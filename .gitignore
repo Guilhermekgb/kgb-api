@@ -1,0 +1,7 @@
+# não subir segredos/arquivos locais
+.env
+.env.* 
+uploads/
+data/
+*.db
+node_modules/
