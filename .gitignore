@@ -1,7 +1,18 @@
-# não subir segredos/arquivos locais
-.env
-.env.* 
-uploads/
-data/
-*.db
+# NPM
 node_modules/
+
+# Env (segredos)
+.env
+.env.*
+*.env
+
+# Banco/arquivos locais
+*.db
+*.db-shm
+*.db-wal
+data/
+uploads/
+
+# Logs e CSVs locais
+*.log
+*.csv
