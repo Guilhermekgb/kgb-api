@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS assinaturas_contratos (
   updated_at_iso TEXT NOT NULL,
   FOREIGN KEY(event_id) REFERENCES eventos(id)
 );
+
 CREATE TABLE IF NOT EXISTS portal_tokens (
   token TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
@@ -239,6 +240,36 @@ function saveJSON(file, obj) {
 // Journal do sync (lista de mudanças em arquivo)
 const JOURNAL_FILE = 'journal.json';
 const LEADS_FILE = 'leads.json';
+const LEADS_HISTORY_FILE = 'leads-historico.json';
+
+// === GET /leads/:id — retorna um lead específico (por ID) ===
+app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const leadId   = String(req.params.id || '').trim();
+
+    if (!leadId) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads    = Array.isArray(allLeads) ? allLeads : [];
+
+    const lead = leads.find(
+      (l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
+    );
+
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    return res.json({ ok: true, data: lead });
+  } catch (e) {
+    console.error('[GET /leads/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar lead' });
+  }
+});
+
 
 if (!fs.existsSync(path.join(DATA_DIR, JOURNAL_FILE))) saveJSON(JOURNAL_FILE, []);
 
@@ -562,6 +593,221 @@ app.post('/webhooks/assinaturas', rawJson, (req, res) => {
 
 // Depois dos webhooks em raw:
 app.use(express.json({ limit: '50mb' }));
+
+// ========================= M6 – Funil de Leads: API básica =========================
+
+// GET /leads → lista leads do funil (usado no sync inicial)
+app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+
+    const all = loadJSON(LEADS_FILE, []);
+    let leads = Array.isArray(all)
+      ? all.filter(l => String(l.tenantId || 'default') === tenantId)
+      : [];
+
+    // Filtro opcional: ?ids=1,2,3
+    const idsStr = String(req.query.ids || '').trim();
+    if (idsStr) {
+      const idSet = new Set(
+        idsStr.split(',').map(s => s.trim()).filter(Boolean)
+      );
+      leads = leads.filter(ld => idSet.has(String(ld.id)));
+    }
+
+    // pode devolver array direto (getLeadsAll aceita isso)
+    return res.json(leads);
+  } catch (e) {
+    console.error('[GET /leads] erro:', e);
+    return res.status(500).json({ error: 'Erro ao listar leads' });
+  }
+});
+
+// PUT /leads/:id → chamado quando você arrasta o card de coluna
+app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+
+    if (!id) {
+      return res.status(400).json({ error: 'id é obrigatório' });
+    }
+
+    const all = loadJSON(LEADS_FILE, []);
+    const leads = Array.isArray(all) ? all : [];
+    const idx = leads.findIndex(
+      l => String(l.id) === id && String(l.tenantId || 'default') === tenantId
+    );
+
+    if (idx < 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    const lead = { ...leads[idx] };
+    const body = req.body || {};
+
+    if (body.status != null) lead.status = String(body.status);
+    if (body.dataFechamento != null) lead.dataFechamento = body.dataFechamento;
+    if (body.proximoContato != null) lead.proximoContato = body.proximoContato;
+    if (body.responsavel != null) lead.responsavel = body.responsavel;
+
+    leads[idx] = lead;
+    saveJSON(LEADS_FILE, leads);
+
+    return res.json({ ok: true, lead });
+  } catch (e) {
+    console.error('[PUT /leads/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao atualizar lead' });
+  }
+});
+
+// GET /leads/metrics → indicadores do funil (usado pelo funil-leads.js)
+app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    let ids = body.ids;
+
+    if (Array.isArray(ids)) {
+      ids = ids.map(v => String(v));
+    } else {
+      ids = [];
+    }
+
+    const all = loadJSON(LEADS_FILE, []);
+    let leads = Array.isArray(all)
+      ? all.filter(l => String(l.tenantId || 'default') === tenantId)
+      : [];
+
+    if (ids.length) {
+      const set = new Set(ids);
+      leads = leads.filter(l => set.has(String(l.id)));
+    }
+
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+
+    const parseDate = (v) => {
+      if (!v) return null;
+      const d = new Date(v);
+      return isNaN(d) ? null : d;
+    };
+
+    const isCurrentMonth = (v) => {
+      const d = parseDate(v);
+      if (!d) return false;
+      return d.getMonth() === curMonth && d.getFullYear() === curYear;
+    };
+
+    // Total no mês (pela data do evento)
+    const totalMes = leads.filter(l => isCurrentMonth(l.dataEvento)).length;
+
+    // Coluna com mais leads
+    const porCol = {};
+    leads.forEach(l => {
+      const s = l.status || 'Novo Lead';
+      porCol[s] = (porCol[s] || 0) + 1;
+    });
+    let topColunaNome = '–';
+    let topColunaQtd = 0;
+    Object.keys(porCol).forEach(nome => {
+      const qtd = porCol[nome];
+      if (qtd > topColunaQtd) {
+        topColunaQtd = qtd;
+        topColunaNome = nome;
+      }
+    });
+
+    // Tempo médio p/ fechar (dias)
+    const fechados = leads.filter(l =>
+      String(l.status || '').toLowerCase().startsWith('fechado')
+    );
+    const duracoes = fechados
+      .map(l => {
+        const ini = parseDate(l.dataCriacao || l.criadoEm || l.dataCadastro);
+        const fim = parseDate(l.dataFechamento);
+        if (!ini || !fim) return null;
+        const diffDias = (fim - ini) / 86400000;
+        return diffDias >= 0 ? diffDias : null;
+      })
+      .filter(v => v != null);
+
+    const tempoMedioFechamentoDias = duracoes.length
+      ? duracoes.reduce((a, b) => a + b, 0) / duracoes.length
+      : null;
+
+    // Taxa de conversão
+    const total = leads.length || 0;
+    const taxaConversaoPercent = total
+      ? (fechados.length / total) * 100
+      : 0;
+
+    return res.json({
+      totalMes,
+      topColunaNome,
+      topColunaQtd,
+      tempoMedioFechamentoDias,
+      taxaConversaoPercent,
+    });
+  } catch (e) {
+    console.error('[GET /leads/metrics] erro:', e);
+    return res.status(500).json({ error: 'Erro ao calcular métricas de leads' });
+  }
+});
+
+// POST /leads/historico → adiciona item de histórico na timeline do lead
+app.post('/leads/historico', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+
+    const leadId = String(body.leadId || '').trim();
+    const item   = body.item || null;
+
+    if (!leadId || !item || Object.keys(item).length === 0) {
+      return res.status(400).json({ error: 'leadId e item são obrigatórios' });
+    }
+
+    // 1) Atualiza histórico dentro do próprio lead (em leads.json)
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads = Array.isArray(allLeads) ? allLeads : [];
+
+    const idx = leads.findIndex(
+      l => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
+    );
+
+    if (idx >= 0) {
+      const lead = { ...leads[idx] };
+      if (!Array.isArray(lead.historico)) lead.historico = [];
+
+      const nowIso = new Date().toISOString();
+      lead.historico.push({
+        ...item,
+        dataISO: item.dataISO || nowIso,
+      });
+
+      leads[idx] = lead;
+      saveJSON(LEADS_FILE, leads);
+    }
+
+    // 2) Opcional: registra também em um arquivo separado de histórico
+    const histAll = loadJSON(LEADS_HISTORY_FILE, []);
+    const histArr = Array.isArray(histAll) ? histAll : [];
+    histArr.push({
+      tenantId,
+      leadId,
+      ...item,
+      ts: Date.now(),
+    });
+    saveJSON(LEADS_HISTORY_FILE, histArr);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[POST /leads/historico] erro:', e);
+    return res.status(500).json({ error: 'Erro ao registrar histórico do lead' });
+  }
+});
 
 // ========================= NOTIFICAÇÕES FEED (M33) =========================
 
@@ -1595,6 +1841,57 @@ app.get('/fin/metrics', verifyFirebaseToken, ensureAllowed('finance'), (req, res
       if (/^\d{4}-\d{2}$/.test(q)) return q;
       return new Date().toISOString().slice(0, 7);
     })();
+    // ========================= LEADS (Funil) – API básica =========================
+
+// PUT /leads/:id → atualiza alguns campos do lead (status, dataFechamento, etc.)
+app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const leadId   = String(req.params.id || '').trim();
+    const body     = req.body || {};
+
+    if (!leadId) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads    = Array.isArray(allLeads) ? allLeads : [];
+
+    const idx = leads.findIndex(
+      l => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
+    );
+
+    if (idx < 0) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    const lead = { ...leads[idx] };
+
+    // Campos que podem vir do front (ajuste se quiser mandar mais coisa)
+    if (body.status != null) {
+      lead.status = String(body.status);
+    }
+    if (body.dataFechamento != null) {
+      lead.dataFechamento = body.dataFechamento;
+    }
+    if (body.proximoContato != null) {
+      lead.proximoContato = body.proximoContato;
+    }
+    if (body.responsavel != null) {
+      lead.responsavel = body.responsavel;
+    }
+
+    leads[idx] = lead;
+    saveJSON(LEADS_FILE, leads);
+
+    return res.json({ ok: true, lead });
+  } catch (e) {
+    console.error('[PUT /leads/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao atualizar lead' });
+  }
+});
+
+
 // ========================= PATCH 3.3 — Leads (metrics para Dashboard) =========================
 app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
@@ -2358,6 +2655,164 @@ app.put('/usuarios', (req, res) => {
 
     const atualizado = db
       .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?')
+      .get(id);
+
+    return res.json({ status: 200, data: atualizado });
+  } catch (err) {
+    console.error('[usuarios] PUT /usuarios erro:', err);
+    return res.status(500).json({ status: 500, error: 'Erro ao atualizar usuário.' });
+  }
+});
+
+// DELETE /usuarios -> remove por id OU por email
+app.delete('/usuarios', (req, res) => {
+  const { id, email } = req.body || {};
+  const emailNorm = email ? String(email).toLowerCase().trim() : null;
+
+  if (!id && !emailNorm) {
+    return res.status(400).json({ status: 400, error: 'ID ou e-mail obrigatório.' });
+  }
+
+  try {
+    let changes = 0;
+
+    if (id) {
+      const info = db.prepare('DELETE FROM usuarios WHERE id = ?').run(id);
+      changes += info.changes || 0;
+    }
+
+    if (!changes && emailNorm) {
+      const info = db.prepare('DELETE FROM usuarios WHERE lower(email) = ?').run(emailNorm);
+      changes += info.changes || 0;
+    }
+
+    if (!changes) {
+      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+    }
+
+    return res.json({ status: 200, data: { removed: changes } });
+  } catch (err) {
+    console.error('[usuarios] DELETE /usuarios erro:', err);
+    return res.status(500).json({ status: 500, error: 'Erro ao remover usuário.' });
+  }
+});
+// ===== Usuários (CRUD básico para o sistema) =====
+
+// GET /usuarios -> lista todos (sem campo senha)
+app.get('/usuarios', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso
+        FROM usuarios
+       ORDER BY datetime(created_at_iso) DESC
+    `).all();
+
+    return res.json({ status: 200, data: rows });
+  } catch (err) {
+    console.error('[usuarios] GET /usuarios erro:', err);
+    return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
+  }
+});
+
+// POST /usuarios -> cria novo usuário
+app.post('/usuarios', (req, res) => {
+  const { nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+  const emailNorm = String(email || '').toLowerCase().trim();
+
+  if (!nome || !emailNorm || !perfil) {
+    return res.status(400).json({ status: 400, error: 'Campos obrigatórios.' });
+  }
+
+  try {
+    const exists = db
+      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
+      .get(emailNorm);
+
+    if (exists) {
+      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
+    }
+
+    const id = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at_iso)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      String(nome || '').trim(),
+      emailNorm,
+      String(whatsapp || ''),
+      String(perfil || '').trim(),
+      senha ? String(senha) : null,
+      typeof foto === 'string' ? foto : null,
+      nowIso
+    );
+
+    const salvo = db
+      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso FROM usuarios WHERE id = ?')
+      .get(id);
+
+    return res.status(201).json({ status: 201, data: salvo });
+  } catch (err) {
+    console.error('[usuarios] POST /usuarios erro:', err);
+    return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
+  }
+});
+
+// PUT /usuarios -> atualiza usuário (por id)
+app.put('/usuarios', (req, res) => {
+  const { id, nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+
+  if (!id) {
+    return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
+  }
+
+  try {
+    const atual = db
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
+      .get(id);
+
+    if (!atual) {
+      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+    }
+
+    const emailNorm = email
+      ? String(email).toLowerCase().trim()
+      : atual.email;
+
+    // Se trocou e-mail, verifica se já existe outro com esse e-mail
+    if (emailNorm !== atual.email) {
+      const outro = db
+        .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?')
+        .get(emailNorm, id);
+
+      if (outro) {
+        return res.status(409).json({ status: 409, error: 'Já existe usuário com esse e-mail.' });
+      }
+    }
+
+    db.prepare(`
+      UPDATE usuarios
+         SET nome     = ?,
+             email    = ?,
+             whatsapp = ?,
+             perfil   = ?,
+             senha    = ?,
+             foto     = ?
+       WHERE id = ?
+    `).run(
+      nome ?? atual.nome,
+      emailNorm,
+      whatsapp ?? atual.whatsapp,
+      perfil ?? atual.perfil,
+      typeof senha === 'string' ? senha : atual.senha,
+      typeof foto === 'string' ? foto : atual.foto,
+      id
+    );
+
+    const atualizado = db
+      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso FROM usuarios WHERE id = ?')
       .get(id);
 
     return res.json({ status: 200, data: atualizado });
