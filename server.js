@@ -13,8 +13,23 @@ const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
 
+// ===== Provider Mercado Pago (import dinâmico do arquivo mercadopago.mjs) =====
+let mpProviderCache = null;
+
+/**
+ * Carrega o provider Mercado Pago (mercadopago.mjs) só uma vez.
+ * Esse arquivo é ESM, então usamos import() dinâmico.
+ */
+async function getMercadoPagoProvider() {
+  if (!mpProviderCache) {
+    const mod = await import('./mercadopago.mjs');
+    mpProviderCache = mod.default || mod;
+  }
+  return mpProviderCache;
+}
+
 // ========================= Config (.env) =========================
-const PORT           = Number(process.env.PORT || 3001);
+const PORT = process.env.PORT || 3333;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'troque-isto-no-.env';
 const DB_PATH        = process.env.SQLITE_FILE || './data.db';
 
@@ -57,6 +72,27 @@ CREATE TABLE IF NOT EXISTS recebimentos (
   UNIQUE(id),
   FOREIGN KEY(event_id) REFERENCES eventos(id)
 );
+CREATE TABLE IF NOT EXISTS cobrancas_bancarias (
+  id TEXT PRIMARY KEY,
+  gateway TEXT,
+  metodo TEXT CHECK(metodo IN ('pix','boleto','cartao')) DEFAULT 'pix',
+  status TEXT CHECK(status IN ('pendente','pago','cancelado')) DEFAULT 'pendente',
+  event_id TEXT,
+  origem TEXT, -- 'evento' ou 'dashboard'
+  cliente_nome TEXT,
+  cliente_doc TEXT,
+  cliente_email TEXT,
+  cliente_tel TEXT,
+  total_cents INTEGER NOT NULL,
+  n_parcelas INTEGER NOT NULL,
+  vencimento_primeira_iso TEXT,
+  criado_em_iso TEXT NOT NULL,
+  pago_em_iso TEXT,
+  raw_payload TEXT,
+  UNIQUE(id),
+  FOREIGN KEY(event_id) REFERENCES eventos(id)
+);
+
 CREATE TABLE IF NOT EXISTS docs (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
@@ -118,6 +154,22 @@ CREATE TABLE IF NOT EXISTS usuarios (
   created_at TEXT NOT NULL
 );
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS clientes (
+    id TEXT PRIMARY KEY,
+    nome TEXT,
+    telefone TEXT,
+    email TEXT,
+    cidade TEXT,
+    endereco TEXT,
+    cpf_cnpj TEXT,
+    observacoes TEXT,
+    tags TEXT,
+    status TEXT DEFAULT 'ativo',
+    createdAt TEXT,
+    updatedAt TEXT
+  );
+`);
 
 
 db.exec(`
@@ -163,6 +215,59 @@ CREATE TABLE IF NOT EXISTS notificationsFeed (
   createdAt TEXT,
   read INT DEFAULT 0
 );
+`);
+// === TABELAS: PDV (vendas e movimentos de caixa) ===
+db.exec(`
+CREATE TABLE IF NOT EXISTS pdv_vendas (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  created_at_iso TEXT NOT NULL,
+  operador TEXT,
+  forma_id TEXT,
+  forma_label TEXT,
+  valor_bruto_cents INTEGER NOT NULL DEFAULT 0,
+  desconto_cents INTEGER NOT NULL DEFAULT 0,
+  valor_liquido_cents INTEGER NOT NULL DEFAULT 0,
+  valor_pago_cents INTEGER NOT NULL DEFAULT 0,
+  troco_cents INTEGER NOT NULL DEFAULT 0,
+  categoria_id TEXT,
+  subcategoria_id TEXT,
+  origem TEXT,
+  payload_json TEXT,
+  created_by TEXT,
+  tenant_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pdv_movimentos (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  tipo TEXT NOT NULL, -- abertura, venda-itens, venda-ingressos, sangria, fechamento
+  forma_label TEXT,
+  valor_cents INTEGER NOT NULL DEFAULT 0,
+  saldo_dinheiro_cents INTEGER NOT NULL DEFAULT 0,
+  saldo_eletronico_cents INTEGER NOT NULL DEFAULT 0,
+  resp TEXT,
+  created_at_iso TEXT NOT NULL,
+  created_by TEXT,
+  tenant_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pdv_vendas_event   ON pdv_vendas(event_id);
+CREATE INDEX IF NOT EXISTS idx_pdv_vendas_created ON pdv_vendas(created_at_iso);
+CREATE INDEX IF NOT EXISTS idx_pdv_mov_event      ON pdv_movimentos(event_id);
+CREATE INDEX IF NOT EXISTS idx_pdv_mov_created    ON pdv_movimentos(created_at_iso);
+`);
+// === TABELA: docs_uploads — PDFs anexados manualmente em Contratos ===
+db.exec(`
+CREATE TABLE IF NOT EXISTS docs_uploads (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  url TEXT NOT NULL,
+  created_at_iso TEXT,
+  UNIQUE(id)
+);
+CREATE INDEX IF NOT EXISTS idx_docs_uploads_event ON docs_uploads(event_id);
 `);
 
 // ========================= Firebase Admin (Storage) =========================
@@ -236,11 +341,38 @@ function loadJSON(file, fb) {
 function saveJSON(file, obj) {
   fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(obj, null, 2), 'utf8');
 }
+// === CONVITES / CHECK-IN (M30/M31) ===
+const CONVITES_LOGS_FILE = 'convites-logs.json';
 
+// garante que o arquivo exista
+try {
+  const fp = path.join(DATA_DIR, CONVITES_LOGS_FILE);
+  if (!fs.existsSync(fp)) {
+    fs.writeFileSync(fp, '[]', 'utf8');
+  }
+} catch (e) {
+  console.error('Falha ao inicializar CONVITES_LOGS_FILE', e);
+}
+
+function loadConviteLogs() {
+  return loadJSON(CONVITES_LOGS_FILE, []);
+}
+function saveConviteLogs(logs) {
+  return saveJSON(CONVITES_LOGS_FILE, logs || []);
+}
 // Journal do sync (lista de mudanças em arquivo)
 const JOURNAL_FILE = 'journal.json';
 const LEADS_FILE = 'leads.json';
 const LEADS_HISTORY_FILE = 'leads-historico.json';
+const ORCAMENTOS_FILE = 'orcamentos.json';
+const CLIENTES_FILE = 'clientes.json';
+const EVENTOS_FILE = 'eventos.json';
+const ESTOQUE_MATERIAIS_FILE   = 'estoque-materiais.json';
+const ESTOQUE_SETORES_FILE     = 'estoque-setores.json';
+const ESTOQUE_INSUMOS_FILE     = 'estoque-insumos.json';
+const ESTOQUE_MOVIMENTOS_FILE  = 'estoque-movimentos.json';
+const CHECKLIST_LINKS_FILE = 'checklist-links.json';
+
 
 // === GET /leads/:id — retorna um lead específico (por ID) ===
 app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
@@ -269,6 +401,220 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
     return res.status(500).json({ error: 'Erro ao buscar lead' });
   }
 });
+// === POST /leads — cria ou atualiza um lead (Módulo 7) ===
+app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body     = req.body || {};
+
+    // id do lead (se não mandar, geramos um)
+    let id = String(body.id || '').trim();
+    if (!id) {
+      id = crypto.randomUUID
+        ? crypto.randomUUID()
+        : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads    = Array.isArray(allLeads) ? allLeads : [];
+
+    const idx = leads.findIndex(
+      (l) => String(l.id) === id && String(l.tenantId || 'default') === tenantId
+    );
+
+    // base do lead que vamos salvar
+    const leadBase = {
+      ...body,
+      id,
+      tenantId
+    };
+
+    // se o front já mandou token, usamos ele; senão geramos um
+    if (!leadBase.token) {
+      leadBase.token =
+        (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36))) +
+        '-' + Math.random().toString(36).slice(2, 6);
+    }
+
+    if (idx >= 0) {
+      // atualiza lead existente
+      const antigo = leads[idx];
+      leads[idx] = {
+        ...antigo,
+        ...leadBase,
+        id: antigo.id,
+        tenantId: antigo.tenantId || tenantId
+      };
+    } else {
+      // novo lead
+      leads.push(leadBase);
+    }
+
+    saveJSON(LEADS_FILE, leads);
+
+    // devolve id e token pro front
+    return res.json({
+      ok: true,
+      data: {
+        id: leadBase.id,
+        token: leadBase.token
+      }
+    });
+  } catch (e) {
+    console.error('[POST /leads] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar lead' });
+  }
+});
+// ========================= CLIENTES (MÓDULO 10) =========================
+
+app.get('/clientes', (req, res) => {
+  try {
+    db.all('SELECT * FROM clientes', [], (err, rows) => {
+      if (err) {
+        console.error('ERRO SQL /clientes:', err.message);
+        // em vez de quebrar, devolve lista vazia
+        return res.json({ ok: true, data: [] });
+      }
+      return res.json({ ok: true, data: rows || [] });
+    });
+  } catch (err) {
+    console.error('ERRO GERAL /clientes:', err);
+    return res.json({ ok: true, data: [] });
+  }
+});
+
+
+
+// GET /clientes/:id — retorna um cliente específico
+app.get('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+
+    if (!id) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const all = loadJSON(CLIENTES_FILE, []);
+    const clientes = Array.isArray(all) ? all : [];
+
+    const cli = clientes.find(
+      c => String(c.id) === id && String(c.tenantId || 'default') === tenantId
+    );
+
+    if (!cli) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    return res.json({ ok: true, data: cli });
+  } catch (e) {
+    console.error('[GET /clientes/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar cliente' });
+  }
+});
+
+// POST /clientes — cria um novo cliente
+app.post('/clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+
+    const all = loadJSON(CLIENTES_FILE, []);
+    const clientes = Array.isArray(all) ? all : [];
+
+    const id = String(body.id || crypto.randomUUID());
+    const nowIso = new Date().toISOString();
+
+    const novoCliente = {
+      ...body,
+      id,
+      tenantId,
+      createdAt: body.createdAt || nowIso,
+      updatedAt: nowIso,
+    };
+
+    clientes.push(novoCliente);
+    saveJSON(CLIENTES_FILE, clientes);
+
+    return res.status(201).json({ ok: true, data: novoCliente });
+  } catch (e) {
+    console.error('[POST /clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar cliente' });
+  }
+});
+
+// PUT /clientes/:id — atualiza um cliente existente
+app.put('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+    const body = req.body || {};
+
+    if (!id) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const all = loadJSON(CLIENTES_FILE, []);
+    const clientes = Array.isArray(all) ? all : [];
+
+    const idx = clientes.findIndex(
+      c => String(c.id) === id && String(c.tenantId || 'default') === tenantId
+    );
+
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const atual = clientes[idx];
+
+    const atualizado = {
+      ...atual,
+      ...body,
+      id,
+      tenantId,
+      createdAt: atual.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    clientes[idx] = atualizado;
+    saveJSON(CLIENTES_FILE, clientes);
+
+    return res.json({ ok: true, data: atualizado });
+  } catch (e) {
+    console.error('[PUT /clientes/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao atualizar cliente' });
+  }
+});
+
+// DELETE /clientes/:id — remove um cliente
+app.delete('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+
+    if (!id) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const all = loadJSON(CLIENTES_FILE, []);
+    const clientes = Array.isArray(all) ? all : [];
+
+    const restantes = clientes.filter(
+      c => !(String(c.id) === id && String(c.tenantId || 'default') === tenantId)
+    );
+
+    if (restantes.length === clientes.length) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    saveJSON(CLIENTES_FILE, restantes);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /clientes/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao remover cliente' });
+  }
+});
 
 
 if (!fs.existsSync(path.join(DATA_DIR, JOURNAL_FILE))) saveJSON(JOURNAL_FILE, []);
@@ -278,6 +624,7 @@ const AUDIT_FILE = 'audit.json';
 // >>> CONFIGURAÇÕES DO FUNIL / LISTAS (MÓDULO 3) <<<
 const FUNIL_COLUNAS_FILE = 'funil-colunas.json';          // colunas do funil
 const LISTAS_AUX_FILE    = 'listas-auxiliares.json';      // listas tipo "como conheceu" etc.
+const CATALOGO_FILE      = 'catalogo.json';               // cardápios, adicionais, serviços
 
 // garante que os arquivos existem
 if (!fs.existsSync(path.join(DATA_DIR, FUNIL_COLUNAS_FILE))) {
@@ -288,6 +635,16 @@ if (!fs.existsSync(path.join(DATA_DIR, LISTAS_AUX_FILE))) {
   // objeto com várias listas dentro
   saveJSON(LISTAS_AUX_FILE, {});
 }
+
+// garante que o arquivo de catálogo exista
+if (!fs.existsSync(path.join(DATA_DIR, CATALOGO_FILE))) {
+  saveJSON(CATALOGO_FILE, {
+    cardapios: [],
+    adicionais: [],
+    servicos: []
+  });
+}
+
 
 // helpers para ler/gravar essas listas auxiliares
 function loadListasAux() {
@@ -311,6 +668,26 @@ const LIST_KEYS = {
 
 function getListKey(slug) {
   return LIST_KEYS[String(slug || '').toLowerCase()] || null;
+}
+// helpers do CATÁLOGO (cardápios, adicionais, serviços)
+function loadCatalogo() {
+  const raw = loadJSON(CATALOGO_FILE, null);
+  const base = (!raw || typeof raw !== 'object') ? {} : raw;
+
+  return {
+    cardapios : Array.isArray(base.cardapios)  ? base.cardapios  : [],
+    adicionais: Array.isArray(base.adicionais) ? base.adicionais : [],
+    servicos  : Array.isArray(base.servicos)   ? base.servicos   : []
+  };
+}
+
+function saveCatalogo(cat) {
+  const norm = {
+    cardapios : Array.isArray(cat.cardapios)  ? cat.cardapios  : [],
+    adicionais: Array.isArray(cat.adicionais) ? cat.adicionais : [],
+    servicos  : Array.isArray(cat.servicos)   ? cat.servicos   : []
+  };
+  saveJSON(CATALOGO_FILE, norm);
 }
 
 if (!fs.existsSync(path.join(DATA_DIR, AUDIT_FILE))) saveJSON(AUDIT_FILE, []);
@@ -755,6 +1132,147 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
     return res.status(500).json({ error: 'Erro ao calcular métricas de leads' });
   }
 });
+// ======================================================
+//  ORÇAMENTOS – /orcamentos  (Módulo 7)
+// ======================================================
+
+// POST /orcamentos → cria ou atualiza um orçamento
+// A ideia é funcionar como "upsert": se vier id, atualiza; se não vier, cria um novo.
+app.post('/orcamentos', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body     = req.body || {};
+
+    // Você pode mandar:
+    // - id (opcional) → se vier, tentamos atualizar esse orçamento
+    // - leadId (recomendado) → amarra orçamento ao lead
+    let id = String(body.id || '').trim();
+    const leadId = body.leadId ? String(body.leadId).trim() : '';
+
+    const all = loadJSON(ORCAMENTOS_FILE, []);
+    const orcs = Array.isArray(all) ? all : [];
+
+    const agora = new Date().toISOString();
+
+    let idx = -1;
+    if (id) {
+      idx = orcs.findIndex(
+        o => String(o.id) === id && String(o.tenantId || 'default') === tenantId
+      );
+    }
+
+    // Se não mandou id, geramos um
+    if (!id) {
+      id = crypto.randomUUID();
+    }
+
+    const baseOrc = {
+      id,
+      tenantId,
+      leadId: leadId || null,
+      // Aqui guardamos o "snapshot" do orçamento que vier do front
+      dados: body.dados || body.detalhes || body.orcamento || body,
+      createdAt: agora,
+      updatedAt: agora
+    };
+
+    if (idx >= 0) {
+      // Atualiza orçamento existente (mesmo id + tenant)
+      const antigo = orcs[idx];
+      orcs[idx] = {
+        ...antigo,
+        ...baseOrc,
+        createdAt: antigo.createdAt || baseOrc.createdAt,
+        updatedAt: agora
+      };
+    } else {
+      // Novo orçamento
+      orcs.push(baseOrc);
+    }
+
+    saveJSON(ORCAMENTOS_FILE, orcs);
+
+    return res.json({ ok: true, orcamento: baseOrc });
+  } catch (e) {
+    console.error('[POST /orcamentos] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar orçamento' });
+  }
+});
+
+// GET /orcamentos/:id → retorna um orçamento específico
+app.get('/orcamentos/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId   = String(req.user?.tenantId || 'default');
+    const orcIdParam = String(req.params.id || '').trim();
+
+    if (!orcIdParam) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const all = loadJSON(ORCAMENTOS_FILE, []);
+    const orcs = Array.isArray(all) ? all : [];
+
+    const orc = orcs.find(
+      o => String(o.id) === orcIdParam && String(o.tenantId || 'default') === tenantId
+    );
+
+    if (!orc) {
+      return res.status(404).json({ error: 'Orçamento não encontrado' });
+    }
+
+    return res.json({ ok: true, orcamento: orc });
+  } catch (e) {
+    console.error('[GET /orcamentos/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar orçamento' });
+  }
+});
+// === GET /proposta/:token — endpoint público da proposta ===
+app.get('/proposta/:token', (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ error: 'token obrigatório' });
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads    = Array.isArray(allLeads) ? allLeads : [];
+
+    // procura pelo token de proposta
+    const lead = leads.find(l => String(l.token || '') === token);
+
+    if (!lead) {
+      return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+
+    // Monta um objeto "seguro" só com o que a proposta pública precisa
+    const safeLead = {
+      id: lead.id,
+      token: lead.token,
+      nome: lead.nome || lead.cliente || '',
+      cliente: lead.cliente || '',
+      tipoEvento: lead.tipoEvento || '',
+      dataEvento: lead.dataEvento || '',
+      dataEventoISO: lead.dataEventoISO || '',
+      dataEventoBR: lead.dataEventoBR || '',
+      horarioEvento: lead.horarioEvento || '',
+      local: lead.local || '',
+      qtd: lead.qtd || lead.convidados || '',
+      convidados: lead.convidados || '',
+      observacoes: lead.observacoes || '',
+      valorTotal: lead.valorTotal || 0,
+      descontoReais: lead.descontoReais || 0,
+      descontoPorcentagem: lead.descontoPorcentagem || 0,
+      cardapios_enviados: lead.cardapios_enviados || [],
+      adicionaisSelecionados: lead.adicionaisSelecionados || [],
+      servicosSelecionados: lead.servicosSelecionados || []
+    };
+
+    return res.json({ ok: true, data: safeLead });
+  } catch (e) {
+    console.error('[GET /proposta/:token] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar proposta' });
+  }
+});
 
 // POST /leads/historico → adiciona item de histórico na timeline do lead
 app.post('/leads/historico', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
@@ -813,20 +1331,29 @@ app.post('/leads/historico', verifyFirebaseToken, ensureAllowed('sync'), (req, r
 
 // GET /notificacoes → lista todas / ou filtradas por audience
 app.get('/notificacoes', (req, res) => {
-  const audience = String(req.query.audience || '').trim();
-  let sql = "SELECT * FROM notificationsFeed";
-  const args = [];
+  try {
+    const audience = String(req.query.audience || '').trim();
+    let sql = "SELECT * FROM notificationsFeed";
+    const args = [];
 
-  if (audience) {
-    sql += " WHERE audience = ?";
-    args.push(audience);
+    if (audience) {
+      sql += " WHERE audience = ?";
+      args.push(audience);
+    }
+
+    sql += " ORDER BY datetime(createdAt) DESC";
+
+    const rows = args.length
+      ? db.prepare(sql).all(...args)
+      : db.prepare(sql).all();
+
+    return res.json({ ok: true, items: rows });
+  } catch (e) {
+    console.error('[GET /notificacoes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar notificações' });
   }
-
-  sql += " ORDER BY datetime(createdAt) DESC";
-
-  const rows = db.prepare(sql).all(...args);
-  return res.json({ ok: true, items: rows });
 });
+
 
 
 // POST /notificacoes → inserir nova notificação
@@ -859,6 +1386,46 @@ app.put('/notificacoes/:id/read', (req, res) => {
   const id = String(req.params.id);
   db.prepare(`UPDATE notificationsFeed SET read = 1 WHERE id = ?`).run(id);
   res.json({ ok: true });
+});
+// POST /notificacoes/marcar-todas-lidas → marca todas as notificações como lidas
+app.post('/notificacoes/marcar-todas-lidas', (req, res) => {
+  try {
+    // no futuro podemos usar isso pra segmentar por área (comercial, financeiro, etc.)
+    const audience = String(req.body?.audience || '').trim();
+
+    if (audience) {
+      // Marca como lidas só as notificações de uma "audiência" específica
+      db.prepare(`UPDATE notificationsFeed SET read = 1 WHERE audience = ?`).run(audience);
+    } else {
+      // Se não enviar audiência, marca TODAS como lidas
+      db.prepare(`UPDATE notificationsFeed SET read = 1`).run();
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[POST /notificacoes/marcar-todas-lidas] erro:', err);
+    return res.status(500).json({ error: 'Erro ao marcar notificações como lidas.' });
+  }
+});
+
+// POST /notificacoes/marcar-todas-lidas → marca todas como lidas
+app.post('/notificacoes/marcar-todas-lidas', (req, res) => {
+  try {
+    const audience = String(req.body?.audience || '').trim();
+
+    if (audience) {
+      // Marca como lidas só as notificações daquele público (ex.: "comercial", "financeiro")
+      db.prepare(`UPDATE notificationsFeed SET read = 1 WHERE audience = ?`).run(audience);
+    } else {
+      // Se não mandar audience, marca TODAS como lidas
+      db.prepare(`UPDATE notificationsFeed SET read = 1`).run();
+    }
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[POST /notificacoes/marcar-todas-lidas] erro:', e);
+    return res.status(500).json({ error: 'Erro ao marcar notificações como lidas.' });
+  }
 });
 
 // ====== UNIFIED AGENDA ======
@@ -1212,100 +1779,78 @@ app.post('/portal/token', verifyFirebaseToken, ensureAllowed('admin'), (req, res
 });
 
 
-/**
- * GET /portal/me?token=...
- * Usado pelo area-cliente.js quando o cliente abre o link com ?token=...
- * NÃO tem autenticação, pois o cliente externo acessa direto.
- */
+// Valida token e devolve dados públicos do evento
 app.get('/portal/me', (req, res) => {
   try {
-    const token = String(req.query.token || req.query.t || '').trim();
+    const token = String(req.query.token || '').trim();
     if (!token) {
-      return res.status(400).json({ error: 'Token é obrigatório' });
+      return res.status(400).json({ error: 'token obrigatório' });
     }
 
-    const row = db.prepare(
-      'SELECT token, event_id, expires_at_iso FROM portal_tokens WHERE token = ? LIMIT 1'
-    ).get(token);
+    const tokens = loadPortalTokens();
+    const entry = tokens.find((t) => t.token === token);
 
-    if (!row) {
-      return res.status(401).json({ error: 'Token inválido' });
+    if (!entry) {
+      return res
+        .status(404)
+        .json({ error: 'token inválido ou expirado', code: 'INVALID_TOKEN' });
     }
 
-    const agora = new Date();
-    const exp   = new Date(row.expires_at_iso);
-    if (exp < agora) {
-      return res.status(401).json({ error: 'Token expirado' });
+    // 1) Começa com o que foi salvo no token (se existir)
+    let evPublic = entry.evento || {};
+
+    // 2) Tenta complementar com os dados oficiais do evento (eventos.json)
+    try {
+      const allEventos = loadJSON(EVENTOS_FILE, []);
+      const evFull = Array.isArray(allEventos)
+        ? allEventos.find(e =>
+            String(e.id) === String(entry.eventId || entry.event_id)
+          )
+        : null;
+
+      if (evFull) {
+        evPublic = {
+          ...evPublic,
+          id: evFull.id,
+          nomeEvento:
+            evFull.nomeEvento ||
+            evFull.titulo ||
+            evFull.nome ||
+            evPublic.nomeEvento ||
+            '',
+          dataEvento:
+            evFull.dataEvento ||
+            evFull.data ||
+            evFull.dataISO ||
+            evPublic.dataEvento ||
+            null,
+          local:
+            evFull.local ||
+            evFull.endereco ||
+            evFull.salao ||
+            evPublic.local ||
+            '',
+          qtdConvidados:
+            evFull.qtdConvidados ||
+            evFull.quantidadeConvidados ||
+            evPublic.qtdConvidados ||
+            null,
+          cliente: evFull.cliente || evPublic.cliente || null,
+        };
+      }
+    } catch (e) {
+      console.warn(
+        '[portal/me] Não consegui complementar dados do evento oficial:',
+        e?.message || e
+      );
     }
 
-    const id = String(row.event_id);
-
-    // --- MESMO JEITO do /api/eventos/:id, só que sem precisar de login ---
-    const evRow = db.prepare(
-      'SELECT id, valor_contrato_cents FROM eventos WHERE id = ?'
-    ).get(id) || { id, valor_contrato_cents: 0 };
-
-    const parcelas = db.prepare(`
-      SELECT id, descricao, valor_cents, vencimento_iso, status, comprovante_url, pago_em_iso
-      FROM parcelas WHERE event_id = ? ORDER BY date(vencimento_iso) ASC, id ASC
-    `).all(id);
-
-    const recebimentos = db.prepare(`
-      SELECT id, descricao, valor_cents, pago_em_iso, comprovante_url, origem
-      FROM recebimentos WHERE event_id = ? ORDER BY date(pago_em_iso) ASC, id ASC
-    `).all(id);
-
-    const docs = db.prepare(`
-      SELECT id, tipo, motivo, url, status_assinatura, assinado_em_iso
-      FROM docs WHERE event_id = ? ORDER BY date(assinado_em_iso) ASC, id ASC
-    `).all(id);
-
-    const contrato = docs.find(d => d.tipo === 'contrato') || null;
-    const adendos  = docs.filter(d => d.tipo === 'adendo');
-
-    const evento = {
-      id,
-      financeiro: {
-        valorContrato: (evRow.valor_contrato_cents || 0) / 100,
-        parcelas: parcelas.map(p => ({
-          id: p.id,
-          descricao: p.descricao || null,
-          valor: (p.valor_cents || 0) / 100,
-          vencimentoISO: p.vencimento_iso || null,
-          status: p.status,
-          comprovanteUrl: p.comprovante_url || null,
-          pagoEmISO: p.pago_em_iso || null
-        })),
-        recebimentos: recebimentos.map(r => ({
-          id: r.id,
-          descricao: r.descricao || 'Recebimento',
-          valor: (r.valor_cents || 0) / 100,
-          dataISO: r.pago_em_iso || null,
-          comprovanteUrl: r.comprovante_url || null,
-          origem: r.origem || null
-        }))
-      },
-      contrato: contrato ? {
-        id: contrato.id,
-        url: contrato.url,
-        status: contrato.status_assinatura,
-        dataISO: contrato.assinado_em_iso
-      } : null,
-      addendos: adendos.map(a => ({
-        id: a.id,
-        motivo: a.motivo || null,
-        url: a.url || null,
-        status: a.status_assinatura,
-        dataISO: a.assinado_em_iso || null
-      }))
-    };
-
-    // o area-cliente.js faz: ev = data.evento || data;
-    // então podemos devolver direto o objeto do evento:
-    return res.json(evento);
-  } catch (e) {
-    console.error('[portal] erro em GET /portal/me', e);
-    return res.status(500).json({ error: 'Erro ao carregar dados do portal.' });
+    return res.json({ evento: evPublic });
+  } catch (err) {
+    console.error('Erro em GET /portal/me', err);
+    return res
+      .status(500)
+      .json({ error: 'Erro ao carregar evento do portal do cliente' });
   }
 });
 
@@ -1463,34 +2008,6 @@ app.get('/portal/eventos/:id/financeiro', (req, res) => {
   } catch (e) {
     console.error('[portal] erro em GET /portal/eventos/:id/financeiro', e);
     return res.status(500).json({ error: 'Erro ao carregar financeiro.' });
-  }
-});
-// ===== Integrações – teste de pagamentos (ETAPA 5.1) =====
-app.post('/api/integracoes/test/payments', (req, res) => {
-  try {
-    const { gateway, pixKey } = req.body || {};
-
-    if (!pixKey || !String(pixKey).trim()) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Informe a chave PIX para testar a conexão.'
-      });
-    }
-
-    // FUTURO:
-    // Aqui você pode colocar um teste REAL com o gateway (Mercado Pago, Asaas, etc.).
-    // Por enquanto, se chegou até aqui, consideramos o teste básico OK.
-
-    return res.json({
-      ok: true,
-      message: 'Configurações de pagamentos recebidas. Teste básico OK.'
-    });
-  } catch (e) {
-    console.error('[integracoes] erro em POST /api/integracoes/test/payments', e);
-    return res.status(500).json({
-      ok: false,
-      message: 'Erro interno ao testar pagamentos.'
-    });
   }
 });
 
@@ -1755,9 +2272,119 @@ app.post('/contracts/zapsign/webhook', express.json(), (req, res) => {
   res.json({ ok:true });
 });
 
-/* ========================= Backup Snapshots (filesystem) ========================= */
+
+
 const SNAP_DIR = path.join(process.cwd(), 'uploads', 'snapshots');
 try { fs.mkdirSync(SNAP_DIR, { recursive: true }); } catch {}
+
+// ==== Dump completo do banco SQLite em JSON (por tenant) ====
+function gerarDumpBanco(tenantId) {
+  const snapshot = {
+    _meta: {
+      generatedAt: new Date().toISOString(),
+      tenantId: tenantId || 'default'
+    }
+  };
+
+  // Lista todas as tabelas do SQLite (menos as internas)
+  const tables = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+  ).all();
+
+  for (const row of tables) {
+    const tableName = row.name;
+    if (!tableName) continue;
+
+    try {
+      // Descobre as colunas dessa tabela
+      const cols = db.prepare(`PRAGMA table_info("${tableName}")`).all();
+
+      const hasTenantSnake = cols.some(c => c.name === 'tenant_id');
+      const hasTenantCamel = cols.some(c => c.name === 'tenantId');
+
+      let rows;
+
+      if (hasTenantSnake || hasTenantCamel) {
+        // Monta o WHERE só com colunas que realmente existem
+        const whereParts = [];
+        const params     = [];
+
+        if (hasTenantSnake) {
+          whereParts.push('"tenant_id" = ?');
+          params.push(tenantId);
+        }
+        if (hasTenantCamel) {
+          whereParts.push('"tenantId" = ?');
+          params.push(tenantId);
+        }
+
+        const sql = `SELECT * FROM "${tableName}" WHERE ${whereParts.join(' OR ')}`;
+        rows = db.prepare(sql).all(...params);
+      } else {
+        // Tabela global (sem coluna de tenant): traz tudo
+        const sql = `SELECT * FROM "${tableName}"`;
+        rows = db.prepare(sql).all();
+      }
+
+      snapshot[tableName] = rows;
+    } catch (e) {
+      console.warn('[Backup] Não consegui ler tabela', tableName, e?.message || e);
+    }
+  }
+
+  return snapshot;
+}
+
+// POST /backup/dump  → gera um arquivo JSON com dump completo do banco
+app.post('/backup/dump', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
+  try {
+    const tenantRaw = String(req.user?.tenantId || req.headers['x-tenant-id'] || 'default');
+    const tenantSafe = tenantRaw.replace(/[^a-z0-9_.-]/gi, '_') || 'default';
+
+    // 1) Monta o dump em memória
+    const dump = gerarDumpBanco(tenantRaw);
+
+    // 2) Define nome do arquivo
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `dump-${tenantSafe}-${ts}.json`;
+    const filePath = path.join(SNAP_DIR, name);
+
+    // 3) Salva em disco
+    fs.writeFileSync(filePath, JSON.stringify(dump, null, 2), 'utf-8');
+
+    // 4) Grava auditoria local
+    db.prepare(`
+      INSERT INTO audit_logs (ts_iso, actor, entity, action, payload)
+      VALUES (?, 'system', 'backup', 'dump', ?)
+    `).run(
+      new Date().toISOString(),
+      JSON.stringify({ name, tenantId: tenantRaw })
+    );
+
+    // 5) (Opcional) Enviar para Firebase Storage – DESATIVADO por enquanto
+    // Se quiser ativar depois, é só descomentar o bloco abaixo
+    /*
+    if (typeof bucket !== 'undefined' && bucket) {
+      try {
+        const dest = `${tenantSafe}/backup/${name}`;
+        await bucket.upload(filePath, {
+          destination: dest,
+          contentType: 'application/json'
+        });
+        console.log('[Storage] Dump enviado:', dest);
+      } catch (e) {
+        console.warn('[Storage] Falha ao enviar dump:', e?.message || e);
+      }
+    }
+    */
+
+    // 6) Resposta para o frontend
+    res.json({ ok: true, name });
+  } catch (err) {
+    console.error('[Backup] Erro ao gerar dump do banco:', err?.message || err);
+    res.status(500).json({ ok: false, error: 'Falha ao gerar backup do banco' });
+  }
+});
 
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {
@@ -1879,6 +2506,12 @@ app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
     }
     if (body.responsavel != null) {
       lead.responsavel = body.responsavel;
+    }
+    if (body.degustacao != null) {
+      lead.degustacao = body.degustacao;
+    }
+    if (body.arquivado != null) {
+      lead.arquivado = body.arquivado;
     }
 
     leads[idx] = lead;
@@ -2142,7 +2775,224 @@ app.post(
       return res.status(500).json({ ok: false, error: 'erro_interno' });
     }
   }
+  
 );
+// ========================= CATÁLOGO — Upload de imagem de cardápio/adicional =========================
+// POST /catalogo/imagens
+// body: multipart/form-data com campo "file"
+app.post(
+  '/catalogo/imagens',
+  // se quiser travar por login depois, dá pra colocar verifyFirebaseToken e ensureAllowed('admin') aqui
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      if (!bucket) {
+        return res.status(500).json({ ok: false, error: 'storage_desativado' });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ ok: false, error: 'arquivo_obrigatorio' });
+      }
+
+      const mime = file.mimetype || '';
+      const size = file.size || 0;
+
+      const isImage = mime.startsWith('image/');
+
+      if (!isImage) {
+        return res.status(400).json({
+          ok: false,
+          error: 'tipo_invalido',
+          detail: 'Somente imagens (png, jpg, webp) são permitidas para o catálogo.'
+        });
+      }
+
+      // limite: 5MB por imagem
+      if (size > 5 * 1024 * 1024) {
+        return res.status(400).json({ ok: false, error: 'imagem_maior_5mb' });
+      }
+
+      const original = file.originalname || 'imagem-catalogo';
+      const ext = original.includes('.') ? original.split('.').pop() : 'jpg';
+
+      const randomPart = crypto.randomBytes(8).toString('hex');
+      const fileName   = `${Date.now()}_${randomPart}.${ext}`;
+
+      // Caminho no Storage: catalogo/imagens/{fileName}
+      const storagePath = `catalogo/imagens/${fileName}`;
+      const blob = bucket.file(storagePath);
+
+      await blob.save(file.buffer, {
+        contentType: mime,
+        resumable: false,
+        metadata: { contentType: mime }
+      });
+
+      // URL de leitura longa
+      const [signedUrl] = await blob.getSignedUrl({
+        action: 'read',
+        expires: '2100-01-01'
+      });
+
+      return res.status(201).json({
+        ok: true,
+        data: {
+          url: signedUrl,
+          mime,
+          size
+        }
+      });
+    } catch (e) {
+      console.error('[POST /catalogo/imagens] erro:', e);
+      return res.status(500).json({ ok: false, error: 'upload_imagem_falhou' });
+    }
+  }
+);
+
+// ========================= EVENTOS — Upload de documentos (PDF) para Contratos =========================
+
+// Lista documentos anexados de um evento
+// GET /eventos/:id/docs-upload
+app.get('/eventos/:id/docs-upload', verifyFirebaseToken, ensureAllowed('finance'), (req, res) => {
+  try {
+    const eventId = String(req.params.id || '');
+
+    const docs = db.prepare(`
+      SELECT id, event_id, nome, url, created_at_iso
+      FROM docs_uploads
+      WHERE event_id = ?
+      ORDER BY datetime(created_at_iso) ASC, id ASC
+    `).all(eventId);
+
+    return res.json({
+      ok: true,
+      data: docs.map(d => ({
+        id: d.id,
+        eventId: d.event_id,
+        nome: d.nome,
+        url: d.url,
+        createdAt: d.created_at_iso
+      }))
+    });
+  } catch (e) {
+    console.error('[GET /eventos/:id/docs-upload] erro:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar documentos do evento.' });
+  }
+});
+
+// Faz upload de um PDF para o evento e salva no Firebase Storage + SQLite
+// POST /eventos/:id/docs-upload  (body: multipart/form-data com campo "file")
+app.post(
+  '/eventos/:id/docs-upload',
+  verifyFirebaseToken,
+  ensureAllowed('finance'),
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      const eventId = String(req.params.id || '');
+
+      if (!bucket) {
+        // Storage não configurado
+        return res.status(500).json({ ok: false, error: 'storage_desativado' });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ ok: false, error: 'arquivo_obrigatorio' });
+      }
+
+      const mime = file.mimetype || '';
+      const size = file.size || 0;
+
+      // Aceita somente PDF aqui
+      const isPdf = mime === 'application/pdf';
+      if (!isPdf) {
+        return res.status(400).json({
+          ok: false,
+          error: 'tipo_invalido',
+          detail: 'Somente PDF é permitido para documentos de contratos.'
+        });
+      }
+
+      // Limite de tamanho do PDF (10MB)
+      if (size > 10 * 1024 * 1024) {
+        return res.status(400).json({ ok: false, error: 'pdf_maior_10mb' });
+      }
+
+      const docId = crypto.randomUUID();
+      const originalName = file.originalname || 'documento.pdf';
+      const safeName = originalName.replace(/\s+/g, '-');
+      const objectPath = `docs/${eventId}/${docId}-${safeName}`;
+
+      const blob = bucket.file(objectPath);
+
+      await blob.save(file.buffer, {
+        contentType: mime,
+        resumable: false,
+        metadata: { contentType: mime }
+      });
+
+      // URL de leitura longa
+      const [signedUrl] = await blob.getSignedUrl({
+        action: 'read',
+        expires: '2100-01-01'
+      });
+
+      const agoraIso = new Date().toISOString();
+
+      db.prepare(`
+        INSERT INTO docs_uploads (id, event_id, nome, url, created_at_iso)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        docId,
+        eventId,
+        originalName,
+        signedUrl,
+        agoraIso
+      );
+
+      return res.status(201).json({
+        ok: true,
+        data: {
+          id: docId,
+          eventId,
+          nome: originalName,
+          url: signedUrl,
+          createdAt: agoraIso
+        }
+      });
+    } catch (e) {
+      console.error('[POST /eventos/:id/docs-upload] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao fazer upload de documento do evento.' });
+    }
+  }
+);
+
+// Exclui um documento (apenas apaga do banco; o arquivo pode ser limpo manualmente no Storage se você quiser)
+// DELETE /eventos/:id/docs-upload/:docId
+app.delete(
+  '/eventos/:id/docs-upload/:docId',
+  verifyFirebaseToken,
+  ensureAllowed('finance'),
+  async (req, res) => {
+    try {
+      const eventId = String(req.params.id || '');
+      const docId = String(req.params.docId || '');
+
+      db.prepare(`
+        DELETE FROM docs_uploads
+        WHERE id = ? AND event_id = ?
+      `).run(docId, eventId);
+
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('[DELETE /eventos/:id/docs-upload/:docId] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao remover documento do evento.' });
+    }
+  }
+);
+
 // ========================= FINANCEIRO — Remover comprovante de parcela (opcional) =========================
 // DELETE /fin/parcelas/:id/comprovante
 app.delete(
@@ -2226,6 +3076,46 @@ app.delete(
     }
   }
 );
+// Cria um lançamento financeiro vinculado ao evento (parcela pendente)
+app.post('/fin/lancamentos', verifyFirebaseToken, ensureAllowed('finance'), (req, res) => {
+  try {
+    const body = req.body || {};
+    const eventoId     = String(body.eventoId || body.eventId || '').trim();
+    const descricao    = String(body.descricao || 'Cobrança pós-evento');
+    const valorNumber  = Number(body.valor || 0);
+    const vencimentoISO = body.vencimentoISO || body.vencimento || new Date().toISOString().slice(0,10);
+
+    if (!eventoId) {
+      return res.status(400).json({ ok: false, error: 'eventoId obrigatório.' });
+    }
+    if (!(valorNumber > 0)) {
+      return res.status(400).json({ ok: false, error: 'Valor deve ser maior que zero.' });
+    }
+
+    const valorCents = Math.round(valorNumber * 100);
+    const id = crypto.randomUUID();
+
+    db.prepare(`
+      INSERT INTO parcelas (id, event_id, descricao, valor_cents, vencimento_iso, status, comprovante_url, pago_em_iso)
+      VALUES (?, ?, ?, ?, ?, 'pendente', NULL, NULL)
+    `).run(id, eventoId, descricao, valorCents, vencimentoISO);
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        id,
+        eventId: eventoId,
+        descricao,
+        valor: valorNumber,
+        vencimentoISO,
+        status: 'pendente'
+      }
+    });
+  } catch (e) {
+    console.error('POST /fin/lancamentos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar lançamento financeiro.' });
+  }
+});
 
 // /fin/relatorios/extrato (SQLite — extrato por evento ou geral)
 app.get('/fin/relatorios/extrato', verifyFirebaseToken, ensureAllowed('finance'), (req, res) => {
@@ -2325,6 +3215,860 @@ app.get('/sync/pull', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
 
   return res.json({ ok:true, changes:list, lastRev: list.reduce((m, e)=>Math.max(m, e.rev), since) });
 });
+// ========================= MÓDULO 11 – EVENTOS =========================
+
+function loadEventos() {
+  return loadJSON(EVENTOS_FILE, []);
+}
+
+function saveEventos(eventos) {
+  saveJSON(EVENTOS_FILE, eventos);
+}
+
+// Lista todos os eventos do tenant atual
+app.get('/eventos', verifyFirebaseToken, (req, res) => {
+  try {
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    let eventos = loadEventos();
+
+    if (tenantId) {
+      eventos = eventos.filter(ev => String(ev.tenantId || '') === String(tenantId));
+    }
+
+    return res.json({ ok: true, data: eventos });
+  } catch (e) {
+    console.error('GET /eventos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar eventos.' });
+  }
+});
+
+// Busca um único evento por ID
+app.get('/eventos/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const ev = eventos.find(e => {
+      if (String(e.id) !== String(id)) return false;
+      if (!tenantId) return true;
+      return String(e.tenantId || '') === String(tenantId);
+    });
+
+    if (!ev) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    return res.json({ ok: true, data: ev });
+  } catch (e) {
+    console.error('GET /eventos/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao buscar evento.' });
+  }
+});
+
+// Cria um novo evento
+app.post('/eventos', verifyFirebaseToken, (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    let eventos = loadEventos();
+
+    const now = new Date().toISOString();
+    const id = String(body.id || crypto.randomUUID());
+
+    const novo = {
+      ...body,
+      id,
+      tenantId,
+      status: body.status || 'ativo',
+      criadoEm: body.criadoEm || now,
+      atualizadoEm: now,
+    };
+
+    const idx = eventos.findIndex(e => String(e.id) === String(id));
+    if (idx > -1) {
+      eventos[idx] = { ...eventos[idx], ...novo, atualizadoEm: now };
+    } else {
+      eventos.push(novo);
+    }
+
+    saveEventos(eventos);
+
+    return res.status(201).json({ ok: true, data: novo });
+  } catch (e) {
+    console.error('POST /eventos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar evento.' });
+  }
+});
+
+// Atualiza um evento existente
+app.put('/eventos/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const patch = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    let eventos = loadEventos();
+    const idx = eventos.findIndex(e => String(e.id) === String(id));
+
+    if (idx === -1) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    const atual = eventos[idx];
+
+    if (tenantId && String(atual.tenantId || '') !== String(tenantId)) {
+      return res.status(403).json({ ok: false, error: 'Evento de outro tenant.' });
+    }
+
+    const now = new Date().toISOString();
+    const atualizado = {
+      ...atual,
+      ...patch,
+      id: atual.id,
+      tenantId: atual.tenantId || tenantId,
+      atualizadoEm: now,
+    };
+
+    eventos[idx] = atualizado;
+    saveEventos(eventos);
+
+    return res.json({ ok: true, data: atualizado });
+  } catch (e) {
+    console.error('PUT /eventos/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar evento.' });
+  }
+});
+
+// Remove um evento
+app.delete('/eventos/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    let eventos = loadEventos();
+    const idx = eventos.findIndex(e => String(e.id) === String(id));
+
+    if (idx === -1) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    const atual = eventos[idx];
+    if (tenantId && String(atual.tenantId || '') !== String(tenantId)) {
+      return res.status(403).json({ ok: false, error: 'Evento de outro tenant.' });
+    }
+
+    eventos.splice(idx, 1);
+    saveEventos(eventos);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /eventos/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao remover evento.' });
+  }
+});
+// ========================= CHECKLIST / PÓS-EVENTO =========================
+// Armazena tokens de execução (link/QR)
+function loadChecklistLinks() {
+  return loadJSON(CHECKLIST_LINKS_FILE, []);
+}
+function saveChecklistLinks(lista) {
+  saveJSON(CHECKLIST_LINKS_FILE, Array.isArray(lista) ? lista : []);
+}
+
+// POST /eventos/:id/checklist-link
+// Gera (ou reaproveita) um token de execução com validade
+app.post('/eventos/:id/checklist-link', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user    = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const eventos = loadEventos();
+    const { evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+    if (!evento) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado para gerar link.' });
+    }
+
+    let links = loadChecklistLinks();
+    if (!Array.isArray(links)) links = [];
+
+    const nowMs = Date.now();
+    const seteDias = 7*24*60*60*1000;
+
+    // tenta reutilizar token válido existente
+    let link = links.find(
+      l => String(l.eventoId) === String(id) &&
+           String(l.tenantId || 'default') === String(tenantId) &&
+           Number(l.expiresAt || 0) > nowMs
+    );
+
+    if (!link) {
+      // cria novo
+      const token = crypto.randomUUID();
+      const expiresAt = nowMs + seteDias;
+      link = {
+        id: crypto.randomUUID(),
+        token,
+        eventoId: String(id),
+        tenantId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        expiresAt
+      };
+      links.push(link);
+    } else {
+      link.updatedAt = new Date().toISOString();
+    }
+
+    saveChecklistLinks(links);
+
+    return res.json({
+      ok: true,
+      data: {
+        token    : link.token,
+        eventoId : link.eventoId,
+        expiresAt: link.expiresAt
+      }
+    });
+  } catch (e) {
+    console.error('POST /eventos/:id/checklist-link falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao gerar link de execução.' });
+  }
+});
+
+// GET /eventos/checklist-por-token?t=...
+// Valida o token, checa validade e devolve evento + checklist
+app.get('/eventos/checklist-por-token', verifyFirebaseToken, (req, res) => {
+  try {
+    const t = String(req.query.t || '').trim();
+    if (!t) {
+      return res.status(400).json({ ok: false, error: 'Token ausente.' });
+    }
+
+    const user     = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    let links = loadChecklistLinks();
+    if (!Array.isArray(links)) links = [];
+
+    const nowMs = Date.now();
+    const link = links.find(
+      l => String(l.token) === t &&
+           String(l.tenantId || 'default') === String(tenantId) &&
+           Number(l.expiresAt || 0) > nowMs
+    );
+
+    if (!link) {
+      return res.status(404).json({ ok: false, error: 'Link inválido ou expirado.' });
+    }
+
+    const eventos = loadEventos();
+    const { evento } = findEventoByIdAndTenant(eventos, link.eventoId, tenantId);
+    if (!evento) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado para este token.' });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        evento,
+        checklistSaida  : evento.checklistSaida   || null,
+        checklistRetorno: evento.checklistRetorno || null
+      }
+    });
+  } catch (e) {
+    console.error('GET /eventos/checklist-por-token falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao validar link de execução.' });
+  }
+});
+
+// Helpers internos
+function findEventoByIdAndTenant(eventos, id, tenantId) {
+  const idx = eventos.findIndex(e => String(e.id) === String(id));
+  if (idx === -1) return { idx: -1, evento: null };
+
+  const ev = eventos[idx];
+  if (tenantId && String(ev.tenantId || '') !== String(tenantId)) {
+    return { idx: -1, evento: null };
+  }
+  return { idx, evento: ev };
+}
+
+// GET /eventos/:id/checklist-saida
+app.get('/eventos/:id/checklist-saida', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const { evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+
+    if (!evento) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    // pode ser null se ainda não tiver sido gerado
+    const payload = evento.checklistSaida || null;
+    return res.json({ ok: true, data: payload });
+  } catch (e) {
+    console.error('GET /eventos/:id/checklist-saida falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao carregar checklist de saída.' });
+  }
+});
+
+// PUT /eventos/:id/checklist-saida
+app.put('/eventos/:id/checklist-saida', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const { idx, evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+
+    if (!evento || idx === -1) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      ...body,
+      eventoId: id,
+      atualizadoEm: now,
+      criadoEm: body.criadoEm || evento.checklistSaida?.criadoEm || now,
+    };
+
+    eventos[idx] = {
+      ...evento,
+      checklistSaida: payload,
+      atualizadoEm: now,
+    };
+
+    saveEventos(eventos);
+    return res.json({ ok: true, data: payload });
+  } catch (e) {
+    console.error('PUT /eventos/:id/checklist-saida falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar checklist de saída.' });
+  }
+});
+
+// GET /eventos/:id/checklist-retorno
+app.get('/eventos/:id/checklist-retorno', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const { evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+
+    if (!evento) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    const payload = evento.checklistRetorno || null;
+    return res.json({ ok: true, data: payload });
+  } catch (e) {
+    console.error('GET /eventos/:id/checklist-retorno falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao carregar checklist de retorno.' });
+  }
+});
+
+// PUT /eventos/:id/checklist-retorno
+app.put('/eventos/:id/checklist-retorno', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const { idx, evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+
+    if (!evento || idx === -1) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      ...body,
+      eventoId: id,
+      atualizadoEm: now,
+      criadoEm: body.criadoEm || evento.checklistRetorno?.criadoEm || now,
+    };
+
+    eventos[idx] = {
+      ...evento,
+      checklistRetorno: payload,
+      atualizadoEm: now,
+    };
+
+    saveEventos(eventos);
+    return res.json({ ok: true, data: payload });
+  } catch (e) {
+    console.error('PUT /eventos/:id/checklist-retorno falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar checklist de retorno.' });
+  }
+});
+
+// GET /eventos/:id/pos-evento  → atalho para o que o módulo Pós-Evento já salva dentro do evento
+app.get('/eventos/:id/pos-evento', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || null;
+
+    const eventos = loadEventos();
+    const { evento } = findEventoByIdAndTenant(eventos, id, tenantId);
+
+    if (!evento) {
+      return res.status(404).json({ ok: false, error: 'Evento não encontrado.' });
+    }
+
+    // o pos-evento já é salvo hoje dentro do objeto evento (campo ev.posEvento)
+    return res.json({ ok: true, data: evento.posEvento || null });
+  } catch (e) {
+    console.error('GET /eventos/:id/pos-evento falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao carregar pós-evento.' });
+  }
+});
+
+// ========================= MÓDULO 20 – ESTOQUE (materiais, setores, insumos) =========================
+
+// Helpers de leitura/gravação
+function loadEstoqueMateriais() {
+  return loadJSON(ESTOQUE_MATERIAIS_FILE, []);
+}
+function saveEstoqueMateriais(lista) {
+  saveJSON(ESTOQUE_MATERIAIS_FILE, Array.isArray(lista) ? lista : []);
+}
+
+function loadEstoqueSetores() {
+  return loadJSON(ESTOQUE_SETORES_FILE, []);
+}
+function saveEstoqueSetores(lista) {
+  saveJSON(ESTOQUE_SETORES_FILE, Array.isArray(lista) ? lista : []);
+}
+
+function loadEstoqueInsumos() {
+  return loadJSON(ESTOQUE_INSUMOS_FILE, []);
+}
+function saveEstoqueInsumos(lista) {
+  saveJSON(ESTOQUE_INSUMOS_FILE, Array.isArray(lista) ? lista : []);
+}
+
+function loadEstoqueMovimentos() {
+  return loadJSON(ESTOQUE_MOVIMENTOS_FILE, []);
+}
+function saveEstoqueMovimentos(lista) {
+  saveJSON(ESTOQUE_MOVIMENTOS_FILE, Array.isArray(lista) ? lista : []);
+}
+
+// ---------- SETORES ----------
+
+// GET /estoque/setores  → lista setores do tenant
+app.get('/estoque/setores', verifyFirebaseToken, (req, res) => {
+  try {
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const todos = loadEstoqueSetores();
+    const setores = (Array.isArray(todos) ? todos : [])
+      .filter(s => !s.tenantId || String(s.tenantId) === String(tenantId));
+
+    return res.json({ ok: true, data: setores });
+  } catch (e) {
+    console.error('GET /estoque/setores falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar setores.' });
+  }
+});
+
+// POST /estoque/setores → cria ou atualiza um setor
+app.post('/estoque/setores', verifyFirebaseToken, (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+    const id = String(body.id || crypto.randomUUID());
+
+    let list = loadEstoqueSetores();
+    if (!Array.isArray(list)) list = [];
+
+    const base = {
+      id,
+      nome: String(body.nome || '').trim(),
+      ativo: body.ativo !== false,
+      tenantId,
+      atualizadoEm: now,
+      criadoEm: body.criadoEm || now
+    };
+
+    const idx = list.findIndex(
+      s => String(s.id) === id && String(s.tenantId || 'default') === String(tenantId)
+    );
+    if (idx > -1) list[idx] = { ...list[idx], ...base };
+    else list.push(base);
+
+    saveEstoqueSetores(list);
+    return res.status(201).json({ ok: true, data: base });
+  } catch (e) {
+    console.error('POST /estoque/setores falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar setor.' });
+  }
+});
+
+// PUT /estoque/setores/:id → atualiza um setor existente
+app.put('/estoque/setores/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+
+    let list = loadEstoqueSetores();
+    if (!Array.isArray(list)) list = [];
+
+    const idx = list.findIndex(
+      s => String(s.id) === String(id) && String(s.tenantId || 'default') === String(tenantId)
+    );
+    if (idx === -1) {
+      // cria se não existir
+      const novo = {
+        id: String(id),
+        nome: String(body.nome || '').trim(),
+        ativo: body.ativo !== false,
+        tenantId,
+        criadoEm: now,
+        atualizadoEm: now
+      };
+      list.push(novo);
+      saveEstoqueSetores(list);
+      return res.json({ ok: true, data: novo });
+    }
+
+    const atualizado = {
+      ...list[idx],
+      ...body,
+      id: list[idx].id,
+      tenantId,
+      atualizadoEm: now
+    };
+    list[idx] = atualizado;
+    saveEstoqueSetores(list);
+
+    return res.json({ ok: true, data: atualizado });
+  } catch (e) {
+    console.error('PUT /estoque/setores/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar setor.' });
+  }
+});
+
+// DELETE /estoque/setores/:id → remove um setor
+app.delete('/estoque/setores/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    let list = loadEstoqueSetores();
+    if (!Array.isArray(list)) list = [];
+
+    const novo = list.filter(
+      s => !(String(s.id) === String(id) && String(s.tenantId || 'default') === String(tenantId))
+    );
+
+    saveEstoqueSetores(novo);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /estoque/setores/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao excluir setor.' });
+  }
+});
+
+// ---------- MATERIAIS ----------
+
+app.get('/estoque/materiais', verifyFirebaseToken, (req, res) => {
+  try {
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const todos = loadEstoqueMateriais();
+    const mats = (Array.isArray(todos) ? todos : [])
+      .filter(m => !m.tenantId || String(m.tenantId) === String(tenantId));
+
+    return res.json({ ok: true, data: mats });
+  } catch (e) {
+    console.error('GET /estoque/materiais falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar materiais.' });
+  }
+});
+
+app.post('/estoque/materiais', verifyFirebaseToken, (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+    const id = String(body.id || crypto.randomUUID());
+
+    let list = loadEstoqueMateriais();
+    if (!Array.isArray(list)) list = [];
+
+    const base = {
+      ...body,
+      id,
+      tenantId,
+      atualizadoEm: now,
+      criadoEm: body.criadoEm || now
+    };
+
+    const idx = list.findIndex(
+      m => String(m.id) === id && String(m.tenantId || 'default') === String(tenantId)
+    );
+    if (idx > -1) list[idx] = { ...list[idx], ...base };
+    else list.push(base);
+
+    saveEstoqueMateriais(list);
+    return res.status(201).json({ ok: true, data: base });
+  } catch (e) {
+    console.error('POST /estoque/materiais falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar material.' });
+  }
+});
+
+app.put('/estoque/materiais/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+
+    let list = loadEstoqueMateriais();
+    if (!Array.isArray(list)) list = [];
+
+    const idx = list.findIndex(
+      m => String(m.id) === String(id) && String(m.tenantId || 'default') === String(tenantId)
+    );
+    if (idx === -1) {
+      const novo = {
+        ...body,
+        id: String(id),
+        tenantId,
+        criadoEm: now,
+        atualizadoEm: now
+      };
+      list.push(novo);
+      saveEstoqueMateriais(list);
+      return res.json({ ok: true, data: novo });
+    }
+
+    const atualizado = {
+      ...list[idx],
+      ...body,
+      id: list[idx].id,
+      tenantId,
+      atualizadoEm: now
+    };
+    list[idx] = atualizado;
+    saveEstoqueMateriais(list);
+
+    return res.json({ ok: true, data: atualizado });
+  } catch (e) {
+    console.error('PUT /estoque/materiais/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar material.' });
+  }
+});
+
+app.delete('/estoque/materiais/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    let list = loadEstoqueMateriais();
+    if (!Array.isArray(list)) list = [];
+
+    const novo = list.filter(
+      m => !(String(m.id) === String(id) && String(m.tenantId || 'default') === String(tenantId))
+    );
+
+    saveEstoqueMateriais(novo);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /estoque/materiais/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao excluir material.' });
+  }
+});
+
+// ---------- INSUMOS (entradas de estoque / sobras) ----------
+
+app.get('/estoque/insumos', verifyFirebaseToken, (req, res) => {
+  try {
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const todos = loadEstoqueInsumos();
+    const lista = (Array.isArray(todos) ? todos : [])
+      .filter(m => !m.tenantId || String(m.tenantId) === String(tenantId));
+
+    return res.json({ ok: true, data: lista });
+  } catch (e) {
+    console.error('GET /estoque/insumos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar insumos.' });
+  }
+});
+
+app.post('/estoque/insumos', verifyFirebaseToken, (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+    const id = String(body.id || crypto.randomUUID());
+
+    let list = loadEstoqueInsumos();
+    if (!Array.isArray(list)) list = [];
+
+    const base = {
+      ...body,
+      id,
+      tenantId,
+      dataISO: body.dataISO || now,
+      atualizadoEm: now,
+      criadoEm: body.criadoEm || now
+    };
+
+    const idx = list.findIndex(
+      m => String(m.id) === id && String(m.tenantId || 'default') === String(tenantId)
+    );
+    if (idx > -1) list[idx] = { ...list[idx], ...base };
+    else list.push(base);
+
+    saveEstoqueInsumos(list);
+    return res.status(201).json({ ok: true, data: base });
+  } catch (e) {
+    console.error('POST /estoque/insumos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar insumo.' });
+  }
+});
+
+app.put('/estoque/insumos/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+
+    let list = loadEstoqueInsumos();
+    if (!Array.isArray(list)) list = [];
+
+    const idx = list.findIndex(
+      m => String(m.id) === String(id) && String(m.tenantId || 'default') === String(tenantId)
+    );
+    if (idx === -1) {
+      const novo = {
+        ...body,
+        id: String(id),
+        tenantId,
+        dataISO: body.dataISO || now,
+        criadoEm: now,
+        atualizadoEm: now
+      };
+      list.push(novo);
+      saveEstoqueInsumos(list);
+      return res.json({ ok: true, data: novo });
+    }
+
+    const atualizado = {
+      ...list[idx],
+      ...body,
+      id: list[idx].id,
+      tenantId,
+      atualizadoEm: now
+    };
+    list[idx] = atualizado;
+    saveEstoqueInsumos(list);
+
+    return res.json({ ok: true, data: atualizado });
+  } catch (e) {
+    console.error('PUT /estoque/insumos/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar insumo.' });
+  }
+});
+
+app.delete('/estoque/insumos/:id', verifyFirebaseToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    let list = loadEstoqueInsumos();
+    if (!Array.isArray(list)) list = [];
+
+    const novo = list.filter(
+      m => !(String(m.id) === String(id) && String(m.tenantId || 'default') === String(tenantId))
+    );
+
+    saveEstoqueInsumos(novo);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('DELETE /estoque/insumos/:id falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao excluir insumo.' });
+  }
+});
+
+// ---------- MOVIMENTOS DE ESTOQUE (saídas definitivas, perdas, ajustes) ----------
+
+app.post('/estoque/movimentos', verifyFirebaseToken, (req, res) => {
+  try {
+    const body = req.body || {};
+    const user = req.user || {};
+    const tenantId = user.tenantId || user.uid || 'default';
+
+    const now = new Date().toISOString();
+    const id = String(body.id || crypto.randomUUID());
+
+    let list = loadEstoqueMovimentos();
+    if (!Array.isArray(list)) list = [];
+
+    const movimento = {
+      ...body,
+      id,
+      tenantId,
+      dataISO: body.dataISO || now,
+      criadoEm: now
+    };
+
+    list.push(movimento);
+    saveEstoqueMovimentos(list);
+
+    return res.status(201).json({ ok: true, data: movimento });
+  } catch (e) {
+    console.error('POST /estoque/movimentos falhou:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao registrar movimento.' });
+  }
+});
+
 // ========================= MÓDULO 3 – FUNIL E LISTAS AUXILIARES =========================
 
 // --- Colunas do Funil ---
@@ -2411,6 +4155,134 @@ app.put('/listas/:slug', verifyFirebaseToken, ensureAllowed('admin'), (req, res)
     res.status(500).json({ ok: false, error: 'erro_ao_salvar_lista' });
   }
 });
+// ==== CATÁLOGO – Cardápios, Adicionais, Serviços ====
+
+// GET /catalogo/cardapios
+app.get('/catalogo/cardapios', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const cat = loadCatalogo();
+    // apiFetch vai retornar cat.cardapios por causa do "data"
+    res.json({ ok: true, data: cat.cardapios });
+  } catch (e) {
+    console.error('[catalogo/cardapios][GET] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_listar_cardapios' });
+  }
+});
+
+// POST /catalogo/cardapios  → cria/atualiza 1 cardápio
+app.post('/catalogo/cardapios', verifyFirebaseToken, ensureAllowed('admin'), (req, res) => {
+  try {
+    const body = req.body || {};
+    const cat  = loadCatalogo();
+
+    const lista = Array.isArray(cat.cardapios) ? cat.cardapios : [];
+
+    // garante um id
+    let id = String(body.id || '').trim();
+    if (!id) id = String(Date.now());
+
+    const novo = {
+      ...body,
+      id,
+      tipo: body.tipo || 'cardapio'
+    };
+
+    const idx = lista.findIndex(p => String(p.id) === String(id));
+    if (idx >= 0) {
+      lista[idx] = novo;
+    } else {
+      lista.push(novo);
+    }
+
+    cat.cardapios = lista;
+    saveCatalogo(cat);
+
+    res.json({ ok: true, data: novo });
+  } catch (e) {
+    console.error('[catalogo/cardapios][POST] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_salvar_cardapio' });
+  }
+});
+
+// GET /catalogo/adicionais
+app.get('/catalogo/adicionais', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const cat = loadCatalogo();
+    res.json({ ok: true, data: cat.adicionais });
+  } catch (e) {
+    console.error('[catalogo/adicionais][GET] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_listar_adicionais' });
+  }
+});
+
+// POST /catalogo/adicionais
+app.post('/catalogo/adicionais', verifyFirebaseToken, ensureAllowed('admin'), (req, res) => {
+  try {
+    const body = req.body || {};
+    const cat  = loadCatalogo();
+    const lista = Array.isArray(cat.adicionais) ? cat.adicionais : [];
+
+    let id = String(body.id || '').trim();
+    if (!id) id = String(Date.now());
+
+    const novo = { ...body, id };
+
+    const idx = lista.findIndex(a => String(a.id) === String(id));
+    if (idx >= 0) {
+      lista[idx] = novo;
+    } else {
+      lista.push(novo);
+    }
+
+    cat.adicionais = lista;
+    saveCatalogo(cat);
+
+    res.json({ ok: true, data: novo });
+  } catch (e) {
+    console.error('[catalogo/adicionais][POST] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_salvar_adicional' });
+  }
+});
+
+// GET /catalogo/servicos
+app.get('/catalogo/servicos', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const cat = loadCatalogo();
+    res.json({ ok: true, data: cat.servicos });
+  } catch (e) {
+    console.error('[catalogo/servicos][GET] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_listar_servicos' });
+  }
+});
+
+// POST /catalogo/servicos
+app.post('/catalogo/servicos', verifyFirebaseToken, ensureAllowed('admin'), (req, res) => {
+  try {
+    const body = req.body || {};
+    const cat  = loadCatalogo();
+    const lista = Array.isArray(cat.servicos) ? cat.servicos : [];
+
+    let id = String(body.id || '').trim();
+    if (!id) id = String(Date.now());
+
+    const novo = { ...body, id };
+
+    const idx = lista.findIndex(s => String(s.id) === String(id));
+    if (idx >= 0) {
+      lista[idx] = novo;
+    } else {
+      lista.push(novo);
+    }
+
+    cat.servicos = lista;
+    saveCatalogo(cat);
+
+    res.json({ ok: true, data: novo });
+  } catch (e) {
+    console.error('[catalogo/servicos][POST] erro:', e?.message || e);
+    res.status(500).json({ ok: false, error: 'erro_ao_salvar_servico' });
+  }
+});
 
 // ==== PORTAL DO CLIENTE – geração e validação de token ====
 
@@ -2482,38 +4354,19 @@ app.post('/portal/token', verifyFirebaseToken, (req, res) => {
       .json({ error: 'Erro ao gerar token do portal do cliente' });
   }
 });
-
-// Valida token e devolve dados públicos do evento
-app.get('/portal/me', (req, res) => {
-  try {
-    const token = String(req.query.token || '').trim();
-    if (!token) {
-      return res.status(400).json({ error: 'token obrigatório' });
-    }
-
-    const tokens = loadPortalTokens();
-    const entry = tokens.find((t) => t.token === token);
-
-    if (!entry) {
-      return res
-        .status(404)
-        .json({ error: 'token inválido ou expirado', code: 'INVALID_TOKEN' });
-    }
-
-    // se quiser, aqui você pode aplicar regra de expiração por data (entry.createdAt)
-    return res.json({ evento: entry.evento });
-  } catch (err) {
-    console.error('Erro em GET /portal/me', err);
-    return res
-      .status(500)
-      .json({ error: 'Erro ao carregar evento do portal do cliente' });
-  }
-});
-
-// ===== Integrações – teste de pagamentos (ETAPA 5.1) =====
-app.post('/api/integracoes/test/payments', (req, res) => {
+// ===== Integrações – teste de pagamentos (Mercado Pago real) =====
+app.post('/api/integracoes/test/payments', async (req, res) => {
   try {
     const { gateway, pixKey } = req.body || {};
+
+    const gw = String(gateway || '').toLowerCase();
+
+    if (gw !== 'mercadopago') {
+      return res.json({
+        ok: true,
+        message: 'Configurações de pagamentos recebidas. (Gateway diferente de Mercado Pago).'
+      });
+    }
 
     if (!pixKey || !String(pixKey).trim()) {
       return res.status(400).json({
@@ -2522,22 +4375,173 @@ app.post('/api/integracoes/test/payments', (req, res) => {
       });
     }
 
-    // FUTURO:
-    // Aqui você pode colocar um teste REAL com o gateway (Mercado Pago, Asaas, etc.).
-    // Por enquanto, se chegou até aqui, consideramos o teste básico OK.
+    const mp = await getMercadoPagoProvider();
+    const ok = await mp.testConnection();
+  
+    if (!ok) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Não foi possível conectar ao Mercado Pago. Verifique o Access Token.'
+      });
+    }
 
     return res.json({
       ok: true,
-      message: 'Configurações de pagamentos recebidas. Teste básico OK.'
+      message: 'Conexão com o Mercado Pago OK! Token válido e chave PIX preenchida.'
     });
   } catch (e) {
     console.error('[integracoes] erro em POST /api/integracoes/test/payments', e);
     return res.status(500).json({
       ok: false,
-      message: 'Erro interno ao testar pagamentos.'
+      message: 'Erro interno ao testar pagamentos com Mercado Pago.'
     });
   }
 });
+
+// ===== Integrações – criação de cobrança (Fase 1: simulada) =====
+// Esta rota recebe o payload do financeiro-modal (PIX/BOLETO/CARTÃO)
+// e apenas registra/loga a cobrança de forma simples, sem chamar um
+// gateway real ainda. Depois podemos trocar o miolo para Mercado Pago.
+// ===== Integrações – criação de cobrança (Fase 2: gravando no banco) =====
+// ===== Integrações – criação de cobrança (Mercado Pago real) =====
+app.post('/api/integracoes/payments/cobranca', async (req, res) => {
+  try {
+    const body      = req.body || {};
+    const cobranca  = body.cobranca || {};
+    const parcelas  = Array.isArray(body.parcelas) ? body.parcelas : [];
+    const metodo    = (cobranca.metodo || 'pix').toLowerCase();
+    const clienteNome  = cobranca.nome || 'Cliente não informado';
+    const clienteDoc   = (cobranca.documento && cobranca.documento.numero) || null;
+    const clienteEmail = cobranca.email || null;
+    const clienteTel   = cobranca.telefone || null;
+    const eventoId     = body.eventoId || null;
+    const origem       = eventoId ? 'evento' : 'dashboard';
+
+    // soma o total das parcelas (já em reais)
+    const total = parcelas.reduce((soma, p) => {
+      const v = Number(p.valor || 0);
+      return soma + (isNaN(v) ? 0 : v);
+    }, 0);
+
+    const nParcelas    = parcelas.length || 0;
+    const vencPrimeira = nParcelas > 0 ? (parcelas[0].vencimentoISO || null) : null;
+
+    if (!total || !nParcelas) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Nenhuma parcela/valor encontrado para gerar a cobrança.'
+      });
+    }
+
+    // Nesta fase vamos trabalhar só com PIX e Boleto
+    if (!['pix', 'boleto'].includes(metodo)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Apenas PIX ou Boleto estão habilitados nesta fase da integração.'
+      });
+    }
+
+    // Provider Mercado Pago (já configurado lá em cima com getMercadoPagoProvider)
+    const mp = await getMercadoPagoProvider();
+
+    const mpResp = await mp.createCharge({
+      method: metodo,                     // 'pix' ou 'boleto'
+      amount: Number(total.toFixed(2)),   // valor em reais
+      description: cobranca.descricao || cobranca.desc || 'Cobrança de evento',
+      due_date: metodo === 'boleto' && vencPrimeira
+        ? String(vencPrimeira).slice(0, 10) // YYYY-MM-DD
+        : undefined,
+      customer: {
+        name: clienteNome,
+        email: clienteEmail || undefined,
+        document: clienteDoc ? String(clienteDoc).replace(/\D/g, '') : undefined
+      },
+      metadata: {
+        origem,
+        event_id: eventoId,
+        lancamento_id: body.lancamentoId || null
+      }
+    });
+
+    const nowIso = new Date().toISOString();
+    const mpId   = (mpResp && mpResp.id != null)
+      ? String(mpResp.id)
+      : ('COB-' + Date.now().toString(36).toUpperCase());
+
+    const tx = (mpResp
+      && mpResp.point_of_interaction
+      && mpResp.point_of_interaction.transaction_data) || {};
+
+    // Persiste no banco
+    db.prepare(`
+      INSERT INTO cobrancas_bancarias (
+        id, gateway, metodo, status,
+        event_id, origem,
+        cliente_nome, cliente_doc, cliente_email, cliente_tel,
+        total_cents, n_parcelas, vencimento_primeira_iso,
+        criado_em_iso, raw_payload
+      ) VALUES (
+        @id, @gateway, @metodo, @status,
+        @event_id, @origem,
+        @cliente_nome, @cliente_doc, @cliente_email, @cliente_tel,
+        @total_cents, @n_parcelas, @vencimento_primeira_iso,
+        @criado_em_iso, @raw_payload
+      )
+    `).run({
+      id: mpId,
+      gateway: 'mercadopago',
+      metodo,
+      status: 'pendente',
+      event_id: eventoId,
+      origem,
+      cliente_nome: clienteNome,
+      cliente_doc: clienteDoc,
+      cliente_email: clienteEmail,
+      cliente_tel: clienteTel,
+      total_cents: Math.round(total * 100),
+      n_parcelas: nParcelas,
+      vencimento_primeira_iso: vencPrimeira,
+      criado_em_iso: nowIso,
+      raw_payload: JSON.stringify({ requisicao: body, resposta_gateway: mpResp })
+    });
+
+    const respPayload = {
+      ok: true,
+      gateway: 'mercadopago',
+      tipo: metodo,
+      id: mpId,
+      // aqui em reais (ex.: 150.5) – o modal cuida do formato BR
+      valor: Number(total.toFixed(2))
+    };
+
+    if (metodo === 'pix') {
+      respPayload.pix = {
+        // o modal aceita qualquer um destes campos
+        qr_base64: tx.qr_code_base64 || tx.qrCodeBase64 || null,
+        qr_code:   tx.qr_code || null,
+        copia_cola: tx.qr_code || null,
+        checkout_url: tx.ticket_url || null
+      };
+    } else if (metodo === 'boleto') {
+      respPayload.boleto = {
+        boleto_url:
+          (mpResp.transaction_details && mpResp.transaction_details.external_resource_url) ||
+          mpResp.ticket_url ||
+          null
+      };
+    }
+
+    return res.json(respPayload);
+  } catch (e) {
+    console.error('[integracoes] erro em POST /api/integracoes/payments/cobranca', e);
+    return res.status(500).json({
+      ok: false,
+      message: 'Erro interno ao criar cobrança no Mercado Pago.'
+    });
+  }
+});
+
+
 // ===== Usuários (cadastro-usuario.html / usuarios.html) =====
 
 // GET /usuarios -> lista todos (sem campo senha)
@@ -2854,9 +4858,314 @@ app.delete('/usuarios', (req, res) => {
     return res.status(500).json({ status: 500, error: 'Erro ao remover usuário.' });
   }
 });
+// ========================= PDV – Vendas & Caixa (M30/M31) =========================
+
+/**
+ * POST /pdv/vendas
+ * Body esperado:
+ *  {
+ *    venda: {...},     // objeto que o PDV monta (centavos, etc.)
+ *    origem: "itens" | "ingressos",
+ *    formaLabel: "Dinheiro" | "Crédito" | ...
+ *  }
+ */
+app.post('/pdv/vendas', (req, res) => {
+  try {
+    const body  = req.body || {};
+    const venda = body.venda || {};
+    const origem = String(body.origem || '').trim() || null;
+
+    const id      = String(venda.id || '').trim();
+    const eventId = String(venda.eventoId || '').trim();
+
+    if (!id || !eventId) {
+      return res.status(400).json({ ok: false, error: 'id_e_eventoId_obrigatorios' });
+    }
+
+    const nowIso       = new Date().toISOString();
+    const createdAtIso = String(venda.createdAt || nowIso);
+    const bruto        = Number(venda.valorBruto || 0)  || 0;
+    const desc         = Number(venda.desconto || 0)    || 0;
+    const liquido      = Math.max(0, bruto - desc);
+    const pago         = Number(venda.valorPago || 0)   || 0;
+    const troco        = Number(venda.troco || 0)       || 0;
+
+    const formaId      = String(venda.forma || '');
+    const formaLabel   = String(body.formaLabel || venda.formaLabel || '');
+    const operador     = String(venda.operador || '');
+    const categoriaId  = venda.categoriaId != null ? String(venda.categoriaId) : null;
+    const subcatId     = venda.subcategoriaId != null ? String(venda.subcategoriaId) : null;
+
+    const tenantId = String(req.headers['x-tenant-id'] || 'default');
+    const createdBy = (req.user && req.user.uid) ? String(req.user.uid) : null;
+
+    db.prepare(`
+      INSERT OR REPLACE INTO pdv_vendas (
+        id,
+        event_id,
+        created_at_iso,
+        operador,
+        forma_id,
+        forma_label,
+        valor_bruto_cents,
+        desconto_cents,
+        valor_liquido_cents,
+        valor_pago_cents,
+        troco_cents,
+        categoria_id,
+        subcategoria_id,
+        origem,
+        payload_json,
+        created_by,
+        tenant_id
+      ) VALUES (
+        @id,
+        @event_id,
+        @created_at_iso,
+        @operador,
+        @forma_id,
+        @forma_label,
+        @valor_bruto_cents,
+        @desconto_cents,
+        @valor_liquido_cents,
+        @valor_pago_cents,
+        @troco_cents,
+        @categoria_id,
+        @subcategoria_id,
+        @origem,
+        @payload_json,
+        @created_by,
+        @tenant_id
+      )
+    `).run({
+      id,
+      event_id: eventId,
+      created_at_iso: createdAtIso,
+      operador,
+      forma_id: formaId,
+      forma_label: formaLabel,
+      valor_bruto_cents: bruto,
+      desconto_cents: desc,
+      valor_liquido_cents: liquido,
+      valor_pago_cents: pago,
+      troco_cents: troco,
+      categoria_id: categoriaId,
+      subcategoria_id: subcatId,
+      origem,
+      payload_json: JSON.stringify(venda || {}),
+      created_by: createdBy,
+      tenant_id: tenantId
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PDV] erro em POST /pdv/vendas:', e);
+    return res.status(500).json({ ok: false, error: 'erro_interno_pdv_vendas' });
+  }
+});
+
+/**
+ * POST /pdv/caixa/movimentos
+ * Body esperado:
+ *  {
+ *    eventoId: "<id do evento>",
+ *    tipo: "abertura" | "venda-itens" | "venda-ingressos" | "sangria" | "fechamento",
+ *    formaLabel: "Dinheiro" | "PIX" | ... (opcional),
+ *    valorCents: 12000,
+ *    saldoDinheiroCents: 8000,
+ *    saldoEletronicoCents: 4000,
+ *    resp: "Nome do responsável"
+ *  }
+ */
+app.post('/pdv/caixa/movimentos', (req, res) => {
+  try {
+    const body = req.body || {};
+    const eventId = String(body.eventoId || body.eventId || '').trim();
+    const tipo    = String(body.tipo || '').trim();
+
+    if (!eventId || !tipo) {
+      return res.status(400).json({ ok: false, error: 'eventoId_e_tipo_obrigatorios' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const id = 'mov_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const tenantId  = String(req.headers['x-tenant-id'] || 'default');
+    const createdBy = (req.user && req.user.uid) ? String(req.user.uid) : null;
+
+    const valor       = Number(body.valorCents || 0) || 0;
+    const saldoDin    = Number(body.saldoDinheiroCents || 0) || 0;
+    const saldoElec   = Number(body.saldoEletronicoCents || 0) || 0;
+    const formaLabel  = String(body.formaLabel || '');
+    const resp        = String(body.resp || '');
+
+    db.prepare(`
+      INSERT INTO pdv_movimentos (
+        id,
+        event_id,
+        tipo,
+        forma_label,
+        valor_cents,
+        saldo_dinheiro_cents,
+        saldo_eletronico_cents,
+        resp,
+        created_at_iso,
+        created_by,
+        tenant_id
+      ) VALUES (
+        @id,
+        @event_id,
+        @tipo,
+        @forma_label,
+        @valor_cents,
+        @saldo_dinheiro_cents,
+        @saldo_eletronico_cents,
+        @resp,
+        @created_at_iso,
+        @created_by,
+        @tenant_id
+      )
+    `).run({
+      id,
+      event_id: eventId,
+      tipo,
+      forma_label: formaLabel,
+      valor_cents: valor,
+      saldo_dinheiro_cents: saldoDin,
+      saldo_eletronico_cents: saldoElec,
+      resp,
+      created_at_iso: nowIso,
+      created_by: createdBy,
+      tenant_id: tenantId
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PDV] erro em POST /pdv/caixa/movimentos:', e);
+    return res.status(500).json({ ok: false, error: 'erro_interno_pdv_movimentos' });
+  }
+});
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, db: DB_PATH });
+});
+// ===============================================
+//  CONVITES / CHECK-IN – LOGS NA API (M30/M31)
+// ===============================================
+/**
+ * POST /convites/:ticketId/checkin
+ *  Corpo esperado:
+ *  {
+ *    "eventoId": "<id do evento>",
+ *    "numero": "<numero impresso do convite>",
+ *    "tipo": "<nome do tipo (opcional)>",
+ *    "portaria": "<identificador da portaria/leitor>",
+ *    "extra": { ... qualquer outra coisa ... }
+ *  }
+ */
+app.post('/convites/:ticketId/checkin', verifyFirebaseToken, async (req, res) => {
+  try {
+    const user = req.user || {};
+    const ticketId = String(req.params.ticketId || '');
+    const body = req.body || {};
+
+    if (!ticketId) {
+      return res.status(400).json({ ok: false, error: 'ticketId obrigatório' });
+    }
+
+    const logs = loadConviteLogs();
+    const now = new Date().toISOString();
+
+    const log = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      action: 'checkin',
+      ticketId,
+      eventoId: String(body.eventoId || ''),
+      numero: String(body.numero || ''),
+      tipo: String(body.tipo || ''),
+      portaria: String(body.portaria || ''),
+      actorId: String(user.uid || user.id || ''),
+      actorEmail: String(user.email || ''),
+      actorName: String(user.name || ''),
+      extra: body.extra || null,
+      createdAt: now
+    };
+
+    logs.push(log);
+    saveConviteLogs(logs);
+
+    return res.json({ ok: true, log });
+  } catch (e) {
+    console.error('Erro em POST /convites/:ticketId/checkin', e);
+    return res.status(500).json({ ok: false, error: 'erro-interno' });
+  }
+});
+
+/**
+ * POST /convites/:ticketId/uncheckin
+ *  Corpo esperado:
+ *  {
+ *    "eventoId": "<id do evento>",
+ *    "motivo": "<opcional>"
+ *  }
+ */
+app.post('/convites/:ticketId/uncheckin', verifyFirebaseToken, async (req, res) => {
+  try {
+    const user = req.user || {};
+    const ticketId = String(req.params.ticketId || '');
+    const body = req.body || {};
+
+    if (!ticketId) {
+      return res.status(400).json({ ok: false, error: 'ticketId obrigatório' });
+    }
+
+    const logs = loadConviteLogs();
+    const now = new Date().toISOString();
+
+    const log = {
+      id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      action: 'uncheckin',
+      ticketId,
+      eventoId: String(body.eventoId || ''),
+      motivo: String(body.motivo || ''),
+      portaria: String(body.portaria || ''),
+      actorId: String(user.uid || user.id || ''),
+      actorEmail: String(user.email || ''),
+      actorName: String(user.name || ''),
+      extra: body.extra || null,
+      createdAt: now
+    };
+
+    logs.push(log);
+    saveConviteLogs(logs);
+
+    return res.json({ ok: true, log });
+  } catch (e) {
+    console.error('Erro em POST /convites/:ticketId/uncheckin', e);
+    return res.status(500).json({ ok: false, error: 'erro-interno' });
+  }
+});
+
+/**
+ * GET /convites/logs?eventoId=XXX&ticketId=YYY
+ *  – lista logs para relatórios/auditoria
+ */
+app.get('/convites/logs', verifyFirebaseToken, async (req, res) => {
+  try {
+    const eventoId = String(req.query.eventoId || '') || null;
+    const ticketId = String(req.query.ticketId || '') || null;
+
+    let logs = loadConviteLogs();
+    if (eventoId) logs = logs.filter(l => String(l.eventoId) === String(eventoId));
+    if (ticketId) logs = logs.filter(l => String(l.ticketId) === String(ticketId));
+
+    // ordena mais recentes primeiro
+    logs.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+
+    return res.json({ ok: true, logs });
+  } catch (e) {
+    console.error('Erro em GET /convites/logs', e);
+    return res.status(500).json({ ok: false, error: 'erro-interno' });
+  }
 });
 
 // ========================= Inicialização =========================
