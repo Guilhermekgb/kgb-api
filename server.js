@@ -339,7 +339,23 @@ function loadJSON(file, fb) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8')); } catch { return fb; }
 }
 function saveJSON(file, obj) {
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(obj, null, 2), 'utf8');
+  const fp = path.join(DATA_DIR, file);
+  fs.writeFileSync(fp, JSON.stringify(obj, null, 2), 'utf8');
+
+  // If Firebase Storage is configured, upload the saved JSON to the bucket
+  // asynchronously so we preserve the current synchronous behavior.
+  if (bucket) {
+    (async () => {
+      try {
+        await bucket.file(file).save(JSON.stringify(obj, null, 2), {
+          contentType: 'application/json'
+        });
+        console.log('[INFO] saveJSON: uploaded to Firebase Storage ->', file);
+      } catch (err) {
+        console.error('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+      }
+    })();
+  }
 }
 // === CONVITES / CHECK-IN (M30/M31) ===
 const CONVITES_LOGS_FILE = 'convites-logs.json';
