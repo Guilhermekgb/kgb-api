@@ -1,0 +1,306 @@
+{
+  "keyword": "API_BASE",
+  "count": 119,
+  "sample": [
+    {
+      "file": "agenda-bridge.js",
+      "line": 120,
+      "column": 47,
+      "snippet": "const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE');"
+    },
+    {
+      "file": "agenda-bridge.js",
+      "line": 199,
+      "column": 49,
+      "snippet": "const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE');"
+    },
+    {
+      "file": "agenda-equipe.html",
+      "line": 23,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "agenda.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "alertas.html",
+      "line": 17,
+      "column": 13,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "api/remote-adapter.js",
+      "line": 17,
+      "column": 16,
+      "snippet": "const ls = localStorage.getItem('API_BASE');"
+    },
+    {
+      "file": "area-cliente.html",
+      "line": 21,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 58,
+      "column": 5,
+      "snippet": "localStorage.getItem('API_BASE') ||"
+    },
+    {
+      "file": "assinatura.html",
+      "line": 329,
+      "column": 37,
+      "snippet": "|| (function () { try { return (localStorage.getItem('API_BASE') || '').trim(); } catch { return ''; } })()"
+    },
+    {
+      "file": "auditoria.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "backup.html",
+      "line": 21,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "backup.html",
+      "line": 307,
+      "column": 37,
+      "snippet": "return window.__API_BASE__ || localStorage.getItem('API_BASE') || 'http://localhost:3001';"
+    },
+    {
+      "file": "cadastro-cliente.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "cadastro-evento.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "cadastro-usuario.html",
+      "line": 20,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "cardapios-e-produtos.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "cardapios-e-produtos.js",
+      "line": 110,
+      "column": 7,
+      "snippet": "localStorage.getItem(\"API_BASE\") ||"
+    },
+    {
+      "file": "categorias-gerais.html",
+      "line": 21,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "categorias-gerais.js",
+      "line": 18,
+      "column": 30,
+      "snippet": "* ou da chave \"API_BASE\" no localStorage."
+    },
+    {
+      "file": "categorias-gerais.js",
+      "line": 20,
+      "column": 41,
+      "snippet": "const API_BASE = window.__API_BASE__ || localStorage.getItem(\"API_BASE\") || \"\";"
+    },
+    {
+      "file": "categorias-gerais.js",
+      "line": 109,
+      "column": 73,
+      "snippet": "console.warn(\"[Categorias] API_BASE não configurado; usando somente localStorage.\");"
+    },
+    {
+      "file": "checkin.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "checkin.html",
+      "line": 302,
+      "column": 46,
+      "snippet": "const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();"
+    },
+    {
+      "file": "checkin.html",
+      "line": 337,
+      "column": 46,
+      "snippet": "const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();"
+    },
+    {
+      "file": "checklist-execucao.html",
+      "line": 21,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "checklist-materiais.html",
+      "line": 30,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "checklist.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "cliente-detalhado.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "clientes-lista.html",
+      "line": 31,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "colaboradores.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "comissoes.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "configuracoes.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "contrato.html",
+      "line": 20,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "contrato.js",
+      "line": 78,
+      "column": 20,
+      "snippet": "const ls = localStorage.getItem('API_BASE') || '';"
+    },
+    {
+      "file": "custos-fixo.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "dashboard.html",
+      "line": 12,
+      "column": 9,
+      "snippet": "try { localStorage.setItem('API_BASE', RENDER); } catch(e){}"
+    },
+    {
+      "file": "dashboard.html",
+      "line": 34,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "definicoes-evento.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "degustacoes-disponiveis.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "detalhes-responsavel-evento.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "documentacao-api.html",
+      "line": 23,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "documentos-evento.html",
+      "line": 24,
+      "column": 13,
+      "snippet": "try { localStorage.setItem(\"__API_BASE__\", base); } catch(e){}"
+    },
+    {
+      "file": "documentos-evento.js",
+      "line": 38,
+      "column": 20,
+      "snippet": "const ls = localStorage.getItem('API_BASE') || '';"
+    },
+    {
+      "file": "documentos-evento.js",
+      "line": 41,
+      "column": 65,
+      "snippet": "console.warn('[DocsEvento] Não consegui ler API_BASE do localStorage:', e);"
+    },
+    {
+      "file": "entradas-saidas.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "equipe.html",
+      "line": 23,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "escala-evento.html",
+      "line": 24,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "estoque-insumos.html",
+      "line": 23,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "estoque-materiais.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    },
+    {
+      "file": "estoque-setores.html",
+      "line": 22,
+      "column": 11,
+      "snippet": "try { localStorage.setItem(\"API_BASE\", base); } catch(e) {}"
+    }
+  ]
+}
