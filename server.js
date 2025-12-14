@@ -485,14 +485,14 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 
 app.get('/clientes', (req, res) => {
   try {
-    db.all('SELECT * FROM clientes', [], (err, rows) => {
-      if (err) {
-        console.error('ERRO SQL /clientes:', err.message);
-        // em vez de quebrar, devolve lista vazia
-        return res.json({ ok: true, data: [] });
-      }
-      return res.json({ ok: true, data: rows || [] });
-    });
+    // usa better-sqlite3 (sincrono)
+    try {
+      const rows = db.prepare('SELECT * FROM clientes').all();
+      return res.json({ ok: true, data: Array.isArray(rows) ? rows : [] });
+    } catch (e) {
+      console.error('ERRO SQL /clientes:', e?.message || e);
+      return res.json({ ok: true, data: [] });
+    }
   } catch (err) {
     console.error('ERRO GERAL /clientes:', err);
     return res.json({ ok: true, data: [] });
