@@ -143,6 +143,25 @@
     preload,
     isLocalKey
   };
+  
+  // Conveniência: helper específico para fotosClientes (patch por chave)
+  async function patchFotos(key, value){
+    try{
+      await patchJSON('fotosClientes', (Object.prototype.hasOwnProperty.call({ key, value }, 'key') ? { key, value } : { [key]: value }));
+    }catch(e){ /* ignore */ }
+  }
+  
+  // Expor API mínima
+  const storageAdapter = {
+    getJSON,
+    setJSON,
+    patchJSON,
+    getRaw,
+    setRaw,
+    preload,
+    isLocalKey,
+    patchFotos
+  };
 
   // Torna disponível como `window.storageAdapter`
   try{ global.storageAdapter = storageAdapter; }catch(e){ /* ignore */ }

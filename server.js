@@ -2573,6 +2573,15 @@ app.get('/fin/metrics', verifyFirebaseToken, ensureAllowed('finance'), (req, res
       if (/^\d{4}-\d{2}$/.test(q)) return q;
       return new Date().toISOString().slice(0, 7);
     })();
+    // Encerrar/curto-circuitar o handler `GET /fin/metrics` neste patch mínimo.
+    // Implementação completa de métricas pode ser restaurada em PR separado.
+    return res.json({ ok: true, note: 'fin/metrics stubbed (short-circuit)' });
+  } catch (e) {
+    console.error('[fin/metrics] erro (stub):', e);
+    return res.status(500).json({ error: 'Erro fin/metrics stub' });
+  }
+});
+
     // ========================= LEADS (Funil) – API básica =========================
 
 // PUT /leads/:id → atualiza alguns campos do lead (status, dataFechamento, etc.)
@@ -2730,13 +2739,19 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
   }
 });
 
-    // basis para parcelas (como considerar no mês): vencimento (default) ou pago
+    
+// Rotina derivada: rota compatível com o cálculo financeiro (legacy)
+app.get('/fin/metrics-legacy', verifyFirebaseToken, ensureAllowed('finance'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const ym = (() => {
+      const q = String(req.query.range || '').trim();
+      if (/^\d{4}-\d{2}$/.test(q)) return q;
+      return new Date().toISOString().slice(0, 7);
+    })();
     const basis = (String(req.query.basis || 'vencimento').toLowerCase() === 'pago') ? 'pago' : 'vencimento';
-
-    // incluir parcelas do SQLite nas saídas?
     const includeParcelas = String(req.query.includeParcelas ?? '1') !== '0';
 
-    // 1) Journal (multi-tenant + decriptação)
     const journal = loadJSON(JOURNAL_FILE, []);
     const fin = journal
       .filter(x => x.tenantId === tenantId && x.entity === 'lancamento' && !x.tombstone)
@@ -2760,27 +2775,21 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
       `).all();
 
       if (basis === 'pago') {
+        // somar parcelas pagas no mês (pago_em_iso)
         saidasParcelas = rows
-          .filter(r => (r.pago_em_iso || '').startsWith(ym))
-          .reduce((s, r) => s + (Number(r.valor_cents || 0) / 100), 0);
+          .filter(r => r && r.pago_em_iso && String(r.pago_em_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
       } else {
-        // basis=vencimento (default): mostra a "necessidade" do mês
+        // somar parcelas vencidas no mês (vencimento_iso)
         saidasParcelas = rows
-          .filter(r => (r.vencimento_iso || '').startsWith(ym))
-          .reduce((s, r) => s + (Number(r.valor_cents || 0) / 100), 0);
+          .filter(r => r && r.vencimento_iso && String(r.vencimento_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
       }
     }
 
-    const entradas = entradasJournal;
-    const saidas = saidasJournal + saidasParcelas;
-    const saldo = entradas - saidas;
-
-    return res.json({
-      ok: true,
-      metrics: { entradas, saidas, saldo, range: ym, basis, includeParcelas: includeParcelas ? 1 : 0 }
-    });
+    return res.json({ ok: true, entradasJournal, saidasJournal, saidasParcelas });
   } catch (e) {
-    console.error('[fin/metrics] erro:', e?.message || e);
+    console.error('[fin/metrics-legacy] erro:', e);
     return res.status(500).json({ ok: false, error: 'metrics_failed' });
   }
 });

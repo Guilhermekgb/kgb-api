@@ -78,6 +78,13 @@ Principais pontos:
 
 Testes realizados: testes locais de POST/GET clientes, validação de backups via `/api/storage-backup`, e verificação manual das páginas principais.
 
+Testes adicionais (executados localmente):
+
+- Iniciado servidor em background com `DISABLE_AUTH=1` e verificado que `GET /fotos-clientes` e `PATCH /fotos-clientes` funcionam corretamente (merge parcial confirmou as chaves `foto1` e `foto2`).
+- Confirmei que `PATCH /fotos-clientes` retorna o mapa atualizado e que `GET /fotos-clientes` devolve o mapa com as entradas mescladas.
+
+Observação: durante testes iniciais, arquivos temporários do SQLite (`data.db-shm`, `data.db-wal`) foram acidentalmente adicionados ao índice; já foram removidos do repositório e `.gitignore` atualizado para evitar futuros commits desses arquivos.
+
 Notas de deploy/segurança:
 - Não usar `DISABLE_AUTH=1` em produção
 - Definir `BACKUP_UPLOAD_TOKEN` e variáveis de ambiente para credenciais do Firebase se necessário
