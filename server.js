@@ -352,7 +352,16 @@ function saveJSON(file, obj) {
         });
         console.log('[INFO] saveJSON: uploaded to Firebase Storage ->', file);
       } catch (err) {
-        console.error('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+        // Common failure modes:
+        // - 404 / notFound: bucket name invalid or project misconfigured
+        // - permission errors
+        // For local dev we want a quieter log and actionable hint.
+        const code = err && err.code;
+        if (code === 404 || String(err?.message || '').toLowerCase().includes('notfound') || String(err?.message || '').toLowerCase().includes('not found')) {
+          console.warn('[WARN] saveJSON: Firebase bucket not found for upload ->', file, '-', err?.message || err);
+        } else {
+          console.warn('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+        }
       }
     })();
   }
@@ -2425,6 +2434,72 @@ app.post('/backup/dump', verifyFirebaseToken, ensureAllowed('admin'), async (req
   }
 });
 
+// ===== Fotos de clientes: armazenamento centralizado (mapa chave -> dataURL)
+// GET /fotos-clientes  => retorna mapa para o tenant
+// PUT /fotos-clientes  => substitui o mapa do tenant (body = object)
+app.get('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const map = (all && typeof all === 'object') ? (all[tenantId] || {}) : {};
+    return res.json({ ok: true, data: map });
+  } catch (e) {
+    console.error('[GET /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao ler fotosClientes' });
+  }
+});
+
+app.put('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere um objeto' });
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const base = (all && typeof all === 'object') ? all : {};
+    base[tenantId] = body;
+    saveJSON(file, base);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar fotosClientes' });
+  }
+});
+
+// PATCH /fotos-clientes => merge parcial do mapa do tenant
+app.patch('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere um objeto' });
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const base = (all && typeof all === 'object') ? all : {};
+    const current = (base[tenantId] && typeof base[tenantId] === 'object') ? base[tenantId] : {};
+
+    // Suporta dois formatos:
+    // 1) { key: 'foto1', value: 'data:...' }
+    // 2) { foto1: 'data:...', foto2: 'data:...' }
+    if (Object.prototype.hasOwnProperty.call(body, 'key') && Object.prototype.hasOwnProperty.call(body, 'value')) {
+      const k = String(body.key);
+      current[k] = body.value;
+    } else {
+      // Mescla todas as chaves do body no mapa atual
+      Object.keys(body).forEach(k => {
+        current[k] = body[k];
+      });
+    }
+
+    base[tenantId] = current;
+    saveJSON(file, base);
+    return res.json({ ok: true, data: current });
+  } catch (e) {
+    console.error('[PATCH /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao aplicar patch fotosClientes' });
+  }
+});
+
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {
     // body: { name, data (string|object) }
@@ -2507,6 +2582,51 @@ app.get('/fin/metrics', verifyFirebaseToken, ensureAllowed('finance'), (req, res
       if (/^\d{4}-\d{2}$/.test(q)) return q;
       return new Date().toISOString().slice(0, 7);
     })();
+    const basis = (String(req.query.basis || 'vencimento').toLowerCase() === 'pago') ? 'pago' : 'vencimento';
+    const includeParcelas = String(req.query.includeParcelas ?? '1') !== '0';
+
+    const journal = loadJSON(JOURNAL_FILE, []);
+    const fin = journal
+      .filter(x => x.tenantId === tenantId && x.entity === 'lancamento' && !x.tombstone)
+      .map(x => ({ ...x, payload: maybeDecryptPayload(x.payload) }));
+
+    const finMes = fin.filter(x => String(x.payload.data || '').startsWith(ym));
+    const entradasJournal = finMes
+      .filter(x => String(x.payload.tipo || '').toLowerCase() === 'entrada')
+      .reduce((s, x) => s + (+x.payload.valor || 0), 0);
+
+    const saidasJournal = finMes
+      .filter(x => String(x.payload.tipo || '').toLowerCase() === 'saida')
+      .reduce((s, x) => s + (+x.payload.valor || 0), 0);
+
+    // 2) Parcelas do SQLite (opcional) → saídas do mês
+    let saidasParcelas = 0;
+    if (includeParcelas) {
+      const rows = db.prepare(`
+        SELECT valor_cents, vencimento_iso, pago_em_iso
+        FROM parcelas
+      `).all();
+
+      if (basis === 'pago') {
+        // somar parcelas pagas no mês (pago_em_iso)
+        saidasParcelas = rows
+          .filter(r => r && r.pago_em_iso && String(r.pago_em_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
+      } else {
+        // somar parcelas vencidas no mês (vencimento_iso)
+        saidasParcelas = rows
+          .filter(r => r && r.vencimento_iso && String(r.vencimento_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
+      }
+    }
+
+    return res.json({ ok: true, entradasJournal, saidasJournal, saidasParcelas });
+  } catch (e) {
+    console.error('[fin/metrics] erro (stub):', e);
+    return res.status(500).json({ error: 'Erro fin/metrics stub' });
+  }
+});
+
     // ========================= LEADS (Funil) – API básica =========================
 
 // PUT /leads/:id → atualiza alguns campos do lead (status, dataFechamento, etc.)
@@ -2664,13 +2784,19 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
   }
 });
 
-    // basis para parcelas (como considerar no mês): vencimento (default) ou pago
+    
+// Rotina derivada: rota compatível com o cálculo financeiro (legacy)
+app.get('/fin/metrics-legacy', verifyFirebaseToken, ensureAllowed('finance'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const ym = (() => {
+      const q = String(req.query.range || '').trim();
+      if (/^\d{4}-\d{2}$/.test(q)) return q;
+      return new Date().toISOString().slice(0, 7);
+    })();
     const basis = (String(req.query.basis || 'vencimento').toLowerCase() === 'pago') ? 'pago' : 'vencimento';
-
-    // incluir parcelas do SQLite nas saídas?
     const includeParcelas = String(req.query.includeParcelas ?? '1') !== '0';
 
-    // 1) Journal (multi-tenant + decriptação)
     const journal = loadJSON(JOURNAL_FILE, []);
     const fin = journal
       .filter(x => x.tenantId === tenantId && x.entity === 'lancamento' && !x.tombstone)
@@ -2694,27 +2820,21 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
       `).all();
 
       if (basis === 'pago') {
+        // somar parcelas pagas no mês (pago_em_iso)
         saidasParcelas = rows
-          .filter(r => (r.pago_em_iso || '').startsWith(ym))
-          .reduce((s, r) => s + (Number(r.valor_cents || 0) / 100), 0);
+          .filter(r => r && r.pago_em_iso && String(r.pago_em_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
       } else {
-        // basis=vencimento (default): mostra a "necessidade" do mês
+        // somar parcelas vencidas no mês (vencimento_iso)
         saidasParcelas = rows
-          .filter(r => (r.vencimento_iso || '').startsWith(ym))
-          .reduce((s, r) => s + (Number(r.valor_cents || 0) / 100), 0);
+          .filter(r => r && r.vencimento_iso && String(r.vencimento_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
       }
     }
 
-    const entradas = entradasJournal;
-    const saidas = saidasJournal + saidasParcelas;
-    const saldo = entradas - saidas;
-
-    return res.json({
-      ok: true,
-      metrics: { entradas, saidas, saldo, range: ym, basis, includeParcelas: includeParcelas ? 1 : 0 }
-    });
+    return res.json({ ok: true, entradasJournal, saidasJournal, saidasParcelas });
   } catch (e) {
-    console.error('[fin/metrics] erro:', e?.message || e);
+    console.error('[fin/metrics-legacy] erro:', e);
     return res.status(500).json({ ok: false, error: 'metrics_failed' });
   }
 });
