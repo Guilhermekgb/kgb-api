@@ -552,6 +552,29 @@ app.post('/clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
     clientes.push(novoCliente);
     saveJSON(CLIENTES_FILE, clientes);
 
+    // Também grava/atualiza na tabela SQLite para manter consistência
+    try {
+      const stmt = db.prepare(`INSERT OR REPLACE INTO clientes
+        (id, nome, telefone, email, cidade, endereco, cpf_cnpj, observacoes, tags, status, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+      stmt.run(
+        String(novoCliente.id),
+        novoCliente.nome || null,
+        novoCliente.telefone || null,
+        novoCliente.email || null,
+        novoCliente.cidade || null,
+        novoCliente.endereco || null,
+        novoCliente.cpf_cnpj || null,
+        novoCliente.observacoes || null,
+        Array.isArray(novoCliente.tags) ? (novoCliente.tags.join(',')) : (typeof novoCliente.tags === 'string' ? novoCliente.tags : null),
+        novoCliente.status || 'ativo',
+        novoCliente.createdAt || nowIso,
+        novoCliente.updatedAt || nowIso
+      );
+    } catch (e) {
+      console.warn('[POST /clientes] falha ao gravar em SQLite:', e?.message || e);
+    }
     return res.status(201).json({ ok: true, data: novoCliente });
   } catch (e) {
     console.error('[POST /clientes] erro:', e);
