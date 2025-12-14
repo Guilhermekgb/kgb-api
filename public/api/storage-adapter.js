@@ -1,3 +1,52 @@
+// Public storage adapter for pages
+// Minimal methods used by the shim and frontend: getFotos, patchFotos, preload
+(function(){
+  const BASE = window.API_BASE || '';
+  window.storageAdapter = window.storageAdapter || {};
+
+  window.storageAdapter.getFotos = async function(){
+    try{
+      const res = await fetch(BASE + '/fotos-clientes');
+      if(!res.ok) return null;
+      const j = await res.json();
+      return j && (j.data || j);
+    }catch(e){
+      console.warn('storageAdapter.getFotos failed', e);
+      return null;
+    }
+  };
+
+  window.storageAdapter.patchFotos = async function(key, value){
+    try{
+      await fetch(BASE + '/fotos-clientes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value })
+      });
+    }catch(e){
+      console.warn('storageAdapter.patchFotos failed', e);
+    }
+  };
+
+  // Preload will fetch the full fotos map from the server and write it
+  // into localStorage only if localStorage does not already have a value.
+  // This avoids overwriting any local unsynced changes while preventing
+  // flash-of-empty-state on pages that read localStorage immediately.
+  window.storageAdapter.preload = async function(){
+    try{
+      if(typeof localStorage === 'undefined') return;
+      if(localStorage.getItem('fotosClientes')) return; // already present
+      const map = await window.storageAdapter.getFotos();
+      if(map && typeof map === 'object'){
+        try{ localStorage.setItem('fotosClientes', JSON.stringify(map)); }
+        catch(e){ console.warn('storageAdapter.preload: localStorage write failed', e); }
+      }
+    }catch(e){
+      console.warn('storageAdapter.preload failed', e);
+    }
+  };
+
+})();
 // Pequeno adapter para centralizar acessos a dados armazenados localmente
 // e oferecer pontos de extensão para adapters remotos (ex: firebaseClientes).
 // Uso recomendado:

@@ -352,7 +352,16 @@ function saveJSON(file, obj) {
         });
         console.log('[INFO] saveJSON: uploaded to Firebase Storage ->', file);
       } catch (err) {
-        console.error('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+        // Common failure modes:
+        // - 404 / notFound: bucket name invalid or project misconfigured
+        // - permission errors
+        // For local dev we want a quieter log and actionable hint.
+        const code = err && err.code;
+        if (code === 404 || String(err?.message || '').toLowerCase().includes('notfound') || String(err?.message || '').toLowerCase().includes('not found')) {
+          console.warn('[WARN] saveJSON: Firebase bucket not found for upload ->', file, '-', err?.message || err);
+        } else {
+          console.warn('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+        }
       }
     })();
   }

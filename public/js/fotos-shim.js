@@ -8,6 +8,8 @@
 (function(){
   try{
     if (typeof window === 'undefined') return;
+    // Tentar preload para evitar flash-of-empty-state quando possível
+    try{ if (window.storageAdapter && typeof window.storageAdapter.preload === 'function'){ window.storageAdapter.preload().catch(()=>{}); } }catch(e){}
     // espera que a aplicação carregue window.storageAdapter (se existir)
     const maybe = () => (window.storageAdapter && typeof window.storageAdapter.patchFotos === 'function') ? window.storageAdapter : null;
     const nativeSet = window.localStorage && window.localStorage.setItem ? window.localStorage.setItem.bind(window.localStorage) : null;
