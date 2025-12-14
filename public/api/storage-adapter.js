@@ -74,6 +74,41 @@
     setJSONLocal(key, value);
   }
 
+  // Partial update helper for keys that support PATCH (ex: fotosClientes)
+  async function patchJSON(key, patch){
+    try{
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
+        try{
+          const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
+          await fetch(url, { method: 'PATCH', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(patch) });
+          // update local cache too (best-effort): merge into existing cached value
+          try{
+            const raw = cache['fotosClientes'] || localStorage.getItem('fotosClientes');
+            const obj = raw ? JSON.parse(raw) : {};
+            if(patch && typeof patch === 'object'){
+              if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
+                obj[patch.key] = patch.value;
+              } else {
+                Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
+              }
+              cache['fotosClientes'] = JSON.stringify(obj);
+              try{ localStorage.setItem('fotosClientes', JSON.stringify(obj)); }catch(e){}
+            }
+          }catch(e){}
+          return;
+        }catch(e){ console.warn('[storage-adapter] failed to PATCH /fotos-clientes', e); }
+      }
+    }catch(e){}
+    // fallback: do a full get/merge/put
+    try{
+      const existing = await getJSON(key, {});
+      const merged = Object.assign({}, existing || {}, (patch && typeof patch === 'object') ? (
+        (patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')) ? { [patch.key]: patch.value } : patch
+      ) : {});
+      await setJSON(key, merged);
+    }catch(e){ /* ignore */ }
+  }
+
   function setJSONLocal(key, value){
     try{ const txt = JSON.stringify(value); localStorage.setItem(key, txt); cache[key] = txt; }catch(e){ console.warn('[storage-adapter] setJSONLocal failed', e); }
   }
@@ -102,6 +137,7 @@
   const storageAdapter = {
     getJSON,
     setJSON,
+    patchJSON,
     getRaw,
     setRaw,
     preload,

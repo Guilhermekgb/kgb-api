@@ -2458,6 +2458,39 @@ app.put('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res
   }
 });
 
+// PATCH /fotos-clientes => merge parcial do mapa do tenant
+app.patch('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere um objeto' });
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const base = (all && typeof all === 'object') ? all : {};
+    const current = (base[tenantId] && typeof base[tenantId] === 'object') ? base[tenantId] : {};
+
+    // Suporta dois formatos:
+    // 1) { key: 'foto1', value: 'data:...' }
+    // 2) { foto1: 'data:...', foto2: 'data:...' }
+    if (Object.prototype.hasOwnProperty.call(body, 'key') && Object.prototype.hasOwnProperty.call(body, 'value')) {
+      const k = String(body.key);
+      current[k] = body.value;
+    } else {
+      // Mescla todas as chaves do body no mapa atual
+      Object.keys(body).forEach(k => {
+        current[k] = body[k];
+      });
+    }
+
+    base[tenantId] = current;
+    saveJSON(file, base);
+    return res.json({ ok: true, data: current });
+  } catch (e) {
+    console.error('[PATCH /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao aplicar patch fotosClientes' });
+  }
+});
+
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {
     // body: { name, data (string|object) }
