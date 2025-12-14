@@ -2573,9 +2573,45 @@ app.get('/fin/metrics', verifyFirebaseToken, ensureAllowed('finance'), (req, res
       if (/^\d{4}-\d{2}$/.test(q)) return q;
       return new Date().toISOString().slice(0, 7);
     })();
-    // Encerrar/curto-circuitar o handler `GET /fin/metrics` neste patch mínimo.
-    // Implementação completa de métricas pode ser restaurada em PR separado.
-    return res.json({ ok: true, note: 'fin/metrics stubbed (short-circuit)' });
+    const basis = (String(req.query.basis || 'vencimento').toLowerCase() === 'pago') ? 'pago' : 'vencimento';
+    const includeParcelas = String(req.query.includeParcelas ?? '1') !== '0';
+
+    const journal = loadJSON(JOURNAL_FILE, []);
+    const fin = journal
+      .filter(x => x.tenantId === tenantId && x.entity === 'lancamento' && !x.tombstone)
+      .map(x => ({ ...x, payload: maybeDecryptPayload(x.payload) }));
+
+    const finMes = fin.filter(x => String(x.payload.data || '').startsWith(ym));
+    const entradasJournal = finMes
+      .filter(x => String(x.payload.tipo || '').toLowerCase() === 'entrada')
+      .reduce((s, x) => s + (+x.payload.valor || 0), 0);
+
+    const saidasJournal = finMes
+      .filter(x => String(x.payload.tipo || '').toLowerCase() === 'saida')
+      .reduce((s, x) => s + (+x.payload.valor || 0), 0);
+
+    // 2) Parcelas do SQLite (opcional) → saídas do mês
+    let saidasParcelas = 0;
+    if (includeParcelas) {
+      const rows = db.prepare(`
+        SELECT valor_cents, vencimento_iso, pago_em_iso
+        FROM parcelas
+      `).all();
+
+      if (basis === 'pago') {
+        // somar parcelas pagas no mês (pago_em_iso)
+        saidasParcelas = rows
+          .filter(r => r && r.pago_em_iso && String(r.pago_em_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
+      } else {
+        // somar parcelas vencidas no mês (vencimento_iso)
+        saidasParcelas = rows
+          .filter(r => r && r.vencimento_iso && String(r.vencimento_iso).startsWith(ym))
+          .reduce((s, r) => s + ((r.valor_cents || 0) / 100), 0);
+      }
+    }
+
+    return res.json({ ok: true, entradasJournal, saidasJournal, saidasParcelas });
   } catch (e) {
     console.error('[fin/metrics] erro (stub):', e);
     return res.status(500).json({ error: 'Erro fin/metrics stub' });
