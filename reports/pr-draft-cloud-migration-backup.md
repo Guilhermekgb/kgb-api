@@ -1,3 +1,61 @@
+# PR Draft: Cloud migration (storage adapter + fotos shim)
+
+Branch: `cloud-migration-backup`
+
+Resumo
+-------
+Este PR implementa um caminho incremental para migrar a persistência do navegador (localStorage) para um backend (API local/remote), começando pelo mapa de fotos de clientes (`fotosClientes`). As mudanças incluem:
+
+- Um `storageAdapter` público (`public/api/storage-adapter.js`) com métodos `getFotos`, `patchFotos` e `preload`.
+- Um shim leve (`public/js/fotos-shim.js`) que espelha gravações em `localStorage.fotosClientes` para `storageAdapter.patchFotos` e chama `preload()` no carregamento para evitar flash-of-empty-state.
+- Endpoints no servidor (`/fotos-clientes`) suportando `GET`, `PUT` e `PATCH` (merge por chave, suportando `null` para sinalizar remoção).
+- Ajuste no `server.js` para reduzir severidade de logs quando o upload para Firebase falha (ex.: bucket ausente), mantendo gravação local em `kgb-api/data/`.
+- Scripts de teste: `tests/smoke-fotos-test.js` (smoke test que adiciona, verifica e sinaliza remoção de uma foto de teste).
+- Inclusões do adapter+shim nas páginas públicas principais (`dashboard.html`, `clientes-lista.html`, `cadastro-cliente.html`) como prova de conceito.
+
+Motivação
+----------
+Mover persistência para um armazenamento centralizado oferece: backup confiável, compartilhamento entre dispositivos, e possibilidades de sincronização/ingestão. A abordagem incremental (shim + adapter + endpoints) minimiza risco e permite rollback rápido.
+
+Testes manuais realizados
+------------------------
+- Executado `tests/smoke-fotos-test.js` com `API_BASE=http://localhost:3333` — PASSOU. O servidor gravou localmente e o fluxo PATCH/GET/PATCH(null)/GET funcionou. Observação: tentativa de upload para Firebase gerou WARN quando bucket inexistente (tratado no `server.js`).
+
+Checklist de revisão (PR)
+------------------------
+- [ ] Revisar `public/api/storage-adapter.js` (segurança e fallback quando API_BASE não está definida)
+- [ ] Revisar `public/js/fotos-shim.js` (não bloqueante, tolerância a erros)
+- [ ] Verificar endpoints em `server.js` (`/fotos-clientes`) para validação/escopo multi-tenant
+- [ ] Executar smoke tests localmente (instruções abaixo)
+- [ ] Validar inclusão do shim nas páginas públicas e comportamento em navegadores (abrir `dashboard.html`, `clientes-lista.html`, `cadastro-cliente.html` e observar console/localStorage)
+- [ ] Confirmar que o upload para Firebase é opcional e que logs não poluem ambientes sem credenciais
+
+Instruções para testes locais
+----------------------------
+1. Iniciar API em modo dev (auth desativada):
+
+```powershell
+Push-Location 'C:\Users\user\OneDrive\Desktop\sistema-buffet\kgb-api'
+$env:DISABLE_AUTH='1'; node .\server.js; Pop-Location
+```
+
+2. Executar smoke test (numa nova janela PowerShell):
+
+```powershell
+Push-Location 'C:\Users\user\OneDrive\Desktop\sistema-buffet\kgb-api'
+$env:API_BASE='http://localhost:3333'; node .\tests\smoke-fotos-test.js; Pop-Location
+```
+
+3. Manual: abrir `cadastro-cliente.html` (arquivo local) no navegador (localhost file:// ou servido por um servidor estático), abrir DevTools → Console e verificar que `storageAdapter.preload()` foi chamado e que `localStorage.fotosClientes` foi preenchido quando vazio.
+
+Observações e próximos passos sugeridos
+-----------------------------------
+- Expandir a inclusão do shim para outras páginas (automatizar inserção em todas as HTML que importam `kgb-common.js`).
+- Adicionar `storageAdapter.preload()` para outras chaves críticas (`clientes`, `eventos`) com fallback cuidadoso para não sobrescrever dados locais não sincronizados.
+- Adicionar teste headless (Puppeteer) para simular UI e confirmar que o shim dispara `PATCH /fotos-clientes`.
+- Preparar documentação para migrar dados existentes (backup/ingestão), e instruções de rollback.
+
+Se aprovado, posso abrir o PR draft no GitHub (se desejar, preciso de autorização/token ou instruções manuais para criar o PR). Também posso automatizar a inclusão do shim em todas as páginas.
 # PR Draft: cloud-migration-backup → main
 
 Resumo
