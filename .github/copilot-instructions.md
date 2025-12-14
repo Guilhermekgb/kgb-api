@@ -1,3 +1,24 @@
+# Copilot instructions for this repo
+
+This repository follows a user preference to always receive concise suggestions from the assistant and optionally allow the assistant to apply approved changes automatically.
+
+Preference source: the file `.copilot-preferences.json` at the repository root controls assistant behavior. The keys are:
+
+- `alwaysSuggest` (boolean): when `true`, the assistant always includes a short suggestion block in its replies.
+- `autoApply` (boolean): when `true`, the assistant may proceed to implement non-destructive changes without asking for additional confirmation. When `false`, the assistant will ask for confirmation before applying changes.
+
+Default suggestion format (the assistant will use this structure):
+
+- **Sugestão:** ação concreta e curta (1 frase).
+- **Por que:** motivo/resumo do benefício (1 frase).
+- **Como executar:** comandos exatos em `powershell` ou trechos de código (copiar/colar).
+- **Arquivos afetados:** lista de `caminho/arquivo` a editar.
+- **Riscos/testes:** pontos a validar e comandos de teste.
+- **Próximo passo:** opção para o usuário indicar `sim` ou `não` para que o assistente execute.
+
+When making code changes, the assistant will create a small todo list entry (tracked in the agent UI) and update the repository with minimal, focused edits. The assistant will not perform destructive changes unless the user explicitly authorizes them.
+
+If you prefer a different default (for example `autoApply: true`), edit `.copilot-preferences.json` or tell the assistant to change it for you.
 <!-- Copilot instructions for kgb-api -->
 # Resumo rápido
 
