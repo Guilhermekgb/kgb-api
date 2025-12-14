@@ -1,0 +1,24 @@
+PR comment: Extensão das inclusões do storage-adapter + fotos-shim
+
+Resumo:
+- Inserimos um shim leve (`public/js/fotos-shim.js`) e um adapter público (`public/api/storage-adapter.js`).
+- A inclusão dessas duas tags foi aplicada em múltiplos arquivos HTML no workspace raiz que importam `./kgb-common.js`.
+- Para evitar commits acidentais no repo raiz, criei um script reprodutível em `scripts/apply-shim-includes.ps1` que aplica as alterações (com backup `.bak`).
+
+O que eu testei:
+- Rodo o smoke test de backend (`tests/smoke-fotos-test.js`) contra `http://localhost:3333` — resultado: SMOKE TEST PASSED.
+- Executei um teste "headless" que avalia o `fotos-shim.js` num contexto de VM para confirmar que o shim chama `storageAdapter.patchFotos` quando `localStorage.fotosClientes` é atualizado — resultado: PASSED.
+
+Onde está a automação:
+- Script: `scripts/apply-shim-includes.ps1` (cria backups `.bak`).
+- Relatório: `reports/shim-inclusions-report.md` (lista de arquivos alterados e justificativa).
+
+Próximos passos recomendados:
+1. Revisão manual em 3 páginas (sugestão: `clientes-lista.html`, `cadastro-cliente.html`, `evento-detalhado.html`) — abrir no navegador e checar Console (DevTools).
+2. Após validação, planejar migração incremental para outras chaves (clientes, eventos) usando `storageAdapter.preload()`.
+
+Se quiser, eu posso:
+- Automatizar testes de runtime (headless + captura de console) e anexar os logs aqui, ou
+- Gerar um patch unificado das mudanças aplicadas (.bak -> atual) e adicioná-lo ao repo `kgb-api`.
+
+Observação: não há token GitHub configurado neste ambiente; eu não postei este comentário automaticamente. Anexo este arquivo para que você possa colar no PR, ou eu posso tentar postar automaticamente se você fornecer um token/CLI.
