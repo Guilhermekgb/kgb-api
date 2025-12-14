@@ -1,0 +1,7 @@
+{
+  "alwaysSuggest": true,
+  "autoApply": true,
+  "suggestionFormat": {
+    "fields": ["Sugestão","Por que","Como executar","Arquivos afetados","Riscos/testes","Próximo passo"]
+  }
+}
