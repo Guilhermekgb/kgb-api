@@ -183,24 +183,14 @@
   }
 
   // Expor API mínima
-  const storageAdapter = {
-    getJSON,
-    setJSON,
-    patchJSON,
-    getRaw,
-    setRaw,
-    preload,
-    isLocalKey
-  };
-  
   // Conveniência: helper específico para fotosClientes (patch por chave)
   async function patchFotos(key, value){
     try{
       await patchJSON('fotosClientes', (Object.prototype.hasOwnProperty.call({ key, value }, 'key') ? { key, value } : { [key]: value }));
     }catch(e){ /* ignore */ }
   }
-  
-  // Expor API mínima
+
+  // Expor API mínima (single object, evita declarações duplicadas)
   const storageAdapter = {
     getJSON,
     setJSON,
