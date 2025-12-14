@@ -30,6 +30,18 @@
       }
     }catch(e){ /* ignore */ }
 
+    // 1.b) Se for fotosClientes, tentar endpoint central
+    try{
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
+        const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
+        const r = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') } });
+        if (r && r.ok){
+          const j = await r.json();
+          if(j && j.ok && j.data) return j.data;
+        }
+      }
+    }catch(e){ console.warn('[storage-adapter] fetch /fotos-clientes failed', e); }
+
     // 2) Tentar ler do localStorage
     try{
       const raw = localStorage.getItem(key);
@@ -49,6 +61,13 @@
       // if there is a specific adapter to persist remotely, call it
       if(key === 'clientes' && global.firebaseClientes && typeof global.firebaseClientes.upsert === 'function'){
         try{ await global.firebaseClientes.upsert(value); }catch(e){ console.warn('[storage-adapter] firebaseClientes.upsert failed', e); }
+      }
+      // persist fotosClientes to backend endpoint if available
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
+        try{
+          const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
+          await fetch(url, { method: 'PUT', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(value) });
+        }catch(e){ console.warn('[storage-adapter] failed to PUT /fotos-clientes', e); }
       }
     }catch(e){}
     // always persist locally as fallback

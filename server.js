@@ -2425,6 +2425,39 @@ app.post('/backup/dump', verifyFirebaseToken, ensureAllowed('admin'), async (req
   }
 });
 
+// ===== Fotos de clientes: armazenamento centralizado (mapa chave -> dataURL)
+// GET /fotos-clientes  => retorna mapa para o tenant
+// PUT /fotos-clientes  => substitui o mapa do tenant (body = object)
+app.get('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const map = (all && typeof all === 'object') ? (all[tenantId] || {}) : {};
+    return res.json({ ok: true, data: map });
+  } catch (e) {
+    console.error('[GET /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao ler fotosClientes' });
+  }
+});
+
+app.put('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere um objeto' });
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const base = (all && typeof all === 'object') ? all : {};
+    base[tenantId] = body;
+    saveJSON(file, base);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /fotos-clientes] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar fotosClientes' });
+  }
+});
+
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {
     // body: { name, data (string|object) }
