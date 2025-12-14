@@ -339,7 +339,23 @@ function loadJSON(file, fb) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8')); } catch { return fb; }
 }
 function saveJSON(file, obj) {
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(obj, null, 2), 'utf8');
+  const fp = path.join(DATA_DIR, file);
+  fs.writeFileSync(fp, JSON.stringify(obj, null, 2), 'utf8');
+
+  // If Firebase Storage is configured, upload the saved JSON to the bucket
+  // asynchronously so we preserve the current synchronous behavior.
+  if (bucket) {
+    (async () => {
+      try {
+        await bucket.file(file).save(JSON.stringify(obj, null, 2), {
+          contentType: 'application/json'
+        });
+        console.log('[INFO] saveJSON: uploaded to Firebase Storage ->', file);
+      } catch (err) {
+        console.error('[WARN] saveJSON: failed uploading to Firebase Storage ->', file, err?.message || err);
+      }
+    })();
+  }
 }
 // === CONVITES / CHECK-IN (M30/M31) ===
 const CONVITES_LOGS_FILE = 'convites-logs.json';
@@ -469,14 +485,14 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 
 app.get('/clientes', (req, res) => {
   try {
-    db.all('SELECT * FROM clientes', [], (err, rows) => {
-      if (err) {
-        console.error('ERRO SQL /clientes:', err.message);
-        // em vez de quebrar, devolve lista vazia
-        return res.json({ ok: true, data: [] });
-      }
-      return res.json({ ok: true, data: rows || [] });
-    });
+    // usa better-sqlite3 (sincrono)
+    try {
+      const rows = db.prepare('SELECT * FROM clientes').all();
+      return res.json({ ok: true, data: Array.isArray(rows) ? rows : [] });
+    } catch (e) {
+      console.error('ERRO SQL /clientes:', e?.message || e);
+      return res.json({ ok: true, data: [] });
+    }
   } catch (err) {
     console.error('ERRO GERAL /clientes:', err);
     return res.json({ ok: true, data: [] });
@@ -536,6 +552,29 @@ app.post('/clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
     clientes.push(novoCliente);
     saveJSON(CLIENTES_FILE, clientes);
 
+    // Também grava/atualiza na tabela SQLite para manter consistência
+    try {
+      const stmt = db.prepare(`INSERT OR REPLACE INTO clientes
+        (id, nome, telefone, email, cidade, endereco, cpf_cnpj, observacoes, tags, status, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+      stmt.run(
+        String(novoCliente.id),
+        novoCliente.nome || null,
+        novoCliente.telefone || null,
+        novoCliente.email || null,
+        novoCliente.cidade || null,
+        novoCliente.endereco || null,
+        novoCliente.cpf_cnpj || null,
+        novoCliente.observacoes || null,
+        Array.isArray(novoCliente.tags) ? (novoCliente.tags.join(',')) : (typeof novoCliente.tags === 'string' ? novoCliente.tags : null),
+        novoCliente.status || 'ativo',
+        novoCliente.createdAt || nowIso,
+        novoCliente.updatedAt || nowIso
+      );
+    } catch (e) {
+      console.warn('[POST /clientes] falha ao gravar em SQLite:', e?.message || e);
+    }
     return res.status(201).json({ ok: true, data: novoCliente });
   } catch (e) {
     console.error('[POST /clientes] erro:', e);
@@ -5167,6 +5206,148 @@ app.get('/convites/logs', verifyFirebaseToken, async (req, res) => {
     return res.status(500).json({ ok: false, error: 'erro-interno' });
   }
 });
+
+/**
+ * POST /api/storage-backup
+ * Recebe um dump JSON do localStorage/sessionStorage do navegador e grava em `data/backups/`.
+ * Autenticação permissiva: aceita
+ *  - Firebase Bearer token (se Firebase ativado), ou
+ *  - Header `x-backup-token` igual a env `BACKUP_UPLOAD_TOKEN`, ou
+ *  - DISABLE_AUTH=1 (modo dev).
+ */
+app.post('/api/storage-backup', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    // Autenticação/autorizações
+    const backupToken = process.env.BACKUP_UPLOAD_TOKEN || '';
+    const disableAuth = String(process.env.DISABLE_AUTH || '0') === '1';
+    let actor = 'anonymous';
+    let tenantId = req.headers['x-tenant-id'] || 'default';
+
+    // 1) dev override
+    if (disableAuth) {
+      actor = 'dev';
+    } else {
+      // 2) x-backup-token header
+      const hdrToken = String(req.headers['x-backup-token'] || '');
+      if (backupToken && hdrToken && hdrToken === backupToken) {
+        actor = 'backup-token';
+      } else if (hasFirebaseCreds) {
+        // 3) try Firebase bearer
+        const auth = req.headers.authorization || '';
+        const m = auth.match(/^Bearer\s+(.+)$/i);
+        if (!m) return res.status(401).json({ ok: false, error: 'missing auth' });
+        try {
+          const decoded = await admin.auth().verifyIdToken(m[1]);
+          actor = decoded.email || decoded.uid || 'firebase-user';
+          tenantId = req.headers['x-tenant-id'] || tenantId;
+        } catch (e) {
+          return res.status(401).json({ ok: false, error: 'invalid token' });
+        }
+      } else {
+        return res.status(401).json({ ok: false, error: 'auth required' });
+      }
+    }
+
+    // Payload sanity
+    const payload = req.body || {};
+    const now = new Date().toISOString();
+    const backupsDir = path.join(DATA_DIR, 'backups');
+    try { fs.mkdirSync(backupsDir, { recursive: true }); } catch (e) {}
+
+    const fname = `${Date.now()}_${(tenantId||'default').replace(/[^a-z0-9\-_.]/gi,'')}_${crypto.randomBytes(4).toString('hex')}.json`;
+    const fp = path.join(backupsDir, fname);
+    const content = { meta: { actor, tenantId, receivedAt: now }, data: payload };
+    fs.writeFileSync(fp, JSON.stringify(content, null, 2), 'utf8');
+
+    // opcional: espelhar no Firebase Storage se disponível
+    if (bucket) {
+      (async () => {
+        try {
+          await bucket.file(`backups/${fname}`).save(JSON.stringify(content, null, 2), { contentType: 'application/json' });
+          console.log('[storage-backup] uploaded to Firebase Storage ->', `backups/${fname}`);
+        } catch (err) {
+          console.error('[storage-backup] failed uploading to Firebase Storage', err?.message || err);
+        }
+      })();
+    }
+
+    writeAudit({ type: 'storage-backup', actor, tenantId, payload: { file: fname, keys: Object.keys(payload || {}) } });
+
+    return res.json({ ok: true, file: `data/backups/${fname}` });
+  } catch (e) {
+    console.error('POST /api/storage-backup error', e);
+    return res.status(500).json({ ok: false, error: 'erro-interno' });
+  }
+});
+
+// GET /api/backups — lista backups gravados no servidor
+app.get('/api/backups', async (req, res) => {
+  try {
+    const backupToken = process.env.BACKUP_UPLOAD_TOKEN || '';
+    const disableAuth = String(process.env.DISABLE_AUTH || '0') === '1';
+    let allowed = false;
+
+    if (disableAuth) allowed = true;
+    const hdr = String(req.headers['x-backup-token'] || '');
+    if (backupToken && hdr && hdr === backupToken) allowed = true;
+
+    if (!allowed && hasFirebaseCreds) {
+      const auth = req.headers.authorization || '';
+      const m = auth.match(/^Bearer\s+(.+)$/i);
+      if (!m) return res.status(401).json({ ok: false, error: 'missing auth' });
+      try {
+        await admin.auth().verifyIdToken(m[1]);
+        allowed = true;
+      } catch (e) {
+        return res.status(401).json({ ok: false, error: 'invalid token' });
+      }
+    }
+
+    if (!allowed) return res.status(403).json({ ok: false, error: 'forbidden' });
+
+    const backupsDir = path.join(DATA_DIR, 'backups');
+    try { fs.mkdirSync(backupsDir, { recursive: true }); } catch (e) {}
+
+    const files = (fs.readdirSync(backupsDir) || []).filter(f => f.endsWith('.json'))
+      .map(f => {
+        const st = fs.statSync(path.join(backupsDir, f));
+        return { file: f, size: st.size, mtime: st.mtime.toISOString() };
+      }).sort((a,b) => b.mtime.localeCompare(a.mtime));
+
+    return res.json({ ok: true, count: files.length, files });
+  } catch (e) {
+    console.error('GET /api/backups error', e);
+    return res.status(500).json({ ok: false, error: 'erro-interno' });
+  }
+});
+
+// Rotina: limpeza automática de backups antigos (dias definíveis por BACKUP_RETENTION_DAYS, default 30)
+function cleanupOldBackups() {
+  try {
+    const days = Number(process.env.BACKUP_RETENTION_DAYS || '30');
+    if (Number.isNaN(days) || days <= 0) return;
+    const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+    const backupsDir = path.join(DATA_DIR, 'backups');
+    try { fs.mkdirSync(backupsDir, { recursive: true }); } catch (e) {}
+    const files = (fs.readdirSync(backupsDir) || []).filter(f => f.endsWith('.json'));
+    for (const f of files) {
+      try {
+        const fp = path.join(backupsDir, f);
+        const st = fs.statSync(fp);
+        if (st.mtimeMs < cutoff) {
+          fs.unlinkSync(fp);
+          console.log('[cleanup-backups] removed', f);
+        }
+      } catch (e) { /* ignore per-file errors */ }
+    }
+  } catch (e) {
+    console.error('[cleanup-backups] erro', e?.message || e);
+  }
+}
+
+// Executa na inicialização e depois a cada 24h
+try { cleanupOldBackups(); } catch(e){}
+setInterval(() => { try{ cleanupOldBackups(); } catch(e){} }, 24 * 60 * 60 * 1000);
 
 // ========================= Inicialização =========================
 app.listen(PORT, () => {

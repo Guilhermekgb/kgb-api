@@ -1,0 +1,60 @@
+{
+  "keyword": "fotosClientes",
+  "count": 9,
+  "sample": [
+    {
+      "file": "area-cliente.js",
+      "line": 177,
+      "column": 32,
+      "snippet": "const map = JSON.parse(localStorage.getItem('fotosClientes') || '{}');"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 287,
+      "column": 28,
+      "snippet": "const map = JSON.parse(localStorage.getItem(\"fotosClientes\") || \"{}\");"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1234,
+      "column": 28,
+      "snippet": "const map = JSON.parse(localStorage.getItem('fotosClientes') || '{}');"
+    },
+    {
+      "file": "evento-detalhado.js",
+      "line": 1662,
+      "column": 30,
+      "snippet": "const map = JSON.parse(localStorage.getItem(\"fotosClientes\") || \"{}\");"
+    },
+    {
+      "file": "evento-detalhado.js",
+      "line": 1664,
+      "column": 7,
+      "snippet": "localStorage.setItem(\"fotosClientes\", JSON.stringify(map));"
+    },
+    {
+      "file": "evento-detalhado.js",
+      "line": 1724,
+      "column": 30,
+      "snippet": "const map = JSON.parse(localStorage.getItem(\"fotosClientes\") || \"{}\");"
+    },
+    {
+      "file": "evento-detalhado.js",
+      "line": 3427,
+      "column": 30,
+      "snippet": "const map = JSON.parse(localStorage.getItem(\"fotosClientes\") || \"{}\");"
+    },
+    {
+      "file": "evento-detalhado.js",
+      "line": 3446,
+      "column": 9,
+      "snippet": "localStorage.setItem(\"fotosClientes\", JSON.stringify(map));"
+    },
+    {
+      "file": "lista-evento.html",
+      "line": 337,
+      "column": 30,
+      "snippet": "const map = JSON.parse(localStorage.getItem(\"fotosClientes\") || \"{}\");"
+    }
+  ]
+}

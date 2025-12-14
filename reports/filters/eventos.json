@@ -1,0 +1,306 @@
+{
+  "keyword": "eventos",
+  "count": 280,
+  "sample": [
+    {
+      "file": "agenda-equipe.html",
+      "line": 232,
+      "column": 29,
+      "snippet": "try { xs = JSON.parse(localStorage.getItem('m30.eventos')||'[]') || []; } catch {}"
+    },
+    {
+      "file": "agenda-equipe.html",
+      "line": 235,
+      "column": 35,
+      "snippet": "const legado = JSON.parse(localStorage.getItem('eventos')||'[]') || [];"
+    },
+    {
+      "file": "api/eventos-api.js",
+      "line": 6,
+      "column": 32,
+      "snippet": "const load  = () => JSON.parse(localStorage.getItem(KEY) || '[]');"
+    },
+    {
+      "file": "api/eventos-api.js",
+      "line": 7,
+      "column": 24,
+      "snippet": "const save  = (arr) => localStorage.setItem(KEY, JSON.stringify(arr));"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 156,
+      "column": 26,
+      "snippet": "const eidFromLS    = localStorage.getItem('eventoSelecionado') || '';"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 161,
+      "column": 28,
+      "snippet": "eventos = JSON.parse(localStorage.getItem('eventos') || '[]');"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 300,
+      "column": 31,
+      "snippet": "try{ eventos=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 596,
+      "column": 33,
+      "snippet": "const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 779,
+      "column": 69,
+      "snippet": "const eid = new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 1093,
+      "column": 39,
+      "snippet": "let arr=[]; try{ arr=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 1098,
+      "column": 9,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(arr));"
+    },
+    {
+      "file": "area-cliente.js",
+      "line": 1135,
+      "column": 51,
+      "snippet": "let eventos=[]; try{ eventos=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}"
+    },
+    {
+      "file": "assinatura.html",
+      "line": 506,
+      "column": 34,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem(\"eventos\") || \"[]\");"
+    },
+    {
+      "file": "assinatura.html",
+      "line": 537,
+      "column": 7,
+      "snippet": "localStorage.setItem(\"eventos\", JSON.stringify(eventos));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 241,
+      "column": 32,
+      "snippet": "// Salva o array de eventos no localStorage com proteção"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 244,
+      "column": 5,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventos || []));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 246,
+      "column": 46,
+      "snippet": "console.error('Erro ao salvar eventos no localStorage:', err);"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 502,
+      "column": 27,
+      "snippet": "eventos = (JSON.parse(localStorage.getItem('eventos') || '[]') || [])"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 815,
+      "column": 32,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem('eventos') || '[]') || [];"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 819,
+      "column": 5,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventos));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 915,
+      "column": 48,
+      "snippet": "const eventosLocais = JSON.parse(localStorage.getItem('eventos') || '[]');"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 926,
+      "column": 17,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventosLocais));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 956,
+      "column": 34,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 967,
+      "column": 36,
+      "snippet": "// salva lista de eventos no localStorage"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 972,
+      "column": 11,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventos));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 975,
+      "column": 56,
+      "snippet": "console.warn('[KGB] Falha ao salvar eventos no localStorage', e);"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1526,
+      "column": 30,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem(\"eventos\") || \"[]\");"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1540,
+      "column": 30,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem(\"eventos\") || \"[]\");"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1560,
+      "column": 30,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem(\"eventos\") || \"[]\");"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1781,
+      "column": 15,
+      "snippet": "|| localStorage.getItem(\"eventoSelecionado\")"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1792,
+      "column": 3,
+      "snippet": "localStorage.setItem(\"eventoSelecionado\", String(id));"
+    },
+    {
+      "file": "cadastro-evento.js",
+      "line": 1855,
+      "column": 12,
+      "snippet": "return localStorage.getItem(\"eventoSelecionado\") || \"\";"
+    },
+    {
+      "file": "checklist-execucao.js",
+      "line": 324,
+      "column": 21,
+      "snippet": "const raw = localStorage.getItem('eventos');"
+    },
+    {
+      "file": "checklist-execucao.js",
+      "line": 331,
+      "column": 9,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventos));"
+    },
+    {
+      "file": "checklist-materiais.html",
+      "line": 652,
+      "column": 54,
+      "snippet": "const getNomeIndex = ()=> { try{ return JSON.parse(localStorage.getItem('eventos:nomeIndex')||'[]'); }catch{return [];} };"
+    },
+    {
+      "file": "checklist.html",
+      "line": 210,
+      "column": 66,
+      "snippet": "return new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';"
+    },
+    {
+      "file": "checklist.html",
+      "line": 213,
+      "column": 32,
+      "snippet": "try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; }"
+    },
+    {
+      "file": "checklist.html",
+      "line": 241,
+      "column": 12,
+      "snippet": "try{ localStorage.setItem('eventoSelecionado', String(id||'')); }catch(e){}"
+    },
+    {
+      "file": "checklist.js",
+      "line": 32,
+      "column": 54,
+      "snippet": "// Carrega um evento do backend (com fallback para o localStorage \"eventos\")"
+    },
+    {
+      "file": "clientes-lista.js",
+      "line": 180,
+      "column": 20,
+      "snippet": "// 2) Procura no localStorage \"eventos\""
+    },
+    {
+      "file": "clientes-lista.js",
+      "line": 182,
+      "column": 32,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');"
+    },
+    {
+      "file": "contrato.js",
+      "line": 9,
+      "column": 85,
+      "snippet": "// === Limpa PDFs antigos guardados dentro de eventos/clientes (para evitar lotar localStorage) ==="
+    },
+    {
+      "file": "contrato.js",
+      "line": 281,
+      "column": 67,
+      "snippet": "const eid = new URLSearchParams(location.search).get(\"id\") || localStorage.getItem(\"eventoSelecionado\") || \"\";"
+    },
+    {
+      "file": "contrato.js",
+      "line": 284,
+      "column": 34,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem(\"eventos\") || \"[]\");"
+    },
+    {
+      "file": "custos-fixo.js",
+      "line": 503,
+      "column": 40,
+      "snippet": "let eventoId = params.get('id') || localStorage.getItem('eventoSelecionado') || '';"
+    },
+    {
+      "file": "custos-fixo.js",
+      "line": 505,
+      "column": 5,
+      "snippet": "localStorage.setItem('eventoSelecionado', String(eventoId));"
+    },
+    {
+      "file": "custos-fixo.js",
+      "line": 517,
+      "column": 34,
+      "snippet": "const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');"
+    },
+    {
+      "file": "custos-fixo.js",
+      "line": 522,
+      "column": 9,
+      "snippet": "localStorage.setItem('eventos', JSON.stringify(eventos));"
+    },
+    {
+      "file": "dashboard.js",
+      "line": 708,
+      "column": 28,
+      "snippet": "try{ return JSON.parse(localStorage.getItem(\"eventos\")||\"[]\")||[]; }catch{ return []; }"
+    },
+    {
+      "file": "dashboard.js",
+      "line": 1679,
+      "column": 29,
+      "snippet": "try { return JSON.parse(localStorage.getItem(\"eventos\") || \"[]\") || []; }"
+    }
+  ]
+}
