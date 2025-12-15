@@ -296,6 +296,29 @@ CREATE INDEX IF NOT EXISTS idx_docs_uploads_event ON docs_uploads(event_id);
 // ========================= Firebase Admin (Storage) =========================
 const admin = require('firebase-admin');
 
+// Cloudinary opcional (upload para nuvem sem usar Firebase)
+let cloudinary = null;
+let hasCloudinary = false;
+try {
+  cloudinary = require('cloudinary').v2;
+  hasCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+  if (hasCloudinary) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    console.log('[INFO] Cloudinary configurado ->', process.env.CLOUDINARY_CLOUD_NAME);
+  } else {
+    console.log('[INFO] Cloudinary não configurado (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET missing).');
+  }
+} catch (e) {
+  // lib não instalada — não é fatal, apenas não usaremos Cloudinary
+  cloudinary = null;
+  hasCloudinary = false;
+  console.log('[INFO] Cloudinary library não encontrada — ignorando Cloudinary support.');
+}
+
 // deixa o Firebase/Storage OPCIONAL até você preencher o .env
 const hasFirebaseCreds =
   !!process.env.FIREBASE_PROJECT_ID &&
@@ -316,7 +339,22 @@ if (hasFirebaseCreds) {
     });
   }
   bucket = admin.storage().bucket();
-  console.log('[INFO] Firebase Storage conectado ao bucket:', process.env.FIREBASE_STORAGE_BUCKET);
+  // Verifica se o bucket realmente existe no projeto; se não existir, desliga o suporte a Storage
+  (async () => {
+    try {
+      // bucket.exists() retorna [exists]
+      const [exists] = await bucket.exists();
+      if (!exists) {
+        console.warn('[WARN] Firebase bucket definido mas não existe ->', process.env.FIREBASE_STORAGE_BUCKET);
+        bucket = null;
+      } else {
+        console.log('[INFO] Firebase Storage conectado ao bucket:', process.env.FIREBASE_STORAGE_BUCKET);
+      }
+    } catch (err) {
+      console.warn('[WARN] Erro ao verificar Firebase bucket ->', err && err.message ? err.message : err);
+      bucket = null;
+    }
+  })();
 } else {
   console.log('[INFO] Firebase/Storage desativado (variáveis ausentes no .env).');
 }
@@ -2592,6 +2630,7 @@ app.post('/fotos-clientes/presign', verifyFirebaseToken, ensureAllowed('sync'), 
 // POST /fotos-clientes/upload => upload POC: aceita { key, data } onde data é dataURL
 app.post('/fotos-clientes/upload', verifyFirebaseToken, ensureAllowed('sync'), async (req, res) => {
   try {
+    const storageMode = String(process.env.STORAGE_MODE || '').toLowerCase();
     const tenantId = String(req.user?.tenantId || 'default');
     const body = req.body || {};
     if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere objeto { key, data }' });
@@ -2608,12 +2647,68 @@ app.post('/fotos-clientes/upload', verifyFirebaseToken, ensureAllowed('sync'), a
 
     // prepare upload path: prefer Firebase bucket if configured
     let publicUrl = null;
-    const uploadsDir = path.join(__dirname, 'public', 'uploads', tenantId);
-    try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) {}
     const filename = `${String(key).replace(/[^a-z0-9_.-]/gi,'_')}-${Date.now()}.png`;
-    const fp = path.join(uploadsDir, filename);
-    fs.writeFileSync(fp, buf);
-    publicUrl = `/uploads/${tenantId}/${filename}`;
+
+    // Se o modo obrigar Cloudinary, valide configuração antes de prosseguir
+    const enforceCloudinaryOnly = storageMode === 'cloudinary';
+    if (enforceCloudinaryOnly && !hasCloudinary) {
+      console.error('[POST /fotos-clientes/upload] STORAGE_MODE=cloudinary mas Cloudinary não está configurado');
+      return res.status(500).json({ ok: false, error: 'STORAGE_MODE=cloudinary configurado, mas CLOUDINARY_* não presentes/no pacote' });
+    }
+
+    // Primeiro: se Cloudinary estiver configurado, tente enviar para lá (independente do Firebase)
+    if (!publicUrl && hasCloudinary && cloudinary) {
+      try {
+        const uploadResult = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream({ folder: `${tenantId}` }, (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          });
+          stream.end(buf);
+        });
+        publicUrl = uploadResult.secure_url || uploadResult.url;
+        console.log('[INFO] upload to Cloudinary ->', uploadResult.public_id);
+      } catch (eCloud) {
+        console.warn('[WARN] upload to Cloudinary failed ->', eCloud?.message || eCloud);
+        // Se estamos no modo Cloudinary-only, falhamos imediatamente (não usar fallback)
+        if (enforceCloudinaryOnly) {
+          console.error('[POST /fotos-clientes/upload] Falha ao enviar para Cloudinary e STORAGE_MODE=cloudinary ativo');
+          return res.status(500).json({ ok: false, error: 'Falha ao enviar para Cloudinary' });
+        }
+      }
+    }
+
+    // Em seguida, se ainda não temos publicUrl e o Firebase bucket existir, tente enviar para Firebase
+    if (!publicUrl && bucket) {
+      try {
+        const dest = `${tenantId}/${filename}`;
+        const fileRef = bucket.file(dest);
+        await fileRef.save(buf, {
+          contentType: contentType,
+          resumable: false,
+          metadata: { contentType }
+        });
+        const [signedUrl] = await fileRef.getSignedUrl({ action: 'read', expires: '2100-01-01' });
+        publicUrl = signedUrl;
+        console.log('[INFO] upload to Firebase Storage ->', dest);
+      } catch (e) {
+        console.warn('[WARN] upload to Firebase failed, falling back to local file ->', e?.message || e);
+      }
+    }
+
+    // Se ainda não temos URL pública, decidir fallback.
+    if (!publicUrl) {
+      if (enforceCloudinaryOnly) {
+        console.error('[POST /fotos-clientes/upload] STORAGE_MODE=cloudinary ativo mas não obtivemos URL após tentativa');
+        return res.status(500).json({ ok: false, error: 'Nenhuma URL pública obtida (Cloudinary required)' });
+      }
+      // gravar localmente (fallback)
+      const uploadsDir = path.join(__dirname, 'public', 'uploads', tenantId);
+      try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (err) {}
+      const fp = path.join(uploadsDir, filename);
+      fs.writeFileSync(fp, buf);
+      publicUrl = `/uploads/${tenantId}/${filename}`;
+    }
 
     // Persist mapping in fotos-clientes.json
     const file = 'fotos-clientes.json';
