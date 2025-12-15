@@ -1,0 +1,7 @@
+Open this URL in your browser to create a PR draft with title and body prefilled:
+
+https://github.com/Guilhermekgb/kgb-api/compare/main...feat/storage-cloudinary-enforce?expand=1&title=storage:%20fotosClientes%20-%3E%20cloud%20%2B%20shim&body=This%20branch%20contains%20the%20first%20non-destructive%20steps%20to%20migrate%20%60fotosClientes%60%20from%20browser%20%60localStorage%60%20to%20Cloudinary.%0A%0ATesting%20checklist:%0A- %20Start%20server%20and%20run%20%60kgb-api/scripts/test-firebase-upload.ps1%60.%0A- %20Open%20pages%20(cadastro-evento,%20evento-detalhado,%20area-cliente,%20lista-evento)%20and%20verify%20photos%20render%20without%20flash-of-empty-state.%0A- %20Confirm%20no%20base64%20blobs%20persist%20in%20browser%20%60localStorage%60%20for%20%60fotosClientes%60.%0A%0ASee%20%60kgb-api/pr_request_review.txt%60%20for%20full%20details.
+
+Notes:
+- The GitHub CLI (`gh`) is not installed in this environment, so I prepared this URL for manual PR creation.
+- If you prefer I can create the PR for you after you provide a GitHub personal access token, or install and authenticate `gh` locally and I can run the `gh` commands.
