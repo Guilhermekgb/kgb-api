@@ -2504,13 +2504,52 @@ app.patch('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, r
     // Suporta dois formatos:
     // 1) { key: 'foto1', value: 'data:...' }
     // 2) { foto1: 'data:...', foto2: 'data:...' }
+    // Se a nova value for `null`, tentamos remover o objeto armazenado (S3 ou local)
+    function handleSetSync(k, newValue) {
+      const oldValue = current && Object.prototype.hasOwnProperty.call(current, k) ? current[k] : undefined;
+
+      if (newValue === null && typeof oldValue === 'string') {
+        try {
+          // Local uploads path (POC): /uploads/<tenantId>/filename
+          if (oldValue.startsWith('/uploads/') || oldValue.startsWith('uploads/')) {
+            const rel = oldValue.replace(/^\/*/, '');
+            const fp = path.join(__dirname, 'public', rel);
+            try { fs.unlinkSync(fp); console.log('[INFO] removed local upload:', fp); } catch (e) { /* ignore */ }
+          }
+
+          // S3 URL pattern: https://<bucket>.s3.<region>.amazonaws.com/<key>
+          if (hasS3 && typeof oldValue === 'string' && process.env.S3_BUCKET) {
+            const bucketHost = `https://${process.env.S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/`;
+            if (oldValue.indexOf(bucketHost) === 0) {
+              try {
+                const objectKey = oldValue.slice(bucketHost.length);
+                const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+                // fire-and-forget async delete; log errors if any
+                s3Client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: objectKey }))
+                  .then(() => console.log('[INFO] deleted S3 object:', objectKey))
+                  .catch((e) => console.warn('[WARN] failed deleting S3 object for', oldValue, e && e.message));
+              } catch (e) { console.warn('[WARN] failed initiating S3 delete for', oldValue, e && e.message); }
+            }
+          }
+        } catch (e) {
+          console.warn('[WARN] error while attempting to remove previous file for key', k, e && e.message);
+        }
+        // keep the key with null (signals removal)
+        current[k] = null;
+        return;
+      }
+
+      // Otherwise set/overwrite normally
+      current[k] = newValue;
+    }
+
     if (Object.prototype.hasOwnProperty.call(body, 'key') && Object.prototype.hasOwnProperty.call(body, 'value')) {
       const k = String(body.key);
-      current[k] = body.value;
+      handleSetSync(k, body.value);
     } else {
       // Mescla todas as chaves do body no mapa atual
-      Object.keys(body).forEach(k => {
-        current[k] = body[k];
+      Object.keys(body || {}).forEach(k => {
+        handleSetSync(k, body[k]);
       });
     }
 
@@ -2557,7 +2596,8 @@ app.post('/fotos-clientes/upload', verifyFirebaseToken, ensureAllowed('sync'), a
     const body = req.body || {};
     if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere objeto { key, data }' });
     const { key, data } = body;
-    if (!key || !data || typeof data !== 'string') return res.status(400).json({ error: 'espera { key, data } com data como dataURL' });
+    if (!key) return res.status(400).json({ error: 'espera { key, data } com key válida' });
+    if (!data || typeof data !== 'string') return res.status(400).json({ error: 'espera { key, data } com data como dataURL' });
 
     // decode dataURL
     const m = String(data).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
@@ -2590,6 +2630,14 @@ app.post('/fotos-clientes/upload', verifyFirebaseToken, ensureAllowed('sync'), a
     return res.status(500).json({ error: 'Erro ao processar upload' });
   }
 });
+
+// Enhance PATCH /fotos-clientes: when a key is set to null, attempt to delete stored file (S3 or local)
+// This keeps storage tidy when frontend removes a photo.
+// The existing PATCH handler already merges keys; we add deletion behavior before persisting.
+// Note: we only delete when the new value is strictly null.
+// If the previous value points to the configured S3 bucket, we call DeleteObjectCommand.
+// If it points to a local /uploads path, we remove the file from disk.
+
 
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {

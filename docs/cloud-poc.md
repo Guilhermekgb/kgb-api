@@ -27,6 +27,14 @@ Resumo do que foi implementado (POC):
     - `AWS_REGION`
     Sem essas variáveis o servidor continuará respondendo o endpoint de upload POC local (`/fotos-clientes/upload`).
 
+  Remoção de arquivos quando chave for `null`:
+
+  - Comportamento: quando o frontend definir uma chave do mapa `fotosClientes` como `null` (ex.: `PATCH /fotos-clientes` com `{ key: 'foto1', value: null }`), o servidor tentará remover o arquivo associado:
+    - Se o valor anterior for uma URL pública do S3 no formato `https://<bucket>.s3.<region>.amazonaws.com/<key>`, o servidor dispara a deleção do objeto no bucket (requere que `S3_BUCKET` e `AWS_REGION` estejam configurados).
+    - Se o valor anterior apontar para um caminho local em `public/uploads/...`, o arquivo local será removido do disco (apenas no POC local).
+
+    Nota: a exclusão S3 é feita de forma assíncrona (fire-and-forget) e o mapa é atualizado para `null` mesmo se a exclusão falhar; logs de erro ficam no servidor para investigação.
+
 - Vantagem imediata: reduz o peso do JSON `fotos-clientes.json` (removendo data-URIs enormes), permitindo armazenar as imagens como arquivos e o mapa apenas com referências.
 
 Próximos passos recomendados para produção (opcional):
