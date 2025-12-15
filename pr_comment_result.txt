@@ -1,30 +1,30 @@
-PR: https://github.com/Guilhermekgb/kgb-api/pull/5
+﻿PR: https://github.com/Guilhermekgb/kgb-api/pull/5
 
-Resumo do QA executado localmente (automático):
+Resumo do QA executado localmente (automÃ¡tico):
 
 - Servidor: verificado que existe um processo `node` escutando em `http://localhost:3333` (PID 23196).
 - Teste de upload: executei `scripts/test-firebase-upload.ps1` e o upload para Cloudinary funcionou. Resposta: { ok: true, url: "https://res.cloudinary.com/dzw8u1h69/image/upload/.../q04xbfzp8dik9ybl2ujy.png" }.
 - data/fotos-clientes.json: foi atualizado localmente com a URL retornada.
 
-Busca por usos de `fotosClientes` no repositório (resultados relevantes):
+Busca por usos de `fotosClientes` no repositÃ³rio (resultados relevantes):
 - Arquivos ainda contendo leituras sincronas de `localStorage.getItem("fotosClientes")`:
   - `cadastro-evento.js` (linha aproximada em workspace)
-  - `evento-detalhado.js` (várias ocorrências incluindo linhas que ainda chamam `localStorage.setItem("fotosClientes", JSON.stringify(map))`)
+  - `evento-detalhado.js` (vÃ¡rias ocorrÃªncias incluindo linhas que ainda chamam `localStorage.setItem("fotosClientes", JSON.stringify(map))`)
   - `lista-evento.html` (leitura sync como fallback)
-  - `area-cliente.js` (fallback em algumas funções)
+  - `area-cliente.js` (fallback em algumas funÃ§Ãµes)
 
-- Arquivos já adaptados para usar `storageAdapter`/shim (preload/getRaw/setJSON):
-  - `public/api/storage-adapter.js` and `api/storage-adapter.js` (mantêm `fotosClientes` em memória e suportam `patchFotos`)
-  - HTMLs top-level contêm `public/js/fotos-shim.js` include (shim carrega cache inicial e expõe `getFotosClientesSync`)
+- Arquivos jÃ¡ adaptados para usar `storageAdapter`/shim (preload/getRaw/setJSON):
+  - `public/api/storage-adapter.js` and `api/storage-adapter.js` (mantÃªm `fotosClientes` em memÃ³ria e suportam `patchFotos`)
+  - HTMLs top-level contÃªm `public/js/fotos-shim.js` include (shim carrega cache inicial e expÃµe `getFotosClientesSync`)
 
-Recomendações e passos seguintes (que posso executar se autorizar):
-1) Substituir as leituras sincronas restantes por `storageAdapter.getRaw('fotosClientes')` ou pela `window.__FOTOS_CLIENTES_PRELOAD__` shim, de forma incremental e em PRs separados (faço isso automaticamente em pequenos commits).
-2) Remover as escritas diretas de blobs base64 para `localStorage` (ex.: `localStorage.setItem("fotosClientes", JSON.stringify(map))`) e substituí-las por `storageAdapter.setJSON('fotosClientes', map)` ou `storageAdapter.patchFotos(key, value)`.
+RecomendaÃ§Ãµes e passos seguintes (que posso executar se autorizar):
+1) Substituir as leituras sincronas restantes por `storageAdapter.getRaw('fotosClientes')` ou pela `window.__FOTOS_CLIENTES_PRELOAD__` shim, de forma incremental e em PRs separados (faÃ§o isso automaticamente em pequenos commits).
+2) Remover as escritas diretas de blobs base64 para `localStorage` (ex.: `localStorage.setItem("fotosClientes", JSON.stringify(map))`) e substituÃ­-las por `storageAdapter.setJSON('fotosClientes', map)` ou `storageAdapter.patchFotos(key, value)`.
 3) Opcional: Migrar imagens existentes em `public/uploads/*` para Cloudinary e atualizar `data/fotos-clientes.json`.
 
-Sugestão de comentário pronto para colar no PR (copiar/colar no campo de comentário do PR #5):
+SugestÃ£o de comentÃ¡rio pronto para colar no PR (copiar/colar no campo de comentÃ¡rio do PR #5):
 
-"QA automático local realizado ✅\n\n- Servidor local rodando em http://localhost:3333 (PID 23196).\n- Teste de upload para Cloudinary OK — o endpoint `POST /fotos-clientes/upload` retornou URL válida e `data/fotos-clientes.json` foi atualizado.\n\nObservações:\n- Algumas páginas ainda usam leituras síncronas (`localStorage.getItem('fotosClientes')`) como fallback: `cadastro-evento.js`, `evento-detalhado.js`, `lista-evento.html`, `area-cliente.js`. Recomendo um follow-up PR para remover esses fallbacks — posso preparar esse PR e dividir em commits pequenos para revisão.\n\nPróximos passos sugeridos:\n1) Se concordarem, eu abro um PR de follow-up que corrige as leituras síncronas restantes e remove gravações de blobs base64 em `localStorage`.\n2) Opcional: migrar assets existentes em `public/uploads/` para Cloudinary (faço backup antes).\n\nSe quiserem que eu adicione este comentário diretamente no PR, eu posso publicar se você me fornecer um GitHub PAT (escopo `repo`) ou instalar/autenticar o GitHub CLI (`gh`) para que eu possa usar aqui."
+"QA automÃ¡tico local realizado âœ…\n\n- Servidor local rodando em http://localhost:3333 (PID 23196).\n- Teste de upload para Cloudinary OK â€” o endpoint `POST /fotos-clientes/upload` retornou URL vÃ¡lida e `data/fotos-clientes.json` foi atualizado.\n\nObservaÃ§Ãµes:\n- Algumas pÃ¡ginas ainda usam leituras sÃ­ncronas (`localStorage.getItem('fotosClientes')`) como fallback: `cadastro-evento.js`, `evento-detalhado.js`, `lista-evento.html`, `area-cliente.js`. Recomendo um follow-up PR para remover esses fallbacks â€” posso preparar esse PR e dividir em commits pequenos para revisÃ£o.\n\nPrÃ³ximos passos sugeridos:\n1) Se concordarem, eu abro um PR de follow-up que corrige as leituras sÃ­ncronas restantes e remove gravaÃ§Ãµes de blobs base64 em `localStorage`.\n2) Opcional: migrar assets existentes em `public/uploads/` para Cloudinary (faÃ§o backup antes).\n\nSe quiserem que eu adicione este comentÃ¡rio diretamente no PR, eu posso publicar se vocÃª me fornecer um GitHub PAT (escopo `repo`) ou instalar/autenticar o GitHub CLI (`gh`) para que eu possa usar aqui."
 
 ---
-Arquivo gerado: `kgb-api/pr_comment_result.txt` (contém este relatório e o comentário pronto).
+Arquivo gerado: `kgb-api/pr_comment_result.txt` (contÃ©m este relatÃ³rio e o comentÃ¡rio pronto).
