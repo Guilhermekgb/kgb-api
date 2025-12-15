@@ -2500,6 +2500,47 @@ app.patch('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, r
   }
 });
 
+// POST /fotos-clientes/upload => upload POC: aceita { key, data } onde data é dataURL
+app.post('/fotos-clientes/upload', verifyFirebaseToken, ensureAllowed('sync'), async (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'body inválido, espere objeto { key, data }' });
+    const { key, data } = body;
+    if (!key || !data || typeof data !== 'string') return res.status(400).json({ error: 'espera { key, data } com data como dataURL' });
+
+    // decode dataURL
+    const m = String(data).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (!m) return res.status(400).json({ error: 'data não parece um dataURL base64 de imagem' });
+    const contentType = m[1];
+    const b64 = m[2];
+    const buf = Buffer.from(b64, 'base64');
+
+    // prepare upload path: prefer Firebase bucket if configured
+    let publicUrl = null;
+    const uploadsDir = path.join(__dirname, 'public', 'uploads', tenantId);
+    try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) {}
+    const filename = `${String(key).replace(/[^a-z0-9_.-]/gi,'_')}-${Date.now()}.png`;
+    const fp = path.join(uploadsDir, filename);
+    fs.writeFileSync(fp, buf);
+    publicUrl = `/uploads/${tenantId}/${filename}`;
+
+    // Persist mapping in fotos-clientes.json
+    const file = 'fotos-clientes.json';
+    const all = loadJSON(file, {});
+    const base = (all && typeof all === 'object') ? all : {};
+    const current = (base[tenantId] && typeof base[tenantId] === 'object') ? base[tenantId] : {};
+    current[String(key)] = publicUrl;
+    base[tenantId] = current;
+    saveJSON(file, base);
+
+    return res.json({ ok: true, url: publicUrl });
+  } catch (err) {
+    console.error('[POST /fotos-clientes/upload] erro:', err);
+    return res.status(500).json({ error: 'Erro ao processar upload' });
+  }
+});
+
 app.put('/backup/snapshot', verifyFirebaseToken, ensureAllowed('admin'), async (req, res) => {
   try {
     // body: { name, data (string|object) }
