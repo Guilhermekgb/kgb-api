@@ -14,6 +14,19 @@ Resumo do que foi implementado (POC):
   - `patchFotos`: se o valor a ser gravado for uma data-URL (`data:`), o adapter enviará `POST /fotos-clientes/upload` com `{ key, data }` e, se o upload retornar `url`, usará esse URL para atualizar o mapa (`PATCH /fotos-clientes` com `{ key, value: url }`).
   - Backward compatible: se upload falhar, o adapter faz o `PATCH` normal com o conteúdo original.
 
+  - Presign S3 (opcional): o servidor agora expõe `POST /fotos-clientes/presign` quando as variáveis AWS estiverem configuradas. O fluxo é:
+    1. Cliente pede `POST /fotos-clientes/presign` com `{ key, contentType }`.
+    2. O servidor responde `{ ok: true, presignUrl, publicUrl }`.
+    3. O cliente faz `PUT` direto para `presignUrl` com o corpo binário e `Content-Type` adequado.
+    4. Depois do `PUT` bem-sucedido, o cliente grava `publicUrl` no mapa via `PATCH /fotos-clientes`.
+
+    Para ativar isso em produção, defina as variáveis de ambiente no servidor / CI:
+    - `AWS_ACCESS_KEY_ID`
+    - `AWS_SECRET_ACCESS_KEY`
+    - `S3_BUCKET`
+    - `AWS_REGION`
+    Sem essas variáveis o servidor continuará respondendo o endpoint de upload POC local (`/fotos-clientes/upload`).
+
 - Vantagem imediata: reduz o peso do JSON `fotos-clientes.json` (removendo data-URIs enormes), permitindo armazenar as imagens como arquivos e o mapa apenas com referências.
 
 Próximos passos recomendados para produção (opcional):

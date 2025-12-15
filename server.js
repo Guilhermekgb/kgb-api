@@ -13,6 +13,29 @@ const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
 
+// Optional AWS S3 presign support (enabled when AWS env vars are provided)
+let s3Client = null;
+let hasS3 = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.S3_BUCKET && process.env.AWS_REGION);
+if (hasS3) {
+  try {
+    const { S3Client } = require('@aws-sdk/client-s3');
+    s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      }
+    });
+    console.log('[INFO] AWS S3 client configured for bucket', process.env.S3_BUCKET);
+  } catch (e) {
+    console.warn('[WARN] Failed to initialize AWS S3 client, continuing without S3 support', e && e.message);
+    s3Client = null;
+    hasS3 = false;
+  }
+} else {
+  console.log('[INFO] AWS S3 not configured (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / S3_BUCKET / AWS_REGION missing).');
+}
+
 // ===== Provider Mercado Pago (import dinâmico do arquivo mercadopago.mjs) =====
 let mpProviderCache = null;
 
@@ -2497,6 +2520,33 @@ app.patch('/fotos-clientes', verifyFirebaseToken, ensureAllowed('sync'), (req, r
   } catch (e) {
     console.error('[PATCH /fotos-clientes] erro:', e);
     return res.status(500).json({ error: 'Erro ao aplicar patch fotosClientes' });
+  }
+});
+// POST /fotos-clientes/presign => opcional: gera URL presign para upload direto ao S3
+app.post('/fotos-clientes/presign', verifyFirebaseToken, ensureAllowed('sync'), async (req, res) => {
+  try {
+    if (!s3Client) return res.status(400).json({ ok: false, error: 'S3 não está configurado no servidor' });
+    const tenantId = String(req.user?.tenantId || 'default');
+    const body = req.body || {};
+    const key = String(body.key || '').trim();
+    const contentType = String(body.contentType || 'image/png');
+    if (!key) return res.status(400).json({ ok: false, error: 'key obrigatório' });
+
+    const { PutObjectCommand } = require('@aws-sdk/client-s3');
+    const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+    // Normaliza e monta a key no bucket (prefix per-tenant)
+    const filename = `${tenantId}/${String(key).replace(/[^a-z0-9_.-]/gi,'_')}-${Date.now()}.png`;
+    const bucket = process.env.S3_BUCKET;
+
+    const cmd = new PutObjectCommand({ Bucket: bucket, Key: filename, ContentType: contentType });
+    const presignUrl = await getSignedUrl(s3Client, cmd, { expiresIn: 900 });
+    const publicUrl = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${filename}`;
+
+    return res.json({ ok: true, presignUrl, publicUrl });
+  } catch (err) {
+    console.error('[POST /fotos-clientes/presign] erro:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao gerar presign URL' });
   }
 });
 

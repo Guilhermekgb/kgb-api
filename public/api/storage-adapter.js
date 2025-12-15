@@ -186,6 +186,52 @@
   // Conveniência: helper específico para fotosClientes (patch por chave)
   async function patchFotos(key, value){
     try{
+      // If value is a data URL, try presigned upload (S3) then fallback to server-side POC
+      if(typeof value === 'string' && value.indexOf('data:') === 0 && typeof window !== 'undefined' && window.__API_BASE__){
+        const m = String(value).match(/^data:([^;]+);base64,(.*)$/);
+        if(m){
+          const contentType = m[1];
+          const b64 = m[2];
+          try{
+            // 1) Try presign flow
+            const presignRes = await fetch(`${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes/presign`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') },
+              body: JSON.stringify({ key, contentType })
+            });
+            if(presignRes && presignRes.ok){
+              const pj = await presignRes.json();
+              if(pj && pj.ok && pj.presignUrl && pj.publicUrl){
+                // PUT binary directly to presignUrl
+                const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                const putRes = await fetch(pj.presignUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: bin });
+                if(putRes && (putRes.ok || putRes.status === 200 || putRes.status === 204)){
+                  await patchJSON('fotosClientes', { key, value: pj.publicUrl });
+                  return;
+                }
+              }
+            }
+          }catch(e){ console.warn('[storage-adapter] presign upload failed', e); }
+
+          try{
+            // 2) Fallback to existing server-side upload POC
+            const up = await fetch(`${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes/upload`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') },
+              body: JSON.stringify({ key, data: value })
+            });
+            if(up && up.ok){
+              const uj = await up.json();
+              if(uj && uj.ok && uj.url){
+                await patchJSON('fotosClientes', { key, value: uj.url });
+                return;
+              }
+            }
+          }catch(e){ console.warn('[storage-adapter] fallback upload failed', e); }
+        }
+      }
+
+      // Default: just patch the map with provided value
       await patchJSON('fotosClientes', (Object.prototype.hasOwnProperty.call({ key, value }, 'key') ? { key, value } : { [key]: value }));
     }catch(e){ /* ignore */ }
   }
