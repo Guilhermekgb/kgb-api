@@ -1,0 +1,7 @@
+{
+  "default": {
+    "fotoA": "data:image/png;base64,AAA2",
+    "fotoB": null,
+    "fotoC": "data:image/png;base64,CCC"
+  }
+}
