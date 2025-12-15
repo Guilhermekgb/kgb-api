@@ -18,3 +18,29 @@ Pequenas instruções para configurar uploads de `fotosClientes` usando o Cloudi
 	- Remova `-WhatIf` para executar de fato.
 
 Recomenda-se manter as chaves sensíveis fora do repositório (usar variáveis de ambiente na máquina ou no host de produção).
+
+## Quick start
+
+1. Copie o arquivo de exemplo e preencha suas variáveis:
+
+	```powershell
+	copy .env.example .env
+	# edite .env e preencha CLOUDINARY_* e outras variáveis
+	```
+
+2. Instale dependências e rode o servidor:
+
+	```powershell
+	cd kgb-api
+	npm install
+	npm run start
+	```
+
+3. Teste upload de fotos (exemplo):
+
+	```powershell
+	# dentro de kgb-api
+	node scripts/test-firebase-upload.ps1
+	```
+
+Observação: em dev você pode usar `STORAGE_MODE=local` para não depender de serviços externos.
