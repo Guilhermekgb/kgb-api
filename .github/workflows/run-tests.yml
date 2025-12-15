@@ -20,8 +20,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        # Use npm install to avoid CI failure when lockfile is out-of-sync
-        run: npm install
+        run: npm ci
         shell: pwsh
 
       - name: Show Node version
