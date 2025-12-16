@@ -2,7 +2,9 @@
 # Uso: execute este script localmente. Ele pede o PAT (não compartilhe) e publica o arquivo pr_comment_result.txt
 # Depois de usar, revogue o token no GitHub (https://github.com/settings/tokens)
 
-param()
+param(
+    [int]$PRNumber = 7
+)
 
 $repoPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $commentFile = Join-Path $repoPath 'pr_comment_result.txt'
@@ -12,7 +14,7 @@ if (-not (Test-Path $commentFile)) {
     exit 1
 }
 
-Write-Host "Este script publicará o conteúdo de:`n  $commentFile`ncomo comentário no PR #5 do repositório Guilhermekgb/kgb-api." -ForegroundColor Yellow
+Write-Host "Este script publicará o conteúdo de:`n  $commentFile`ncomo comentário no PR #$PRNumber do repositório Guilhermekgb/kgb-api." -ForegroundColor Yellow
 Write-Host "Por favor, revogue qualquer token exposto ANTES de prosseguir." -ForegroundColor Red
 
 $secureToken = Read-Host -Prompt "Cole seu PAT aqui (será usado somente nesta sessão)" -AsSecureString
@@ -30,7 +32,7 @@ try {
 }
 
 $body = Get-Content -Raw $commentFile
-$uri = 'https://api.github.com/repos/Guilhermekgb/kgb-api/issues/5/comments'
+$uri = "https://api.github.com/repos/Guilhermekgb/kgb-api/issues/$PRNumber/comments"
 
 try {
     $payload = @{ body = $body } | ConvertTo-Json -Depth 10
