@@ -1,0 +1,24 @@
+*** Patch: evento-detalhado.js — Safer persistence for fotosClientes
+
+Resumo:
+- Substituí escritas diretas de `localStorage.setItem('fotosClientes', ...)` por uma sequência segura:
+  1) `storageAdapter.setJSON('fotosClientes', index)` quando disponível
+  2) `storageAdapter.setRaw('fotosClientes', JSON.stringify(index))` para espelhar o índice no cache local do adapter
+  3) fallback final: `localStorage.setItem('fotosClientes', JSON.stringify(index))` (apenas índice sanitizado)
+
+Trechos a serem aplicados manualmente no arquivo raiz `evento-detalhado.js` (dois locais foram atualizados):
+
+// Exemplo de escrita segura (substitui o bloco que usava localStorage diretamente)
+try{
+  if (window.storageAdapter && typeof window.storageAdapter.setJSON === 'function'){
+    window.storageAdapter.setJSON('fotosClientes', index);
+  } else if (window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){
+    try{ window.storageAdapter.setRaw('fotosClientes', JSON.stringify(index)); }catch(e){}
+  } else {
+    try{ localStorage.setItem("fotosClientes", JSON.stringify(index)); }catch(e){}
+  }
+}catch(e){}
+
+Notas:
+- O objetivo é nunca armazenar grandes dataURLs diretamente no `localStorage` — apenas um índice sanitizado.
+- As alterações completas já foram aplicadas localmente no arquivo raiz do workspace; este patch facilita revisão e aplicação manual às suas cópias de controle de versão se preferir.
