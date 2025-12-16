@@ -13,7 +13,7 @@
         try{
           if (window.__FOTOS_CLIENTES_PRELOAD__ && Object.keys(window.__FOTOS_CLIENTES_PRELOAD__).length) return window.__FOTOS_CLIENTES_PRELOAD__;
           // fallback: try localStorage (read-only)
-          try{ const raw = localStorage.getItem('fotosClientes'); if(raw) return JSON.parse(raw); }catch(e){}
+          try{ const raw = (()=>{ try{ if(typeof getFotosClientesSync==='function') return JSON.stringify(getFotosClientesSync()); if(window.__FOTOS_CLIENTES_PRELOAD__) return JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__); if(window.storageAdapter && window.storageAdapter.getRaw) return window.storageAdapter.getRaw('fotosClientes'); return localStorage.getItem('fotosClientes'); }catch{return null;} })(); if(raw) return JSON.parse(raw); }catch(e){}
           return window.__FOTOS_CLIENTES_PRELOAD__ || {};
         }catch(e){ return {}; }
       };
