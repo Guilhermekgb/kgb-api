@@ -93,27 +93,39 @@
       }
     }catch(e){ console.warn('[storage-adapter] fetch /fotos-clientes failed', e); }
 
-    // 2) Tentar ler do localStorage
+    // 2) Tentar ler do preload shim ou cache em memória.
+    // Evitamos leituras síncronas do `localStorage` aqui para prevenir
+    // flash-of-empty-state e leituras de blobs grandes em runtime.
     try{
-      const raw = localStorage.getItem(key);
-      const parsed = safeJSONParse(raw, null);
-      if(parsed !== null) return parsed;
-    }catch(e){
-      console.warn('[storage-adapter] Erro lendo localStorage key=', key, e);
-    }
-
-    // 3) fallback
-    return fallback;
-  }
-
-  // Async setter
-  async function setJSON(key, value){
-    try{
-      // if there is a specific adapter to persist remotely, call it
-      if(key === 'clientes' && global.firebaseClientes && typeof global.firebaseClientes.upsert === 'function'){
-        try{ await global.firebaseClientes.upsert(value); }catch(e){ console.warn('[storage-adapter] firebaseClientes.upsert failed', e); }
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
+        return window.__FOTOS_CLIENTES_PRELOAD__;
       }
-      // persist fotosClientes to backend endpoint if available
+      if(typeof cache !== 'undefined' && cache[key] !== undefined){
+        const parsed = safeJSONParse(cache[key], null);
+        if(parsed !== null) return parsed;
+      }
+    }catch(e){
+      console.warn('[storage-adapter] Erro lendo cache/preload key=', key, e);
+    }
+          try{
+            // Prefer preload (synchronous index) then in-memory cache. Avoid localStorage reads.
+            let raw = null;
+            if(typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
+              raw = JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
+            } else if(typeof cache !== 'undefined' && cache['fotosClientes'] !== undefined){
+              raw = cache['fotosClientes'];
+            }
+            const obj = raw ? JSON.parse(raw) : {};
+            if(patch && typeof patch === 'object'){
+              if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
+                obj[patch.key] = patch.value;
+              } else {
+                Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
+              }
+              cache['fotosClientes'] = JSON.stringify(obj);
+              // Do NOT write fotosClientes to localStorage; keep only in-memory cache.
+            }
+          }catch(e){}
       if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
         try{
           const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
@@ -134,7 +146,12 @@
           await fetch(url, { method: 'PATCH', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(patch) });
           // update local cache too (best-effort): merge into existing cached value
           try{
-            const raw = cache['fotosClientes'] || localStorage.getItem('fotosClientes');
+            let raw = null;
+            if(typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
+              raw = JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
+            } else if(typeof cache !== 'undefined' && cache['fotosClientes'] !== undefined){
+              raw = cache['fotosClientes'];
+            }
             const obj = raw ? JSON.parse(raw) : {};
             if(patch && typeof patch === 'object'){
               if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
@@ -186,7 +203,11 @@
             }
           }catch(e){}
   function getRaw(key){
-    try{ if(cache && cache[key] !== undefined) return cache[key]; return localStorage.getItem(key); }catch(e){ return null; }
+    try{
+      if(typeof cache !== 'undefined' && cache && cache[key] !== undefined) return cache[key];
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__) return JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
+      return null;
+    }catch(e){ return null; }
   }
 
   function setRaw(key, value){
