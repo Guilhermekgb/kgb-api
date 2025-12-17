@@ -1,8 +1,8 @@
 {
   "default": {
-    "fotoA": "data:image/png;base64,AAA2",
+    "fotoA": null,
     "fotoB": null,
-    "fotoC": "data:image/png;base64,CCC",
-    "teste/script-upload.png": "https://res.cloudinary.com/dzw8u1h69/image/upload/v1765821909/default/q04xbfzp8dik9ybl2ujy.png"
+    "fotoC": null,
+    "teste/script-upload.png": "https://res.cloudinary.com/dzw8u1h69/image/upload/v1765938544/default/rdlsim9yax4pjohexfcc.png"
   }
 }
