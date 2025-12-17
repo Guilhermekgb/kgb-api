@@ -1,0 +1,15 @@
+Patch: include fotos-shim.js in HTML pages
+
+Insert this snippet before the existing kgb-common include in each page:
+
+  <script src="./kgb-api/public/js/fotos-shim.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+
+Files to update (relative to workspace root):
+- cadastro-evento.html
+- evento-detalhado.html
+- area-cliente.html
+- lista-evento.html
+- cadastro-cliente.html
+
+Apply manually or run a provided PowerShell script to automate the insertion.

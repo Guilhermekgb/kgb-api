@@ -40,7 +40,7 @@ function runTest(){
 
   // Agora chama setItem com fotosClientes
   const sample = { 'auto-test-key': 'data:image/png;base64,TEST' };
-  sandbox.window.localStorage.setItem('fotosClientes', JSON.stringify(sample));
+  sandbox.window.(() => { try{ if(window.storageAdapter && typeof window.storageAdapter.setJSON === 'function'){ window.storageAdapter.setJSON('fotosClientes', sample); } else if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ try{ window.storageAdapter.setRaw('fotosClientes', JSON.stringify(sample)); }catch(e){} } else { try{ localStorage.setItem('fotosClientes', JSON.stringify(sample)); }catch(e){} } }catch(e){} })()
 
   // Aguarda 200ms para qualquer chamada assíncrona (o shim chama patchFotos direto)
   setTimeout(()=>{

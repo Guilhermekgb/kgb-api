@@ -1,0 +1,33 @@
+Resumo das mudanças
+
+- Migrei a persistência de `fotosClientes` do `localStorage` para um fluxo server/cloud (PoC).
+- Adicionei endpoint opcional de presign S3 (`POST /fotos-clientes/presign`) para permitir upload direto do navegador via URL preassinada.
+- Mantive um fallback local seguro (`POST /fotos-clientes/upload`) que escreve em `public/uploads/` para compatibilidade e testes.
+- Ao aplicar `PATCH` com `value: null` o servidor tenta apagar o arquivo antigo (arquivo local removido; para S3, DeleteObject é enfileirado se configurado).
+- Incluí testes locais que cobrem upload/fallback e remoção de arquivos locais (`tests/delete-local-file-test.js`) e atualizei docs em `docs/cloud-poc.md`.
+
+Como testar localmente (rápido)
+
+1. Start do servidor em dev (ex.: `node server.js` ou seu comando habitual).
+2. Para testar presign local (se tiver variáveis AWS definidas):
+   - POST `/fotos-clientes/presign` com `{ "key": "teste/cliente-123.png", "contentType": "image/png" }`
+   - Fazer um `PUT` para `presignUrl` retornado com o binário do arquivo. Verificar `publicUrl`.
+3. Para testar fallback local (sem S3 configurado): usar o fluxo POC `POST /fotos-clientes/upload` com `{ key, data }` (data URL).
+4. Verificar que `PATCH /fotos-clientes` atualiza o map com a `publicUrl` e que um `PATCH` definindo `value:null` remove arquivo localmente.
+
+Observações para reviewers
+
+- A funcionalidade S3 depende de variáveis de ambiente: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET`, `AWS_REGION`. Sem essas variáveis, o presign não ficará disponível e o fallback local será usado.
+- Recomendo adicionar os segredos ao repositório/staging antes de ativar o presign em CI.
+- Após validação em staging/produção, podemos remover o fallback local para simplificar o código.
+
+Checklist
+
+- [ ] Revisar segurança do fluxo de upload (CORS, content-type, tamanho máximo).
+- [ ] Adicionar segredos do S3 em staging/production (se aprovados).
+- [ ] Executar testes de integração que façam PUT para `presignUrl` (após segredos).
+
+Labels sugeridas: `feature`, `needs-review`, `ci`
+Reviewers sugeridos: @<seu-time-ou-usuario> (substitua pelo handle desejado)
+
+Se preferir, poste este arquivo com `gh pr comment 3 --body-file pr_comment.txt` (substitua `3` pelo número do PR).

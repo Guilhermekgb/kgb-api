@@ -1,0 +1,14 @@
+Follow-up: Complete fotosClientes migration
+
+Resumo das mudanças neste branch `fix/fotosclients-complete-migration`:
+
+- Evitei gravações diretas de blobs/base64 em `localStorage` no arquivo `evento-detalhado.js`, usando `storageAdapter.setJSON` quando disponível; mantenho fallback seguro para gravação de índices leves.
+- Adicionado `.env.example` com variáveis recomendadas (Cloudinary, Firebase, S3, CORS, SQLite).
+- Adicionada seção "Quick start" em `kgb-api/README.md` com comandos para iniciar o servidor local.
+
+Próximos passos sugeridos (pos-merge):
+1. Substituir leituras síncronas restantes (se houver) por `getFotosClientesSync()` ou `storageAdapter.getRaw('fotosClientes')` onde aplicável.
+2. Opcional: migrar assets existentes em `public/uploads/*` para Cloudinary e limpar os arquivos locais.
+3. Rodar testes manuais: iniciar servidor (`npm start`) e executar `kgb-api/scripts/test-firebase-upload.ps1` para validar uploads.
+
+Se quiser, eu posso abrir o PR automaticamente (preciso de `gh` autenticado ou de um PAT com escopo `repo`).

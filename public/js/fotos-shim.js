@@ -1,3 +1,33 @@
+// Shim para garantir acesso síncrono seguro ao mapa `fotosClientes`.
+// Uso: incluir este script o MAIS CEDO possível nas páginas que precisam
+// ler `localStorage['fotosClientes']` de forma síncrona no carregamento.
+
+(function(){
+  try{
+    // Inicializa com objeto vazio para leituras imediatas
+    if (typeof window !== 'undefined') {
+      window.__FOTOS_CLIENTES_PRELOAD__ = window.__FOTOS_CLIENTES_PRELOAD__ || {};
+
+      // Síncrono-safe getter usado por páginas que não podem aguardar promises
+      window.getFotosClientesSync = function(){
+        try{
+          if (window.__FOTOS_CLIENTES_PRELOAD__ && Object.keys(window.__FOTOS_CLIENTES_PRELOAD__).length) return window.__FOTOS_CLIENTES_PRELOAD__;
+          // fallback: try localStorage (read-only)
+          try{ const raw = (()=>{ try{ if(typeof getFotosClientesSync==='function') return JSON.stringify(getFotosClientesSync()); if(window.__FOTOS_CLIENTES_PRELOAD__) return JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__); if(window.storageAdapter && window.storageAdapter.getRaw) return window.storageAdapter.getRaw('fotosClientes'); return localStorage.getItem('fotosClientes'); }catch{return null;} })(); if(raw) return JSON.parse(raw); }catch(e){}
+          return window.__FOTOS_CLIENTES_PRELOAD__ || {};
+        }catch(e){ return {}; }
+      };
+
+      // Attempt to warm the preload asynchronously (best-effort)
+      try{
+        if (window.storageAdapter && typeof window.storageAdapter.preload === 'function'){
+          // preload will set window.__FOTOS_CLIENTES_PRELOAD__ when available
+          window.storageAdapter.preload('fotosClientes').catch(()=>{});
+        }
+      }catch(e){}
+    }
+  }catch(e){ /* safe no-op */ }
+})();
 /*
   fotos-shim.js
   Shim leve para espelhar alterações em `localStorage.fotosClientes`

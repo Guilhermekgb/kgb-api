@@ -1,0 +1,54 @@
+Title: Draft PR — storage: fotosClientes → cloud + shim
+
+Body:
+This branch `feat/storage-cloudinary-enforce` contains the first non-destructive
+steps to migrate `fotosClientes` from browser `localStorage` to a backend/cloud
+flow (Cloudinary POC). Changes in this branch include:
+
+- Server: Cloudinary-first upload endpoint and presign support (POC).
+- Public client adapter: `public/api/storage-adapter.js` with `preload`, `patchFotos` and in-memory cache for `fotosClientes`.
+- Shim: `public/js/fotos-shim.js` to provide a synchronous-safe getter and warm the in-memory cache.
+- Report: `reports/fotosClients-scan.md` with remaining sites using sync localStorage reads.
+- Minor fixes to avoid writing `fotosClientes` to `localStorage` and to patch client code.
+
+Testing checklist (suggested):
+- Start server locally and run `kgb-api/scripts/test-firebase-upload.ps1` to validate upload to Cloudinary.
+- Open main pages (`cadastro-evento`, `evento-detalhado`, `area-cliente`, `lista-evento`) and verify photos still render without flash-of-empty-state.
+- Confirm no sensitive base64 blobs are persisted in browser localStorage for `fotosClientes`.
+
+Notes:
+- Top-level HTML files were updated locally in the workspace to include the shim; if these files live in another repo, see `kgb-api/reports/html-includes-fotos-shim.patch` or run `kgb-api/scripts/apply-fotos-shim.ps1` to apply the changes.
+
+Please review and if OK, merge to main after validating in staging.
+Pedido de revisão — PR #3: uploads pré-assinados do S3 + fallback local
+
+Olá pessoal,
+
+Podem revisar este PR, por favor?
+
+Resumo rápido:
+- Adiciona suporte opcional a uploads por URLs S3 pré-assinadas (`POST /fotos-clientes/presign`).
+- Mantém um fallback local seguro (`POST /fotos-clientes/upload`) enquanto não ativarmos S3 em staging.
+- `PATCH` com `value:null` remove arquivo localmente e dispara tentativa de DeleteObject em S3 (se configurado).
+
+Status dos testes locais/CI:
+- Testes locais (SMOKE, HEADLESS e teste de remoção local) passaram.
+- CI foi atualizado para usar lockfile e está executando (ver checks no PR).
+
+Pontos a revisar com atenção:
+- Segurança do fluxo de upload (CORS, validação de content-type e limites de tamanho).
+- Lógica de fallback e comportamento offline (o frontend tenta presign e em caso de falha usa o endpoint de upload local).
+- Remoção/limpeza de arquivos ao definir `value:null`.
+
+Sugestão de reviewers: @handle1 @handle2  (substitua pelos handles reais)
+
+Labels já adicionadas: `feature`, `needs-review`, `ci`.
+
+Como publicar este comentário localmente (PowerShell):
+
+# estando em `C:\Users\user\OneDrive\Desktop\sistema-buffet\kgb-api`
+gh pr comment 3 --body-file pr_request_review.txt
+
+Obrigado!
+
+(Se preferir, posso gerar um convite para colaboradores ou um comentário com menção direta aos revisores que você indicar.)
