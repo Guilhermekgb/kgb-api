@@ -1,5 +1,8 @@
 name: Migrate uploads to Cloudinary
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
 
