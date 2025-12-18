@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <title>Evento Detalhado</title>
+
+<!-- Ícones -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- Estilos base do projeto -->
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="menu-lateral.css" />
+
+<!-- CSS específico desta página -->
+<link rel="stylesheet" href="evento-detalhado.css" />
+
+<!-- Corrige favicon 404 -->
+<link rel="icon" href="data:,">
+
+<!-- Permissão desta página (RBAC) -->
+<meta name="page-permission" content="page:evento-detalhado.html">
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+var PROD_API = "https://kgb-api.onrender.com";
+var DEV_API  = "http://127.0.0.1:3333";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+
+<!-- === ORDEM DE SCRIPTS (importante) ===
+1) Define a base da API (Render)
+2) Helpers globais do sistema (kgb-common)
+3) Cliente ZapSign (expondo window.ZapSignClient)
+4) Guard de permissões (proteger-pagina)
+-->
+
+<!-- 2) Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Storage adapter (público) e shim para espelhar fotosClientes → storageAdapter -->
+<!-- (Opcional) Bypass do guard em *.netlify.app até ativarmos Auth -->
+<script>
+  (function () {
+    try {
+      var h = String(location.hostname || "");
+      if (/\.netlify\.app$/i.test(h)) {
+        localStorage.setItem("guard.enforce", "0");
+        if (!localStorage.getItem("perfil")) localStorage.setItem("perfil", "Administrador");
+        console.log("[GUARD] Bypass ativo (Netlify)");
+      }
+    } catch (e) {}
+  })();
+</script>
+
+<!-- 4) Guard / RBAC -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+<style>
+
+    /* não alterar fonte global do app para não quebrar o menu */
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+
+    main.conteudo-principal{ flex:1; padding:40px; height:100vh; overflow:auto; transition:margin-left .2s; }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    main.conteudo-principal, .conteudo-principal input, .conteudo-principal select,
+    .conteudo-principal textarea, .conteudo-principal button{
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1,.conteudo-principal h2,.conteudo-principal h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{ font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+
+    #hamburguer{ position:fixed; top:12px; left:12px; background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px; z-index:1001; display:none; }
+    @media (max-width:768px){ #hamburguer{display:block} main.conteudo-principal{padding:20px} }
+
+    .menu-lateral a.ativo,.menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    .btn-excluir-discreto{ display:inline-flex; align-items:center; gap:6px; font-size:13px;
+      padding:6px 10px; border:1px dashed rgba(178,61,45,.35); background:transparent; color:#b23c31; opacity:.85 }
+    .btn-excluir-discreto:hover{ opacity:1; background:#fff6f5; border-color:rgba(178,61,45,.55) }
+
+    .area-cliente-grid{ display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center }
+    @media (max-width:640px){ .area-cliente-grid{ grid-template-columns:1fr } }
+    .muted{ color:#7a6f66; font-size:12px }
+    .chip.ok{ background:#e7f7ef; color:#137a54; border:1px solid #c2ebd5 }
+    .chip.warn{ background:#fff3cd; color:#8a6d1b; border:1px solid #ffe69c }
+
+    .bloco-detalhes.ac-compact{ margin-top:28px }
+    .ac-compact .area-cliente-grid .input-editar{ max-width:520px }
+    @media (max-width:640px){ .ac-compact .area-cliente-grid .input-editar{ max-width:100% } }
+
+    /* Toolbar do topo (botões Editar/Salvar/Cancelar/Trocar foto) */
+    .toolbar-hero{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; flex-wrap:wrap; margin-top:8px;
+    }
+    .toolbar-hero .tl-left,
+    .toolbar-hero .tl-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    body.em-edicao #btnEditarHero{ display:none !important; }
+    body.em-edicao #btnSalvarHero,
+    body.em-edicao #btnCancelarHero{ display:inline-flex !important; }
+
+    /* Inputs em/fora de edição */
+    .input-editar[disabled]{ background:#f7f1e6; cursor:not-allowed; }
+    body.em-edicao .input-editar{ background:#fff; cursor:text; }
+  </style>
+</head>
+<body>
+
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+
+      <span id="badgeArquivado" class="badge-arquivado" style="display:none">📦 Arquivado</span>
+
+      <h1><i data-lucide="calendar-days"></i> Detalhes do Evento</h1>
+
+      <!-- HERO cliente -->
+      <section class="cliente-hero" aria-label="Cliente do evento">
+        <div class="cliente-foto">
+          <img id="fotoCliente" alt="Foto do cliente" style="display:none" loading="eager" decoding="async" />
+          <div id="fotoClientePh" class="ph" aria-hidden="true">
+            <i data-lucide="user"></i><span>Foto do cliente</span>
+          </div>
+        </div>
+
+        <!-- cabeçalho com título + ações no topo -->
+        <div class="cliente-titulos" style="flex:1">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <div>
+              <h1 id="tituloEvento">—</h1>
+              <div class="muted">Criado em <span id="criadoEm">—</span></div>
+            </div>
+
+            <!-- AÇÕES DO TOPO (ÚNICAS) -->
+            <div class="toolbar-hero" role="group" aria-label="Ações do evento">
+              <div class="tl-left">
+                <button type="button" class="btn" id="btnSalvarHero" style="display:none">
+                  <i data-lucide="save"></i> Salvar
+                </button>
+
+                <button type="button" class="btn" id="btnTrocarFoto">
+                  <i data-lucide="image-plus"></i> Trocar foto
+                </button>
+                <input type="file" id="inpFotoCliente" accept="image/*" hidden>
+              </div>
+
+              <div class="tl-right">
+                <button type="button" class="btn" id="btnEditarHero">
+                  <i data-lucide="pencil-line"></i> Editar
+                </button>
+                <button type="button" class="btn-ghost" id="btnCancelarHero" style="display:none">
+                  <i data-lucide="x"></i> Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- /HERO -->
+
+      <!-- Dados do evento -->
+      <div class="bloco-detalhes" id="dados-evento">
+        <div class="linha-dado"><strong>Nome do Evento:</strong><input type="text" id="eventoNome" class="input-editar" disabled /></div>
+        <div class="linha-dado"><strong>Tipo:</strong><input type="text" id="eventoTipo" class="input-editar" disabled /></div>
+        <div class="linha-dado"><strong>Data:</strong><input type="date" id="eventoData" class="input-editar" disabled /></div>
+        <div class="linha-dado"><strong>Local:</strong><input type="text" id="eventoLocal" class="input-editar" disabled /></div>
+
+        <div class="linha-dado">
+          <strong>Convidados:</strong>
+          <input type="number" id="eventoConvidados" class="input-editar" disabled />
+          <button type="button" class="btn-ghost" id="btnAddConvidados" title="Adicionar convidados" style="margin-left:8px">
+            <i data-lucide="plus"></i> Adicionar
+          </button>
+        </div>
+
+        <div class="linha-dado">
+          <strong>Cerimônia no Local?</strong>
+          <select id="eventoCerimoniaNoLocal" class="input-editar" disabled>
+            <option value="">—</option>
+            <option value="Sim">Sim</option>
+            <option value="Não">Não</option>
+          </select>
+        </div>
+
+        <div class="linha-dado">
+          <strong>Horário da Cerimônia:</strong>
+          <input type="time" id="eventoHorarioCerimonia" class="input-editar" step="60" disabled />
+        </div>
+
+        <div class="linha-dado">
+          <strong>Horário do Evento:</strong>
+          <input type="time" id="eventoHorarioEvento" class="input-editar" step="60" disabled />
+        </div>
+
+        <div class="linha-dado">
+          <strong>Cerveja:</strong>
+          <select id="eventoCerveja" class="input-editar" disabled>
+            <option value="">—</option>
+            <option value="Sim">Sim</option>
+            <option value="Não">Não</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Itens do Evento (layout simplificado: Tipo/Nome + cards de totais) -->
+      <section class="bloco-detalhes" id="bloco-itens">
+        <div class="header-itens">
+          <h2 class="subtitulo"><i data-lucide="layers-3"></i> Itens do Evento</h2>
+          <button class="btn" id="btnIrItens" data-abrir-itens>
+            <i data-lucide="plus"></i> Adicionar/Editar Itens
+          </button>
+        </div>
+
+        <div id="itensEvento">
+          <div id="resumoItensUnificado"></div>
+        </div>
+      </section>
+
+      <!-- Financeiro (resumo) -->
+      <div id="financeiro-resumo">
+        <div class="resumo-grid fin-resumo">
+          <div class="campo">
+            <div class="rotulo">Valor total do contrato</div>
+            <div class="valor" id="finTotalContrato">R$ 0,00</div>
+          </div>
+          <div class="campo">
+            <div class="rotulo">Recebido</div>
+            <div class="valor" id="finRecebido">R$ 0,00</div>
+          </div>
+          <div class="campo">
+            <div class="rotulo">Falta receber</div>
+            <div class="valor" id="finFalta">R$ 0,00</div>
+          </div>
+        </div>
+      </div>
+
+ <!-- Acessos -->
+<!-- Acessos -->
+<h2 class="subtitulo">Acessar áreas do evento</h2>
+<div class="cards-acesso" id="cardsAcesso">
+  <a href="javascript:void(0)" class="card-link" onclick="alternarCliente()">
+    <i data-lucide="id-card"></i><br> Cliente
+  </a>
+
+  <a id="linkContrato" class="card-link" data-area="contratos">
+    <i data-lucide="file-signature"></i><br>
+    Contratos e Documentos
+    <span class="dot-alert" aria-hidden="true"></span>
+  </a>
+
+  <a id="linkFinanceiro" class="card-link" data-area="financeiro">
+    <i data-lucide="wallet"></i><br>
+    Financeiro
+    <span class="dot-alert" aria-hidden="true"></span>
+  </a>
+
+  <!-- NOVO: Documentos do Evento -->
+  <a id="linkDocumentos" class="card-link" data-area="documentos">
+    <i data-lucide="folder-open"></i><br>
+    Documentos do Evento
+  </a>
+
+  <!-- já existente: materiais/execução -->
+  <a id="linkChecklist" class="card-link" data-area="checklist">
+    <i data-lucide="archive"></i><br>
+    Estoque / Checklist
+    <span class="dot-alert" aria-hidden="true"></span>
+  </a>
+
+  <!-- NOVO: Checklist (Tarefas) – abre checklist.html do evento -->
+  <a id="linkChecklistTarefas" class="card-link" data-area="checklist-tarefas">
+    <i data-lucide="check-square"></i><br>
+    Checklist (Tarefas)
+    <span class="dot-alert" aria-hidden="true"></span>
+  </a>
+
+  <a id="linkDefinicoes" class="card-link">
+    <i data-lucide="file-spreadsheet"></i><br> Definições
+  </a>
+
+  <a id="linkEscala" class="card-link">
+    <i data-lucide="users"></i><br> Escala
+  </a>
+
+  <a id="linkComissoes" class="card-link" href="javascript:void(0)" data-abrir-comissao>
+    <i data-lucide="percent"></i><br> Comissões
+  </a>
+
+  <a id="linkRelatorioEvento"
+     class="card-link"
+     href="relatorio-evento.html"
+     data-area="relatorio"
+     aria-label="Relatório Financeiro do evento">
+    <i data-lucide="bar-chart-3"></i><br>
+    <span>Relatório Financeiro</span>
+  </a>
+</div>
+
+
+
+      <!-- Área do cliente (compacta) -->
+      <div class="bloco-detalhes ac-compact" id="bloco-area-cliente">
+        <h3>🔗 Área do Cliente</h3>
+        <div class="chips-resumo" style="margin:6px 0 10px;">
+          <span class="chip" id="chipMsgGrandeDiaAC">Mensagem do grande dia: —</span>
+        </div>
+
+        <div class="area-cliente-grid" style="margin-top:0;">
+         <input id="idTxtLinkCliente" type="text" class="input-editar" disabled placeholder="O link será gerado automaticamente…" />
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-ghost" id="btnCopiarLinkCliente" title="Copiar link">
+              <i data-lucide="copy"></i> Copiar
+            </button>
+            <a class="btn" id="btnAbrirAreaCliente" target="_blank" rel="noopener">
+              <i data-lucide="external-link"></i> Abrir
+            </a>
+            <button type="button" class="btn" id="btnWhatsLinkCliente" title="Enviar por WhatsApp">
+              <i data-lucide="send"></i> WhatsApp (link + msg)
+            </button>
+          </div>
+        </div>
+
+        <div class="linha-dado" style="margin-top:10px;">
+          <strong>Modelo do “grande dia”:</strong>
+          <select id="selModeloGrandeDia" class="input-editar" data-lock="true" style="max-width:340px"></select>
+          <div class="muted" style="margin-top:6px">
+            Os modelos vêm da tela <em>Modelos</em> (modelos.html). Campos: {{nome_cliente}}, {{nome_evento}}, {{data_evento}}.
+          </div>
+        </div>
+      </div>
+
+      <!-- Histórico -->
+      <div id="blocoHistoricoEvento">
+        <h3>📝 Histórico do Evento</h3>
+        <textarea id="novaAnotacao" placeholder="Digite uma anotação..."></textarea>
+        <button class="btn" id="btnSalvarAnotacao"><i data-lucide="save"></i> Salvar Anotação</button>
+        <div id="listaHistorico" class="historico-lista"></div>
+      </div>
+
+      <!-- Rodapé -->
+      <div class="rodape-acoes">
+        <button class="btn" id="btnAbrirArquivar"><i data-lucide="archive"></i> Arquivar</button>
+        <button class="btn" id="btnDesarquivar" style="display:none"><i data-lucide="rotate-ccw"></i> Desarquivar</button>
+        <button type="button" class="btn-excluir-discreto" id="btnExcluirEvento"><i data-lucide="trash-2"></i> Excluir evento</button>
+      </div>
+
+  
+      <!-- Modal Acréscimo de Convidados -->
+      <div id="modalAddConvidados" class="modal" hidden aria-modal="true" role="dialog">
+        <div class="modal-box" role="document">
+          <div class="modal-header">
+            <h3><i data-lucide="users"></i> Acréscimo de convidados</h3>
+            <button type="button" class="btn-icon close" id="btnFecharAddConvidados" aria-label="Fechar"><i data-lucide="x"></i></button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <label>Quantos convidados a mais?
+                <input id="addQtdConvidados" type="number" min="1" inputmode="numeric" placeholder="Ex.: 10">
+              </label>
+              <label>Valor por pessoa
+                <input id="addValorPorPessoa" type="text" inputmode="decimal" placeholder="Ex.: 89,90">
+              </label>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="btnCancelarAddConvidados"><i data-lucide="x"></i> Cancelar</button>
+            <button type="button" class="btn" id="btnSalvarAddConvidados"><i data-lucide="save"></i> Salvar</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- Menu -->
+<script type="module" src="menu-lateral.js"></script>
+
+<script>
+(function(){
+  // Tenta resolver o ID do evento a partir de várias fontes (robusto)
+  var evtId =
+    (window.eventoAtual && (window.eventoAtual.id || window.eventoAtual.evtId)) ||
+    (window.evt && (window.evt.id || window.evt.evtId)) ||
+    new URLSearchParams(location.search).get('id') ||
+    // fallback: último evento aberto (caso venha de navegação interna)
+    (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+
+  // Ajusta o link do card "Checklist (Tarefas)"
+  var a = document.getElementById('linkChecklistTarefas');
+  if (a) a.href = evtId ? ('checklist.html?id=' + encodeURIComponent(evtId)) : 'checklist.html';
+
+  // (opcional) re-render dos ícones do Lucide
+  try { lucide.createIcons(); } catch(e){}
+})();
+</script>
+
+<!-- Proteção/Permissões -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = (meta && meta.content || '').trim();
+  if (permissao) guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+<!-- Modal: Comissões -->
+<dialog id="dlg-comissoes" class="modal-soft" hidden>
+  <form method="dialog" class="comi-box" id="form-comissoes" onsubmit="return false;">
+    <header class="comi-head">
+      <h3><i data-lucide="percent"></i> Comissões</h3>
+      <button type="button" class="btn ghost" onclick="document.getElementById('dlg-comissoes').close()">Fechar</button>
+    </header>
+
+    <div class="grid-form">
+      <label>
+        <span>Data pagamento</span>
+        <input id="com-data" type="date" required>
+      </label>
+
+      <label>
+        <span>Valor</span>
+        <input id="com-valor" type="text" inputmode="decimal" placeholder="0,00" required>
+      </label>
+
+      <label>
+        <span>Status</span>
+        <select id="com-status">
+          <option value="pendente">Pendente</option>
+          <option value="pago">Pago</option>
+        </select>
+      </label>
+
+      <label class="col-2">
+        <span>Destinatário</span>
+        <select id="com-dest"></select>
+      </label>
+
+      <label class="col-2">
+        <span>Descrição</span>
+        <input id="com-desc" type="text" placeholder="Ex.: Comissão do vendedor">
+      </label>
+    </div>
+
+    <div class="cmds">
+      <button id="btnSalvarComissoes" type="button" class="btn primary">
+        <i data-lucide="save"></i> Salvar
+      </button>
+      <span id="com-flash" class="flash"></span>
+    </div>
+
+    <div class="subhead">Lançamentos desta comissão</div>
+    <div class="table-wrap">
+      <table class="nice-table">
+        <thead>
+          <tr><th>Data</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Status</th></tr>
+        </thead>
+        <tbody id="com-lista"><tr><td colspan="4" class="muted">Sem lançamentos ainda.</td></tr></tbody>
+      </table>
+    </div>
+  </form>
+</dialog>
+
+<!-- JS desta página -->
+<script type="module" src="evento-detalhado.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="./agenda-bridge.js"></script>
+  <!-- estilos base do seu sistema -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- estilos específicos desta página -->
+  <link rel="stylesheet" href="cadastro-evento.css" />
+  
+<script>
+  // Abre o diálogo ao clicar no card "Comissões"
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.querySelector('[data-abrir-comissao]') || document.getElementById('linkComissoes');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      window.openComissoesDialog?.();
+    });
+  });
+</script>
+
+<!-- Ajustes de ícones, links e ações locais -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    window.lucide?.createIcons?.();
+
+    // guarda último evento aberto + substitui EVENTOID nos cards
+    const qs = new URLSearchParams(location.search);
+    const eid = qs.get('id') || '';
+    if (eid) { try { localStorage.setItem('eventoSelecionado', eid); } catch {} }
+    document.querySelectorAll('#cardsAcesso a.card-link[href*="EVENTOID"]').forEach(a=>{
+      a.href = a.href.replace('EVENTOID', encodeURIComponent(eid));
+    });
+  });
+
+  // === Links dos cards com ?id= ===
+  (function () {
+    const id = new URLSearchParams(location.search).get('id') ||
+               (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+    const q = s => document.getElementById(s);
+    const withId = (url) => id ? `${url}?id=${encodeURIComponent(id)}` : url;
+
+    if (q('linkContrato'))   q('linkContrato').href   = withId('contrato.html');
+    if (q('linkFinanceiro')) q('linkFinanceiro').href = withId('financeiro-evento.html');
+    if (q('linkChecklist'))  q('linkChecklist').href  = withId('checklist-materiais.html');
+    if (q('linkDefinicoes')) q('linkDefinicoes').href = withId('definicoes-evento.html');
+    if (q('linkEscala'))     q('linkEscala').href     = withId('escala-evento.html');
+    if (q('linkDocumentos')) q('linkDocumentos').href = withId('documentos-evento.html');
+    if (q('linkRelatorioEvento')) q('linkRelatorioEvento').href = withId('relatorio-evento.html');
+  })();
+
+  // === Falta receber (snapshot do Financeiro; fallback com dados do evento) ===
+  if (typeof window.getEventoId !== 'function') {
+    window.getEventoId = () =>
+      new URLSearchParams(location.search).get('id') ||
+      (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+  }
+
+  (function () {
+    function lerSnapshotFinanceiro(id){
+      try { return JSON.parse(localStorage.getItem(`financeiroEvento:${id}`) || 'null'); }
+      catch { return null; }
+    }
+    function parseMoneyBR(v){
+      if (typeof v === 'number') return v;
+      const n = parseFloat(String(v||'').replace(/\./g,'').replace(',','.'));
+      return Number.isFinite(n) ? n : 0;
+    }
+    function getEventoById(id){
+      try {
+        const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+        return (arr||[]).find(e => String(e.id) === String(id)) || null;
+      } catch { return null; }
+    }
+
+    function pintarFaltaReceber(){
+      const id   = String(getEventoId());
+      const snap = lerSnapshotFinanceiro(id);
+      let faltaReceber = null;
+
+      if (snap && typeof snap.falta === 'number') {
+        faltaReceber = snap.falta; // oficial do Financeiro
+      } else {
+        const ev  = getEventoById(id) || {};
+        const contrato = parseMoneyBR(ev?.financeiro?.valorContrato ?? ev?.valorContrato ?? ev?.totalContrato ?? 0);
+        const recebido = Array.isArray(ev?.financeiro?.recebimentos)
+          ? ev.financeiro.recebimentos.reduce((a,x)=> a + parseMoneyBR(x.valor ?? x.valorPago ?? 0), 0)
+          : 0;
+        faltaReceber = Math.max(0, contrato - recebido);
+      }
+
+      const alvos = [
+        document.getElementById('kpiFaltaReceber'),
+        document.getElementById('kContratoFalta'),
+        document.getElementById('edFaltaReceber')
+        
+      ].filter(Boolean);
+
+      const txt = (faltaReceber||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+      alvos.forEach(el => el.textContent = txt);
+    }
+
+    document.addEventListener('DOMContentLoaded', pintarFaltaReceber);
+    window.addEventListener('storage', (e) => {
+      const id = getEventoId();
+      if (e.key === `financeiroEvento:${id}` || e.key === 'financeiro:return:ping') {
+        pintarFaltaReceber();
+      }
+    });
+  })();
+
+  // Ajuste de margem do conteúdo conforme largura do menu
+  (function ajustaEspacoConteudo(){
+    const menu = document.getElementById('menuLateral');
+    const main = document.querySelector('main.conteudo-principal');
+    function aplicar() {
+      if (!menu || !main) return;
+      const desktop = window.innerWidth >= 1024;
+      if (desktop) {
+        const w = menu.getBoundingClientRect().width || 0;
+        main.style.marginLeft = w ? (w + 'px') : '0px';
+      } else {
+        main.style.marginLeft = '0px';
+      }
+    }
+    try {
+      const obs = new MutationObserver(() => {
+        if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+      });
+      obs.observe(menu, { childList: true });
+    } catch {}
+    window.addEventListener('resize', aplicar);
+    window.addEventListener('orientationchange', aplicar);
+    aplicar();
+  })();
+</script>
+
+<script>
+  // 1) garante que o id do evento esteja salvo para as funções que leem do LS
+  document.addEventListener('DOMContentLoaded', () => {
+    const id = new URLSearchParams(location.search).get('id') ||
+               (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+    if (id) { try { localStorage.setItem('eventoSelecionado', id); } catch {} }
+
+    // 2) se o tbody da lista existir no DOM, renderiza já na carga
+    if (document.getElementById('com-lista')) {
+      try { window.renderComissoesLista?.(); } catch {}
+    }
+  });
+
+  // 3) se outras telas alterarem o financeiro/evento, atualiza a listinha aberta
+  window.addEventListener('storage', (e) => {
+    const keys = ['financeiroGlobal', 'financeiroGlobal:ping', 'eventos'];
+    if (keys.includes(e.key)) {
+      if (document.getElementById('dlg-comissoes')?.open &&
+          document.getElementById('com-lista')) {
+        try { window.renderComissoesLista?.(); } catch {}
+      }
+    }
+  });
+</script>
+<!-- storage-adapter centralizado via kgb-common.js loader -->
+<script type="module" src="evento-detalhado.js"></script>
+
+</body>
+</html>
+
