@@ -1,0 +1,213 @@
+From aeb652d5fd6844da677d19995fce19969ecafab4 Mon Sep 17 00:00:00 2001
+From: KGB Buffet <kgbbuffeteventos.com.br>
+Date: Thu, 18 Dec 2025 09:51:25 -0300
+Subject: [PATCH] chore(fotos): remove fotos-shim.js includes from HTML pages
+
+
+diff --git a/cadastro-cliente.html b/cadastro-cliente.html
+new file mode 100644
+index 0000000..f77df4f
+--- /dev/null
++++ b/cadastro-cliente.html
+@@ -0,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:cadastro-cliente.html">
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+   // Desenvolvimento local (vamos usar a mesma API da Render)
+var DEV_API  = "https://kgb-api.onrender.com";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Cadastro de Cliente</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="./config.env.js"></script>
+
+<!-- 1) Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Storage adapter + shim: preload e mirror de fotosClientes -->
+<!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    /* ===== Base / Layout ===== */
+    :root{
+      --bg: #f8f1e8;
+      --card: #ffffff;
+      --brand: #5a3e2b;      /* marrom */
+      --brand-2:#c29a5d;     /* dourado */
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --input:#f9fafb;
+      --shadow: 0 2px 10px rgba(0,0,0,.06);
+      --radius: 14px;
+    }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); height: 100%;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      color: var(--brand);
+      margin: 0 0 14px 0;
+    }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral {
+      flex-shrink:0; background-color:#5a3e2b; height:100vh; overflow-y:auto;
+    }
+    main.conteudo-principal {
+      flex:1; height:100vh; overflow-y:auto; padding:32px;
+    }
+    .conteudo-central { max-width: 1040px; margin: 0 auto 80px; }
+
+    /* ===== Header ===== */
+    h1 {
+      font-size: 30px; display:flex; align-items:center; gap:10px;
+    }
+    .page-sub {
+      color: var(--muted); margin-top: -6px; margin-bottom: 18px;
+    }
+
+    /* ===== Cards / Sections ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 18px 8px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+    }
+    .section-head {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px dashed #eadfd4;
+    }
+    .section-head h3 {
+      display:flex; align-items:center; gap:10px; margin:0;
+    }
+    .section-help {
+      color:var(--muted); font-size:.92rem;
+    }
+
+    /* ===== Form grid ===== */
+    .form-grid {
+      display:grid; gap:12px;
+      grid-template-columns: repeat(12, minmax(0,1fr));
+      margin-bottom: 10px;
+    }
+    .form-item { display:flex; flex-direction:column; gap:6px; }
+    /* Spans comuns para não mexer em IDs */
+    .span-12{grid-column: span 12;}
+    .span-8 {grid-column: span 8;}
+    .span-6 {grid-column: span 6;}
+    .span-4 {grid-column: span 4;}
+    .span-3 {grid-column: span 3;}
+    .span-2 {grid-column: span 2;}
+
+    label { font-weight: 600; color:#5C4033; }
+    input, select, textarea {
+      appearance:none; border:1px solid var(--line); background: var(--input);
+      border-radius: 10px; padding: 10px 12px; font:inherit;
+      transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--brand-2);
+      box-shadow: 0 0 0 3px rgba(194,154,93,.18);
+      background:#fff;
+    }
+    ::placeholder { color:#9ca3af; }
+
+    /* Bloco “subgrid” dentro de um item (ex.: TipoPessoa + CNPJ) */
+    .subgrid {
+      display:grid; gap:12px; grid-template-columns: repeat(12, minmax(0,1fr));
+    }
+
+    /* ===== Documentos / Chips ===== */
+    .documento-box{
+      background:#fff7ed; border:1px solid #fde7c7;
+      padding:10px 12px; border-radius:10px; margin:8px 0;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .botoes-doc a, .botoes-doc button{
+      border:1px solid var(--line); background:#fff; border-radius:10px;
+      padding:6px 10px; font-size:.92rem; cursor:pointer;
+    }
+    .botoes-doc a:hover, .botoes-doc button:hover{ background:#f3f4f6; }
+
+/* ===== Footer de ação (não fixo) ===== */
+.form-rodape {
+  position: static; /* deixa de ser sticky/fixo */
+  bottom: auto;
+  display:flex; justify-content:flex-end; gap:10px;
+
+  /* visual mais discreto por não ser fixo */
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+
+  padding: 0;
+  margin-top: 18px;
+}
+
+    .botao-dourado{
+      background: var(--brand-2); color:#fff; border:1px solid var(--brand-2);
+      border-radius: 12px; padding: 10px 14px; cursor:pointer;
+      display:inline-flex; align-items:center; gap:8px; font-weight:600;
+    }
+    .botao-dourado:hover{ filter: brightness(0.95); }
+    .botao-dourado:active{ transform: translateY(1px); }
+
+    /* ===== Mobile ===== */
+    #hamburguer {
+      position: fixed; top:12px; left:12px;
+      background: var(--brand-2); border:none; color:white; font-size:24px;
+      padding: 6px 12px; border-radius: 8px; z-index:1001; display:none;
+    }
+    @media (max-width: 900px){
+      .form-grid{ grid-template-columns: repeat(6, minmax(0,1fr)); }
+      .span-8{grid-column: span 6;}
+      .span-6{grid-column: span 6;}
+      .span-4{grid-column: span 6;}
+      .span-3{grid-column: span 3;}
+      .span-2{grid-column: span 3;}
+    }
+    @media (max-width: 768px) {
+      #hamburguer { display:block; }
+      #menuLateral {
+        position: fixed; transform: translateX(-100%); transition: transform .3s ease;
+        z-index: 999; width: 260px;
+      }
+      #menuLateral.aberto { transform: translateX(0); }
+      main.conteudo-principal { padding: 22px; }
+    }
+    @media (min-width: 1100px){
+  .form-grid--contato2{
+    grid-template-columns: 1fr 1.2fr .9fr; /* relação / observações / telefone */
+  }
+}
+
+/* Em telas bem estreitas, garante uma coluna por linha (100%) */
+... (arquivo longo)
