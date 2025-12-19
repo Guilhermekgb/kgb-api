@@ -85,6 +85,29 @@ async function checkPage(page, path) {
     console.warn('No mapping found at data/fotos-clientes.json — proceeding without injection');
   }
 
+  // wait for server to be ready before launching tests
+  async function waitForServer(url, timeout = 30000, interval = 500) {
+    const start = Date.now();
+    const u = url.replace(/\/$/, '');
+    while (Date.now() - start < timeout) {
+      try {
+        const res = await fetch(u, { method: 'HEAD' });
+        if (res && (res.status === 200 || res.status === 302 || res.status === 301)) return true;
+      } catch (e) {
+        // ignore and retry
+      }
+      await new Promise(r => setTimeout(r, interval));
+    }
+    throw new Error('server not ready: ' + url);
+  }
+
+  const fetch = require('node-fetch');
+  try {
+    await waitForServer(BASE, 30000, 500);
+  } catch (e) {
+    console.warn('Server did not respond in time:', e.message);
+  }
+
   const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
 
