@@ -103,7 +103,8 @@ async function checkPage(page, path) {
 
   const fetch = require('node-fetch');
   try {
-    await waitForServer(BASE, 30000, 500);
+    const probeUrl = BASE.replace(/\/$/, '') + (PAGES[0] || '/');
+    await waitForServer(probeUrl, 30000, 500);
   } catch (e) {
     console.warn('Server did not respond in time:', e.message);
   }
