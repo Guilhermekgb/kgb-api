@@ -21,13 +21,13 @@ function walk(dir){
 
 function replaceContent(src){
   let out = src;
-  // replace JSON.parse(localStorage.getItem('fotosClientes') || '{}') patterns
+  // replace (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})()) patterns
   out = out.replace(/JSON\.parse\(localStorage\.getItem\(\s*(['\"])fotosClientes\1\s*\)\s*\|\|\s*'\{\}'\s*\)/g,
-    "(typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})())");
+    "(typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})()); }catch(e){return {};}})())");
 
-  // replace localStorage.setItem('fotosClientes', JSON.stringify(map)) with helper
+  // replace (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map))) with helper
   out = out.replace(/localStorage\.setItem\(\s*(['\"])fotosClientes\1\s*,\s*JSON\.stringify\(([^)]+)\)\s*\)/g,
-    "(typeof window.setFotosMap==='function' ? window.setFotosMap($2) : localStorage.setItem('fotosClientes', JSON.stringify($2)))");
+    "(typeof window.setFotosMap==='function' ? window.setFotosMap($2) : (typeof window.setFotosMap==='function' ? window.setFotosMap($2) : localStorage.setItem('fotosClientes', JSON.stringify($2))))");
 
   return out;
 }

@@ -92,7 +92,7 @@ async function checkPage(page, path) {
     // make the mapping available before any page scripts run
     const flat = flattenMapping(mapping);
     await page.evaluateOnNewDocument((m) => {
-      try { localStorage.setItem('fotosClientes', JSON.stringify(m)); } catch (e) { /* ignore */ }
+      try { (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); } catch (e) { /* ignore */ }
       try { window.__FOTOS_CLIENTES_PRELOAD__ = m; } catch (e) { }
     }, flat);
     try{
