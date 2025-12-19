@@ -1,0 +1,36 @@
+name: Smoke tests (headless)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start dev-server
+        run: |
+          node kgb-api/dev-server.js &
+          echo "Waiting for dev-server to start..."
+          for i in {1..20}; do
+            if curl -sSf http://localhost:5500/ > /dev/null; then
+              echo "dev-server ready"; break
+            fi
+            sleep 1
+          done
+
+      - name: Run headless smoke test
+        run: |
+          node kgb-api/tests/headless-inject-and-checks.js || (echo "Smoke tests failed"; exit 1)
