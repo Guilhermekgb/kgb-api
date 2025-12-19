@@ -1,0 +1,26 @@
+name: Cloud Migration (dry run)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install optional deps
+        run: |
+          cd kgb-api || exit 0
+          if [ -f package.json ]; then npm ci; fi
+      - name: Dry-run codemod
+        run: |
+          cd kgb-api
+          node scripts/replace-fotos-urls.js
+        shell: bash
+      - name: Prepare migration artifact (no secrets used)
+        run: |
+          echo "Migration dry-run complete"

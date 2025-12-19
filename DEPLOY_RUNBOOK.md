@@ -31,3 +31,21 @@ Monitoramento pós-merge (24–48h):
 
 Limpeza final após canary estável:
 - Remover backups e `.bak` locais com commit único (branch `chore/cleanup-baks`).
+
+Migração para Cloudinary (passos preparatórios):
+
+1. Gerar o mapa atual de imagens: `node kgb-api/tests/dump-page-html.js` (ou criar `data/fotos-clientes.json` manualmente).
+2. Rodar um dry-run local do upload (não faz upload sem credenciais):
+  - `node kgb-api/scripts/upload-to-cloudinary.js --dry-run`
+  - Gera `data/fotos-clientes-cloud-ready.json` com preview.
+3. Rodar o codemod em dry-run para ver onde as substituições ocorreriam:
+  - `node kgb-api/scripts/replace-fotos-urls.js`
+4. Quando quiser fazer o upload real, configurar secrets no GitHub (recomendado) ou exportar localmente as variáveis `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` e executar:
+  - `CLOUDINARY_CLOUD_NAME=... CLOUDINARY_API_KEY=... CLOUDINARY_API_SECRET=... node kgb-api/scripts/upload-to-cloudinary.js`
+5. Revisar `data/fotos-clientes-cloud-ready.json` e rodar o codemod com `--apply` para substituir referências em arquivos:
+  - `node kgb-api/scripts/replace-fotos-urls.js --apply`
+6. Executar testes headless / smoke e canary deploy.
+
+Notas de segurança:
+- Nunca coloque `CLOUDINARY_API_SECRET` em commits. Use GitHub Secrets para CI.
+- Faça um commit único com a substituição e linke a PR com o runbook e o preview `data/fotos-clientes-cloud-ready.json`.
