@@ -1,5 +1,39 @@
 # PR: Remove leituras síncronas remanescentes de `fotosClientes`
 
+Branch: `chore/fotos-remove-sync-reads`
+
+Resumo
+------
+Este PR Remove leituras síncronas restantes de `localStorage['fotosClientes']` em favor de um helper `window.getFotosMap()` / `window.setFotosMap()` que prioriza o shim (`getFotosClientesSync`) e o `storageAdapter` em memória, evitando bloqueios e flash-of-empty-state.
+
+O que inclui
+-----------
+- `kgb-api/scripts/replace-fotos-sync-reads.js` — script local que aplica as substituições sugeridas (rodar e revisar antes de commitar).
+- Rascunho de PR com mudanças graduais para revisão (aplicar em passos menores se preferir).
+
+Como revisar / testar localmente
+--------------------------------
+1. Criar branch de trabalho:
+
+```powershell
+git fetch origin
+git checkout -b chore/fotos-remove-sync-reads
+```
+
+2. Rodar o codemod (no diretório `kgb-api`):
+
+```powershell
+node scripts\replace-fotos-sync-reads.js ..\..\  # aplica no workspace raiz
+```
+
+3. Revisar diffs, ajustar manualmente se necessário e commitar.
+
+Risco e rollback
+-----------------
+- O script tenta alterações conservadoras; sempre revise antes de commitar.
+- Em caso de problema, use o branch `backup/restore-fotos-shim` para restaurar o shim e reverter.
+# PR: Remove leituras síncronas remanescentes de `fotosClientes`
+
 Resumo
 Esta branch corrige leituras e escritas restantes que ainda dependem de
 `localStorage.getItem('fotosClientes')` e `localStorage.setItem('fotosClientes', ...)`.

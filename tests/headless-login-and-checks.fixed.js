@@ -71,7 +71,7 @@ async function checkPage(page, path, mapping){
   try{
     if (mapping){
       const flat = flattenMapping(mapping);
-      await page.evaluate((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
+      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
       // also inject a small eventos list and mark eventoSelecionado so pages that read localStorage render
       try{
         const sampleKey = Object.keys(flat)[0];
@@ -153,7 +153,7 @@ async function checkPage(page, path, mapping){
       if (mapping){
         const flatGlobal = flattenMapping(mapping);
         await page.evaluateOnNewDocument((m)=>{
-          try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){}
+          try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
           try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
           try{
             const sampleKey = Object.keys(m||{})[0];

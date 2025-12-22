@@ -71,7 +71,7 @@ async function clickHeuristics(page){
 
   if (mapping) {
     const flat = flattenMapping(mapping);
-    await page.evaluateOnNewDocument((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
     try{
       const sampleKey = Object.keys(flat)[0];
       if (sampleKey){

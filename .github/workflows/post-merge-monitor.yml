@@ -1,0 +1,25 @@
+name: Post-merge Image Monitor
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  check-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install deps
+        run: |
+          cd kgb-api || exit 0
+          if [ -f package.json ]; then npm ci; fi
+      - name: Run image monitor
+        run: |
+          cd kgb-api
+          node monitor/check-images.js ../cadastro-cliente.html ../evento-detalhado.html ../cliente-detalhado.html ../area-cliente.html --cloud dzw8u1h69
+        shell: bash

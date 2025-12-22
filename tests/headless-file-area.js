@@ -37,7 +37,7 @@ function loadMapping() {
     }
     const urlForKey = findByKey(mapping, event.fotoClienteKey);
     const flat = urlForKey ? { [event.fotoClienteKey]: urlForKey } : mapping;
-    await page.evaluateOnNewDocument((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, flat);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, flat);
   }
   // set eventoSelecionado and eventos list and query string id
   await page.evaluateOnNewDocument((ev)=>{ try{ localStorage.setItem('eventoSelecionado', String(ev.id)); localStorage.setItem('eventos', JSON.stringify([ev])); }catch(e){} }, event);

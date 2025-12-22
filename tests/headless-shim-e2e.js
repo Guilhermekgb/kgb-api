@@ -44,7 +44,7 @@ async function run(){
 
   // trigger setItem
   const sample = { 'headless-e2e-test':'data:image/png;base64,E2E' };
-  sandbox.window.(() => { try{ if(window.storageAdapter && typeof window.storageAdapter.setJSON === 'function'){ window.storageAdapter.setJSON('fotosClientes', sample); } else if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ try{ window.storageAdapter.setRaw('fotosClientes', JSON.stringify(sample)); }catch(e){} } else { try{ localStorage.setItem('fotosClientes', JSON.stringify(sample)); }catch(e){} } }catch(e){} })()
+  sandbox.window.(() => { try{ if(window.storageAdapter && typeof window.storageAdapter.setJSON === 'function'){ window.storageAdapter.setJSON('fotosClientes', sample); } else if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ try{ window.storageAdapter.setRaw('fotosClientes', JSON.stringify(sample)); }catch(e){} } else { try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(sample) : localStorage.setItem('fotosClientes', JSON.stringify(sample))); }catch(e){} } }catch(e){} })()
 
   // wait for async patch to finish
   await new Promise(res=>setTimeout(res, 500));

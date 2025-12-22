@@ -25,7 +25,7 @@ function loadMapping() {
 
   // inject mapping + evento BEFORE load
   if (mapping) {
-    await page.evaluateOnNewDocument((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, mapping);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, mapping);
   }
   await page.evaluateOnNewDocument((ev)=>{ try{ localStorage.setItem('eventoSelecionado', JSON.stringify(ev)); }catch(e){} }, evento);
 

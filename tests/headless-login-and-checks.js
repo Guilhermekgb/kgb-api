@@ -53,7 +53,7 @@ async function checkPage(page, path, mapping){
   const out = { path, url, steps: [], ok:false };
   try{
     if (mapping){
-      await page.evaluate((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} }, mapping);
+      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} }, mapping);
     }
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
   }catch(e){ out.steps.push({ type:'navigation-error', msg: e.message }); return out; }
@@ -130,7 +130,7 @@ async function checkPage(page, path, mapping){
   const out = { path, url, steps: [], ok:false };
   try{
     if (mapping){
-      await page.evaluate((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} }, mapping);
+      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} }, mapping);
     }
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
   }catch(e){ out.steps.push({ type:'navigation-error', msg: e.message }); return out; }
@@ -190,7 +190,7 @@ async function checkPage(page, path, mapping){
             const out = { path, url, steps: [], ok:false };
             try{
               if (mapping){
-                await page.evaluate((m)=>{ try{ localStorage.setItem('fotosClientes', JSON.stringify(m)); }catch(e){} }, mapping);
+                await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} }, mapping);
               }
               await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             }catch(e){ out.steps.push({ type:'navigation-error', msg: e.message }); return out; }
