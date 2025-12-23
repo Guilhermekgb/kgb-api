@@ -1,15 +1,9 @@
-﻿# Ignore everything by default (safety)
+﻿# Safety: ignore everything by default
 *
-!kgb-api/
 !.gitignore
 
-# Allow kgb-api contents
-!kgb-api/**
-
-# Common ignores
-kgb-api/node_modules/
-kgb-api/reports/
-kgb-api/uploads/
+# Ignore local folders/files not tracked in this repo
+kgb-api/
 reports/
 data.db
 *.bak
