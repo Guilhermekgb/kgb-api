@@ -1,16 +1,16 @@
 name: Post-merge Image Monitor
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch: {}
+  schedule:
+    - cron: '0 */6 * * *' # a cada 6 horas
 
 jobs:
-  check-images:
+  monitor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -18,8 +18,17 @@ jobs:
         run: |
           cd kgb-api || exit 0
           if [ -f package.json ]; then npm ci; fi
-      - name: Run image monitor
+      - name: Run image checks (static)
         run: |
           cd kgb-api
-          node monitor/check-images.js ../cadastro-cliente.html ../evento-detalhado.html ../cliente-detalhado.html ../area-cliente.html --cloud dzw8u1h69
+          node monitor/check-images.js ../cadastro-cliente.html ../evento-detalhado.html ../cliente-detalhado.html ../area-cliente.html --cloud ${{ secrets.CLOUDINARY_CLOUD_NAME }}
         shell: bash
+      - name: Upload report
+        if: always()
+        run: |
+          mkdir -p reports
+          echo "Post-merge monitor run completed on $(date)" > reports/monitor-run-$(date +%s).txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monitor-reports
+          path: kgb-api/reports/**
