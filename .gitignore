@@ -1,0 +1,17 @@
+﻿# Ignore everything by default (safety)
+*
+!kgb-api/
+!.gitignore
+
+# Allow kgb-api contents
+!kgb-api/**
+
+# Common ignores
+kgb-api/node_modules/
+kgb-api/reports/
+kgb-api/uploads/
+reports/
+data.db
+*.bak
+*.tmp
+*.log
