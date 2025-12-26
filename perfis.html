@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:perfis.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perfis de Acesso</title>
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Playfair Display', serif;
+      background-color: #f8f1e8;
+      overflow-x: hidden;
+    }
+
+    .wrapper {
+      display: flex;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    #menuLateral {
+      width: 260px;
+      min-height: 100vh;
+      background-color: #5C4033;
+      flex-shrink: 0;
+    }
+
+    main {
+      flex-grow: 1;
+      padding: 40px;
+      padding-left: 280px;
+      box-sizing: border-box;
+      max-width: 100%;
+    }
+
+    h1 {
+      color: #5a3e2b;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .topo {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn-novo {
+      background-color: #c29a5d;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-novo:hover {
+      background-color: #a57d3a;
+    }
+
+    .input-busca {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 100%;
+      max-width: 300px;
+      font-family: 'Playfair Display', serif;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 14px 16px;
+    }
+
+    th {
+      background-color: #f3e4c5;
+      color: #5a3300;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fdf7ed;
+    }
+
+    .btn-acao {
+      padding: 6px 12px;
+      margin-right: 6px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      color: white;
+    }
+
+    .editar { background-color: #d4af37; }
+    .excluir { background-color: #c0392b; }
+    .btn-acao:hover { opacity: 0.9; }
+   /* Botão hambúrguer (só no mobile) */
+#hamburguer {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1001;
+  background: #c29a5d;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 22px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  cursor: pointer;
+  display: none; /* aparece só no mobile */
+}
+
+/* Backdrop do menu (off-canvas) */
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:998;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+}
+#menuBackdrop.visivel{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* Quando o menu está aberto, bloqueia o scroll do fundo */
+body.no-scroll{
+  overflow:hidden;
+}
+
+@media (max-width: 768px) {
+  /* Conteúdo ocupa a tela toda no mobile */
+  main {
+    margin-left: 0;
+    padding: 20px;
+  }
+
+  /* Mostra o botão hambúrguer */
+  #hamburguer {
+    display: block;
+  }
+
+  /* Menu vira off-canvas (escondido fora da tela) */
+  #menuLateral {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 999;
+  }
+
+  /* Quando ganha .aberto (via JS), entra na tela */
+  #menuLateral.aberto {
+    transform: translateX(0);
+  }
+}
+
+
+  </style>
+  
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div> <!-- NOVO: fundo escuro do menu mobile -->
+    <main class="conteudo-principal">
+      
+      <div class="topo">
+        <h1><i data-lucide="shield-check"></i> Perfis de Acesso</h1>
+        <button class="btn-novo" onclick="novoPerfil()" data-permissao="criar-perfil">
+  <i data-lucide="plus"></i> Novo Perfil
+</button>
+      </div>
+
+      <input type="text" id="filtroPerfil" class="input-busca" placeholder="Buscar perfil...">
+      <p id="infoPerfis" style="margin-top: 5px; color: #5c4033; font-weight: bold;"></p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Nome do Perfil</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-perfis"></tbody>
+      </table>
+    </main>
+  </div>
+
+  <!-- 1) Monta o menu lateral -->
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  (function initHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob) setOpened(false);
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+<!-- 2) Protege a página (lê a meta) e aplica permissões -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  // Se o <head> tem: <meta name="page-permission" content="ver-perfis">
+  // o guard() já bloqueia quem não pode
+  guard();
+  // Aplica permissões após o menu ser injetado
+  // (chamamos de novo depois do render da tabela também)
+  aplicarPermissoesNaTela();
+</script>
+
+<script type="module">
+  import { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  import { handleRequest } from './api/routes.js';
+
+// === Menu mobile (hambúrguer) ===
+if (document.getElementById('hamburguer')?.hasAttribute('data-bound')) { /* menu já instalado */ }
+else {
+
+const btnHamb = document.getElementById('hamburguer');
+const menuLat = document.getElementById('menuLateral');
+const backdrop = document.getElementById('menuBackdrop');
+
+function toggleMenu(open) {
+  if (!menuLat) return;
+
+  const isOpen = open === undefined
+    ? !menuLat.classList.contains('aberto')
+    : !!open;
+
+  // abre/fecha o menu
+  menuLat.classList.toggle('aberto', isOpen);
+
+  // controla o fundo escuro + bloqueio de scroll
+  if (backdrop) {
+    backdrop.hidden = !isOpen;
+    backdrop.classList.toggle('visivel', isOpen);
+  }
+  document.body.classList.toggle('no-scroll', isOpen);
+
+  // acessibilidade no botão
+  if (btnHamb) {
+    btnHamb.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+}
+
+// clique no hambúrguer abre/fecha
+btnHamb?.addEventListener('click', () => toggleMenu());
+
+// clique no backdrop fecha
+backdrop?.addEventListener('click', () => toggleMenu(false));
+
+// se redimensionar para tela grande, garante tudo fechado
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 768) {
+    toggleMenu(false);
+  }
+});
+}
+
+
+  // === Helper para chamar a API com token ===
+  const authHeader = () => {
+    const t = localStorage.getItem('token') || sessionStorage.getItem('token');
+    return t ? { Authorization: 'Bearer ' + t } : {};
+  };
+
+  const api = (endpoint, req = {}) => {
+    const headers = { ...authHeader(), ...(req.headers || {}) };
+    return new Promise(resolve => handleRequest(endpoint, { ...req, headers }, resolve));
+  };
+
+  // === Perfis: fixos + personalizados da API ===
+  const perfisFixos = ['Administrador', 'Vendedor', 'Financeiro', 'Maitre'];
+  let perfis = [];
+
+  function normalizarNome(nome) {
+    return String(nome || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .trim();
+  }
+
+  async function carregarPerfis() {
+    let extras = [];
+    try {
+      const resp = await api('/perfis', { method: 'GET' });
+      if (resp && resp.status === 200 && Array.isArray(resp.data)) {
+        extras = resp.data;
+      }
+    } catch (e) {
+      console.warn('Não foi possível carregar perfis da API, usando apenas perfis fixos.', e);
+    }
+
+    const lista = [];
+    const nomesUsados = new Set();
+
+    const addPerfil = (nome, id = null, isFixo = false) => {
+      const clean = normalizarNome(nome);
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (nomesUsados.has(key)) return;
+      nomesUsados.add(key);
+      lista.push({ id, nome: clean, isFixo });
+    };
+
+    // Adiciona os 4 perfis fixos
+    perfisFixos.forEach(n => addPerfil(n, null, true));
+
+    // Adiciona os personalizados vindos da API
+    if (Array.isArray(extras)) {
+      extras.forEach(p => {
+        const nome = typeof p === 'string' ? p : (p?.nome || '');
+        const id   = typeof p === 'object' ? (p.id || p._id || null) : null;
+        if (!nome) return;
+        // se o backend devolver também os fixos, evitamos duplicar
+        if (perfisFixos.includes(nome)) return;
+        addPerfil(nome, id, false);
+      });
+    }
+
+    perfis = lista;
+    return perfis;
+  }
+
+  function desenharTabela() {
+    const tabela = document.getElementById('tabela-perfis');
+    if (!tabela) return;
+
+    tabela.innerHTML = '';
+    if (!Array.isArray(perfis) || !perfis.length) {
+      tabela.innerHTML = `
+        <tr>
+          <td colspan="2" style="text-align:center; padding: 16px;">
+            Nenhum perfil encontrado.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    perfis.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      const botoes = p.isFixo
+        ? ''
+        : (
+          '<button class="btn-acao editar" onclick="editarPerfil(' + i + ')" data-permissao="editar-perfil">Editar</button>' +
+          '<button class="btn-acao excluir" onclick="excluirPerfil(' + i + ')" data-permissao="excluir-perfil">Excluir</button>'
+        );
+
+      tr.innerHTML = `
+        <td>${p.nome}</td>
+        <td class="acoes">
+          ${botoes}
+        </td>
+      `;
+      tabela.appendChild(tr);
+    });
+  }
+
+  async function renderizarPerfis() {
+    await carregarPerfis();
+    desenharTabela();
+    try { window.lucide?.createIcons?.(); } catch (e) {}
+    try { aplicarPermissoesNaTela(); } catch (e) { console.warn(e); }
+  }
+
+  // === Ações de CRUD ===
+  async function novoPerfil() {
+    const nome = prompt('Digite o nome do novo perfil:');
+    if (!nome) return;
+    const clean = normalizarNome(nome);
+    if (!clean) return alert('Nome inválido.');
+
+    if (perfis.some(p => p.nome.toLowerCase() === clean.toLowerCase())) {
+      return alert('Já existe um perfil com esse nome.');
+    }
+
+    try {
+      const resp = await api('/perfis', {
+        method: 'POST',
+        body: { nome: clean }
+      });
+
+      if (!resp || (resp.status !== 200 && resp.status !== 201)) {
+        const msg =
+          (resp && (resp.error || resp.data?.error)) ||
+          'Não foi possível criar o perfil.';
+        alert(msg);
+        return;
+      }
+
+      alert('Perfil criado com sucesso!');
+      await renderizarPerfis();
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao criar perfil. Tente novamente em alguns instantes.');
+    }
+  }
+
+  async function editarPerfil(i) {
+    const atual = perfis[i];
+    if (!atual) return;
+    if (atual.isFixo) {
+      alert('Este perfil é fixo e não pode ser editado.');
+      return;
+    }
+
+    const nomeNovo = prompt('Novo nome para o perfil:', atual.nome);
+    if (!nomeNovo) return;
+    const clean = normalizarNome(nomeNovo);
+    if (!clean) return alert('Nome inválido.');
+
+    if (perfis.some((p, idx) => idx !== i && p.nome.toLowerCase() === clean.toLowerCase())) {
+      return alert('Já existe outro perfil com esse nome.');
+    }
+
+    try {
+      const body = { nome: clean };
+      if (atual.id) body.id = atual.id;
+
+      const resp = await api('/perfis', {
+        method: 'PUT',
+        body
+      });
+
+      if (!resp || resp.status !== 200) {
+        const msg =
+          (resp && (resp.error || resp.data?.error)) ||
+          'Não foi possível atualizar o perfil.';
+        alert(msg);
+        return;
+      }
+
+      alert('Perfil atualizado com sucesso!');
+      await renderizarPerfis();
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao atualizar perfil. Tente novamente em alguns instantes.');
+    }
+  }
+
+  async function excluirPerfil(i) {
+    const atual = perfis[i];
+    if (!atual) return;
+    if (atual.isFixo) {
+      alert('Este perfil é fixo e não pode ser excluído.');
+      return;
+    }
+
+    if (!confirm('Deseja excluir este perfil?')) return;
+
+    try {
+      const body = {};
+      if (atual.id) body.id = atual.id;
+      else body.nome = atual.nome;
+
+      const resp = await api('/perfis', {
+        method: 'DELETE',
+        body
+      });
+
+      if (!resp || resp.status !== 200) {
+        const msg =
+          (resp && (resp.error || resp.data?.error)) ||
+          'Não foi possível excluir o perfil.';
+        alert(msg);
+        return;
+      }
+
+      alert('Perfil excluído com sucesso!');
+      await renderizarPerfis();
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao excluir perfil. Tente novamente em alguns instantes.');
+    }
+  }
+
+  // === Filtro na tabela ===
+  document.getElementById('filtroPerfil')?.addEventListener('input', function () {
+    const termo = String(this.value || '').toLowerCase();
+    document.querySelectorAll('#tabela-perfis tr').forEach(linha => {
+      const nome = (linha.querySelector('td')?.textContent || '').toLowerCase();
+      linha.style.display = nome.includes(termo) ? '' : 'none';
+    });
+  });
+
+  // Expõe funções pro HTML (onclick="...")
+  window.novoPerfil = novoPerfil;
+  window.editarPerfil = editarPerfil;
+  window.excluirPerfil = excluirPerfil;
+
+  // Inicializa ao abrir a página
+  document.addEventListener('DOMContentLoaded', () => {
+    renderizarPerfis();
+  });
+</script>
+
+
+</body>
+</html>

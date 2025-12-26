@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  
+<!-- === INÍCIO PATCH HEAD MÍNIMO (dashboard) === -->
+<meta name="page-permission" content="page:dashboard.html">
+<!-- === INÍCIO PATCH FORCE-API (remova quando não precisar mais) === -->
+<script>
+(function(){
+  // 1) força a base da API para o Render
+  var RENDER = 'https://kgb-api.onrender.com';
+  try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+  window.__API_BASE__ = RENDER; // redundância útil
+
+  // 2) mostra um selinho no canto para você confirmar visualmente
+  try{
+    var tag = document.createElement('div');
+    tag.id = 'kgb_api_badge';
+    tag.textContent = 'API: Render';
+    tag.style.cssText = ''+
+      'position:fixed; z-index:99999; right:10px; bottom:10px;'+
+      'background:#0ea5e9; color:#fff; font:600 12px/1.2 Inter, Arial;'+
+      'padding:6px 10px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.15);';
+    document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(tag); });
+  }catch(e){}
+})();
+</script>
+<!-- === FIM PATCH FORCE-API === -->
+
+<!-- API_BASE: sempre Render (online) -->
+<script>
+  (function(){
+    var base = "https://kgb-api.onrender.com";  // servidor online
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+
+
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Storage adapter + shim: preload e mirror de fotosClientes -->
+<!-- Opcional: ativar ENFORCE do guard (uma vez) -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH HEAD MÍNIMO (dashboard) === -->
+
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard</title>
+
+  <!-- Corrige favicon 404 -->
+  <link rel="icon" href="data:," />
+
+
+  <!-- Ícones e Gráficos -->
+  <script src="https://unpkg.com/lucide@0.462.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+<!-- INÍCIO PATCH KPIs FINANCEIROS (unificado) -->
+ <script type="module">
+(function(){
+  'use strict';
+  const $ = (s,el=document)=>el.querySelector(s);
+  const fmt = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+
+  function setText(sel, val){
+    const el = $(sel);
+    if (!el) return;
+    el.textContent = val;
+  }
+
+  async function loadKPIs(){
+    let attempt = 0, lastErr = null;
+    while (attempt < 3){
+      try{
+        const r = await window.apiFetch('/fin/metrics');
+        if (!r) throw new Error('Resposta vazia');
+
+        // Normaliza: aceita {metrics:{entradas,saidas,saldo}} ou {entradasMes,saidasMes,saldoMes}
+        const src = r.metrics || r;
+        const e = Number(src.entradasMes ?? src.entradas ?? 0);
+        const s = Number(src.saidasMes   ?? src.saidas   ?? 0);
+        const d = Number(src.saldoMes    ?? src.saldo    ?? (e - s));
+
+        setText('#kpiEntrou', fmt.format(e));
+        setText('#kpiSaiu',   fmt.format(s));
+        setText('#kpiBase',   fmt.format(d));
+
+        try { window.fitKPIValues?.(); } catch {}
+
+        document.dispatchEvent(new CustomEvent('kpi:fin:updated', {
+          detail: { entradas:e, saidas:s, saldo:d, raw:r }
+        }));
+
+        return;
+      } catch(err){
+        lastErr = err;
+        attempt++;
+        await new Promise(res => setTimeout(res, 300 * attempt)); // backoff crescente
+      }
+    }
+
+    console.warn('[Dashboard] KPIs falharam:', lastErr);
+    // estado vazio elegante
+    setText('#kpiEntrou', 'R$ 0,00');
+    setText('#kpiSaiu',   'R$ 0,00');
+    setText('#kpiBase',   'R$ 0,00');
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // carrega KPIs na entrada
+    loadKPIs();
+
+    // realtime: atualiza sempre que o FG mudar (helper global)
+    try { window.onFGChange?.(loadKPIs); } catch {}
+
+    // tenta trazer novidades do backend (não bloqueante)
+    try { window.syncPull?.().then(()=>{ /* ok */ }); } catch {}
+
+    // quando voltar o foco/visibilidade, puxa e atualiza os KPIs
+    try {
+      window.addEventListener('focus', () => {
+        window.syncPull?.().then(()=>{ loadKPIs(); });
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          window.syncPull?.().then(()=>{ loadKPIs(); });
+        }
+      });
+    } catch {}
+
+    // auto-pull a cada 60s (não bloqueante)
+    try {
+      clearInterval(window.__syncTimerKPIs); // evita duplicar se recarregar o script
+      window.__syncTimerKPIs = setInterval(()=>{
+        window.syncPull?.().then(()=>{ /* ok */ });
+      }, 60000);
+    } catch {}
+  });
+
+  // Suaviza KPIs: só troca texto se valor realmente mudou
+  function __setKPIText(id, txt){
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.textContent !== txt) el.textContent = txt;
+  }
+
+  // debug opcional
+  window.__dbgLoadKPIs = loadKPIs;
+})();
+</script>
+<!-- FIM PATCH KPIs FINANCEIROS -->
+
+
+  <!-- Estilo desta página -->
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu Lateral -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <!-- Topo -->
+        <header class="topo">
+          <h1 id="tituloSaudacao">Bem-vindo(a)</h1>
+
+          <div class="acoes-topo">
+            <!-- AGENDA (ADMIN) -->
+            <a id="linkAgendaHoje"
+               href="agenda.html"
+               class="btn btn-dourado"
+               aria-label="Abrir agenda"
+               data-permissao="dash:btn-agenda">
+              <i data-lucide="calendar"></i><span>Agenda</span>
+            </a>
+
+            <!-- Lançamento Rápido (ADMIN + FINANCEIRO) -->
+            <button id="btnLancamentoRapido"
+                    class="btn btn-dourado"
+                    title="Lançamento rápido"
+                    data-permissao="dash:btn-lancamento-rapido">
+              <i data-lucide="plus-circle"></i><span>Lançamento rápido</span>
+            </button>
+
+            <!-- ORÇAMENTOS (ADMIN + VENDEDOR) -->
+            <button id="btnOrcamento"
+                    class="btn btn-dourado"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    data-permissao="dash:btn-orcamento">
+              <i data-lucide="file-text"></i><span>Orçamentos</span>
+            </button>
+
+            <!-- EVENTOS (ADMIN) -->
+            <button id="btnEvento"
+                    class="btn btn-dourado"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    data-permissao="dash:btn-eventos">
+              <i data-lucide="calendar-days"></i><span>Eventos</span>
+            </button>
+
+            <!-- Sino apenas visual -->
+            <button class="btn-icone" title="Notificações" aria-label="Notificações">
+              <i data-lucide="bell"></i>
+              <span class="badge" id="badgeNotif">0</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- ===== POPOVERS (janelinhas) ===== -->
+        <!-- ORÇAMENTO -->
+        <div id="menuOrcamento" class="kgb-popover" role="menu" aria-labelledby="btnOrcamento" hidden>
+          <a class="kgb-popover__item"
+             href="orcamento.html"
+             role="menuitem"
+             data-permissao="page:orcamento.html">
+            <i data-lucide="file-plus"></i><span>Novo Orçamento</span>
+          </a>
+          <a class="kgb-popover__item"
+             href="funil-leads.html"
+             role="menuitem"
+             data-permissao="page:funil-leads.html">
+            <i data-lucide="workflow"></i><span>Funil Vendas</span>
+          </a>
+          <a class="kgb-popover__item"
+             href="lista-propostas.html"
+             role="menuitem"
+             data-permissao="page:lista-propostas.html">
+            <i data-lucide="files"></i><span>Lista Orçamentos</span>
+          </a>
+          <a class="kgb-popover__item"
+             href="degustacoes-disponiveis.html"
+             role="menuitem"
+             data-permissao="page:degustacoes-disponiveis.html">
+            <i data-lucide="utensils"></i><span>Degustações</span>
+          </a>
+        </div>
+
+        <!-- EVENTO -->
+        <div id="menuEvento" class="kgb-popover" role="menu" aria-labelledby="btnEvento" hidden>
+          <a class="kgb-popover__item"
+             href="cadastro-evento.html"
+             role="menuitem"
+             data-permissao="page:cadastro-evento.html">
+            <i data-lucide="calendar-plus"></i><span>Novo Evento</span>
+          </a>
+          <a class="kgb-popover__item"
+             href="lista-evento.html"
+             role="menuitem"
+             data-permissao="page:lista-evento.html">
+            <i data-lucide="calendar-days"></i><span>Lista Eventos</span>
+          </a>
+        </div>
+        <!-- ===== /POPOVERS ===== -->
+        <!-- Preferência: ocultar alertas zerados -->
+        <div class="faixa-alertas-header">
+          <label class="switch">
+            <input type="checkbox" id="cbOcultarZeros">
+            <span>Ocultar alertas zerados</span>
+          </label>
+        </div>
+
+        <!-- ===== Faixa de Alertas ===== -->
+        <section class="faixa-alertas" aria-label="Alertas">
+
+          <a class="alert-card"
+             id="al-retornos"
+             href="funil-leads.html?retorno=vencido"
+             title="Retornos de lead vencidos"
+             data-permissao="dash:card-retornos">
+            <i data-lucide="clock-4"></i>
+            <div>
+              <strong>Retornos vencidos</strong>
+              <span class="pill pill-info" id="ctaRetornos">0</span>
+            </div>
+          </a>
+
+          <div id="al-degust"
+               class="k-card alerta"
+               data-card="degustacoes-hoje"
+               title="Próxima degustação"
+               data-permissao="dash:card-prox-degustacao">
+            <div class="k-card-top">
+              <div class="k-card-title">Próxima degustação</div>
+              <div class="k-pill" id="ctaDegust">0</div>
+            </div>
+            <div class="k-card-sub">
+              <span>Data: </span><b id="txtProximaDeg">—</b>
+            </div>
+          </div>
+
+          <a class="alert-card"
+             id="al-vencidos"
+             href="painel-cobrancas.html?status=atraso"
+             title="Pagamentos vencidos"
+             data-permissao="dash:card-pag-vencidos">
+            <i data-lucide="alert-triangle"></i>
+            <div>
+              <strong>Pagamentos vencidos</strong>
+              <span class="pill pill-danger" id="ctaVencidos">0</span>
+            </div>
+          </a>
+
+          <a class="alert-card"
+             id="al-avencer"
+             href="painel-cobrancas.html?status=aberto"
+             title="Pagamentos a vencer (7 dias)"
+             data-permissao="dash:card-a-vencer">
+            <i data-lucide="calendar-clock"></i>
+            <div>
+              <strong>A vencer (7 dias)</strong>
+              <span class="pill pill-warn" id="ctaAVencer">0</span>
+            </div>
+          </a>
+
+          <a class="alert-card"
+             id="al-posevento"
+             href="painel-cobrancas.html?status=aberto&posEvento=1"
+             title="Cobranças pós-evento pendentes"
+             data-permissao="dash:card-pos-evento">
+            <i data-lucide="receipt"></i>
+            <div>
+              <strong>Pós-evento pendentes</strong>
+              <span class="pill pill-info" id="ctaPosEvento">0</span>
+            </div>
+          </a>
+        </section>
+
+        <p id="msgSemAlertas" class="msg-sem-alertas" hidden>Sem alertas no momento 🎉</p>
+        <!-- ===== /Faixa de Alertas ===== -->
+
+        <!-- KPIs superiores -->
+        <section class="cards-topo">
+          <div class="card kpi" role="group" aria-label="Leads do mês" data-permissao="dash:card-leads-mes">
+            <i data-lucide="user-plus"></i>
+            <div><h3>Leads do Mês</h3><p id="leadsMes">0</p></div>
+          </div>
+
+          <div class="card kpi" role="group" aria-label="Vendas realizadas" data-permissao="dash:card-vendas">
+            <i data-lucide="shopping-cart"></i>
+            <div><h3>Vendas Realizadas</h3><p id="vendasRealizadas">0</p></div>
+          </div>
+
+          <div class="card kpi" role="group" aria-label="Em negociação" data-permissao="dash:card-negociacao">
+            <i data-lucide="handshake"></i>
+            <div><h3>Em Negociação</h3><p id="emNegociacao">0</p></div>
+          </div>
+
+          <div class="card kpi" role="group" aria-label="Leads finalizados (arquivados)" data-permissao="dash:card-finalizados">
+            <i data-lucide="check-circle-2"></i>
+            <div><h3>Leads Finalizados</h3><p id="leadsFinalizados">0</p></div>
+          </div>
+        </section>
+
+        <!-- Gráfico -->
+        <section class="card grafico" data-permissao="dash:grafico-conversao">
+          <div class="card-head">
+            <h3>Taxa de Conversão de Vendas (Mês a Mês)</h3>
+          </div>
+          <div class="card-body">
+            <canvas id="graficoConversao" height="110"></canvas>
+          </div>
+        </section>
+
+        <!-- Cards Secundários -->
+        <section class="cards-secundarios">
+          <article class="card" data-permissao="dash:card-tarefas">
+            <h4><i data-lucide="check-square"></i> Tarefas dos Eventos</h4>
+            <ul id="listaTarefas" class="list"><li>Sem tarefas para hoje</li></ul>
+          </article>
+
+          <article class="card" data-permissao="dash:card-proximos-eventos">
+            <h4><i data-lucide="calendar-days"></i> Próximos Eventos</h4>
+            <ul id="listaProximosEventos" class="list"><li>Carregando…</li></ul>
+          </article>
+
+          <article class="card" data-permissao="dash:card-agenda-degustacoes">
+            <h4><i data-lucide="chef-hat"></i> Agenda de Degustações</h4>
+            <ul id="listaDegustacoes" class="list"><li>—</li></ul>
+          </article>
+
+          <article class="card" id="cardNotificacoes" data-permissao="dash:card-notificacoes">
+            <h4>
+              <i data-lucide="bell-ring" class="icon-title"></i>
+              Notificações
+            </h4>
+
+            <div class="tabs tabs-compact" role="tablist" aria-label="Filtros de notificações">
+              <button class="tab is-active" data-tab="todas"  role="tab" aria-selected="true">Todas</button>
+              <button class="tab"          data-tab="internas" role="tab" aria-selected="false">Internas</button>
+              <button class="tab"          data-tab="externas" role="tab" aria-selected="false">Externas</button>
+            </div>
+
+            <ul id="listaNotificacoes" class="list"><li>Carregando…</li></ul>
+
+            <div class="card-footer">
+              <a href="notificacoes.html" class="link-ver-todos" data-permissao="page:notificacoes.html">Ver todas</a>
+            </div>
+          </article>
+
+          <!-- FINANCEIRO — A receber / A pagar -->
+          <article class="card">
+            <h4><i data-lucide="wallet"></i> Fluxo Previsto</h4>
+            <div class="perm-content" data-permissao="dash:card-fluxo-previsto">
+              <ul class="list kpi-fin">
+                <li class="linha-kpi">
+                  <span class="ttl">Valor a receber (aberto)</span>
+                  <strong class="valor" id="kpiAReceber">R$ 0,00</strong>
+                </li>
+                <li class="linha-kpi">
+                  <span class="ttl">Valor a pagar (aberto)</span>
+                  <strong class="valor neg" id="kpiAPagar">R$ 0,00</strong>
+                </li>
+              </ul>
+            </div>
+          </article>
+
+          <!-- FINANCEIRO — Entrou / Saiu no mês -->
+          <article class="card">
+            <h4><i data-lucide="bar-chart-3"></i> Resultado do Mês</h4>
+            <div class="perm-content" data-permissao="dash:card-resultado-mes">
+              <ul class="list kpi-fin">
+                <li class="linha-kpi">
+                  <span class="ttl">Valores que entraram</span>
+                  <strong class="valor" id="kpiEntrou">R$ 0,00</strong>
+                </li>
+                <li class="linha-kpi">
+                  <span class="ttl">Valores que saíram</span>
+                  <strong class="valor neg" id="kpiSaiu">R$ 0,00</strong>
+                </li>
+                <li class="linha-kpi total">
+                  <span class="ttl">Base (Entrou − Saiu)</span>
+                  <strong class="valor" id="kpiBase">R$ 0,00</strong>
+                </li>
+              </ul>
+            </div>
+          </article>
+
+          <!-- CONTAS A PAGAR (15 dias) -->
+          <article class="card">
+            <h4><i data-lucide="calendar-clock"></i> Contas a Pagar (15 dias)</h4>
+            <div class="perm-content" data-permissao="dash:card-pagar-15">
+              <ul id="listaAPagar15" class="list list-compact">
+                <li>Sem contas a pagar no período</li>
+              </ul>
+            </div>
+          </article>
+
+          <!-- CONTAS A RECEBER (15 dias) -->
+          <article class="card">
+            <h4><i data-lucide="calendar-check-2"></i> Contas a Receber (15 dias)</h4>
+            <div class="perm-content" data-permissao="dash:card-receber-15">
+              <ul id="listaAReceber15" class="list list-compact">
+                <li>Sem contas a receber no período</li>
+              </ul>
+            </div>
+          </article>
+
+          <!-- Leads para Retorno -->
+          <article class="card card--wide" id="cardLeadsRetorno">
+            <h4><i data-lucide="phone-outgoing"></i> Leads para Retorno</h4>
+            <div class="perm-content" data-permissao="dash:card-leads-retorno">
+              <table id="tabelaRetornos" class="tabela-min">
+                <thead>
+                  <tr>
+                    <th>Retorno</th>
+                    <th>Cliente</th>
+                    <th>Evento</th>
+                    <th>Local</th>
+                    <th>Convid.</th>
+                    <th>Visualizações</th>
+                    <th>Últ. Viz.</th>
+                  </tr>
+                </thead>
+                <tbody><tr><td colspan="7">Carregando…</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+      
+
+        <!-- Toast -->
+        <div id="toast" class="toast" hidden>Salvo!</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- AVISO: Sem conta selecionada (Dashboard) -->
+  <dialog id="dlgAvisoContaDash" class="modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Atenção</h3>
+        <button class="btn-ghost" data-close type="button" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="a4-wrap">
+        <p style="margin:8px 0 0;color:#7c6a58">
+          ⚠ Nenhuma conta selecionada.<br>
+          Este lançamento ficará <strong>sem conta definida</strong>. Deseja continuar?
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button id="btnDashVoltar" class="btn btn-ghost" type="button">Voltar</button>
+        <button id="btnDashSalvarMesmo" class="btn" type="button">Salvar assim mesmo</button>
+      </div>
+    </div>
+  </dialog>
+
+<script type="module" src="menu-lateral.js"></script>
+<script src="agenda-bridge.js" defer></script>
+
+<!-- Helpers globais do Financeiro (FG) -->
+<script type="module" src="financeiro-shared.js"></script>
+
+<script src="fin-cartao.js" defer></script>
+<script type="module" src="financeiro-modal.js"></script>
+<script type="module" src="fin-cobranca-integ.js"></script>
+<script>window.__USE_API_KPIS = true;</script>
+<script src="dashboard.js"></script>
+
+<script>
+  // PATCH B: ouvir alterações globais e re-renderizar
+  (function(){
+    const onChange = () => { try { renderTudo?.(); } catch {} };
+    window.addEventListener('fin-store-changed', onChange);
+    window.addEventListener('storage', (ev) => {
+      if (ev.key === 'financeiroGlobal' || ev.key === 'financeiroGlobal:ping') onChange();
+    });
+    try {
+      // Se existir onFGChange dos helpers, registra também:
+      window.onFGChange?.(onChange);
+    } catch {}
+  })();
+</script>
+<script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) {
+          fechar();
+        } else {
+          abrir();
+        }
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+  })();
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    try { window.lucide?.createIcons?.(); } catch {}
+  });
+</script>
+
+
+
+  <!-- Aplicação leve de permissões (após render do dashboard) -->
+  <script type="module">
+    import { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
+    });
+  </script>
+
+  <!-- Placeholders visuais para áreas sem permissão -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(aplicarPlaceholdersDePermissao, 0);
+    });
+    function aplicarPlaceholdersDePermissao() {
+      const blocos = document.querySelectorAll('.perm-content[data-permissao]');
+      blocos.forEach((miolo) => {
+        const style = getComputedStyle(miolo);
+        const escondido = style.display === 'none' || miolo.getAttribute('aria-hidden') === 'true';
+        if (!escondido) return;
+        const card = miolo.closest('.card');
+        if (card) card.classList.add('perm-locked');
+        const placeholder = document.createElement('div');
+        placeholder.className = 'perm-placeholder';
+        placeholder.innerHTML = `<span><i data-lucide="lock"></i> Seu perfil não tem acesso a este conteúdo.</span>`;
+        miolo.insertAdjacentElement('beforebegin', placeholder);
+        try { window.lucide?.createIcons?.(); } catch {}
+      });
+    }
+  </script>
+</body>
+</html>
+

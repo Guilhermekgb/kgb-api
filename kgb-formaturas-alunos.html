@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Alunos</title>
+
+  <!-- PERMISSÃO DA PÁGINA (para o guard) -->
+  <meta name="page-permission" content="page:kgb-formaturas-alunos.html">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- ESTILO ESPECÍFICO: LISTA DE ALUNOS --------- */
+
+    .linha-topo-alunos{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo input,
+    .campo select{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      min-width:150px;
+      outline:none;
+    }
+    .campo input:focus,
+    .campo select:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .botoes-topo{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:flex-end;
+    }
+
+    .btn-primario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#c29a5d;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario i{
+      width:16px; height:16px;
+    }
+
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .box-tabela-alunos{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+
+    .tabela-alunos{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-alunos thead{
+      background:#f5e7d8;
+    }
+    .tabela-alunos th,
+    .tabela-alunos td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-alunos th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-alunos tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .col-aluno{
+      font-weight:500;
+      color:#4b2d16;
+    }
+    .col-escola{
+      font-size:12px;
+      color:#7c5a3a;
+    }
+
+    .tag-evento{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+      margin-bottom:2px;
+    }
+    .tag-colacao{
+      background:#e9f0ff;
+      color:#244577;
+    }
+    .tag-baile{
+      background:#fde7ff;
+      color:#7b2d7f;
+    }
+    .tag-churras{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+
+    .status-financeiro{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .status-financeiro i{
+      width:12px; height:12px;
+    }
+    .status-ok{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .status-pendente{
+      background:#fff8e2;
+      color:#7a5a00;
+    }
+    .status-inadimplente{
+      background:#ffe8e5;
+      color:#a32222;
+    }
+
+    .valor-resumo{
+      font-size:11px;
+      color:#7a5a3c;
+      line-height:1.4;
+    }
+    .valor-resumo strong{
+      font-size:12px;
+      color:#4b2d16;
+    }
+
+    .acoes-aluno{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .btn-acao{
+      border:none;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-acao i{
+      width:13px; height:13px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .paginacao{
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .paginacao button{
+      border:none;
+      background:#f3e8da;
+      color:#6c4b30;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .paginacao button[disabled]{
+      opacity:.4;
+      cursor:default;
+    }
+
+    .hint-arquivamento{
+      font-size:11px;
+      color:#9a7b58;
+      margin-bottom:8px;
+    }
+
+    /* Backdrop do menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:900;
+    }
+
+    /* Travar scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+  </style>
+
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="user-round"></i> Alunos – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Visualize todos os formandos por ano, escola e situação financeira. Aqui você também arquiva um ano completo.
+        </p>
+
+        <div class="linha-topo-alunos">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="buscaAluno">Pesquisar aluno</label>
+              <input id="buscaAluno" type="text" placeholder="Nome do aluno...">
+            </div>
+            <div class="campo">
+              <label for="filtroAno">Ano da formatura</label>
+              <select id="filtroAno">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroEscola">Escola</label>
+              <select id="filtroEscola">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroSituacao">Situação financeira</label>
+              <select id="filtroSituacao">
+                <option value="">Todas</option>
+                <option value="ok">OK</option>
+                <option value="pendente">Pendente</option>
+                <option value="inadimplente">Inadimplente</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="botoes-topo">
+            <button type="button" class="btn-secundario" id="btnArquivarAno">
+              <i data-lucide="archive"></i>
+              Arquivar ano selecionado
+            </button>
+            <button type="button" class="btn-primario" id="btnNovoAluno">
+              <i data-lucide="user-plus"></i>
+              Cadastrar novo aluno
+            </button>
+          </div>
+        </div>
+
+        <p class="hint-arquivamento">
+          Ao arquivar um ano, todos os alunos quitados saem desta lista e vão para o Arquivo. Alunos com pendências irão para a tela de Inadimplentes.
+        </p>
+
+        <section class="box-tabela-alunos" aria-label="Lista de alunos">
+          <table class="tabela-alunos">
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                <th>Escola / Ano</th>
+                <th>Eventos</th>
+                <th>Financeiro</th>
+                <th>Situação</th>
+                <th style="width:220px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyAlunos">
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoAlunos">Exibindo 0 alunos.</span>
+            <div class="paginacao">
+              <button disabled>&laquo;</button>
+              <button disabled>1</button>
+              <button disabled>&raquo;</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <!-- Helper pro guard -->
+  <script>
+    function currentPageFile(){
+      return (location.pathname || '')
+        .split('/').pop()
+        .split('?')[0]
+        .split('#')[0];
+    }
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // >>> Mesma chave usada pela tela de detalhe
+      const STORAGE_KEY_DETALHE = 'kgb_alunos'; // usado em kgb-formaturas-aluno-detalhe.js
+
+      // vamos manter aqui a lista "crua" vinda do detalhe
+      let alunosDetalheRaw = [];
+
+      function carregarAlunosDoDetalhe() {
+        try {
+          const txt = localStorage.getItem(STORAGE_KEY_DETALHE);
+          if (!txt) {
+            alunosDetalheRaw = [];
+            return [];
+          }
+          const arr = JSON.parse(txt);
+          if (!Array.isArray(arr)) {
+            alunosDetalheRaw = [];
+            return [];
+          }
+          alunosDetalheRaw = arr;
+          // converte o formato salvo pelo detalhe para o formato da lista
+          return arr.map(aDet => converterAlunoDetalheParaLista(aDet));
+        } catch (e) {
+          console.warn('Erro ao ler kgb_alunos:', e);
+          alunosDetalheRaw = [];
+          return [];
+        }
+      }
+
+      function salvarAlunosDetalheRaw() {
+        try {
+          localStorage.setItem(STORAGE_KEY_DETALHE, JSON.stringify(alunosDetalheRaw));
+        } catch (e) {
+          console.warn('Erro ao salvar kgb_alunos:', e);
+        }
+      }
+
+      function converterAlunoDetalheParaLista(aDet) {
+        if (!aDet || typeof aDet !== 'object') aDet = {};
+
+        const resumo = aDet.resumoFinanceiro || {};
+        const total = Number(resumo.total || 0);
+        const pago  = Number(resumo.pago  || 0);
+        let pendente = Number(
+          resumo.pendente != null ? resumo.pendente : (total - pago)
+        );
+        if (isNaN(pendente)) pendente = 0;
+
+        let status = 'ok';
+        if (aDet.status === 'Inadimplente') {
+          status = 'inadimplente';
+        } else if (pendente > 0) {
+          status = 'pendente';
+        }
+
+        return {
+          id: aDet.id || String(Date.now() + Math.random()),
+          nome: aDet.nome || '',
+          escola: aDet.escolaNome || '',
+          ano: aDet.anoFormatura
+            ? parseInt(aDet.anoFormatura, 10) || null
+            : null,
+          eventos: [], // por enquanto, não temos eventos reais por aluno
+          financeiro: {
+            total: isNaN(total) ? 0 : total,
+            pago:  isNaN(pago)  ? 0 : pago,
+            pendente: isNaN(pendente) ? 0 : pendente,
+            status
+          }
+        };
+      }
+
+      const tbodyAlunos      = document.getElementById('tbodyAlunos');
+      const infoResumoAlunos = document.getElementById('infoResumoAlunos');
+
+      const buscaAluno    = document.getElementById('buscaAluno');
+      const filtroAno     = document.getElementById('filtroAno');
+      const filtroEscola  = document.getElementById('filtroEscola');
+      const filtroSituacao = document.getElementById('filtroSituacao');
+
+      // 1) carrega SOMENTE do kgb_alunos (sem seeds fictícios)
+      let alunos = carregarAlunosDoDetalhe();
+
+      // Popula os filtros "Ano" e "Escola" com base nos dados carregados
+    // Popula os filtros "Ano" e "Escola"
+function popularFiltrosAnoEscola() {
+  if (!filtroAno || !filtroEscola) return;
+
+  // ANOS continuam vindo dos alunos (kgb_alunos)
+  const anosSet = new Set();
+  if (Array.isArray(alunos)) {
+    alunos.forEach(a => {
+      if (a.ano) anosSet.add(a.ano);
+    });
+  }
+
+  const listaAnos = Array.from(anosSet).sort((a, b) => a - b);
+  filtroAno.innerHTML =
+    '<option value="">Todos</option>' +
+    listaAnos.map(ano => `<option value="${ano}">${ano}</option>`).join('');
+
+  // ESCOLAS: tenta puxar do cadastro oficial de escolas
+  let escolasLista = [];
+
+  try {
+    const txt = localStorage.getItem('kgb-formaturas-escolas');
+    if (txt) {
+      const arr = JSON.parse(txt);
+      if (Array.isArray(arr)) {
+        escolasLista = arr
+          .map(e => (e.nome || e.nomeEscola || e.titulo || '').toString().trim())
+          .filter(Boolean);
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao ler kgb-formaturas-escolas:', e);
+  }
+
+  // Se ainda não tiver nada (nenhuma escola cadastrada),
+  // cai no antigo comportamento: escolas vindas dos alunos
+  if (!escolasLista.length && Array.isArray(alunos)) {
+    const escolasSetAlunos = new Set();
+    alunos.forEach(a => {
+      if (a.escola) escolasSetAlunos.add(a.escola);
+    });
+    escolasLista = Array.from(escolasSetAlunos);
+  }
+
+  const listaEscolasOrdenada = escolasLista.sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+
+  filtroEscola.innerHTML =
+    '<option value="">Todas</option>' +
+    listaEscolasOrdenada
+      .map(esc => `<option value="${esc}">${esc}</option>`)
+      .join('');
+}
+
+      function formatCurrencyBR(valor) {
+        return valor.toLocaleString('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        });
+      }
+
+      function excluirAlunoPorId(id) {
+        // remove da lista de exibição
+        alunos = alunos.filter(a => a.id !== id);
+        // remove da lista crua usada pela tela de detalhe
+        alunosDetalheRaw = alunosDetalheRaw.filter(aDet => aDet.id !== id);
+        salvarAlunosDetalheRaw();
+        // atualiza filtros e tabela depois da exclusão
+        popularFiltrosAnoEscola();
+        renderTabela();
+      }
+
+      function renderTabela() {
+        if (!tbodyAlunos) return;
+
+        const termo = (buscaAluno?.value || '').toLowerCase().trim();
+        const anoSel = parseInt(filtroAno?.value || '0', 10) || null;
+        const escolaSel = filtroEscola?.value || '';
+        const situSel = filtroSituacao?.value || '';
+
+        const filtrados = alunos.filter(a => {
+          const nome = (a.nome || '').toLowerCase();
+          if (termo && !nome.includes(termo)) return false;
+          if (anoSel && a.ano && a.ano !== anoSel) return false;
+          if (escolaSel && a.escola !== escolaSel) return false;
+          if (situSel && a.financeiro?.status !== situSel) return false;
+          return true;
+        });
+
+        if (filtrados.length === 0) {
+          tbodyAlunos.innerHTML = `
+            <tr>
+              <td colspan="6">Nenhum aluno encontrado com os filtros atuais.</td>
+            </tr>
+          `;
+        } else {
+          tbodyAlunos.innerHTML = filtrados.map(a => {
+            const evCol = a.eventos?.includes('colacao');
+            const evBa  = a.eventos?.includes('baile');
+            const evCh  = a.eventos?.includes('churrasco');
+
+            const status = a.financeiro?.status || 'ok';
+            let statusClass = 'status-ok';
+            let statusLabel = 'OK';
+            let statusIcon = 'check-circle-2';
+            if (status === 'pendente') {
+              statusClass = 'status-pendente';
+              statusLabel = 'Pendente';
+              statusIcon = 'clock-3';
+            } else if (status === 'inadimplente') {
+              statusClass = 'status-inadimplente';
+              statusLabel = 'Inadimplente';
+              statusIcon = 'alert-triangle';
+            }
+
+            const total = a.financeiro?.total ?? 0;
+            const pago  = a.financeiro?.pago  ?? 0;
+            const pend  = a.financeiro?.pendente ?? (total - pago);
+
+            return `
+              <tr data-id="${a.id}">
+                <td class="col-aluno">${a.nome}</td>
+                <td>
+                  <div class="col-escola">${a.escola || '-'}</div>
+                  <div class="col-escola">Formatura ${a.ano || '-'}</div>
+                </td>
+                <td>
+                  ${evCol ? '<span class="tag-evento tag-colacao">Colação</span>' : ''}
+                  ${evBa  ? '<span class="tag-evento tag-baile">Baile</span>' : ''}
+                  ${evCh  ? '<span class="tag-evento tag-churras">Churrasco</span>' : ''}
+                </td>
+                <td>
+                  <div class="valor-resumo">
+                    <strong>Total:</strong> ${formatCurrencyBR(total)}<br>
+                    <strong>Pago:</strong> ${formatCurrencyBR(pago)}<br>
+                    <strong>Pendente:</strong> ${formatCurrencyBR(pend)}
+                  </div>
+                </td>
+                <td>
+                  <span class="status-financeiro ${statusClass}">
+                    <i data-lucide="${statusIcon}"></i> ${statusLabel}
+                  </span>
+                </td>
+                <td>
+                  <div class="acoes-aluno">
+                    <button class="btn-acao btn-ver-cadastro">
+                      <i data-lucide="file-text"></i>
+                      Ver cadastro
+                    </button>
+                    <button class="btn-acao btn-financeiro">
+                      <i data-lucide="wallet"></i>
+                      Financeiro
+                    </button>
+                    <button class="btn-acao btn-convites">
+                      <i data-lucide="ticket"></i>
+                      Convites
+                    </button>
+                    <button class="btn-acao btn-excluir-aluno">
+                      <i data-lucide="trash-2"></i>
+                      Excluir
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        if (infoResumoAlunos) {
+          infoResumoAlunos.textContent = `Exibindo ${filtrados.length} aluno(s).`;
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+
+        // AÇÕES: ver cadastro / financeiro / convites / excluir
+        tbodyAlunos.querySelectorAll('tr').forEach(tr => {
+          const id = tr.getAttribute('data-id');
+          if (!id) return;
+
+          const btnVer    = tr.querySelector('.btn-ver-cadastro');
+          const btnFin    = tr.querySelector('.btn-financeiro');
+          const btnConv   = tr.querySelector('.btn-convites');
+          const btnExc    = tr.querySelector('.btn-excluir-aluno');
+
+          const irParaDetalhe = () => {
+            window.location.href = 'kgb-formaturas-aluno-detalhe.html?id=' + encodeURIComponent(id);
+          };
+
+          if (btnVer)  btnVer.addEventListener('click', irParaDetalhe);
+          if (btnFin)  btnFin.addEventListener('click', irParaDetalhe);
+          if (btnConv) btnConv.addEventListener('click', irParaDetalhe);
+
+          if (btnExc) {
+            btnExc.addEventListener('click', () => {
+              const aluno = alunos.find(a => a.id === id);
+              const nome = aluno?.nome || 'este aluno';
+              const confirmar = confirm(
+                `Tem certeza que deseja excluir ${nome}?\n` +
+                'Essa ação não poderá ser desfeita.'
+              );
+              if (!confirmar) return;
+              excluirAlunoPorId(id);
+            });
+          }
+        });
+      }
+
+      // FILTROS
+      [buscaAluno, filtroAno, filtroEscola, filtroSituacao].forEach(ctrl => {
+        if (!ctrl) return;
+        const evt = ctrl.tagName === 'INPUT' ? 'input' : 'change';
+        ctrl.addEventListener(evt, renderTabela);
+      });
+
+      // ARQUIVAR ANO (ainda simulação)
+      const btnArquivarAno = document.getElementById('btnArquivarAno');
+      if (btnArquivarAno && filtroAno) {
+        btnArquivarAno.addEventListener('click', () => {
+          const ano = filtroAno.value;
+          if (ano) {
+            alert(`No fluxo real, o sistema arquivaria os alunos quitados de ${ano} e enviaria os devedores para Inadimplentes.`);
+          } else {
+            alert('Selecione um ano da formatura antes de arquivar.');
+          }
+        });
+      }
+
+      // CADASTRAR NOVO ALUNO -> vai para tela de detalhe sem id (novo)
+      const btnNovoAluno = document.getElementById('btnNovoAluno');
+      if (btnNovoAluno) {
+        btnNovoAluno.addEventListener('click', () => {
+          window.location.href = 'kgb-formaturas-aluno-detalhe.html';
+        });
+      }
+
+      // Render inicial + filtros preenchidos
+      popularFiltrosAnoEscola();
+      renderTabela();
+    });
+  </script>
+
+  <script>
+    (function initHamburguer(){
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside || !back) return;
+
+      function setOpened(open){
+        const opened = !!open;
+        aside.classList.toggle('aberto', opened);
+        back.hidden = !opened;
+        document.body.classList.toggle('no-scroll', opened);
+
+        const icon = btn.querySelector('i[data-lucide]');
+        if (icon){
+          icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+          try { window.lucide?.createIcons?.(); } catch(e){}
+        }
+      }
+
+      function isMobile(){ return window.innerWidth <= 768; }
+
+      function syncVisibility(){
+        const mob = isMobile();
+        btn.style.display = mob ? 'block' : 'none';
+        if (!mob){
+          setOpened(false);
+        }
+      }
+
+      if (!btn.hasAttribute('data-bound')){
+        btn.setAttribute('data-bound','1');
+        btn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          setOpened(!aside.classList.contains('aberto'));
+        });
+      }
+
+      if (!back.hasAttribute('data-bound')){
+        back.setAttribute('data-bound','1');
+        back.addEventListener('click', ()=> setOpened(false));
+      }
+
+      document.addEventListener('click', (e)=>{
+        if (!aside.classList.contains('aberto')) return;
+        if (!aside.contains(e.target) && !btn.contains(e.target)){
+          setOpened(false);
+        }
+      });
+
+      syncVisibility();
+      window.addEventListener('resize', syncVisibility);
+    })();
+  </script>
+</body>
+</html>

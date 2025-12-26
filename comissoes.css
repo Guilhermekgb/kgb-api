@@ -1,0 +1,29 @@
+/* Ajustes visuais leves para a página de Comissões */
+
+.badge {
+  display:inline-block;
+  border:1px solid #eadfd1;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+  line-height:1.6;
+  background:#fff;
+  color:#5a3e2b;
+}
+
+.tone-ok { background:#e7f7ef; border-color:#bfe8d2; color:#245f3a; }
+.tone-overdue { background:#fdecec; border-color:#f7c8c8; color:#8a1f1f; }
+.tone-today { background:#fff6e5; border-color:#f6d9a6; color:#7a4a06; }
+.tone-future { background:#eef6ff; border-color:#cfe3ff; color:#254d7a; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid #eadfd1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #5a3e2b;
+  cursor: pointer;
+}
+.btn-ghost:hover { background:#f8efe3; }
+
+.muted { color:#7b6a57; }

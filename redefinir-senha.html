@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<script>
+  // Não bloquear esta página pelo guard (se algum dia você proteger mais coisas)
+  window.__KGB_GUARD_BYPASS__ = true;
+</script>
+<script type="module" src="./api/remote-adapter.js"></script>
+
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Redefinir Senha | Sistema de Buffet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    *,*::before,*::after{ box-sizing:border-box; }
+    body{
+      margin:0; font-family:'Inter',sans-serif; background:#4E342E;
+      min-height:100vh; display:grid; place-items:center; padding:24px;
+    }
+    .container{
+      width:100%; max-width:420px; background:#fff; padding:32px 28px;
+      border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.12); text-align:center;
+    }
+    h2{ margin:0 0 8px; color:#4E342E; }
+    p{ color:#666; font-size:14px; margin:0 0 22px; }
+
+    .input-group{ position:relative; margin-bottom:14px; text-align:left; }
+    .input-group input{
+      width:100%; padding:12px 44px 12px 40px; border-radius:12px; border:1px solid #e6e6e6;
+      background:#f7f7f7; font-size:14px; transition:border-color .15s, box-shadow .15s, background .15s;
+    }
+    .input-group input:focus{ outline:none; border-color:#d4a056; box-shadow:0 0 0 3px #f5e2c2; background:#fff; }
+    .icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#a1887f; }
+    .reveal{
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      display:inline-flex; align-items:center; gap:6px; border:0; background:transparent;
+      padding:6px; border-radius:8px; cursor:pointer;
+    }
+    .reveal:hover{ background:#f3f4f6; }
+
+    .button{
+      background:#d4a056; color:#fff; border:0; border-radius:12px;
+      padding:12px; width:100%; font-size:15px; font-weight:600; cursor:pointer;
+    }
+    .button:hover{ filter:brightness(.97); }
+
+    .back-link{ display:inline-flex; gap:6px; align-items:center; margin-top:14px; color:#4E342E; text-decoration:none; font-size:14px; }
+    .back-link:hover{ text-decoration:underline; }
+
+    .error{ color:#b42318; font-size:13px; margin:6px 0 0; text-align:left; }
+    .ok{ color:#0f5132; font-size:13px; margin:6px 0 0; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Redefinir Senha</h2>
+    <p>Crie uma nova senha para sua conta.</p>
+
+    <form id="formReset" novalidate>
+      <!-- Nova senha -->
+      <div class="input-group">
+        <i class="icon" data-lucide="lock"></i>
+        <input
+          id="new-password"
+          name="new-password"
+          type="password"
+          placeholder="Nova senha"
+          minlength="8"
+          required
+          autocomplete="new-password"
+          aria-describedby="pwdHelp"
+        />
+        <button class="reveal" type="button" data-target="new-password" aria-label="Mostrar/ocultar senha">
+          <i data-lucide="eye"></i>
+        </button>
+        <div id="pwdHelp" class="error" style="display:none;"></div>
+      </div>
+
+      <!-- Confirmar nova senha -->
+      <div class="input-group">
+        <i class="icon" data-lucide="lock"></i>
+        <input
+          id="confirm-password"
+          name="confirm-password"
+          type="password"
+          placeholder="Confirmar nova senha"
+          minlength="8"
+          required
+          autocomplete="new-password"
+          aria-describedby="confirmHelp"
+        />
+        <button class="reveal" type="button" data-target="confirm-password" aria-label="Mostrar/ocultar senha">
+          <i data-lucide="eye"></i>
+        </button>
+        <div id="confirmHelp" class="error" style="display:none;"></div>
+      </div>
+
+      <button class="button" type="submit">Redefinir Senha</button>
+      <div id="msgOk" class="ok" style="display:none;"></div>
+    </form>
+
+    <a class="back-link" href="login.html"><i data-lucide="arrow-left"></i> Voltar para o login</a>
+  </div>
+
+  <script>
+    try { lucide.createIcons(); } catch {}
+
+    // mostrar/ocultar senha
+    document.querySelectorAll('.reveal').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-target');
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
+        btn.innerHTML = input.type === 'password' ? '<i data-lucide="eye"></i>' : '<i data-lucide="eye-off"></i>';
+        try { lucide.createIcons(); } catch {}
+      });
+    });
+
+    // validação simples
+    const form = document.getElementById('formReset');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const a = document.getElementById('new-password');
+      const b = document.getElementById('confirm-password');
+      const helpA = document.getElementById('pwdHelp');
+      const helpB = document.getElementById('confirmHelp');
+      const okMsg = document.getElementById('msgOk');
+
+      helpA.style.display = helpB.style.display = okMsg.style.display = 'none';
+      helpA.textContent = helpB.textContent = okMsg.textContent = '';
+
+      if (a.value.length < 8) {
+        helpA.textContent = 'A senha deve ter ao menos 8 caracteres.';
+        helpA.style.display = 'block';
+        a.focus();
+        return;
+      }
+      if (a.value !== b.value) {
+        helpB.textContent = 'As senhas não coincidem.';
+        helpB.style.display = 'block';
+        b.focus();
+        return;
+      }
+
+        // Pega o token da URL: redefinir-senha.html?token=XYZ
+      function getTokenFromUrl(){
+        try {
+          const params = new URLSearchParams(window.location.search || '');
+          return params.get('token') || '';
+        } catch { return ''; }
+      }
+
+      const resetToken = getTokenFromUrl();
+      if (!resetToken) {
+        alert('Token de redefinição não informado. Verifique o link de recuperação.');
+        return;
+      }
+
+      if (!window.handleRequest) {
+        alert('API não disponível. Tente recarregar a página.');
+        return;
+      }
+
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+
+      window.handleRequest('/auth/reset', {
+        method: 'POST',
+        body: {
+          token: resetToken,
+          novaSenha: a.value.trim()
+        }
+      }).then((resp) => {
+        if (btn) btn.disabled = false;
+
+        if (!resp || resp.status !== 200 || !resp.data || !resp.data.ok) {
+          const msg = (resp && (resp.error || (resp.data && resp.data.error))) || 'Não foi possível redefinir a senha.';
+          alert(msg);
+          return;
+        }
+
+        okMsg.textContent = '✅ Senha redefinida com sucesso!';
+        okMsg.style.display = 'block';
+        setTimeout(() => { window.location.href = 'login.html'; }, 1000);
+      }).catch((err) => {
+        if (btn) btn.disabled = false;
+        console.error('Erro em /auth/reset:', err);
+        alert('Erro ao falar com a API. Tente novamente em instantes.');
+      });
+
+    });
+  </script>
+</body>
+</html>

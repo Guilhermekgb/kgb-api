@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:notificacoes.html">
+  <meta charset="UTF-8" />
+  <title>Minhas Notificações (Vendedor)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+      var PROD_API = "https://kgb-api.onrender.com";
+      var DEV_API  = "http://127.0.0.1:3333";
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+<style>
+html,body{margin:0;padding:0;background:#f8f1e8;height:100%}
+.wrapper{display:flex;min-height:100vh;overflow:hidden}
+main.conteudo-principal{flex-grow:1;min-height:100vh;overflow:auto;padding:40px;margin-left:260px}
+.conteudo-central{max-width:1200px;margin:0 auto}
+
+/* BOTÃO HAMBÚRGUER */
+#hamburguer{
+  position:fixed;top:12px;left:12px;
+  background:#c29a5d;border:none;color:#fff;
+  font-size:24px;padding:6px 12px;
+  border-radius:8px;z-index:1001;display:none;
+}
+
+/* MOBILE */
+@media(max-width:768px){
+  #hamburguer{display:block}
+  #menuLateral{
+    position:fixed;left:0;top:0;height:100vh;width:260px;
+    transform:translateX(-100%);transition:transform .3s ease;z-index:999;
+  }
+  #menuLateral.aberto{transform:translateX(0)}
+  main.conteudo-principal{
+    margin-left:0!important;padding:20px
+  }
+  #menuBackdrop{
+    position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:998;
+  }
+}
+
+body.no-scroll{overflow:hidden}
+
+/*** CARTÕES / MODAL / ESTILOS CONTINUAM IGUAIS ***/
+</style>
+
+</head>
+<body class="page-vendedor">
+
+<button id="hamburguer" type="button">
+  <i data-lucide="menu"></i>
+</button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main id="notificacoesPage" class="conteudo-principal">
+
+    <div class="conteudo-central">
+      <h1><i data-lucide="bell"></i> Minhas Notificações</h1>
+
+      <div class="acoes">
+        <button id="btnMarcarTodas" class="btn btn-prim" type="button">
+          Marcar todas como lidas
+        </button>
+      </div>
+
+      <div class="cols">
+        <section aria-labelledby="titInternas">
+          <h3 id="titInternas"><i data-lucide="mail"></i> Internas
+            <span id="countInt" class="pill" aria-live="polite">0</span>
+          </h3>
+          <div id="lista-notificacoes-internas"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- MODAIS MANTIDOS (sem alterações) 👌 -->
+    <div id="modalAtender" class="modal" hidden></div>
+    <div id="modalVisualizar" class="modal" hidden></div>
+
+  </main>
+</div>
+
+<script type="module" src="menu-lateral.js"></script>
+<script src="agenda-bridge.js"></script>
+<script src="notificacoes.js" defer></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  window.lucide?.createIcons?.();
+  const btn  = document.getElementById('hamburguer');
+  const menu = document.getElementById('menuLateral');
+  const backdrop = document.getElementById('menuBackdrop');
+
+  function close(){
+    menu.classList.remove('aberto');
+    backdrop.hidden = true;
+    document.body.classList.remove('no-scroll');
+  }
+
+  btn.addEventListener('click',()=>{
+    const isOpen = menu.classList.toggle('aberto');
+    backdrop.hidden = !isOpen;
+    document.body.classList.toggle('no-scroll', isOpen);
+  });
+
+  backdrop.addEventListener('click', close);
+});
+</script>
+
+</body>
+</html>
+
+

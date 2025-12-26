@@ -1,0 +1,758 @@
+/* =====================================================
+   FUNIL — VISUAL PREMIUM (v3) + HEADER FIXO
+   - Sem alterar fontes
+   - Mantém classes/estrutura existentes
+   - Estilo mais sofisticado, com acabamentos “luxo”
+   ===================================================== */
+
+/* ---------- Tokens ---------- */
+:root{
+  --bg:        #f6f3ec;     /* fundo suave */
+  --bg-2:      #f1ebe1;
+  --surface:   #ffffff;
+  --surface-2: #fffaf4;     /* leve tom quente */
+  --border:    #e8dcc9;
+  --border-2:  #efe6d7;
+  --text:      #2e261a;
+  --muted:     #7b6a57;
+  --accent:    #b6916a;     /* dourado queimado */
+  --accent-2:  #c7ac85;
+  --danger:    #e15757;
+  --warn:      #d9b23d;
+
+  --shadow-1:  0 2px 10px rgba(0,0,0,.06);
+  --shadow-2:  0 16px 40px rgba(0,0,0,.10);
+  --ring:      0 0 0 3px rgba(182,145,106,.25);
+}
+
+
+
+/* ---------- Base + correção do scroll/stack para sticky ---------- */
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+main.conteudo-principal { 
+  height: 100vh; 
+  overflow: auto;       /* a página verticalmente rola pelo <main> */
+  position: relative;   /* garante contexto p/ z-index e sticky */
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(199,172,133,.20), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(182,145,106,.18), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+}
+
+/* ---------- TOPBAR (fixo, elegante) ---------- */
+.fl-topbar{
+  position: sticky; top: 0; z-index: 1000;
+  display:flex; align-items:center; justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  /* “glass” com contraste melhor */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.70)) padding-box,
+    linear-gradient(180deg, rgba(199,172,133,.35), rgba(255,255,255,0)) border-box;
+  backdrop-filter: blur(10px) saturate(1.15);
+}
+
+.fl-titulo{
+  display:flex; align-items:center; gap:10px;
+  color: var(--text); font-weight: 800; letter-spacing:.2px;
+}
+.fl-titulo i, .fl-titulo [data-lucide]{ width:22px; height:22px; opacity:.9; }
+
+/* Ações do topo */
+.fl-acoes-dir{ display:flex; gap:10px; align-items:center; }
+.btn.primario{
+  padding: 10px 14px; border-radius: 12px; font-weight: 700;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: #2a1f14; border: 1px solid rgba(0,0,0,.05);
+  box-shadow: var(--shadow-1);
+  transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+}
+.btn.primario:hover{ transform: translateY(-1px); box-shadow: var(--shadow-2); filter: saturate(1.05); }
+.btn.primario:focus{ outline: none; box-shadow: var(--ring), var(--shadow-1); }
+
+/* ---------- Filtros ---------- */
+.fl-filtros{ display:flex; align-items:center; gap: 10px; padding: 10px 16px 6px; }
+#filtroBusca{
+  width: clamp(220px, 48vw, 640px);
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(#fff,#fff) padding-box,
+    linear-gradient(135deg, rgba(182,145,106,.6), rgba(231,222,206,.6)) border-box;
+  color: var(--text); box-shadow: var(--shadow-1); transition: .2s ease;
+}
+#filtroBusca::placeholder{ color: var(--muted); }
+#filtroBusca:focus{ outline: none; border-color: transparent; box-shadow: var(--ring), var(--shadow-1); }
+.filtros select{
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  transition: .2s ease;
+}
+.filtros select:focus{ outline:none; box-shadow: var(--ring); }
+
+/* ---------- Indicadores (cards premium) ---------- */
+.fl-indicadores{
+  display: grid; grid-template-columns: repeat(4, minmax(220px,1fr));
+  gap: 14px; margin: 12px 16px 2px;
+}
+.fl-indicadores .ind{
+  position: relative;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(199,172,133,.7), rgba(255,255,255,0)) border-box;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 16px 16px 14px;
+  box-shadow: var(--shadow-1);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.fl-indicadores .ind::after{
+  content:""; position:absolute; inset:0;
+  border-radius:16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25);
+  pointer-events:none;
+}
+.fl-indicadores .ind:hover{ transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.fl-indicadores .k{ font-size: 12px; color: #7a5633; letter-spacing:.2px; }
+.fl-indicadores .v{ font-weight: 900; font-size: 22px; color: var(--text); margin-top: 6px; }
+
+/* ---------- Barra de rolagem horizontal (espelho) ---------- */
+.fl-scroll-x { position: relative; border-bottom: 1px solid var(--border); margin-top: 6px; }
+#scrollXTop { overflow-x: auto; overflow-y: hidden; height: 14px; }
+#scrollXTopInner { height: 1px; }
+
+/* ---------- Scroller das colunas ---------- */
+.fl-scroller, #funilScroller{
+  overflow-x: auto; overflow-y: visible;
+  padding: 12px 0 16px;
+  scrollbar-width: thin; scrollbar-color: var(--accent-2) #efe6d7;
+}
+.fl-scroller::-webkit-scrollbar,
+#funilScroller::-webkit-scrollbar { height: 12px; }
+.fl-scroller::-webkit-scrollbar-thumb,
+#funilScroller::-webkit-scrollbar-thumb { background: var(--accent-2); border-radius: 10px; }
+.fl-scroller::-webkit-scrollbar-track,
+#funilScroller::-webkit-scrollbar-track { background: #efe6d7; border-radius: 10px; }
+
+/* ---------- Linha de colunas ---------- */
+.fl-container, #funil-container{
+  display:flex; gap: 18px; align-items:flex-start; padding: 10px 16px;
+}
+
+/* ---------- Coluna ---------- */
+.fl-coluna, .coluna{
+  flex: 0 0 300px; min-width: 300px; max-width: 300px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(231,222,206,.8), rgba(199,172,133,.55)) border-box;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 12px;
+  box-shadow: var(--shadow-1);
+  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+.fl-coluna:hover{ transform: translateY(-2px); box-shadow: var(--shadow-2); }
+
+/* título da coluna */
+.fl-coluna > h2, .coluna > h2{
+  margin: 6px 6px 12px; padding: 10px 12px;
+  font-size: 14px; font-weight: 900; color: #5a3e2b;
+  display:flex; align-items:center; gap: 10px;
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    linear-gradient(135deg, rgba(199,172,133,.6), rgba(255,255,255,0)) border-box;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+.fl-coluna > h2 i, .fl-coluna > h2 [data-lucide]{ width:18px; height:18px; opacity:.9; }
+
+/* mensagem "vazio" */
+.fl-coluna-vazio{
+  font-size: 12px; color: var(--muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  padding: 12px; border-radius: 12px; margin: 8px 6px;
+}
+
+/* ---------- Cartão do lead ---------- */
+@keyframes fadeSlideUp{ from{ opacity:0; transform: translateY(4px);} to{ opacity:1; transform: translateY(0);} }
+.card-lead{
+  position: relative;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(231,222,206,.9), rgba(199,172,133,.55)) border-box;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 12px 12px;
+  margin: 10px 6px;
+  box-shadow: var(--shadow-1);
+  font-size: 13px; line-height: 1.35;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, filter .18s ease;
+  animation: fadeSlideUp .28s ease both;
+}
+.card-lead:hover{ transform: translateY(-2px); box-shadow: var(--shadow-2); filter: saturate(1.02); }
+.card-lead strong{ font-size: 14px; color: var(--text); font-weight: 900; }
+.lead-info{ font-size: 12px; color: #5a4b3f; margin-top: 6px; }
+.lead-info small{ text-transform: uppercase; letter-spacing: .02em; font-size: 11px; color: var(--muted); margin-right: 6px; }
+
+/* estados por prazo com barra lateral premium */
+.card-lead.atrasado{
+  background:
+    linear-gradient(#fff7f8,#fff7f8) padding-box,
+    linear-gradient(135deg, rgba(255,120,120,.65), rgba(255,255,255,0)) border-box;
+  box-shadow: inset 4px 0 0 var(--danger), var(--shadow-1);
+}
+.card-lead.hoje{
+  background:
+    linear-gradient(#fff9db,#fff9db) padding-box,
+    linear-gradient(135deg, rgba(245,220,130,.65), rgba(255,255,255,0)) border-box;
+  box-shadow: inset 4px 0 0 var(--warn), var(--shadow-1);
+}
+
+/* ---------- Ações ---------- */
+.btn-inline{ display:flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.btn.outline{
+  border: 1px solid var(--accent-2); color: #5a3e2b; background: transparent;
+  padding: 8px 12px; font-size: 12px; border-radius: 10px;
+  transition: background .18s ease, box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+}
+.btn.outline:hover{ background: rgba(199,172,133,.10); transform: translateY(-1px); box-shadow: var(--shadow-1); }
+.btn.outline:focus{ outline: none; box-shadow: var(--ring); }
+
+/* select "mover para" com ícone */
+.mover-para{
+  width: 100%; font-size: 12px;
+  padding: 10px 34px 10px 12px;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface) no-repeat right 10px center / 16px;
+  color: var(--text); transition: .18s ease; appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" stroke="%237b6a57" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+}
+.mover-para:hover{ border-color: var(--accent-2); }
+.mover-para:focus{ outline: none; border-color: var(--accent-2); box-shadow: var(--ring); }
+
+/* ---------- Acessibilidade ---------- */
+:focus-visible{ outline: none; box-shadow: var(--ring); border-color: var(--accent-2); }
+a:focus-visible{ border-radius: 8px; }
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 1200px){
+  .fl-indicadores{ grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 900px){
+  .fl-indicadores{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px){
+  .fl-indicadores{ grid-template-columns: 1fr; }
+  #filtroBusca{ width: 100%; }
+  .fl-coluna, .coluna{ min-width: 280px; max-width: 280px; flex-basis: 280px; }
+}
+
+/* ---------- Preferência de movimento reduzido ---------- */
+@media (prefers-reduced-motion: reduce){
+  *{ animation: none !important; transition: none !important; }
+}
+/* --- Alternar sticky do topo via classe no <body> --- */
+/* Padrão segue sticky (definido acima). Para soltar o topo, use <body class="no-sticky"> */
+.no-sticky .fl-topbar{
+  position: static;     /* rola junto com o conteúdo */
+  top: auto;
+  z-index: 1;
+  background: var(--surface);
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--border);
+}
+
+
+/* (opcional) ajuste visual quando não é fixo */
+.fl-topbar{
+  background: var(--surface);           /* remove o efeito glass se quiser */
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--border);
+}
+/* =======================================================
+   PATCH PREMIUM — Profundidade + Detalhe (sem trocar fontes)
+   Cole no FINAL do funil-leads.css
+   ======================================================= */
+
+/* 1) Colunas com borda-Instagram sutil + brilho interno */
+.fl-coluna, .coluna{
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(231,222,206,.9), rgba(199,172,133,.55)) border-box;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  position: relative;
+}
+.fl-coluna::after, .coluna::after{
+  content:""; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+}
+
+/* 2) Título da coluna mais “imponente” */
+.fl-coluna > h2, .coluna > h2{
+  letter-spacing:.2px; font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+}
+
+/* 3) Card com dupla camada (sombra + stroke interno) e brilho suave */
+.card-lead{
+  background:
+    linear-gradient(180deg, #fff 0%, var(--surface) 100%) padding-box,
+    linear-gradient(135deg, rgba(231,222,206,.85), rgba(199,172,133,.50)) border-box;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+  position: relative;
+}
+.card-lead::after{
+  content:""; position:absolute; inset:0; border-radius:14px; pointer-events:none;
+  /* stroke interno + brilho sutil */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.65),
+    inset 0 -1px 0 rgba(0,0,0,.05);
+}
+
+/* 4) Ponto de status no canto (muda a cor pelo estado) */
+.card-lead::before{
+  content:""; position:absolute; top:10px; right:10px; width:8px; height:8px; border-radius:50%;
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(199,172,133,.18);
+}
+.card-lead.hoje::before{ background: var(--warn); box-shadow: 0 0 0 3px rgba(217,178,61,.20); }
+.card-lead.atrasado::before{ background: var(--danger); box-shadow: 0 0 0 3px rgba(225,87,87,.18); }
+
+/* 5) Hierarquia mais forte no nome */
+.card-lead strong{
+  display:block;
+  font-weight: 900;
+  letter-spacing:.2px;
+}
+
+/* 6) “Meta” do card com grid e ícones nos 4 primeiros itens */
+.lead-info{
+  display: grid; gap: 6px;
+}
+.lead-info small{
+  display:flex; align-items:center; gap:8px;
+  color: #5a4b3f;
+}
+
+/* Ícones (sem mexer no HTML): aplicados por posição */
+.lead-info small::before{
+  content:""; width:14px; height:14px; opacity:.8; flex: 0 0 14px;
+  background-repeat:no-repeat; background-position:center; background-size:contain;
+  filter: drop-shadow(0 0 0 rgba(0,0,0,.0));
+}
+/* 1º: calendário */
+.lead-info small:nth-child(1)::before{ background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" fill="none" stroke="%237b6a57" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke="%237b6a57" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke="%237b6a57" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke="%237b6a57" stroke-width="2"/></svg>'); }
+
+/* 2º: pin (local) */
+.lead-info small:nth-child(2)::before{ background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 1 1 18 0Z" fill="none" stroke="%237b6a57" stroke-width="2"/><circle cx="12" cy="10" r="3" fill="none" stroke="%237b6a57" stroke-width="2"/></svg>'); }
+
+/* 3º: usuários (convidados) */
+.lead-info small:nth-child(3)::before{ background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" fill="none" stroke="%237b6a57" stroke-width="2"/><circle cx="9" cy="7" r="4" fill="none" stroke="%237b6a57" stroke-width="2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="%237b6a57" stroke-width="2"/><path d="M16 3.13A4 4 0 0 1 18 7" fill="none" stroke="%237b6a57" stroke-width="2"/></svg>'); }
+
+/* 4º: telefone/whatsapp (genérico) */
+.lead-info small:nth-child(4)::before{ background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 11 19a19.5 19.5 0 0 1-6-6 19.86 19.86 0 0 1-2.91-8.82A2 2 0 0 1 4 1h3a2 2 0 0 1 2 1.72 12.86 12.86 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8 8a16 16 0 0 0 8 8l.36-.25a2 2 0 0 1 2.11-.45 12.86 12.86 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z" fill="none" stroke="%237b6a57" stroke-width="2"/></svg>'); }
+
+/* 7) Hover mais presente (sem exagerar) */
+.card-lead:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 18px 42px rgba(0,0,0,.12);
+}
+
+/* 8) Botão primário com “sheen” (brilho leve) */
+.btn.primario{
+  position: relative; overflow: hidden;
+  text-shadow: 0 1px 0 rgba(255,255,255,.35);
+}
+.btn.primario::after{
+  content:""; position:absolute; inset:-40% -10% auto -10%; height:140%;
+  background: linear-gradient(120deg, rgba(255,255,255,.55), rgba(255,255,255,0) 35%);
+  transform: translateX(-120%);
+  transition: transform .6s ease;
+}
+.btn.primario:hover::after{ transform: translateX(120%); }
+
+/* 9) Alternativa pronta de paleta (grafite premium). 
+   Para testar, adicione class="tema-grafite" no <body>. */
+body.tema-grafite{
+  --bg:#0f1113; --bg-2:#0b0c0f; --surface:#15181b; --surface-2:#1a1f23;
+  --border:#262c31; --border-2:#2e353b; --text:#e6eaef; --muted:#9aa6b2;
+  --accent:#c7ac85; --accent-2:#b6916a; --danger:#ff6b6b; --warn:#e6c056;
+}
+/* =======================================================
+   MODO FINO & REFINADO — afina colunas e cards
+   Cole no FINAL do funil-leads.css
+   ======================================================= */
+body.modo-fino{
+   --col-w: 240px;
+   --card-pad: 10px;
+   --col-pad: 10px;
+}
+
+/* menos espaço entre colunas */
+.modo-fino .fl-container, .modo-fino #funil-container{ gap: 14px !important; }
+
+/* colunas mais estreitas */
+.modo-fino .fl-coluna, .modo-fino .coluna{
+  flex: 0 0 var(--col-w) !important;
+  min-width: var(--col-w) !important;
+  max-width: var(--col-w) !important;
+  padding: var(--col-pad) !important;
+  border-radius: 16px !important;
+}
+
+/* cabeçalho da coluna mais compacto */
+.modo-fino .fl-coluna > h2, .modo-fino .coluna > h2{
+  margin: 4px 4px 10px !important;
+  padding: 8px 10px !important;
+}
+
+/* cards mais delgados e com tipografia ligeiramente menor */
+.modo-fino .card-lead{
+  padding: var(--card-pad) !important;
+  margin: 8px 4px !important;
+  border-radius: 12px !important;
+  font-size: 12.5px;
+  line-height: 1.28;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+  overflow-wrap: anywhere; /* evita “estufar” com textos longos */
+}
+.card-lead strong{ font-size: 13.5px !important; }
+.modo-fino .lead-info{ gap: 4px !important; }
+.btn-inline{ gap: 6px !important; }
+.modo-fino .mover-para{ font-size: 12px !important; padding: 8px 30px 8px 10px !important; }
+
+/* (opcional) ULTRAFINO: adicione class="compacto" no <body> para 220px */
+body.compacto .fl-coluna, body.compacto .coluna{ --col-w: 220px; }
+
+/* mantém estreito também no mobile sem ficar apertado demais */
+@media (max-width: 620px){
+ .modo-fino .fl-coluna, .modo-fino .coluna{ --col-w: 240px; }
+}
+/* =======================================================
+   CARDS MAIS BAIXOS (compacto e refinado)
+   Cole no FINAL do funil-leads.css
+   ======================================================= */
+
+/* ajustes globais sutis */
+ body.cards-baixos{
+   --card-vpad: 8px;
+   --card-hpad: 10px;
+ }
+
+/* coluna com menos respiro para não “alongar” os cards */
+.cards-baixos .fl-coluna, .cards-baixos .coluna{ padding: 8px 10px !important; }
+
+/* cards mais compactos */
+.cards-baixos .card-lead{
+  padding: var(--card-vpad) var(--card-hpad) !important;
+  margin: 8px 4px !important;     /* aproxima os cartões */
+  border-radius: 12px !important;
+  font-size: 12.5px;              /* -0.5px ajuda na altura */
+  line-height: 1.25;              /* mais “apertado” */
+}
+
+/* título do card em 1 linha */
+.cards-baixos .card-lead strong{
+  font-size: 13.5px !important;
+  line-height: 1.15 !important;
+  margin-bottom: 4px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- AQUI ESTÁ O PULO DO GATO: infos em 2 colunas --- */
+.cards-baixos .lead-info{ display: grid !important;
+  grid-template-columns: 1fr 1fr;   /* 2 colunas */
+  column-gap: 12px;
+  row-gap: 4px;                     /* menos espaço vertical */
+  margin-top: 4px !important;
+}
+.cards-baixos .lead-info small{
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  letter-spacing: .01em !important; /* menos espaço entre letras */
+}
+
+/* se você usa os ícones via ::before, reduzimos também */
+.cards-baixos .lead-info small::before{ width:12px; height:12px; }
+
+/* botões e select mais discretos (menos altura total) */
+.cards-baixos .btn-inline{ margin-top: 6px !important; gap: 6px !important; }
+.cards-baixos .btn.outline{ padding: 6px 10px !important; font-size: 12px !important; }
+.cards-baixos .mover-para{ margin-top: 6px !important; padding: 8px 26px 8px 10px !important; font-size: 12px !important; }
+
+/* opcional: reduz o “ponto de status” no canto para não “abrir espaço visual” */
+.cards-baixos .card-lead::before{ width: 7px; height: 7px; top: 9px; right: 9px; }
+
+/* mobile mantém legível */
+ @media (max-width: 620px){ .cards-baixos .lead-info{ grid-template-columns: 1fr; } }
+/* ===========================
+   CARDS VERTICAIS COMPACTOS
+   (rótulo + valor)
+   Ativar com: <body class="cards-verticais">
+   =========================== */
+
+/* altura e respiro menores */
+.cards-verticais .card-lead{
+  padding: 10px 10px !important;
+  margin: 8px 4px !important;
+  border-radius: 12px !important;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+/* título em uma linha */
+.cards-verticais .card-lead strong{
+  font-size: 13.5px !important;
+  line-height: 1.15 !important;
+  margin-bottom: 6px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* cada info vira uma linha enxuta, com ícone antes */
+.cards-verticais .lead-info{
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0 !important;
+  color: #5a4b3f;
+}
+
+/* rótulo curto em maiúsculas; adiciono um traço " — " automático */
+.cards-verticais .lead-info > small{
+  font-size: 11px !important;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.cards-verticais .lead-info > small::after{
+  content: " —";
+  opacity: .6;
+  margin-left: 2px;
+}
+
+/* valor após o rótulo (estilizo o <span class="v"> do JS) */
+.cards-verticais .lead-info > .v{
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0; /* deixa o ellipsis funcionar em flex */
+}
+
+/* ícone por tipo (aplicado na própria linha, não no <small>) */
+.cards-verticais .lead-info::before{
+  content:"";
+  width: 14px; height: 14px; flex: 0 0 14px; opacity: .85;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+}
+
+/* data do evento */
+.cards-verticais .lead-info.li-data::before{
+ background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='8' y1='2' x2='8' y2='6' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='3' y1='10' x2='21' y2='10' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* local */
+.cards-verticais .lead-info.li-local::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 1 1 18 0Z' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Ccircle cx='12' cy='10' r='3' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* convidados */
+.cards-verticais .lead-info.li-conv::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Ccircle cx='9' cy='7' r='4' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpath d='M16 3.13A4 4 0 0 1 18 7' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* whatsapp/telefone */
+.cards-verticais .lead-info.li-whats::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 11 19a19.5 19.5 0 0 1-6-6 19.86 19.86 0 0 1-2.91-8.82A2 2 0 0 1 4 1h3a2 2 0 0 1 2 1.72 12.86 12.86 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8 8a16 16 0 0 0 8 8l.36-.25a2 2 0 0 1 2.11-.45 12.86 12.86 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+
+/* próximo retorno */
+.cards-verticais .lead-info.li-retorno::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpolyline points='12 6 12 12 16 14' fill='none' stroke='%237b6a57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* menos respiro nos botões para reduzir a altura total */
+.cards-verticais .btn-inline{ margin-top: 6px !important; gap: 6px !important; }
+.cards-verticais .btn.outline{ padding: 6px 10px !important; font-size: 12px !important; }
+.cards-verticais .mover-para{ margin-top: 6px !important; padding: 8px 26px 8px 10px !important; font-size: 12px !important; }
+
+/* (opcional) truncate do Local e WhatsApp para não “esticar” o card */
+.cards-verticais .lead-info.li-local .v,
+.cards-verticais .lead-info.li-whats .v{ max-width: 180px; }
+
+
+/* =====================================================
+   ÍCONE + VALOR (sem rótulos) e sem ícones duplicados
+   Ativar com: <body class="icone-valor">
+   ===================================================== */
+
+/* 1) Esconde os rótulos "DATA DO EVENTO / LOCAL / ..."  */
+.icone-valor .lead-info > small{ display: none !important; }
+/* remove também o tracinho automático desses rótulos, se existir */
+.icone-valor .lead-info > small::after{ content: none !important; }
+
+/* 2) Desativa QUALQUER ícone que vinha dos <small> por nth-child  */
+.icone-valor .lead-info small::before,
+.icone-valor .lead-info small:nth-child(1)::before,
+.icone-valor .lead-info small:nth-child(2)::before,
+.icone-valor .lead-info small:nth-child(3)::before,
+.icone-valor .lead-info small:nth-child(4)::before,
+.icone-valor .lead-info small:nth-child(5)::before{
+  content: none !important;
+  background: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+}
+
+/* 3) Cada linha da info fica: [ícone] [valor] (compacto) */
+.icone-valor .lead-info{
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0 !important;
+  color: var(--text);
+}
+
+
+/* o valor (span.v) ocupa o resto e trunca se for longo */
+.icone-valor .lead-info > .v{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+/* 4) Ícone por TIPO aplicado na própria linha (.lead-info) */
+.icone-valor .lead-info::before{
+  content: "";
+  width: 14px; height: 14px; flex: 0 0 14px; opacity: .85;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+}
+
+/* data do evento */
+.icone-valor .lead-info.li-data::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='8' y1='2' x2='8' y2='6' stroke='%237b6a57' stroke-width='2'/%3E%3Cline x1='3' y1='10' x2='21' y2='10' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* local */
+.icone-valor .lead-info.li-local::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 1 1 18 0Z' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Ccircle cx='12' cy='10' r='3' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* convidados */
+.icone-valor .lead-info.li-conv::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Ccircle cx='9' cy='7' r='4' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpath d='M16 3.13A4 4 0 0 1 18 7' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* whatsapp/telefone */
+.icone-valor .lead-info.li-whats::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2A19.86 19.86 0 0 1 11 19a19.5 19.5 0 0 1-6-6 19.86 19.86 0 0 1-2.91-8.82A2 2 0 0 1 4 1h3a2 2 0 0 1 2 1.72 12.86 12.86 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8 8a16 16 0 0 0 8 8l.36-.25a2 2 0 0 1 2.11-.45 12.86 12.86 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* próximo retorno */
+.icone-valor .lead-info.li-retorno::before{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='%237b6a57' stroke-width='2'/%3E%3Cpolyline points='12 6 12 12 16 14' fill='none' stroke='%237b6a57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* 5) Altura do card ainda menor (respiro enxuto nos controles) */
+.icone-valor .btn-inline{ margin-top: 6px !important; gap: 6px !important; }
+.icone-valor .btn.outline{ padding: 6px 10px !important; font-size: 12px !important; }
+.icone-valor .mover-para{ margin-top: 6px !important; padding: 8px 26px 8px 10px !important; font-size: 12px !important; }
+
+/* (opcional) trunca local/whats para o card não “esticar” */
+.icone-valor .lead-info.li-local .v,
+.icone-valor .lead-info.li-whats .v{ max-width: 180px; }
+
+/* Oculta o badge de notificações no menu lateral apenas no Funil.
+   Adicione <body class="pagina-funil"> na tela do Funil para aplicar. */
+.pagina-funil #menuLateral #badgeNotificacoes,
+.pagina-funil #menuLateral .badge-notificacoes{
+  display: none !important;
+}
+.hl-novo-lead {
+  animation: flash-new 0.6s ease-in-out 0s 3 alternate;
+  outline: 2px solid #c8a46a;
+  background: #fff7e6 !important;
+  border-radius: 10px;
+}
+@keyframes flash-new {
+  from { box-shadow: 0 0 0 rgba(200,164,106,0); }
+  to   { box-shadow: 0 0 0 6px rgba(200,164,106,.35); }
+}
+a.alerta-ativo { position: relative; }
+a.alerta-ativo::after {
+  content: '';
+  position: absolute; top: -4px; right: -4px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #e11d48; /* vermelho */
+}
+/* =======================================================
+   PATCH — Centralização e Largura do Conteúdo Principal
+   ======================================================= */
+
+/* wrapper principal: ocupa toda a largura menos o menu */
+.wrapper {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* conteúdo principal (área do funil) – agora ocupa toda a faixa útil */
+main.conteudo-principal {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;          /* estica o conteúdo, não centraliza mais */
+  justify-content: flex-start;
+  padding: 20px 40px;            /* respiro lateral */
+  box-sizing: border-box;
+}
+
+/* o bloco interno que contém tudo (topbar + funil) – sem limite de largura */
+.conteudo-central {
+  width: 100%;
+  max-width: none;               /* REMOVEMOS a largura máxima */
+  margin: 0;                     /* REMOVEMOS o margin auto (centralizado) */
+}
+
+
+#funilScroller {
+  width: 100%;
+  max-width: none;
+  margin: 0;                     /* tira a centralização */
+}
+
+/* ===== Botão hambúrguer (mobile) — mesmo padrão das outras telas ===== */
+#hamburguer{
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1001;
+  display: none;
+  background: #c29a5d;
+  color: #fff;
+  border: none;
+  font-size: 24px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.12);
+}
+
+@media (max-width: 768px){
+  #hamburguer{ display: block; }
+  main.conteudo-principal{ padding: 20px; }
+}

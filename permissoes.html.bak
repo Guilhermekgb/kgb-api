@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:permissoes.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- (mantém seu bloco que importa exigirPermissao do guard) -->
+<script type="module">
+  import { exigirPermissao } from './api/proteger-pagina.js';
+  exigirPermissao('ver-permissoes');
+</script>
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Permissões Detalhadas por Perfil</title>
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Playfair Display', serif;
+      background-color: #f8f1e8;
+      height: 100%;
+      overflow-x: hidden;
+    }
+    body { display: flex; flex-direction: column; }
+    .wrapper { display: flex; flex-grow: 1; height: 100%; overflow: hidden; }
+    #menuLateral { flex-shrink: 0; width: 260px; min-height: 100vh; background-color: #5C4033; }
+    main { flex-grow: 1; padding: 40px; padding-left: 300px; box-sizing: border-box; height: 100vh; overflow-y: auto; max-width: 100%; }
+
+    h1 {
+      color: #5a3e2b; font-size: 26px; border-bottom: 2px solid #c29a5d;
+      padding-bottom: 10px; display: flex; align-items: center; gap: 10px;
+    }
+    h2 { color: #5a3e2b; margin-top: 30px; font-size: 20px; }
+    table {
+      width: 100%; border-collapse: collapse; background-color: white; border-radius: 12px;
+      overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-top: 10px;
+    }
+    th, td { padding: 10px; text-align: center; font-size: 14px; border-bottom: 1px solid #f1e3d3; }
+    th { background-color: #f3e4c5; color: #5a3300; }
+    tr:nth-child(even) { background-color: #fdf7ed; }
+    button {
+      margin-top: 20px; background-color: #c29a5d; color: white; border: none;
+      padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer;
+    }
+    button:hover { background-color: #a57d3a; }
+
+    #hamburguer {
+      position: fixed; top: 12px; left: 12px; background: #c29a5d; border: none;
+      color: white; font-size: 24px; padding: 6px 12px; border-radius: 8px; z-index: 1001; display: none;
+    }
+    /* Fundo escuro por trás do menu */
+#menuBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+#menuBackdrop.visivel{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* Quando o menu está aberto, trava o scroll do fundo */
+body.no-scroll{
+  overflow:hidden;
+}
+
+@media (max-width: 768px) {
+  main {
+    padding: 20px;
+    padding-left: 0;
+  }
+
+  #hamburguer {
+    display: block;
+  }
+
+  .wrapper {
+    flex-direction: column;
+  }
+
+  #menuLateral {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 240px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 999;
+  }
+
+  /* Quando aberto, entra deslizando da esquerda */
+  #menuLateral.aberto {
+    transform: translateX(0);
+  }
+}
+
+    /* Estilos da seção RBAC API */
+    #rbacApiEditor table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.05)}
+    #rbacApiEditor th,#rbacApiEditor td{padding:10px;border-bottom:1px solid #f1e3d3;vertical-align:top}
+    #rbacApiEditor thead th{background:#f3e4c5;color:#5a3300}
+    #rbacApiEditor input[type="text"]{width:100%;padding:8px;border:1px solid #e4d2b7;border-radius:8px}
+    #rbacApiActions{display:flex;gap:12px;flex-wrap:wrap}
+    #rbacApiActions button{margin-top:10px}
+    .hint{font-size:12px;opacity:.8;margin-top:4px}
+  </style>
+</head>
+
+<body>
+  <button id="hamburguer"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+
+    <main>
+      <h1><i data-lucide="settings"></i> Permissões por Perfil</h1>
+
+      <!-- ===== Permissões de UI (já existentes) ===== -->
+      <div id="tabelasPermissoes"></div>
+      <button onclick="salvarPermissoes()">Salvar Permissões</button>
+
+      <h2 style="margin-top: 40px;">Resumo por Perfil</h2>
+      <div id="resumo-perfis"></div>
+
+      <!-- ===== NOVO: RBAC da API ===== -->
+      <section style="margin-top:32px;">
+        <h2><i data-lucide="shield-check"></i> RBAC da API (entidade × ação)</h2>
+        <p style="margin:8px 0 12px">
+          Edite quais <b>perfis</b> podem executar cada ação na “API local”.
+          Os valores são salvos em <code>localStorage["permissoesAPI"]</code> e lidos por <code>ensureAllowed(entity, action)</code> nas rotas.
+        </p>
+        <div id="rbacApiEditor"></div>
+        <div id="rbacApiActions">
+          <button id="rbacApiSalvar">Salvar RBAC da API</button>
+          <button id="rbacApiReset">Resetar para Padrões</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Menu + guard -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import { exigirPermissao } from './api/proteger-pagina.js';
+    exigirPermissao('ver-permissoes'); // id já previsto no módulo de Sistema
+  </script>
+
+  <!-- Permissões da UI -->
+  <script type="module" src="permissoes.js"></script>
+  <!-- Controle do menu mobile (hambúrguer) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn      = document.getElementById('hamburguer');
+      const menu     = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) {
+        console.warn('[permissoes] Botão ou menu não encontrados');
+        return;
+      }
+
+      function fecharMenu(){
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded','false');
+        if (backdrop){
+          backdrop.classList.remove('visivel');
+          backdrop.hidden = true;
+        }
+        document.body.classList.remove('no-scroll');
+      }
+
+      function toggleMenu(ev){
+        if (ev) ev.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+
+        if (backdrop){
+          backdrop.hidden = !aberto;
+          backdrop.classList.toggle('visivel', aberto);
+        }
+
+        document.body.classList.toggle('no-scroll', aberto);
+      }
+
+      // Clicar no hambúrguer ABRE/FECHA o menu
+      btn.addEventListener('click', toggleMenu);
+
+      // Clicar no fundo escuro fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Clicar fora do menu fecha (no mobile)
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+          fecharMenu();
+        }
+      });
+
+      // Ao trocar pra tela grande, garante tudo fechado
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+  </script>
+
+
+  <!-- ===== NOVO: Script da seção RBAC da API (inline para não criar novo arquivo) ===== -->
+  <script>
+    (function(){
+      // Catálogo base de entidades (pode ajustar livremente)
+      const RBAC_CATALOGO = [
+        "leads","clientes","contratos","financeiro",
+        "dashboard","notificacoes","orcamentos","eventos","cliente",
+        "servicos","produtos","estoque","equipe","fornecedores",
+        "modelos","feiras","relatorios","pdv","configuracoes","bloco_tecnico"
+      ];
+
+      // Perfis conhecidos (fixos + dinâmicos do localStorage "perfis")
+      const PERFIS_KNOWN = (function(){
+        const fixos = ["Administrador","Vendedor","Financeiro","Maitre","Estoque","Responsável por Evento","Responsavel por Evento"];
+        let extras = [];
+        try {
+          const raw = JSON.parse(localStorage.getItem("perfis") || "[]");
+          extras = Array.isArray(raw) ? raw.map(p => (typeof p==="string"?p:(p?.nome))).filter(Boolean) : [];
+        } catch {}
+        const norm = s => String(s||"").replace("Responsavel por Evento","Responsável por Evento");
+        const set = new Set(fixos.map(norm).concat(extras.map(norm)));
+        return Array.from(set);
+      })();
+
+      function lerPermsAPI(){
+        try { return JSON.parse(localStorage.getItem("permissoesAPI") || "{}") || {}; }
+        catch { return {}; }
+      }
+      function salvarPermsAPI(m){
+        localStorage.setItem("permissoesAPI", JSON.stringify(m));
+      }
+
+      function renderRbacAPI(){
+        const host = document.getElementById("rbacApiEditor");
+        if (!host) return;
+
+        const atual = lerPermsAPI(); // { "entidade:acao": ["PerfilA","PerfilB"] }
+        const ACOES = ["get","post","put","delete"];
+
+        // Gera tabela
+        const linhas = RBAC_CATALOGO.map(ent => {
+          const cols = ACOES.map(acao => {
+            const key = `${ent}:${acao}`;
+            const val = Array.isArray(atual[key]) ? atual[key].join(", ") : "";
+            return `
+              <td>
+                <input type="text" data-key="${key}" placeholder="Perfis separados por vírgula" value="${val}">
+                <div class="hint">Sugestão: ${PERFIS_KNOWN.join(" · ")}</div>
+              </td>`;
+          }).join("");
+          return `<tr><th style="text-align:left">${ent}</th>${cols}</tr>`;
+        }).join("");
+
+        host.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Entidade</th>
+                <th>GET (listar)</th>
+                <th>POST (criar)</th>
+                <th>PUT (editar)</th>
+                <th>DELETE (excluir)</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+          </table>
+        `;
+
+        // Atualiza ícones lucide, se necessário
+        try { window.lucide?.createIcons?.(); } catch {}
+      }
+
+      function bindAcoesRbacAPI(){
+        const btnSalvar = document.getElementById("rbacApiSalvar");
+        const btnReset  = document.getElementById("rbacApiReset");
+        if (btnSalvar){
+          btnSalvar.addEventListener("click", () => {
+            const inputs = Array.from(document.querySelectorAll('#rbacApiEditor input[data-key]'));
+            const m = lerPermsAPI();
+            inputs.forEach(inp => {
+              const perfis = String(inp.value||"")
+                .split(",")
+                .map(s => s.trim())
+                .filter(Boolean);
+              m[inp.dataset.key] = perfis;
+            });
+            salvarPermsAPI(m);
+            alert("RBAC da API salvo com sucesso.");
+          });
+        }
+        if (btnReset){
+          btnReset.addEventListener("click", () => {
+            if (!confirm("Resetar RBAC da API para os padrões do código? (Isto remove a chave localStorage['permissoesAPI'])")) return;
+            localStorage.removeItem("permissoesAPI");
+            renderRbacAPI();
+            alert("RBAC resetado. As rotas passarão a usar os defaults internos do código.");
+          });
+        }
+      }
+
+      // Inicializa
+      document.addEventListener("DOMContentLoaded", () => {
+        renderRbacAPI();
+        bindAcoesRbacAPI();
+      });
+    })();
+  </script>
+   
+</body>
+</html>
+

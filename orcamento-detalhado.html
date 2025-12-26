@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+
+  <meta name="page-permission" content="page:orcamento-detalhado.html" />
+
+  <meta charset="UTF-8" />
+  <title>Orçamento Detalhado – Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="menu-lateral.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="orcamento-detalhado.css">
+
+  <style>
+    :root{
+      --sidebar-w:260px;
+    }
+
+    html, body{
+      margin:0;
+      padding:0;
+      background:#f8f1e8;
+      height:100%;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{
+      display:contents !important;
+    }
+
+    /* Desktop: menu fixo à esquerda */
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed;
+        inset:0 auto 0 0;
+        width:var(--sidebar-w);
+        z-index:999;
+      }
+      .wrapper{
+        padding-left:var(--sidebar-w);
+      }
+      main.conteudo-principal{
+        margin-left:0 !important;
+      }
+    }
+
+    /* Mobile: off-canvas */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      background:#c29a5d;
+      border:none;
+      color:#fff;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      z-index:1001;
+      display:none;
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999;
+        width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{
+        transform:translateX(0);
+      }
+      .wrapper{
+        padding-left:0;
+      }
+      main.conteudo-principal{
+        padding:20px;
+      }
+    }
+
+    /* Backdrop do menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:900;
+    }
+
+    /* Travar scroll quando menu aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+    <main class="conteudo-principal">
+
+
+    <h1 class="titulo-pagina"><i data-lucide="file-text"></i> Orçamento Detalhado</h1>
+
+    <div class="card">
+      <!-- VISUALIZAÇÃO DA PROPOSTA -->
+      <section class="secao">
+        <h2 class="subtitulo"><i data-lucide="eye"></i> Visualização da Proposta</h2>
+        <div id="visualizacao-status" class="visu-status"></div>
+
+        <div class="visualizacao-actions">
+          <button id="btnVerTudoViews" class="btn-sec btn-sm">
+            <i data-lucide="clock-3"></i> Ver todos 
+          </button>
+        </div>
+
+        <div id="lista-visualizacoes" class="visu-lista"></div>
+      </section>
+
+     <!-- DADOS DO CLIENTE & EVENTO -->
+<section class="secao">
+  <div class="sec-header">
+    <h2 class="subtitulo"><i data-lucide="user"></i> Dados do Cliente & Evento</h2>
+    <button id="btnEditarSalvar" class="btn btn-inline">
+      <i data-lucide="pencil"></i> Editar
+    </button>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <label>Nome</label>
+      <div id="lead-nome" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>WhatsApp</label>
+      <div id="lead-whatsapp" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Telefone</label>
+      <div id="lead-telefone" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>E-mail</label>
+      <div id="lead-email" class="campo-leitura">-</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <label>Data do Evento</label>
+      <div id="lead-data" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Horário</label>
+      <div id="lead-horario" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Local do Evento</label>
+      <div id="lead-local" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Qtd. Convidados</label>
+      <div id="lead-qtd" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Tipo de Evento</label>
+      <div id="lead-tipo" class="campo-leitura">-</div>
+    </div>
+    <div>
+      <label>Como nos conheceu</label>
+      <div id="lead-como" class="campo-leitura">-</div>
+    </div>
+  </div>
+
+  <div>
+    <label>Observações</label>
+    <div id="lead-observacoes" class="campo-leitura">-</div>
+  </div>
+</section>
+<!-- Responsável pelo lead -->
+<div class="dl-row">
+  <div class="dl-col">
+    <label>Responsável:</label>
+
+    <!-- leitura (todos veem) -->
+    <div id="resp-view" class="dl-value">—</div>
+
+    <!-- edição (só admins veem) -->
+    <div id="resp-admin" class="dl-edit" style="display:none; gap:8px; align-items:center; margin-top:6px;">
+      <select id="selResponsavel" style="min-width:260px;"></select>
+      <button id="btnSalvarResp" type="button" class="btn outline">
+        <i data-lucide="user-check"></i> Salvar
+      </button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- PRÓXIMO CONTATO -->
+<section class="secao" id="sec-proximo-contato">
+  <h2 class="subtitulo"><i data-lucide="calendar"></i> Próximo Contato</h2>
+
+  <div class="pcontato-card">
+    <div class="pcontato-row">
+      <label for="inpProximoContato" style="font-weight:700; color:#5C4033;">Data do próximo contato</label>
+      <input type="date" id="inpProximoContato" />
+      <button id="btnSalvarProximoContato" class="btn">
+        <i data-lucide="save"></i> Salvar
+      </button>
+    </div>
+    <div class="muted" style="margin-top:6px;">
+      Escolha a data e clique em <strong>Salvar</strong>.
+    </div>
+  </div>
+</section>
+
+
+      <!-- ITENS INCLUSOS -->
+      <section class="secao">
+        <h2 class="subtitulo"><i data-lucide="check-square"></i> Itens Inclusos</h2>
+        <div id="lista-itens" class="lista-blocos"><!-- via JS --></div>
+      </section>
+
+      <!-- VALORES -->
+      <section class="secao">
+        <h2 class="subtitulo"><i data-lucide="calculator"></i> Valores</h2>
+
+        <div class="tabela-valores">
+          <div class="tv-row">
+            <div>Valor total do cardápio</div>
+            <div id="val-subtotal" class="valor">R$ 0,00</div>
+          </div>
+          <div class="tv-row">
+            <div>Desconto</div>
+            <div id="val-desconto" class="valor">R$ 0,00</div>
+          </div>
+          <div class="tv-row destaque">
+            <div><strong>Valor total</strong></div>
+            <div id="val-total" class="valor"><strong>R$ 0,00</strong></div>
+          </div>
+          <div class="tv-row">
+            <div>Valor total por pessoa</div>
+            <div id="val-porpessoa" class="valor">R$ 0,00</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button id="btnEditarCardapio" class="btn">
+            <i data-lucide="pencil"></i> Editar cardápio / desconto
+          </button>
+        </div>
+      </section>
+
+      <!-- ANOTAÇÕES & HISTÓRICO -->
+      <div class="secao">
+  <div class="sec-header">
+    <h3 class="subtitulo"><i data-lucide="notebook-pen"></i> Anotações & Histórico</h3>
+  </div>
+
+  <div class="grid-2" id="historico-grid">
+  <!-- Coluna 1: Anotações -->
+  <div class="timeline">
+    <div class="nota-inline" style="margin-bottom:8px">
+      <input id="inpAnotacao" type="text" class="campo-leitura" placeholder="Escreva uma nova anotação…">
+      <button id="btnAddAnotacao" class="btn"><i data-lucide="plus"></i> Adicionar</button>
+    </div>
+    <div id="listaAnotacoes" class="scrollable"></div>
+  </div>
+
+  <!-- Coluna 2: Edições / outras interações -->
+  <div class="timeline">
+    <div class="hist-meta" style="margin-bottom:6px;color:#7a5633">
+      Mostrando alterações no orçamento (cardápio, descontos, dados do evento etc.)
+    </div>
+    <div id="listaEdicoes" class="scrollable"></div>
+  </div>
+</div>
+
+
+
+      <!-- AÇÕES FINAIS -->
+      <section class="secao acoes">
+                <div class="acoes-right">
+          <button id="btnAbrirProposta" class="btn-sec"><i data-lucide="external-link"></i> Abrir Proposta</button>
+          <button id="btnCopiarLink" class="btn-sec"><i data-lucide="copy"></i> Copiar Link</button>
+          <button id="btnWhats" class="btn-sec"><i data-lucide="send"></i> WhatsApp</button>
+    <button id="btnAgendarDeg" type="button" class="botao-dourado" onclick="openDegModal()">
+  Agendar degustação
+</button>
+
+          <button id="btnArquivar" class="btn danger"><i data-lucide="archive"></i> Arquivar orçamento</button>
+          <button id="btnCriarEvento" class="btn">
+  <i data-lucide="calendar-plus"></i> Criar evento
+</button>
+
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL: Visualizações -->
+<div id="modal-views" class="modal oculto" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i data-lucide="eye"></i> Visualizações da proposta</h3>
+      <button class="modal-close" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="views-list"><!-- via JS --></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" data-close>Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Arquivar orçamento -->
+<div id="modal-arquivar" class="modal oculto" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i data-lucide="archive"></i> Arquivar orçamento</h3>
+      <button class="modal-close" data-close><i data-lucide="x"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <label class="muted" style="display:block; margin-bottom:6px;">Motivo</label>
+      <select id="selMotivoArquivar" class="select-full"></select>
+
+      <div style="height:10px"></div>
+
+      <label class="muted" style="display:block; margin-bottom:6px;">Observações</label>
+      <textarea id="inpObsArquivar" rows="3" class="select-full" placeholder="Ex.: cliente desistiu por orçamento acima do previsto"></textarea>
+
+      <p class="muted" style="margin-top:10px">
+        Este lead será movido para <strong>Arquivados</strong> e o motivo ficará registrado no histórico.
+      </p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn danger" id="btnConfirmArquivar">
+        <i data-lucide="check"></i> Arquivar
+      </button>
+      <button class="btn-sec" data-close>Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL: Editar cardápio / desconto -->
+<div id="modal-cardapio" class="modal oculto" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3><i data-lucide="chef-hat"></i> Editar cardápio / desconto</h3>
+      <button class="modal-close" data-close><i data-lucide="x"></i></button>
+    </div>
+
+    <div class="modal-body">
+      <div class="tabs-mini">
+        <button data-tab="cardapio" class="on">Cardápios</button>
+        <button data-tab="adicionais">Adicionais</button>
+        <button data-tab="servicos">Serviços</button>
+      </div>
+
+      <div id="tab-cardapio" class="tab-mini on">
+        <div id="listaEditarCardapio" class="lista-editar"></div>
+      </div>
+
+      <div id="tab-adicionais" class="tab-mini">
+        <div id="listaEditarAdicionais" class="lista-editar"></div>
+      </div>
+
+      <div id="tab-servicos" class="tab-mini">
+        <div id="listaEditarServicos" class="lista-editar"></div>
+      </div>
+
+      <div class="linha"></div>
+
+      <div class="grid2">
+        <div>
+          <label class="muted">Desconto (R$)</label>
+          <input id="inpDescValor" type="text" inputmode="decimal" placeholder="0,00" />
+        </div>
+        <div>
+          <label class="muted">Desconto (%)</label>
+          <input id="inpDescPercent" type="number" min="0" max="100" step="0.01" placeholder="0" />
+        </div>
+      </div>
+      <!-- (removido o texto "Para adicionar novos itens, use o editor completo.") -->
+    </div>
+
+    <div class="modal-footer">
+      <button id="btnSalvarCardapio" class="btn"><i data-lucide="save"></i> Salvar alterações</button>
+      <button class="btn-sec" data-close>Cancelar</button>
+    </div>
+  </div>
+</div>
+<!-- Modal Degustação -->
+<div id="degModal" class="deg-modal hidden" aria-hidden="true">
+  <div class="deg-backdrop" data-close></div>
+  <div class="deg-dialog" role="dialog" aria-modal="true" aria-labelledby="degTitulo">
+    <div class="deg-header">
+      <h3 id="degTitulo"><i data-lucide="coffee"></i> Agendar degustação</h3>
+      <button class="deg-x" title="Fechar" data-close>&times;</button>
+    </div>
+
+    <div class="deg-body">
+      <label for="degSelect">Escolha uma data disponível:</label>
+      <select id="degSelect">
+        <option value="">Carregando…</option>
+      </select>
+
+      <!-- EXTRA: campos do casal (colar logo após o </select>) -->
+<div id="degExtra" class="grid2" style="display:none; margin-top:12px;">
+  <div class="form-group">
+    <label for="degNomCasal">Nome do casal</label>
+    <input id="degNomCasal" class="input" placeholder="Ex: Ana & Pedro">
+  </div>
+  <div class="form-group">
+    <label for="degAcomp">Acompanhantes (extras)</label>
+    <input id="degAcomp" class="input" type="number" min="0" value="0">
+  </div>
+  <div class="form-group">
+    <label for="degWhats">Telefone/WhatsApp</label>
+    <input id="degWhats" class="input" inputmode="numeric" placeholder="Somente números">
+  </div>
+  <div class="form-group" style="grid-column:1 / -1;">
+    <label for="degObs">Observações</label>
+    <textarea id="degObs" class="input" rows="2" placeholder="Anotações para a equipe..."></textarea>
+  </div>
+</div>
+
+
+      <div class="deg-help">
+        Não encontrou a data? 
+        <a href="degustacoes-disponiveis.html" target="_blank" rel="noopener">
+          abrir “Degustações disponíveis”
+        </a>
+      </div>
+    </div>
+
+    <div class="deg-footer">
+      <button class="btn outline" data-close>Cancelar</button>
+      <button id="degSalvar" class="btn">Agendar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module" src="menu-lateral.js"></script>
+
+<script>
+  // Toggle mobile (hamburguer + backdrop)
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      if (back) back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob){
+        setOpened(false);
+      }
+    }
+
+    if (!btn.hasAttribute('data-hamb-bound')){
+      btn.setAttribute('data-hamb-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    if (back && !back.hasAttribute('data-back-bound')){
+      back.setAttribute('data-back-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+<script src="agenda-bridge.js"></script>
+<script src="orcamento-detalhado.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:etiquetas.html">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Etiquetas PDV — Impressão Automática</title>
+
+  <!-- Estilos globais + menu (ordem importa) -->
+  <link rel="stylesheet" href="./kgb-common.css"/>
+  <link rel="stylesheet" href="./menu-lateral.css"/>
+
+  <!-- Ícones + utilitários comuns -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+ <script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+
+
+  <style>
+    :root{ --sidebar-w:260px; }
+    html, body{ margin:0; padding:0; background:#f8f1e8; height:100%; }
+
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+
+    main.conteudo-principal{
+      flex:1; min-height:100vh; overflow-y:auto; width:100% !important; max-width:none !important;
+      margin:0 !important; padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+    .conteudo-central{ display:contents !important; }
+
+    @media (min-width:769px){
+      #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:999; }
+      .wrapper{ padding-left:var(--sidebar-w); }
+    }
+
+    .container{ max-width:1100px; margin:0 auto; }
+    .card{ background:#fff; border-radius:16px; box-shadow:var(--shadow-1); padding:14px; }
+    .h.h1{ font-size:26px; font-weight:800; color:#5a3e2b; font-family:"Playfair Display", serif; margin:6px 0 2px; }
+    .h.h2{ font-size:18px; font-weight:600; margin:0 0 16px; color:#4b3626; }
+    .h-sub{ color:#6b4e30; font-size:13px; margin-bottom:18px; max-width:600px; }
+
+    .row{ display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; }
+    .col{ flex:1; min-width:180px; }
+
+    label{ display:block; font-size:13px; color:#5b4637; margin-bottom:8px; }
+    .input{
+      width:100%; padding:9px 11px; border-radius:10px; border:1px solid #d9c3a6;
+      font-size:14px; background:#fdf9f4;
+    }
+    .input:focus{ outline:2px solid #f1dec7; outline-offset:1px; }
+
+    .pill-toggle{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:4px 8px; border-radius:999px; border:1px solid #d9c3a6;
+      background:#fbf1e4; font-size:12px; cursor:pointer;
+    }
+    .pill-toggle input{ accent-color:#c28d4c; }
+
+    .badge{
+      display:inline-flex; align-items:center; gap:6px; padding:4px 9px;
+      border-radius:999px; font-size:11px; background:#fef3c7; color:#854d0e;
+    }
+    .badge i{ width:14px; height:14px; }
+
+    .section{ margin-top:18px; }
+    .section-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; }
+    .section-header h3{ margin:0; font-size:15px; font-weight:600; color:#4b3626; }
+
+    .table-like{
+      border-radius:14px; border:1px solid #ecd7bd; background:#fdf7ef;
+      overflow:hidden; font-size:13px;
+    }
+    .table-head, .table-row{ display:grid; grid-template-columns:2fr 1fr 1fr 72px; align-items:center; padding:8px 10px; gap:8px; }
+    .table-head{ background:#f4e4cf; font-weight:600; color:#5a4634; }
+    .table-row:nth-child(odd){ background:#fdf9f3; }
+    .table-row:nth-child(even){ background:#f8efe4; }
+
+    @media (max-width:720px){
+      .table-head{ display:none; }
+      .table-row{
+        grid-template-columns:1fr 1fr;
+      }
+      .col-produto{ grid-column:1 / -1; font-weight:600; }
+      .col-info{ font-size:12px; color:#6b5545; }
+      .col-acoes{ text-align:right; }
+    }
+
+    .btn{
+      display:inline-flex; align-items:center; gap:6px;
+      border-radius:999px; border:none; padding:7px 12px;
+      font-size:13px; cursor:pointer;
+      background:#c28d4c; color:#fff;
+      box-shadow:0 2px 8px rgba(0,0,0,.18);
+    }
+    .btn i{ width:16px; height:16px; }
+    .btn.sec{
+      background:#f7efe3; color:#6b4e30; box-shadow:none; border:1px solid #e3d1b7;
+    }
+
+    .lista-fila{
+      max-height:220px; overflow:auto;
+      background:#fefbf6; border-radius:12px; border:1px dashed #e0c7a0;
+      padding:8px;
+    }
+    .item-fila{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:6px 8px; border-radius:10px; margin-bottom:4px;
+      background:#fff;
+      font-size:12px;
+    }
+    .item-fila-main{ display:flex; flex-direction:column; gap:2px; }
+    .item-fila-titulo{ font-weight:600; color:#4b3626; }
+    .item-fila-sub{ color:#7a624f; font-size:11px; }
+
+    .pill-mini{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:3px 7px; border-radius:999px; background:#f3e8ff;
+      color:#5b21b6; font-size:11px;
+    }
+    .pill-mini.danger{ background:#fee2e2; color:#991b1b; }
+    .pill-mini i{ width:13px; height:13px; }
+
+    .hint{ font-size:11px; color:#7c6a58; margin-top:6px; }
+    .hint strong{ color:#4b3626; }
+
+    .footer{
+      margin-top:26px; display:flex; justify-content:space-between; align-items:center;
+      font-size:12px; color:#7a624f; gap:12px; flex-wrap:wrap;
+    }
+    .footer-left{ display:flex; align-items:center; gap:8px; }
+    .footer-left i{ width:16px; height:16px; }
+    .footer-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+    .spinner{ width:16px; height:16px; border-radius:999px; border:2px solid #f7e1bc; border-top-color:#c28d4c; animation:spin .8s linear infinite; }
+    @keyframes spin{ to { transform:rotate(360deg); } }
+
+    .pill-status{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; background:#ecfdf3; color:#166534; }
+    .pill-status i{ width:14px; height:14px; }
+
+    /* caixa do modo bluetooth/worker */
+    .bt-box{ border-radius:14px; padding:10px 11px; background:#f8fafc; border:1px solid #dbeafe; display:flex; flex-direction:column; gap:8px; }
+
+    .chip-radio-group{
+      display:flex; gap:8px; flex-wrap:wrap;
+    }
+    .chip-radio{
+      display:inline-flex; align-items:center; gap:6px;
+      border-radius:999px; border:1px solid #e5d2b5;
+      padding:5px 10px; font-size:12px; background:#fdf7f0;
+      cursor:pointer;
+    }
+    .chip-radio input{ accent-color:#c28d4c; }
+
+    .pill-small{
+      display:inline-flex; align-items:center; gap:4px; padding:3px 7px;
+      border-radius:999px; font-size:11px; background:#eef2ff; color:#3730a3;
+    }
+    .pill-small i{ width:13px; height:13px; }
+
+    .badge-warn{
+      display:inline-flex; align-items:center; gap:6px; padding:3px 8px;
+      border-radius:999px; font-size:11px; background:#fef3c7; color:#92400e;
+    }
+
+    .pill-meta{
+      display:inline-flex; align-items:center; gap:6px; padding:4px 8px;
+      border-radius:999px; font-size:11px; background:#eff6ff; color:#1d4ed8;
+    }
+
+    .list{ max-height:300px; overflow:auto; border:1px solid #eee; border-radius:12px; padding:8px; }
+    .tag{ display:inline-block; padding:2px 8px; border-radius:999px; background:#eee; font-size:12px; }
+    .tag.warn{ background:#fee2e2; color:#991b1b; }
+    .muted{ color:#666; font-size:12px; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    .preview-area{ display:flex; flex-wrap:wrap; gap:10px; }
+    .label-prev{ display:flex; align-items:center; justify-content:center; border:1px dashed #bbb; background:#fff; border-radius:8px; font-weight:800; }
+
+    @media print{
+      body{ background:#fff; }
+      #menuLateral, .no-print, header, nav { display:none !important; }
+      main{ margin:0; padding:0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Botão Mobile (hambúrguer) -->
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+
+<div class="wrapper">
+  <aside id="menuLateral" class="no-print"></aside>
+
+<!-- Backdrop para fechar o menu no mobile -->
+<div id="menuBackdrop" hidden></div>
+
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+      <div class="container">
+        <div class="card">
+          <header style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:16px;">
+            <div>
+              <div class="badge">
+                <i data-lucide="printer"></i>
+                Etiquetas inteligentes
+              </div>
+              <h1 class="h h1">Impressão automática no PDV</h1>
+              <p class="h-sub">
+                Configure a impressão automática de etiquetas de itens assim que uma venda é registrada no balcão (PDV).
+              </p>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+              <span class="pill-status">
+                <i data-lucide="check-circle-2"></i>
+                Beta interno
+              </span>
+              <button class="btn sec no-print" type="button" id="btnDiag">
+                <i data-lucide="activity"></i>
+                Diagnóstico rápido
+              </button>
+            </div>
+          </header>
+
+          <section class="section">
+            <div class="section-header">
+              <h3>Configuração básica</h3>
+              <span class="badge">
+                <i data-lucide="settings-2"></i>
+                Personalize por evento e impressora
+              </span>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <label>Evento
+                  <select id="selEvento" class="input" style="min-width:320px"></select>
+                </label>
+
+                <label>Tamanho da etiqueta
+                  <div class="row" style="gap:6px">
+                    <input id="wMM" class="input" type="number" step="1" value="50" style="width:90px"> mm ×
+                    <input id="hMM" class="input" type="number" step="1" value="50" style="width:90px"> mm
+                  </div>
+                  <div class="muted">Ex.: 50×50 mm (5×5 cm).</div>
+                </label>
+
+                <label>Modo de impressão
+                  <select id="selModo" class="input">
+                    <option value="browser">Impressora via navegador (padrão)</option>
+                    <option value="bt">Impressora Bluetooth (worker PDV)</option>
+                  </select>
+                </label>
+
+                <div class="bt-box" id="btBox" style="display:none; margin-top:10px;">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                    <div>
+                      <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                        <i data-lucide="smartphone" style="width:16px; height:16px;"></i>
+                        <strong>Worker PDV (Bluetooth)</strong>
+                      </div>
+                      <p class="muted" style="margin:0;">
+                        Conecte um dispositivo PDV próximo à impressora Bluetooth. Ele ficará escutando novas vendas e imprimindo as etiquetas automaticamente.
+                      </p>
+                    </div>
+                    <button class="btn sec no-print" id="btnWorkerConnect" type="button">
+                      <i data-lucide="bluetooth"></i>
+                      Conectar impressora
+                    </button>
+                  </div>
+                  <div class="hint" style="margin-top:6px;">
+                    <strong>Dica:</strong> use um tablet ou celular fixo no balcão com o navegador aberto nesta tela em modo worker.
+                  </div>
+                </div>
+
+                <label style="margin-top:10px;">
+                  <span class="pill-toggle">
+                    <input id="autoPrint" type="checkbox" checked>
+                    Imprimir automaticamente sempre que houver nova venda
+                  </span>
+                </label>
+
+                <label style="margin-top:8px;">Modelo da impressora
+                  <select id="selModelo" class="input">
+                    <option value="tspl">TSPL / TSC / Elgin L42</option>
+                    <option value="cpcl">CPCL / Zebra</option>
+                  </select>
+                </label>
+
+                <p class="hint">
+                  <strong>Importante:</strong> deixe esta tela aberta no PDV para garantir a impressão automática. Se preferir, abra em outra aba ou janela.
+                </p>
+              </div>
+
+              <div class="col">
+                <label>Fila de impressão
+                  <div class="lista-fila" id="listaFila"></div>
+                </label>
+                <div class="hint">
+                  Itens são inseridos nesta fila sempre que uma venda é fechada no PDV. Você pode pausar e retomar a impressão a qualquer momento.
+                </div>
+
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                  <button type="button" class="btn no-print" id="btnImprimirTudo">
+                    <i data-lucide="printer"></i>
+                    Imprimir fila agora
+                  </button>
+                  <button type="button" class="btn sec no-print" id="btnLimparFila">
+                    <i data-lucide="trash-2"></i>
+                    Limpar fila
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-header">
+              <h3>Pré-visualização da etiqueta</h3>
+              <span class="pill-meta">
+                <i data-lucide="layout-template"></i>
+                Layout padrão do sistema
+              </span>
+            </div>
+
+            <div class="preview-area" id="previewArea">
+              <!-- prévias geradas via JS -->
+            </div>
+
+            <p class="hint">
+              A pré-visualização é aproximada. O resultado final pode variar ligeiramente conforme a impressora e densidade configurada.
+            </p>
+          </section>
+
+          <section class="section">
+            <div class="section-header">
+              <h3>Fila interna (debug)</h3>
+              <span class="badge-warn">
+                <i data-lucide="bug"></i>
+                Apenas para suporte técnico
+              </span>
+            </div>
+            <div class="list mono" id="debugFila"></div>
+          </section>
+
+          <footer class="footer no-print">
+            <div class="footer-left">
+              <i data-lucide="info"></i>
+              <span>Impressão automática de etiquetas integrada ao fluxo do PDV.</span>
+            </div>
+            <div class="footer-right">
+              <span class="pill-small">
+                <i data-lucide="clock"></i>
+                Atualiza em tempo real
+              </span>
+              <span class="pill-small">
+                <i data-lucide="shield-check"></i>
+                Apenas itens do evento selecionado
+              </span>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- NOSSO JS PRINCIPAL (agora externo) -->
+<script src="etiquetas.js"></script>
+
+<script>
+// INÍCIO PATCH kiosk
+
+// Se o modo "kiosk" estiver ligado no navegador, ele impede window.open
+// Então fazemos um truque: abrimos uma nova janela com javascript:void(0)
+(() => {
+  const KIOSK_TRICK_URL = "javascript:void(0)";
+
+  const originalOpen = window.open;
+  window.open = function patchedOpen(url, name, features){
+    try{
+      if (url === '' || url === undefined || url === null){
+        // Mantém suporte ao uso original window.open('', 'etq_print', '...')
+        url = KIOSK_TRICK_URL;
+      }
+      const win = originalOpen.call(window, url, name, features);
+      return win;
+    } catch(e){
+      console.error('Falha ao abrir popup em modo kiosk:', e);
+      alert('Seu navegador está em modo kiosk e bloqueou a janela de impressão. Desative o modo kiosk para imprimir.');
+      return null;
+    }
+  };
+})();
+
+// FIM PATCH kiosk
+</script>
+
+<!-- Menu lateral (módulo + fallback) --><script>
+(function () {
+  if (window.__kgbMenuLoaderCalled) return;
+  window.__kgbMenuLoaderCalled = true;
+
+  function loadMenuSide() {
+    import("./menu-lateral.js").catch((err) => {
+      console.warn("Falha ao carregar menu-lateral.js como módulo", err);
+      const s = document.createElement("script");
+      s.src = "./menu-lateral.js";
+      s.defer = true;
+      document.head.appendChild(s);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadMenuSide);
+  } else {
+    loadMenuSide();
+  }
+})();
+</script>
+
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim();
+
+  if (permissao) {
+    guard({ permissao });
+  }
+
+  aplicarPermissoesNaTela();
+</script>
+
+<script type="module" src="./menu-lateral.js"></script>
+</body></html>
+

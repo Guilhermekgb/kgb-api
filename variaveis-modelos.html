@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:variaveis-modelos.html">
+  <meta charset="UTF-8" />
+  <title>Variáveis dos Modelos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) + Guard RBAC === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+    var PROD_API = "https://kgb-api.onrender.com";
+    var DEV_API  = "http://127.0.0.1:3333";
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host==="localhost"||host==="127.0.0.1") ? DEV_API
+             : PROD_API;
+    try{ localStorage.setItem("API_BASE", base); }catch(e){}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH __API_BASE__ (auto) + Guard RBAC === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root {
+      --bg:#f8f1e8; --card:#ffffff; --ink:#5a3e2b; --muted:#8e6b42;
+      --brand:#c29a5d; --brand-2:#a9864f; --line:#eadfce;
+    }
+    html, body { margin:0; padding:0; background:var(--bg); height:100%; color:var(--ink); }
+    .wrapper { display:flex; min-height:100vh; }
+    #menuLateral { flex-shrink:0; background-color:#5a3e2b; min-width:240px; }
+    main.conteudo-principal { flex:1; padding:40px; overflow:auto; }
+    .conteudo-central { max-width:1100px; margin:0 auto; }
+    /* Botão hambúrguer (mobile) */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      background:var(--brand);
+      border:none;
+      color:#fff;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      z-index:1001;
+      display:none;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+      cursor:pointer;
+    }
+
+    /* Backdrop do menu no mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:998;
+    }
+
+    /* Quando o menu está aberto, trava o scroll do fundo */
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+    /* Ajustes de layout no mobile */
+    @media (max-width:768px){
+      #hamburguer{
+        display:block;
+      }
+
+      #menuLateral{
+        position:fixed;
+        top:0;
+        left:0;
+        height:100vh;
+        width:260px;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999;
+      }
+
+      #menuLateral.aberto{
+        transform:translateX(0);
+      }
+
+      main.conteudo-principal{
+        padding:20px;
+        margin-left:0;
+      }
+    }
+
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;}
+    .titulo{display:flex;align-items:center;gap:10px;}
+    .titulo h1{margin:0;font-size:28px;}
+    .acoes-topo{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:14px;box-shadow:0 6px 12px rgba(0,0,0,0.06);}
+    .btn:hover{background:var(--brand-2);}
+    .btn-outline{background:transparent;color:var(--brand);border:1px solid var(--brand);}
+    .btn-outline:hover{color:#fff;background:var(--brand);}
+
+    .filtros{display:grid;grid-template-columns: 1fr 220px;gap:10px;margin-bottom:14px;}
+    #campoBusca,#filtroCategoria{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);font-size:15px;background:#fff;}
+
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+    table{width:100%;border-collapse:collapse;}
+    th,td{padding:14px 16px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle;}
+    th{background:#f6ede1;font-weight:600;}
+    tr:hover td{background:#fff9f2;}
+    code{background:#fff3e0;padding:3px 6px;border-radius:6px;cursor:pointer;}
+    .categoria-pill{background:#f4e8d9;color:#8e6b42;padding:4px 8px;border-radius:999px;font-size:12px;}
+    .footer-legend{margin-top:14px;font-size:13px;color:#7a624f;}
+
+    /* botão Hamburguer (mobile) */
+    #hamburguer{position:fixed;top:10px;left:10px;z-index:60;background:#c29a5d;border:none;color:#fff;border-radius:8px;padding:6px 10px;display:none;}
+    @media (max-width: 768px){
+      #hamburguer{display:block;}
+      #menuLateral{position:fixed;transform:translateX(-100%);transition:.3s;z-index:59;width:260px;}
+      #menuLateral.aberto{transform:translateX(0);}
+      main.conteudo-principal{padding:20px;}
+    }
+
+    /* ===== Modais ===== */
+    .modal-sombra{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:1000;}
+    .modal-wrap{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.18);width:min(720px,92vw);padding:20px;}
+    .modal-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .modal-top h3{margin:0;font-size:20px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid-1{display:grid;grid-template-columns:1fr;gap:12px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+    .inp, .sel{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);font-size:15px;background:#fff}
+
+    .btn-icon{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+    .btn-icon:hover{background:#fbf5ee;}
+    .muted{color:#8e6b42;}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;background:#fff;}
+    .pill .x{cursor:pointer;opacity:.7;}
+    .pill .x:hover{opacity:1;}
+    .list-inline{display:flex;gap:6px;flex-wrap:wrap;}
+    .row-actions{display:flex;gap:6px;justify-content:flex-end;}
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+    <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <div class="header">
+          <div class="titulo"><i data-lucide="code"></i><h1>Gerenciar Variáveis dos Modelos</h1></div>
+          <div class="acoes-topo">
+            <button class="btn btn-outline" id="btnGerirCats"><i data-lucide="folder-cog"></i> Categorias</button>
+            <button class="btn" id="btnNovaVar"><i data-lucide="plus"></i> Nova variável</button>
+            <button class="btn btn-outline" id="btnExportar"><i data-lucide="download"></i> Exportar</button>
+          </div>
+        </div>
+
+        <div class="filtros">
+          <input type="text" id="campoBusca" placeholder="Buscar por variável ou descrição..." />
+          <select id="filtroCategoria">
+            <option value="">Todas as categorias</option>
+            <!-- opções são preenchidas dinamicamente -->
+          </select>
+        </div>
+
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:220px;">Variável</th>
+                <th>Descrição</th>
+                <th style="width:240px;">Exemplo</th>
+                <th style="width:160px;">Categoria</th>
+                <th style="width:160px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaVariaveis"></tbody>
+          </table>
+        </div>
+
+        <div class="footer-legend">
+          Dica: clique no código da variável ou no ícone <i data-lucide="copy"></i> para copiar <code>{{chave}}</code>.
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Carrega o menu como MÓDULO por import dinâmico -->
+  <script>
+    (async () => {
+      try { await import('./menu-lateral.js'); } catch (e) { console.warn('menu-lateral fallback:', e); }
+    })();
+  </script>
+<!-- === INÍCIO PATCH LUCIDE/ACESSIBILIDADE === -->
+<script>
+  // Inicializa ícones sem quebrar caso a CDN demore
+  (function initIcons(){
+    try { if (window.lucide?.createIcons) window.lucide.createIcons(); } catch(e){}
+    // Re-tenta após o load da página (garantia)
+    window.addEventListener('load', function(){
+      try { if (window.lucide?.createIcons) window.lucide.createIcons(); } catch(e){}
+    });
+  })();
+
+  // Melhor acessibilidade do menu lateral (Esc fecha em mobile)
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      var m = document.getElementById('menuLateral');
+      if (m?.classList?.contains('aberto')) m.classList.remove('aberto');
+    }
+  });
+</script>
+<!-- === FIM PATCH LUCIDE/ACESSIBILIDADE === -->
+
+  <script>
+    // ======================= HELPERS & CANON =======================
+    const CATS_CANON = ['Cliente','Empresa','Evento','Financeiro','Proposta','Contrato/Recibo','Sistema'];
+    const canon = (s) => {
+      const v = String(s||'').trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      const map = CATS_CANON.map(c => ({ c, n: c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'') }));
+      const hit = map.find(x => x.n === v) || map.find(x => v && (x.n.includes(v) || v.includes(x.n)));
+      return hit ? hit.c : (String(s||'Outros').trim() || 'Outros');
+    };
+    const $  = (s, el=document) => el.querySelector(s);
+    const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+    const getLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
+    const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+    const uniq = (arr) => Array.from(new Set(arr));
+
+    // ======================= SEED =======================
+    const variaveisSeed = [
+      {"chave":"nomeCliente","descricao":"Nome completo do cliente","exemplo":"Ana Paula","categoria":"Cliente"},
+      {"chave":"rgCliente","descricao":"RG do cliente","exemplo":"12.345.678-9","categoria":"Cliente"},
+      {"chave":"cpfCliente","descricao":"CPF do cliente","exemplo":"123.456.789-00","categoria":"Cliente"},
+      {"chave":"cnpjCliente","descricao":"CNPJ do cliente (se PJ)","exemplo":"12.345.678/0001-90","categoria":"Cliente"},
+      {"chave":"enderecoCliente","descricao":"Endereço do cliente","exemplo":"Rua das Flores, 100 - Centro","categoria":"Cliente"},
+      {"chave":"telefoneCliente","descricao":"Telefone do cliente","exemplo":"(11) 2222-3333","categoria":"Cliente"},
+      {"chave":"whatsappCliente","descricao":"WhatsApp do cliente","exemplo":"(11) 9 8888-7777","categoria":"Cliente"},
+      {"chave":"emailCliente","descricao":"E-mail do cliente","exemplo":"ana@email.com","categoria":"Cliente"},
+      {"chave":"cidadeCliente","descricao":"Cidade do cliente","exemplo":"São Paulo","categoria":"Cliente"},
+      {"chave":"estadoCliente","descricao":"Estado do cliente (UF)","exemplo":"SP","categoria":"Cliente"},
+
+      {"chave":"nomeEmpresa","descricao":"Nome da empresa (buffet)","exemplo":"Buffet Flor de Lis","categoria":"Empresa"},
+      {"chave":"cnpjEmpresa","descricao":"CNPJ da empresa","exemplo":"98.765.432/0001-12","categoria":"Empresa"},
+      {"chave":"enderecoEmpresa","descricao":"Endereço da empresa","exemplo":"Av. Paulista, 2000 - Bela Vista","categoria":"Empresa"},
+      {"chave":"emailEmpresa","descricao":"E-mail da empresa","exemplo":"contato@buffet.com.br","categoria":"Empresa"},
+      {"chave":"whatsappEmpresa","descricao":"WhatsApp comercial","exemplo":"(11) 9 9999-0000","categoria":"Empresa"},
+      {"chave":"telefoneEmpresa","descricao":"Telefone comercial","exemplo":"(11) 4002-8922","categoria":"Empresa"},
+      {"chave":"siteEmpresa","descricao":"Site da empresa","exemplo":"https://www.buffet.com.br","categoria":"Empresa"},
+      {"chave":"pixEmpresa","descricao":"Chave PIX","exemplo":"cnpj@buffet.com.br","categoria":"Empresa"},
+      {"chave":"bancoEmpresa","descricao":"Banco para pagamento","exemplo":"Banco do Brasil","categoria":"Empresa"},
+      {"chave":"agenciaEmpresa","descricao":"Agência","exemplo":"1234-5","categoria":"Empresa"},
+      {"chave":"contaEmpresa","descricao":"Conta","exemplo":"98765-4","categoria":"Empresa"},
+
+      {"chave":"tipoEvento","descricao":"Tipo do evento","exemplo":"Casamento","categoria":"Evento"},
+      {"chave":"dataEvento","descricao":"Data do evento","exemplo":"15/11/2025","categoria":"Evento"},
+      {"chave":"horaEvento","descricao":"Horário do evento","exemplo":"19:00","categoria":"Evento"},
+      {"chave":"horaCerimonia","descricao":"Horário da cerimônia (se houver)","exemplo":"18:00","categoria":"Evento"},
+      {"chave":"horaFesta","descricao":"Horário da festa/recepção","exemplo":"20:00","categoria":"Evento"},
+      {"chave":"localEvento","descricao":"Local do evento","exemplo":"Espaço Flor de Lis","categoria":"Evento"},
+      {"chave":"enderecoEvento","descricao":"Endereço do local do evento","exemplo":"Rua Jardim, 50 - Centro","categoria":"Evento"},
+      {"chave":"cidadeEvento","descricao":"Cidade do evento","exemplo":"Campinas","categoria":"Evento"},
+      {"chave":"estadoEvento","descricao":"Estado do evento (UF)","exemplo":"SP","categoria":"Evento"},
+      {"chave":"qtdConvidados","descricao":"Quantidade de convidados","exemplo":"150","categoria":"Evento"},
+      {"chave":"duracaoEvento","descricao":"Duração estimada","exemplo":"6 horas","categoria":"Evento"},
+      {"chave":"responsavelLocal","descricao":"Contato do espaço","exemplo":"Marina (gerente)","categoria":"Evento"},
+      {"chave":"cardapioSelecionado","descricao":"Nome do cardápio principal","exemplo":"Finger Food Premium","categoria":"Evento"},
+      {"chave":"itensSelecionados","descricao":"Itens/serviços selecionados (texto)","exemplo":"• Buffet completo\n• Bebidas","categoria":"Evento"},
+      {"chave":"adicionaisSelecionados","descricao":"Adicionais selecionados (texto)","exemplo":"• Ilha de Massas\n• Hora extra","categoria":"Evento"},
+      {"chave":"servicosSelecionados","descricao":"Serviços/pacotes (texto)","exemplo":"• Barman\n• DJ","categoria":"Evento"},
+      {"chave":"produtosSelecionados","descricao":"Produtos (texto)","exemplo":"• Taças\n• Velas","categoria":"Evento"},
+      {"chave":"observacoes","descricao":"Observações gerais","exemplo":"Mesa dos noivos com arranjos brancos","categoria":"Evento"},
+      {"chave":"observacoes1","descricao":"Observações (campo 1)","exemplo":"Mesa do bolo com velas azuis","categoria":"Evento"},
+      {"chave":"observacoes2","descricao":"Observações (campo 2)","exemplo":"Cadeiras Tiffany na área externa","categoria":"Evento"},
+
+      {"chave":"subtotal","descricao":"Subtotal (antes dos descontos)","exemplo":"R$ 15.000,00","categoria":"Financeiro"},
+      {"chave":"descontoPorcento","descricao":"Desconto em porcentagem","exemplo":"10%","categoria":"Financeiro"},
+      {"chave":"descontoReais","descricao":"Desconto em reais","exemplo":"R$ 500,00","categoria":"Financeiro"},
+      {"chave":"valorTotal","descricao":"Total do contrato/proposta","exemplo":"R$ 13.500,00","categoria":"Financeiro"},
+      {"chave":"valorPorPessoa","descricao":"Total ÷ convidados","exemplo":"R$ 90,00","categoria":"Financeiro"},
+      {"chave":"valorEntrada","descricao":"Entrada/sinal","exemplo":"R$ 3.000,00","categoria":"Financeiro"},
+      {"chave":"dataPagamentoEntrada","descricao":"Data do pagamento da entrada","exemplo":"01/10/2025","categoria":"Financeiro"},
+      {"chave":"saldoRestante","descricao":"Saldo restante","exemplo":"R$ 10.500,00","categoria":"Financeiro"},
+      {"chave":"dataPagamentoContrato","descricao":"Data de quitação do contrato","exemplo":"05/11/2025","categoria":"Financeiro"},
+      {"chave":"formaPagamento","descricao":"Forma de pagamento","exemplo":"PIX","categoria":"Financeiro"},
+      {"chave":"parcelas","descricao":"Nº de parcelas","exemplo":"3","categoria":"Financeiro"},
+      {"chave":"valorParcela","descricao":"Valor da parcela","exemplo":"R$ 3.500,00","categoria":"Financeiro"},
+
+      {"chave":"linkProposta","descricao":"Link público da proposta","exemplo":"https://exemplo.com/p/abc123","categoria":"Proposta"},
+      {"chave":"numeroProposta","descricao":"Número/ID da proposta","exemplo":"PROP-2025-001","categoria":"Proposta"},
+      {"chave":"dataValidadeProposta","descricao":"Validade da proposta","exemplo":"7 dias","categoria":"Proposta"},
+
+      {"chave":"numeroContrato","descricao":"Número/ID do contrato","exemplo":"CTR-2025-045","categoria":"Contrato/Recibo"},
+      {"chave":"dataAssinatura","descricao":"Data de assinatura","exemplo":"20/09/2025","categoria":"Contrato/Recibo"},
+      {"chave":"referente","descricao":"Referente (usado em recibos)","exemplo":"Serviços de buffet para casamento","categoria":"Contrato/Recibo"},
+
+      {"chave":"dataAtual","descricao":"Data atual","exemplo":"28/08/2025","categoria":"Sistema"},
+      {"chave":"horaAtual","descricao":"Hora atual","exemplo":"14:32","categoria":"Sistema"},
+      {"chave":"usuarioAtual","descricao":"Usuário atual (quem gerou)","exemplo":"Carol","categoria":"Sistema"}
+    ];
+
+    // ======================= STORE & CATEGORIAS =======================
+    function carregarVariaveis() {
+      let lista = getLS("variaveis_modelos", []);
+      if (!Array.isArray(lista)) lista = [];
+
+      const byKey = new Map(lista.map(v => [String(v.chave), v]));
+      // mescla seed sem sobrescrever campos já existentes
+      variaveisSeed.forEach(v => {
+        const cur = byKey.get(v.chave);
+        const novo = { ...v, ...(cur||{}) }; // prioriza o que o usuário já tinha
+        novo.categoria = canon(novo.categoria);
+        byKey.set(v.chave, novo);
+      });
+
+      // normaliza categorias
+      for (const [k, v] of byKey) v.categoria = canon(v.categoria);
+
+      const arr = Array.from(byKey.values());
+      setLS("variaveis_modelos", arr);
+
+      // garante store de categorias
+      const catsAtuais = carregarCategorias();
+      const catsLista = uniq(arr.map(v => canon(v.categoria)).concat(catsAtuais).concat(CATS_CANON)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      salvarCategorias(catsLista);
+
+      return arr;
+    }
+
+    function carregarCategorias(){
+      let cats = getLS("variaveis_categorias", []);
+      if (!Array.isArray(cats)) cats = [];
+      // assegura canônicas
+      cats = uniq(cats.concat(CATS_CANON)).map(canon).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      setLS("variaveis_categorias", cats);
+      return cats;
+    }
+    function salvarCategorias(cats){
+      setLS("variaveis_categorias", uniq(cats.map(canon)).sort((a,b)=>a.localeCompare(b,'pt-BR')));
+    }
+
+    function categoriasDaLista(lista){
+      const cats = carregarCategorias();
+      // garante que tudo que existe nas variáveis também está registrado
+      const fromVars = uniq(lista.map(v => canon(v.categoria)));
+      const merged = uniq(cats.concat(fromVars, CATS_CANON)).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      salvarCategorias(merged);
+      return merged;
+    }
+
+    // ======================= RENDER UI =======================
+    function popularSelectCategorias(lista){
+      const sel = document.getElementById('filtroCategoria');
+      const atual = sel.value;
+      const cats = categoriasDaLista(lista);
+      sel.innerHTML = '<option value="">Todas as categorias</option>' +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (cats.includes(atual)) sel.value = atual;
+    }
+
+    function renderizarTabela(lista){
+      const corpo = document.getElementById("tabelaVariaveis");
+      corpo.innerHTML = "";
+      if (!lista.length){
+        corpo.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#8e6b42;">Nenhuma variável encontrada.</td></tr>';
+        try { lucide.createIcons(); } catch {}
+        return;
+      }
+      corpo.innerHTML = lista.map(v => {
+        const exemplo = v.exemplo ? String(v.exemplo).replace(/\n/g,"<br>") : "-";
+        const cat = `<span class="categoria-pill">${canon(v.categoria)}</span>`;
+        return `
+          <tr>
+            <td><code data-copy="{{${v.chave}}}">{{${v.chave}}}</code></td>
+            <td>${v.descricao || "-"}</td>
+            <td>${exemplo}</td>
+            <td>${cat}</td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon" title="Editar" data-editar="${v.chave}"><i data-lucide="pencil"></i></button>
+                <button class="btn-icon" title="Copiar" onclick="copiarToken('${v.chave}')"><i data-lucide="copy"></i></button>
+                <button class="btn-icon" title="Excluir" data-excluir="${v.chave}"><i data-lucide="trash-2"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      try { lucide.createIcons(); } catch {}
+    }
+
+    function aplicarBusca(){
+      const termo = document.getElementById("campoBusca").value.toLowerCase().trim();
+      const selCat = document.getElementById("filtroCategoria").value;
+      const todas = getLS("variaveis_modelos", []);
+      const alvoCat = selCat ? canon(selCat) : "";
+      const filtradas = todas.filter(v => {
+        const catOk = !selCat || canon(v.categoria) === alvoCat;
+        const t = (v.chave + " " + (v.descricao||"")).toLowerCase();
+        return catOk && (!termo || t.includes(termo));
+      });
+      renderizarTabela(filtradas);
+      // mantém select coerente
+      popularSelectCategorias(todas);
+      if (selCat) document.getElementById("filtroCategoria").value = selCat;
+    }
+
+    // ======================= COPY =======================
+    function copiarToken(chave) {
+      const token = `{{${chave}}}`;
+      navigator.clipboard.writeText(token).then(() => { alert("Copiado: " + token); });
+    }
+    window.copiarToken = copiarToken;
+
+    // ======================= MODAL VARIÁVEL (CRUD) =======================
+    function abrirModalVar(editarChave=null){
+      const m = $("#novaVarModal");
+      const isEdit = !!editarChave;
+      $("#novaVarTitulo").textContent = isEdit ? "Editar variável" : "Nova variável";
+
+      // popula select de categorias
+      const cats = carregarCategorias();
+      const sel = $("#varCategoriaSel");
+      sel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join("");
+
+      if (isEdit){
+        const lista = getLS("variaveis_modelos", []);
+        const v = lista.find(x => x.chave === editarChave);
+        if (v){
+          $("#varChave").value   = v.chave;
+          $("#varChave").disabled = true; // chave é o ID lógico
+          $("#varCategoriaSel").value = canon(v.categoria);
+          $("#varDesc").value    = v.descricao || "";
+          $("#varExemplo").value = v.exemplo   || "";
+        }
+      } else {
+        $("#formNovaVar").reset();
+        $("#varChave").disabled = false;
+        if (cats[0]) $("#varCategoriaSel").value = cats[0];
+      }
+
+      m.style.display = "flex";
+      $("#varChave").focus();
+      try { lucide.createIcons(); } catch {}
+    }
+
+    function fecharModalVar(){
+      const m = $("#novaVarModal");
+      m.style.display = "none";
+      $("#formNovaVar").reset();
+      $("#varChave").disabled = false;
+    }
+
+    function sanitizeChave(s){
+      // remove {{ }}, espaços e caracteres inválidos; permite . e -
+      return String(s||"")
+        .replace(/[{}]/g,"")
+        .trim()
+        .replace(/\s+/g,"")
+        .replace(/[^a-zA-Z0-9_.-]/g,"");
+    }
+
+    function salvarVariavel(ev){
+      ev.preventDefault();
+      const editMode = $("#varChave").disabled;
+      const chave = sanitizeChave($("#varChave").value);
+      const categoria = canon($("#varCategoriaSel").value || "Outros");
+      const descricao = String($("#varDesc").value || "");
+      const exemplo   = String($("#varExemplo").value || "");
+
+      if (!chave){ alert("Informe a variável (sem chaves)."); $("#varChave").focus(); return; }
+      if (!categoria){ alert("Informe a categoria."); $("#varCategoriaSel").focus(); return; }
+
+      let lista = getLS("variaveis_modelos", []);
+      if (!Array.isArray(lista)) lista = [];
+      const idx = lista.findIndex(v => String(v.chave) === chave);
+      const item = { chave, descricao, exemplo, categoria };
+
+      if (idx >= 0){
+        lista[idx] = { ...lista[idx], ...item };
+      } else {
+        if (editMode){
+          alert("Não foi possível editar: variável não encontrada."); 
+          return;
+        }
+        lista.push(item);
+      }
+      setLS("variaveis_modelos", lista);
+
+      // garante categoria existente
+      const cats = carregarCategorias();
+      if (!cats.includes(categoria)){
+        salvarCategorias(cats.concat([categoria]));
+      }
+
+      // atualizar UI
+      const base = carregarVariaveis(); // revalida cats
+      popularSelectCategorias(base);
+      aplicarBusca();
+
+      fecharModalVar();
+      alert(`Variável {{${chave}}} salva com sucesso!`);
+    }
+
+    function excluirVariavelPorChave(chave){
+      if (!confirm(`Excluir a variável {{${chave}}}?`)) return;
+      let lista = getLS("variaveis_modelos", []);
+      lista = Array.isArray(lista) ? lista.filter(v => v.chave !== chave) : [];
+      setLS("variaveis_modelos", lista);
+      aplicarBusca();
+    }
+
+    // ======================= MODAL CATEGORIAS (CRUD) =======================
+    function abrirModalCats(){
+      const m = $("#catsModal");
+      montarListaCategorias();
+      m.style.display = "flex";
+      $("#novaCatNome").value = "";
+      $("#novaCatNome").focus();
+      try { lucide.createIcons(); } catch {}
+    }
+    function fecharModalCats(){
+      $("#catsModal").style.display = "none";
+    }
+
+    function montarListaCategorias(){
+      const cont = $("#catsLista");
+      const cats = carregarCategorias();
+      cont.innerHTML = "";
+      cont.innerHTML = cats.map(c => `
+        <div class="pill" data-cat="${c}">
+          <span>${c}</span>
+          <button class="x btn-icon" title="Renomear" data-rename="${c}"><i data-lucide="pencil"></i></button>
+          <button class="x btn-icon" title="Excluir" data-del="${c}"><i data-lucide="x"></i></button>
+        </div>
+      `).join("");
+      try { lucide.createIcons(); } catch {}
+    }
+
+    function criarCategoria(){
+      const nome = canon($("#novaCatNome").value || "");
+      if (!nome){ alert("Informe o nome da categoria."); $("#novaCatNome").focus(); return; }
+      const cats = carregarCategorias();
+      if (cats.includes(nome)){ alert("Essa categoria já existe."); return; }
+      salvarCategorias(cats.concat([nome]));
+
+      // atualiza select do modal de variável se ele estiver aberto
+      if ($("#novaVarModal").style.display === "flex"){
+        const sel = $("#varCategoriaSel");
+        const novas = carregarCategorias();
+        sel.innerHTML = novas.map(c => `<option value="${c}">${c}</option>`).join("");
+        sel.value = nome;
+      }
+
+      montarListaCategorias();
+      // também atualiza filtro/topo
+      const base = getLS("variaveis_modelos", []);
+      popularSelectCategorias(base);
+      alert(`Categoria "${nome}" criada!`);
+    }
+
+    function renomearCategoria(oldName){
+      const novo = prompt("Novo nome para a categoria:", oldName) || "";
+      const novoCanon = canon(novo);
+      if (!novoCanon){ return; }
+      const cats = carregarCategorias();
+      if (cats.includes(novoCanon) && novoCanon !== oldName){
+        alert("Já existe uma categoria com esse nome.");
+        return;
+      }
+      // renomeia em variáveis
+      let lista = getLS("variaveis_modelos", []);
+      lista.forEach(v => { if (canon(v.categoria) === oldName) v.categoria = novoCanon; });
+      setLS("variaveis_modelos", lista);
+
+      // renomeia na lista de categorias
+      const idx = cats.indexOf(oldName);
+      if (idx >= 0) cats[idx] = novoCanon;
+      salvarCategorias(cats);
+
+      montarListaCategorias();
+      popularSelectCategorias(lista);
+      aplicarBusca();
+      alert(`Categoria renomeada para "${novoCanon}".`);
+    }
+
+    function excluirCategoria(nome){
+      if (CATS_CANON.includes(nome)){
+        alert("Categorias padrão não podem ser excluídas.");
+        return;
+      }
+      if (!confirm(`Excluir a categoria "${nome}"? As variáveis dela serão movidas para "Outros".`)) return;
+      // move variáveis para "Outros"
+      let lista = getLS("variaveis_modelos", []);
+      lista.forEach(v => { if (canon(v.categoria) === nome) v.categoria = "Outros"; });
+      setLS("variaveis_modelos", lista);
+
+      // remove da lista
+      let cats = carregarCategorias().filter(c => c !== nome);
+      if (!cats.includes("Outros")) cats.push("Outros");
+      salvarCategorias(cats);
+
+      montarListaCategorias();
+      popularSelectCategorias(lista);
+      aplicarBusca();
+      alert(`Categoria "${nome}" excluída. Variáveis movidas para "Outros".`);
+    }
+
+    // ======================= WIRING GLOBAL =======================
+    document.addEventListener("DOMContentLoaded", () => {
+      try { lucide.createIcons(); } catch {}
+
+      // boot dados
+      const base = carregarVariaveis();
+      popularSelectCategorias(base);
+      renderizarTabela(base);
+
+      // filtros / busca
+      document.getElementById("campoBusca").addEventListener("input", aplicarBusca);
+      document.getElementById("filtroCategoria").addEventListener("change", aplicarBusca);
+
+      // ações de tabela: copiar / editar / excluir
+      document.getElementById("tabelaVariaveis").addEventListener("click", (ev)=>{
+        const code = ev.target.closest('code[data-copy]');
+        if (code){
+          const chave = code.getAttribute('data-copy').replace(/[{}]/g,'');
+          copiarToken(chave);
+          return;
+        }
+        const btnEdit = ev.target.closest('[data-editar]');
+        if (btnEdit){
+          abrirModalVar(btnEdit.getAttribute('data-editar'));
+          return;
+        }
+        const btnDel = ev.target.closest('[data-excluir]');
+        if (btnDel){
+          excluirVariavelPorChave(btnDel.getAttribute('data-excluir'));
+          return;
+        }
+      });
+
+      // exportar
+      document.getElementById("btnExportar").addEventListener("click", () => {
+        const lista = getLS("variaveis_modelos", []);
+        const blob = new Blob([JSON.stringify(lista, null, 2)], {type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "variaveis_modelos.json";
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      });
+
+      // hamburguer
+      document.getElementById("hamburguer")?.addEventListener("click", () => {
+        document.getElementById("menuLateral")?.classList.toggle("aberto");
+      });
+
+      // modal variável
+      document.getElementById("btnNovaVar")?.addEventListener("click", () => abrirModalVar(null));
+      document.getElementById("btnFecharModal")?.addEventListener("click", fecharModalVar);
+      document.getElementById("btnCancelar")?.addEventListener("click", fecharModalVar);
+      document.getElementById("formNovaVar")?.addEventListener("submit", salvarVariavel);
+
+      // modal categorias
+      document.getElementById("btnGerirCats")?.addEventListener("click", abrirModalCats);
+      document.getElementById("btnFecharCats")?.addEventListener("click", fecharModalCats);
+      document.getElementById("btnCancelarCats")?.addEventListener("click", fecharModalCats);
+      document.getElementById("btnAddCat")?.addEventListener("click", criarCategoria);
+
+      // ações dentro da lista de categorias (delegação)
+      document.getElementById("catsLista").addEventListener("click", (ev)=>{
+        const r = ev.target.closest('[data-rename]');
+        const d = ev.target.closest('[data-del]');
+        if (r){ renomearCategoria(r.getAttribute('data-rename')); return; }
+        if (d){ excluirCategoria(d.getAttribute('data-del')); return; }
+      });
+
+      // ESC fecha modais
+      document.addEventListener("keydown", (e)=>{
+        if (e.key === "Escape"){
+          if ($("#novaVarModal")?.style.display === "flex") fecharModalVar();
+          if ($("#catsModal")?.style.display === "flex") fecharModalCats();
+        }
+      });
+    });
+  </script>
+
+  <!-- ===== Modal Variável (Criar/Editar) ===== -->
+  <div class="modal-sombra" id="novaVarModal" aria-hidden="true">
+    <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="novaVarTitulo">
+      <div class="modal-top">
+        <h3 id="novaVarTitulo">Nova variável</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline" id="btnFecharModal"><i data-lucide="x"></i> Fechar</button>
+        </div>
+      </div>
+
+      <form id="formNovaVar" class="grid-1">
+        <div class="grid">
+          <div>
+            <label>Variável (sem chaves) *</label>
+            <input class="inp" id="varChave" placeholder="ex.: nomeCliente" required>
+          </div>
+          <div>
+            <label>Categoria *</label>
+            <div style="display:flex;gap:8px;">
+              <select class="sel" id="varCategoriaSel" required style="flex:1;"></select>
+              <button class="btn-icon" type="button" title="Criar categoria" id="btnCriarCatInline">
+                <i data-lucide="plus"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <label>Descrição</label>
+            <input class="inp" id="varDesc" placeholder="ex.: Nome completo do cliente">
+          </div>
+          <div>
+            <label>Exemplo</label>
+            <input class="inp" id="varExemplo" placeholder="ex.: Ana Paula">
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="btnCancelar">Cancelar</button>
+          <button type="submit" class="btn" id="btnSalvarVar"><i data-lucide="save"></i> Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // criar categoria direto do modal de variável
+    document.addEventListener('click', (e)=>{
+      if (e.target.closest('#btnCriarCatInline')){
+        const nome = prompt('Nome da nova categoria:','');
+        const n = (nome||'').trim();
+        if (!n) return;
+        const novo = (window.canon ? canon(n) : n);
+        const cats = JSON.parse(localStorage.getItem('variaveis_categorias')||'[]');
+        if (!cats.includes(novo)){
+          cats.push(novo);
+          localStorage.setItem('variaveis_categorias', JSON.stringify(uniq(cats)));
+        }
+        const sel = document.getElementById('varCategoriaSel');
+        const all = JSON.parse(localStorage.getItem('variaveis_categorias')||'[]').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        sel.innerHTML = all.map(c => `<option value="${c}">${c}</option>`).join('');
+        sel.value = novo;
+      }
+    });
+  </script>
+
+  <!-- ===== Modal Categorias ===== -->
+  <div class="modal-sombra" id="catsModal" aria-hidden="true">
+    <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="catsTitulo">
+      <div class="modal-top">
+        <h3 id="catsTitulo">Categorias</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline" id="btnFecharCats"><i data-lucide="x"></i> Fechar</button>
+        </div>
+      </div>
+
+      <div class="grid-1">
+        <div class="list-inline" id="catsLista" style="min-height:44px;"></div>
+
+        <div class="grid">
+          <div class="grid-1">
+            <label>Nova categoria</label>
+            <input class="inp" id="novaCatNome" placeholder="ex.: Documentos" />
+          </div>
+          <div class="grid-1" style="display:flex;align-items:flex-end;">
+            <button class="btn" id="btnAddCat" type="button"><i data-lucide="plus"></i> Adicionar</button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="btnCancelarCats">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+    <!-- Menu mobile (hambúrguer) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn      = document.getElementById('hamburguer');
+      const menu     = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) {
+        console.warn('[menu-mobile] Botão ou menu não encontrados');
+        return;
+      }
+
+      function fecharMenu(){
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded','false');
+        if (backdrop) backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+
+      function toggleMenu(ev){
+        if (ev) ev.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        if (backdrop) backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      }
+
+      // Clicar no hambúrguer abre/fecha
+      btn.addEventListener('click', toggleMenu);
+
+      // Clicar no fundo escuro fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Clicar fora do menu fecha (no mobile)
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+          fecharMenu();
+        }
+      });
+
+      // Se trocar pra tela grande, garante que o menu volte ao normal
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+  </script>
+  <!-- === INÍCIO PATCH UX VARIÁVEIS === -->
+<script>
+  // Enter no campo de busca força o foco na tabela
+  (function(){
+    var inp = document.getElementById('campoBusca');
+    if (inp){
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter'){
+          e.preventDefault();
+          const tbody = document.getElementById('tabelaVariaveis');
+          if (tbody) tbody.scrollIntoView({behavior:'smooth', block:'start'});
+        }
+      });
+    }
+  })();
+
+  // Copiar com fallback (HTTPS requirement do Clipboard API)
+  (function ensureCopyFallback(){
+    if (!navigator.clipboard){
+      window.copiarToken = function(chave){
+        var token = "{{"+chave+"}}";
+        var ta = document.createElement('textarea');
+        ta.value = token; document.body.appendChild(ta);
+        ta.select(); try{ document.execCommand('copy'); }catch(e){}
+        document.body.removeChild(ta);
+        alert("Copiado: " + token);
+      };
+    }
+  })();
+
+  // Exportar com tratamento para revoke sempre
+  (function fixExport(){
+    var btn = document.getElementById('btnExportar');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      try{
+        var lista = JSON.parse(localStorage.getItem('variaveis_modelos')||'[]')||[];
+        var blob = new Blob([JSON.stringify(lista, null, 2)], {type:'application/json'});
+        var url  = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = 'variaveis_modelos.json';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 0);
+      }catch(e){
+        alert('Falha ao exportar: ' + e.message);
+      }
+    }, { once:false });
+  })();
+</script>
+<!-- === FIM PATCH UX VARIÁVEIS === -->
+
+</body>
+</html>

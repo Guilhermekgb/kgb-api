@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formulários recebidos – KGB FORMATURAS</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ 
+      display:contents !important; 
+    }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- ESTILO ESPECÍFICO: FORMULÁRIOS RECEBIDOS --------- */
+
+    .bloco-formularios{
+      max-width:1100px;
+      margin:0 auto;
+    }
+
+    .linha-topo-formularios{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo input,
+    .campo select{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      min-width:160px;
+      outline:none;
+    }
+    .campo input:focus,
+    .campo select:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .box-tabela-formularios{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+
+    .topo-box-formularios{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-bottom:12px;
+    }
+    .topo-box-formularios h2{
+      font-size:18px;
+      margin:0;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .topo-box-formularios h2 i{
+      width:18px; height:18px;
+    }
+    .topo-box-formularios small{
+      display:block;
+      font-size:12px;
+      color:#9a7b58;
+    }
+
+    .tag-contador{
+      font-size:11px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#f3e8da;
+      color:#6c4b30;
+    }
+
+    .tabela-formularios{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-formularios thead{
+      background:#f5e7d8;
+    }
+    .tabela-formularios th,
+    .tabela-formularios td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-formularios th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-formularios tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .status-chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:3px 10px;
+      border-radius:999px;
+      font-size:11px;
+      white-space:nowrap;
+    }
+    .status-pendente{
+      background:#fff4e0;
+      color:#aa6a1a;
+    }
+    .status-vinculado{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+
+    .acoes-formulario{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      justify-content:flex-end;
+    }
+    .btn-acao{
+      border:none;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-acao i{
+      width:13px; height:13px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <div class="bloco-formularios">
+          <h1><i data-lucide="inbox"></i> Formulários recebidos – KGB FORMATURAS</h1>
+          <p class="subtitulo">
+            Pré-cadastros enviados pelo formulário online de formatura. Use esta tela para conferir e marcar o que já foi
+            vinculado ao cadastro de alunos.
+          </p>
+
+          <!-- Filtros -->
+          <div class="linha-topo-formularios">
+            <div class="grupo-filtros">
+              <div class="campo">
+                <label for="filtroResponsavel">Responsável</label>
+                <input id="filtroResponsavel" type="text" placeholder="Nome do responsável">
+              </div>
+              <div class="campo">
+                <label for="filtroEscola">Escola</label>
+                <input id="filtroEscola" type="text" placeholder="Nome da escola">
+              </div>
+              <div class="campo">
+                <label for="filtroAno">Ano de formatura</label>
+                <select id="filtroAno">
+                  <option value="">Todos</option>
+                  <!-- opções reais serão preenchidas via JS a partir dos dados -->
+                </select>
+              </div>
+              <div class="campo">
+                <label for="filtroStatus">Status</label>
+                <select id="filtroStatus">
+                  <option value="">Todos</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="vinculado">Vinculado ao sistema</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="button" class="btn-secundario" id="btnAtualizar">
+              <i data-lucide="refresh-cw"></i>
+              Atualizar lista
+            </button>
+          </div>
+
+          <!-- Tabela -->
+          <section class="box-tabela-formularios" aria-label="Lista de formulários recebidos">
+            <div class="topo-box-formularios">
+              <div>
+                <h2><i data-lucide="file-input"></i> Pré-cadastros recebidos</h2>
+                <small>Formulários vindos do site aguardando conferência e vinculação ao sistema.</small>
+              </div>
+              <span id="contadorFormularios" class="tag-contador">0 formulários</span>
+            </div>
+
+            <table class="tabela-formularios">
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Escola</th>
+                  <th>Ano/Turma</th>
+                  <th>Data envio</th>
+                  <th>Eventos desejados</th>
+                  <th>Status</th>
+                  <th style="width:260px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyFormularios">
+                <!-- preenchido via JS apenas com dados reais salvos no localStorage -->
+              </tbody>
+            </table>
+          </section>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ---------- LOCALSTORAGE / CONSTANTES ----------
+    const LS_KEY_FORMULARIOS = 'kgb_formaturas_formularios';
+    const LS_KEY_FORM_SELECIONADO = 'kgb_formaturas_formulario_selecionado';
+
+    let formularios = [];
+    let formulariosFiltrados = [];
+
+    function carregarFormularios(){
+      try{
+        const raw = localStorage.getItem(LS_KEY_FORMULARIOS);
+        let arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) arr = [];
+        // NÃO cria nada fictício. Só usa o que veio do formulário online.
+        return arr;
+      }catch(e){
+        console.error('Erro ao carregar formulários recebidos', e);
+        return [];
+      }
+    }
+
+    function salvarFormularios(lista){
+      try{
+        localStorage.setItem(LS_KEY_FORMULARIOS, JSON.stringify(lista || []));
+      }catch(e){
+        console.error('Erro ao salvar formulários recebidos', e);
+      }
+    }
+
+    function formatarDataHoraBR(iso){
+      if (!iso) return '-';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '-';
+      const dia = String(d.getDate()).padStart(2,'0');
+      const mes = String(d.getMonth()+1).padStart(2,'0');
+      const ano = d.getFullYear();
+      const hh  = String(d.getHours()).padStart(2,'0');
+      const mm  = String(d.getMinutes()).padStart(2,'0');
+      return `${dia}/${mes}/${ano} ${hh}:${mm}`;
+    }
+
+    // ---------- FILTRO DE ANO DINÂMICO (dados reais) ----------
+    function atualizarOpcoesFiltroAno(){
+      const selectAno = document.getElementById('filtroAno');
+      if (!selectAno) return;
+
+      const valorAtual = selectAno.value || '';
+
+      const anosSet = new Set();
+      formularios.forEach(f => {
+        if (f.anoFormatura) anosSet.add(String(f.anoFormatura));
+      });
+
+      selectAno.innerHTML = '';
+      const optTodos = document.createElement('option');
+      optTodos.value = '';
+      optTodos.textContent = 'Todos';
+      selectAno.appendChild(optTodos);
+
+      Array.from(anosSet)
+        .sort()
+        .forEach(ano => {
+          const opt = document.createElement('option');
+          opt.value = ano;
+          opt.textContent = ano;
+          selectAno.appendChild(opt);
+        });
+
+      if (valorAtual && anosSet.has(valorAtual)){
+        selectAno.value = valorAtual;
+      }
+    }
+
+    // ---------- RENDER / FILTROS ----------
+
+    function renderizarFormularios(){
+      const tbody = document.getElementById('tbodyFormularios');
+      const contador = document.getElementById('contadorFormularios');
+      if (!tbody || !contador) return;
+
+      if (!formulariosFiltrados.length){
+        tbody.innerHTML = '<tr><td colspan="7">Nenhum formulário encontrado com os filtros atuais.</td></tr>';
+        contador.textContent = '0 formulários';
+        return;
+      }
+
+      tbody.innerHTML = '';
+
+      formulariosFiltrados.forEach(form => {
+        const tr = document.createElement('tr');
+
+        const eventosTxt = Array.isArray(form.eventosDesejados)
+          ? form.eventosDesejados.join(', ')
+          : (form.eventosDesejados || '');
+
+        const status = form.status || 'pendente';
+
+        let statusHtml = '';
+        if (status === 'vinculado'){
+          statusHtml = '<span class="status-chip status-vinculado">Vinculado ao sistema</span>';
+        } else {
+          statusHtml = '<span class="status-chip status-pendente">Pendente</span>';
+        }
+
+        tr.innerHTML = `
+          <td>${form.alunoNome || '-'}</td>
+          <td>${form.escolaNome || '-'}</td>
+          <td>${form.anoFormatura || '-'} - ${form.turmaDescricao || '-'}</td>
+          <td>${formatarDataHoraBR(form.enviadoEm)}</td>
+          <td>${eventosTxt || '-'}</td>
+          <td>${statusHtml}</td>
+          <td>
+            <div class="acoes-formulario">
+              <button type="button" class="btn-acao" data-acao="ver" data-id="${form.id}">
+                <i data-lucide="eye"></i>
+                Ver detalhes
+              </button>
+              ${status === 'pendente' ? `
+                <button type="button" class="btn-acao" data-acao="vincular" data-id="${form.id}">
+                  <i data-lucide="user-plus"></i>
+                  Vincular ao sistema
+                </button>
+              ` : ''}
+              <button type="button" class="btn-acao" data-acao="excluir" data-id="${form.id}">
+                <i data-lucide="trash-2"></i>
+                Excluir
+              </button>
+            </div>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+
+      contador.textContent =
+        formulariosFiltrados.length === 1
+          ? '1 formulário'
+          : `${formulariosFiltrados.length} formulários`;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function aplicarFiltros(){
+      const respFiltro   = (document.getElementById('filtroResponsavel')?.value || '').trim().toLowerCase();
+      const escolaFiltro = (document.getElementById('filtroEscola')?.value || '').trim().toLowerCase();
+      const anoFiltro    = document.getElementById('filtroAno')?.value || '';
+      const statusFiltro = document.getElementById('filtroStatus')?.value || '';
+
+      formulariosFiltrados = formularios.filter(form => {
+        const status = form.status || 'pendente';
+
+        const matchResp   = !respFiltro   || (form.respNome    || '').toLowerCase().includes(respFiltro);
+        const matchEscola = !escolaFiltro || (form.escolaNome  || '').toLowerCase().includes(escolaFiltro);
+        const matchAno    = !anoFiltro    || (form.anoFormatura || '') === anoFiltro;
+        const matchStatus = !statusFiltro || status === statusFiltro;
+
+        return matchResp && matchEscola && matchAno && matchStatus;
+      });
+
+      // pendente em cima, vinculado embaixo; dentro disso, mais recente primeiro
+      formulariosFiltrados.sort((a,b) => {
+        const statusA = a.status || 'pendente';
+        const statusB = b.status || 'pendente';
+
+        if (statusA !== statusB){
+          return statusA === 'pendente' ? -1 : 1;
+        }
+
+        const da = Date.parse(a.enviadoEm || '') || 0;
+        const db = Date.parse(b.enviadoEm || '') || 0;
+        return db - da;
+      });
+
+      renderizarFormularios();
+    }
+
+    // ---------- AÇÕES DOS BOTÕES ----------
+
+    function tratarCliqueTabela(ev){
+      const btn = ev.target.closest('button[data-acao]');
+      if (!btn) return;
+
+      const acao = btn.getAttribute('data-acao');
+      const id   = btn.getAttribute('data-id');
+      const form = formularios.find(f => f.id === id);
+      if (!form) return;
+
+      if (acao === 'ver'){
+        const eventosTxt = Array.isArray(form.eventosDesejados)
+          ? form.eventosDesejados.join(', ')
+          : (form.eventosDesejados || '');
+
+        alert(
+          'Detalhes do formulário:\n\n' +
+          'Aluno: ' + (form.alunoNome || '-') + '\n' +
+          'Responsável: ' + (form.respNome || '-') + '\n' +
+          'WhatsApp responsável: ' + (form.respWhatsapp || '-') + '\n' +
+          'Escola: ' + (form.escolaNome || '-') + '\n' +
+          'Ano/Turma: ' + (form.anoFormatura || '-') + ' - ' + (form.turmaDescricao || '-') + '\n' +
+          'Eventos desejados: ' + (eventosTxt || '-') + '\n' +
+          'Data envio: ' + formatarDataHoraBR(form.enviadoEm) + '\n' +
+          'Status: ' + (form.status || 'pendente').toUpperCase()
+        );
+      }
+
+      if (acao === 'vincular'){
+        const confirmar = confirm(
+          'Confirmar vinculação desse formulário ao sistema?\n\n' +
+          'Na próxima etapa, a tela de cadastro do aluno será aberta já com os dados preenchidos.'
+        );
+        if (!confirmar) return;
+
+        const idx = formularios.findIndex(f => f.id === id);
+        if (idx >= 0){
+          formularios[idx].status = 'vinculado';
+          salvarFormularios(formularios);
+        }
+
+        try{
+          localStorage.setItem(LS_KEY_FORM_SELECIONADO, JSON.stringify(formularios[idx] || form));
+        }catch(e){
+          console.error('Erro ao salvar formulário selecionado', e);
+        }
+
+        aplicarFiltros();
+        atualizarOpcoesFiltroAno();
+
+        window.location.href = 'kgb-formaturas-aluno-detalhe.html?origem=formulario';
+      }
+
+      if (acao === 'excluir'){
+        const confirmar = confirm(
+          'Tem certeza que deseja excluir este formulário recebido?\n\n' +
+          'Essa ação não poderá ser desfeita.'
+        );
+        if (!confirmar) return;
+
+        const idx = formularios.findIndex(f => f.id === id);
+        if (idx >= 0){
+          formularios.splice(idx, 1);
+          salvarFormularios(formularios);
+        }
+
+        // Atualiza filtros e opções de ano com base nos dados restantes
+        atualizarOpcoesFiltroAno();
+        aplicarFiltros();
+      }
+    }
+  </script>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <!-- Menu lateral -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Proteção / permissões -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Script específico da tela -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // menu lateral / mobile
+      const menu = document.getElementById('menuLateral');
+      const btn = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (btn && menu && backdrop) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+        btn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+
+      // Botão atualizar
+      document.getElementById('btnAtualizar')?.addEventListener('click', () => {
+        formularios = carregarFormularios();
+        atualizarOpcoesFiltroAno();
+        aplicarFiltros();
+      });
+
+      document.getElementById('filtroResponsavel')?.addEventListener('keyup', ev => {
+        if (ev.key === 'Enter') aplicarFiltros();
+      });
+      document.getElementById('filtroEscola')?.addEventListener('keyup', ev => {
+        if (ev.key === 'Enter') aplicarFiltros();
+      });
+      document.getElementById('filtroAno')?.addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroStatus')?.addEventListener('change', aplicarFiltros);
+
+      const tbody = document.getElementById('tbodyFormularios');
+      if (tbody){
+        tbody.addEventListener('click', tratarCliqueTabela);
+      }
+
+      // Carrega dados iniciais (sempre 100% reais do localStorage)
+      formularios = carregarFormularios();
+      atualizarOpcoesFiltroAno();
+      aplicarFiltros();
+    });
+  </script>
+</body>
+</html>

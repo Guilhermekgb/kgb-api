@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Documentos do Evento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Permissão da página (ajuste conforme seu guard/RBAC) -->
+  <meta name="page-permission" content="documentos-evento:ver" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      var PROD_API = "https://kgb-api.onrender.com";
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      window.__API_BASE__ = base;
+      try { localStorage.setItem("__API_BASE__", base); } catch(e){}
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- Helpers globais -->
+  <script type="module" src="./kgb-common.js"></script>
+<!-- Guard / RBAC -->
+  <script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- Estilo específico (leve) para esta página -->
+  <style>
+    main.conteudo-principal{
+      flex:1;
+      padding:40px;
+      min-height:100vh;
+      background:#f8f1e8;
+      overflow:auto;
+    }
+    .conteudo-central{
+      max-width:1000px;
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+      gap:20px;
+    }
+    h1.titulo-pagina{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:0 0 8px;
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+    .muted{
+      color:#7a6f66;
+      font-size:13px;
+      margin-bottom:16px;
+    }
+    .chip-id{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:#efe7dc;
+      color:#4b3625;
+      font-size:12px;
+      margin-bottom:10px;
+    }
+    .chip-id .dot{
+      width:8px; height:8px; border-radius:50%; background:#c29a5d;
+    }
+
+    .resumo-docs{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      font-size:13px;
+      margin-bottom:10px;
+      color:#4b3a2b;
+    }
+    .resumo-docs span{
+      padding:4px 10px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid rgba(0,0,0,.05);
+    }
+
+    .bloco-docs{
+      background:#fff;
+      border-radius:16px;
+      padding:18px 20px;
+      box-shadow:0 12px 30px rgba(0,0,0,.06);
+      border:1px solid rgba(0,0,0,.04);
+    }
+    .bloco-docs h2{
+      margin:0 0 10px;
+      font-size:18px;
+      color:#5a3e2b;
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .bloco-docs h2 i{
+      width:18px; height:18px;
+    }
+
+    .lista-docs{
+      margin-top:10px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .doc-linha{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border-radius:10px;
+      background:#fdfaf6;
+      border:1px solid rgba(0,0,0,.04);
+    }
+    .doc-nome{
+      border:none;
+      background:none;
+      padding:0;
+      margin:0;
+      cursor:pointer;
+      text-align:left;
+      flex:1;
+      font-size:14px;
+      color:#3b2a20;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .doc-nome.no-click{
+      cursor:default;
+    }
+    .doc-nome:hover:not(.no-click){
+      text-decoration:underline;
+    }
+    .doc-data{
+      font-size:12px;
+      color:#7a6f66;
+      white-space:nowrap;
+    }
+    .doc-tag{
+      font-size:11px;
+      padding:2px 6px;
+      border-radius:999px;
+      background:#efe7dc;
+      color:#4b3625;
+      white-space:nowrap;
+    }
+    .empty-msg{
+      font-size:13px;
+      color:#7a6f66;
+      font-style:italic;
+      margin-top:8px;
+    }
+
+    @media (max-width:768px){
+      main.conteudo-principal{ padding:20px; }
+      .doc-data{ display:none; }
+    }
+
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      background:#c29a5d;
+      border:none;
+      color:#fff;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      z-index:1001;
+      display:none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <header>
+          <h1 class="titulo-pagina">
+            <i data-lucide="file-text"></i>
+            Documentos do Evento
+          </h1>
+
+          <p class="muted">
+            Todos os arquivos anexados ao contrato deste evento ficam centralizados aqui para consulta,
+            junto com um resumo financeiro e o status de cardápio/layout.
+          </p>
+
+          <div class="chip-id" id="chipEvento">
+            <span class="dot"></span>
+            <span>Evento: <strong id="eventoIdSpan">—</strong></span>
+          </div>
+        </header>
+
+        <!-- Resumo geral de documentos anexados -->
+        <div class="resumo-docs">
+          <span id="resumoQtd">0 documentos anexados</span>
+          <span id="resumoUltimo">Último envio: —</span>
+        </div>
+
+        <!-- 1) Documentos anexados -->
+        <section class="bloco-docs" aria-labelledby="tituloDocs">
+          <h2 id="tituloDocs">
+            <i data-lucide="paperclip"></i>
+            Documentos anexados
+          </h2>
+
+          <div id="listaDocsEvento" class="lista-docs"></div>
+          <p id="msgDocsVazio" class="empty-msg" style="display:none;">
+            Nenhum documento foi anexado a este evento ainda.
+            Use a tela de <strong>Contratos</strong> para anexar PDFs; eles aparecerão aqui automaticamente.
+          </p>
+        </section>
+
+        <!-- 2) Pagamentos / Comprovantes -->
+        <section class="bloco-docs" aria-labelledby="tituloPagamentos">
+          <h2 id="tituloPagamentos">
+            <i data-lucide="credit-card"></i>
+            Pagamentos / Comprovantes
+          </h2>
+
+          <div class="resumo-docs">
+            <span id="pagResumoReg">Registros: 0</span>
+            <span id="pagResumoTotal">Total pago: R$ 0,00</span>
+            <span id="pagResumoContrato">Contrato: R$ 0,00</span>
+            <span id="pagResumoSaldo">Saldo: R$ 0,00</span>
+          </div>
+
+          <div id="listaPagamentosEvento" class="lista-docs"></div>
+          <p id="msgPagVazio" class="empty-msg" style="display:none;">
+            Não há comprovantes de pagamento anexados para este evento ainda.
+          </p>
+        </section>
+
+        <!-- 3) Definições de evento: Cardápio / Layout -->
+        <section class="bloco-docs" aria-labelledby="tituloDefinicoes">
+          <h2 id="tituloDefinicoes">
+            <i data-lucide="layout-template"></i>
+            Definições do evento (cardápio e layout)
+          </h2>
+
+          <div class="lista-docs">
+            <div class="doc-linha">
+              <div class="doc-nome no-click">
+                🍽️ <span>Cardápio definido</span>
+              </div>
+              <span class="doc-data" id="statusCardapioDefinido">Carregando…</span>
+            </div>
+
+            <div class="doc-linha">
+              <div class="doc-nome no-click">
+                🖼️ <span>Layout definido</span>
+              </div>
+              <span class="doc-data" id="statusLayoutDefinido">Carregando…</span>
+            </div>
+          </div>
+
+          <p class="empty-msg">
+            Para ajustar cardápio ou layout, utilize a tela de <strong>Definições do Evento</strong>.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="documentos-evento.js" defer></script>
+
+  <!-- Botão de fechar dentro do menu lateral (mobile) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menu = document.getElementById('menuLateral');
+      const btnHamb = document.getElementById('hamburguer');
+      if (!menu || !btnHamb) return;
+
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'fecharMenuMobile';
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', 'Fechar menu');
+      closeBtn.innerHTML = '<i data-lucide="x"></i>';
+      closeBtn.style.cssText = `
+        display:none;
+        position:absolute;
+        top:10px;
+        right:10px;
+        background:#c29a5d;
+        border:none;
+        color:#fff;
+        border-radius:999px;
+        padding:4px;
+        z-index:1002;
+      `;
+      menu.appendChild(closeBtn);
+
+      btnHamb.addEventListener('click', () => {
+        const isOpen = menu.classList.toggle('aberto');
+        closeBtn.style.display = isOpen ? 'inline-flex' : 'none';
+      });
+
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        btnHamb.click();
+      });
+
+      try { window.lucide?.createIcons?.(); } catch(e) {}
+    });
+  </script>
+</body>
+</html>
+
+

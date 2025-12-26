@@ -1,0 +1,117 @@
+/* Layout básico */
+body {
+  margin: 0;
+  font-family: 'Playfair Display', serif;
+  background-color: #f8f1e8;
+}
+/* Tipografia dos controles: igual às telas de cadastro */
+label,
+input,
+select,
+textarea,
+button,
+.tabs .tab-btn,
+.lista-simples input {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 500;
+}
+
+.wrapper { display: flex; min-height: 100vh; }
+#menuLateral { background-color: #5a3e2b; height: 100vh; overflow-y: auto; }
+
+/* Conteúdo */
+main.conteudo-principal { flex-grow: 1; padding: 40px; }
+.conteudo-central {
+  max-width: 1200px; margin: 0 auto; background: #fffaf4;
+  padding: 40px; border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.06);
+}
+.titulo-pagina {
+  font-size: 32px; color: #5a3e2b; display: flex; gap: 10px; align-items: center; margin-bottom: 30px;
+}
+
+/* Mobile menu */
+#hamburguer {
+  position: fixed; top: 12px; left: 12px; background: #c29a5d; border: none;
+  color: white; font-size: 24px; padding: 6px 12px; border-radius: 8px; z-index: 1001; display: none;
+}
+@media (max-width: 768px) {
+  #hamburguer { display: block; }
+  #menuLateral {
+    position: fixed; transform: translateX(-100%); transition: transform .3s ease;
+    z-index: 999; width: 260px;
+  }
+  #menuLateral.aberto { transform: translateX(0); }
+}
+
+/* Abas */
+.tabs { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 30px; }
+.tab-btn {
+  background: #f3e8da; border: 2px solid transparent; padding: 12px 24px; border-radius: 12px;
+  font-size: 16px; color: #5a3e2b; font-weight: bold; cursor: pointer; transition: all .3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,.06);
+}
+.tab-btn:hover { background: #e4d4c0; transform: translateY(-2px); }
+.tab-btn.ativo { background: #c29a5d; color: #fff; border-color: #a37843; box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+.aba { display: none; animation: fadeIn .4s ease; }
+.aba.ativa { display: block; }
+@keyframes fadeIn { from{opacity:0; transform: translateY(10px);} to{opacity:1; transform: none;} }
+
+/* Caixa interna */
+.caixa-interna {
+  background: #fff; padding: 30px; border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+}
+.subtitulo { margin: 0 0 18px; font-size: 24px; color: #5a3e2b; }
+.hint { color: #777; margin: 0 0 16px; }
+
+/* Form grid */
+.grid-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px;
+}
+.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo.full { grid-column: 1 / -1; }
+.campo label { font-weight: 600; color: #5a3e2b; }
+.campo input, .campo textarea {
+  padding: 10px; border-radius: 10px; border: 1px solid #ccc; background: #fff;
+  font-family: 'Playfair Display', serif;
+}
+
+.acoes { grid-column: 1 / -1; display: flex; justify-content: flex-start; }
+.btn {
+  background: #f3e8da; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer;
+  font-weight: 600; color: #5a3e2b;
+}
+.btn:hover { background: #e4d4c0; }
+.btn-dourado { background: #c29a5d; color: #fff; }
+.btn-dourado:hover { background: #b48952; }
+
+/* Listas */
+.lista-colunas .item-coluna {
+  background: #fff7ed; padding: 16px; border-radius: 12px; margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.05); border: 1px solid #eee;
+}
+.item-coluna .top-line {
+  display: flex; align-items: center; gap: 10px; color: #5a3e2b; font-weight: bold;
+}
+.item-coluna small { color: #7a5e45; display: block; margin-top: 4px; }
+
+.item-coluna .acoes {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.item-coluna .acoes .btn-icone {
+  background: #f3e8da; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+}
+
+.lista-simples { list-style: none; padding: 0; margin: 0; }
+.lista-simples li {
+  background: #fff7ed; border: 1px solid #e1d2c3; border-radius: 12px;
+  padding: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
+}
+.lista-simples li input {
+  flex: 1; border: none; background: transparent; font-size: 16px; color: #5a3e2b;
+}
+.add-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.add-row input {
+  flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+}

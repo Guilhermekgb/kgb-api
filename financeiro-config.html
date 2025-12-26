@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:financeiro-config.html">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="page-permission" content="financeiro.config"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (financeiro-config) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard / RBAC (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH COMMON + GUARD (financeiro-config) === -->
+
+  <title>Configurações do Financeiro</title>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do layout com menu -->
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="menu-lateral.css"/>
+  <!-- Estilo da página (já usado por você) -->
+  <link rel="stylesheet" href="modelos.css"/>
+
+  <style>
+    /* ---- layout base (igual ao modelo) ---- */
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral { flex-shrink:0; background:#5a3e2b; height:100vh; overflow-y:auto; }
+    main.conteudo-principal { flex-grow:1; padding:40px; height:100vh; overflow-y:auto; }
+    .conteudo-central { max-width: 960px; margin: 0 auto; }
+
+    /* botão mobile */
+    #hamburguer{
+      position: fixed; top:12px; left:12px; background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px; z-index:1001; display:none;
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position: fixed; transform: translateX(-100%); transition: transform .3s ease;
+        z-index: 999; width: 260px;
+      }
+      #menuLateral.aberto{ transform: translateX(0); }
+      main.conteudo-principal{ padding:20px; }
+    }
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:600;
+    }
+
+    /* ---- estilos específicos desta tela ---- */
+    h1 { font-size: 1.6rem; margin: 0 0 20px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+    .muted { color: #6b7280; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
+    .grid > label { display:block; grid-column: span 6; }
+    .grid > label[style*="span 12"] { grid-column: span 12 !important; }
+    input[type="text"], input[type="email"], input[type="number"], input[type="date"], select, textarea {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+      background:#fff;
+    }
+    details.box { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; background: #fff; }
+    details.box summary { cursor: pointer; font-weight: 600; }
+    .row { display:flex; gap: 8px; align-items:center; flex-wrap: wrap; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f3f4f6; font-size: 12px; }
+    .actions { margin-top: 18px; display:flex; gap: 8px; }
+    .btn { padding: 8px 14px; border: 1px solid #d1d5db; background:#111827; color:#fff; border-radius: 10px; cursor: pointer; }
+    .btn.secondary { background:#fff; color:#111; }
+    .hint { font-size: 12px; color:#6b7280; }
+    .inline { display:inline-flex; gap: 8px; align-items:center; }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (o script menu-lateral.js injeta aqui) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="settings"></i> Configurações do Financeiro</h1>
+        <p class="muted">Defina provedor de cobrança, regras padrão de desconto/juros e notificações. Você pode trocar de Asaas para Mercado Pago aqui sem alterar código.</p>
+
+        <details class="box" open>
+          <summary>🔌 Provedor de Cobrança</summary>
+          <div class="grid" style="margin-top:10px;">
+            <label>
+  Provedor
+  <select id="cfg-prov" disabled>
+    <option value="mercadopago" selected>Mercado Pago</option>
+  </select>
+</label>
+
+<label>
+  Ambiente
+  <select id="cfg-env">
+    <option value="production">Produção</option>
+    <option value="sandbox">Sandbox</option>
+  </select>
+</label>
+
+<!-- Esconde o campo de chave Asaas -->
+<label id="lab-asaas-key" style="grid-column: span 12; display:none;">
+  Chave de API (Asaas)
+  <input id="cfg-asaas-key" type="text">
+</label>
+
+<!-- Mantém só o Access Token do MP -->
+<label id="lab-mp-key" style="grid-column: span 12;">
+  Access Token (Mercado Pago)
+  <input id="cfg-mp-key" type="text" placeholder="APP_USR-... ou TEST-...">
+</label>
+
+            <label id="lab-mp-key" style="grid-column: span 12; display:none;">
+              Access Token (Mercado Pago)
+              <input id="cfg-mp-key" type="text" placeholder="APP_USR-...">
+            </label>
+
+            <div class="row" style="grid-column: span 12;">
+              <button id="btn-test" class="btn">Testar conexão</button>
+              <span id="test-res" class="hint"></span>
+            </div>
+          </div>
+        </details>
+
+        <details class="box" open style="margin-top:14px;">
+          <summary>⚙️ Desconto & Juros (padrão)</summary>
+          <div class="grid" style="margin-top:10px;">
+            <label>
+              Tipo do desconto
+              <select id="cfg-disc-tipo">
+                <option value="percent">Percentual (%)</option>
+                <option value="fixed">Valor fixo (R$)</option>
+              </select>
+            </label>
+
+            <label>
+              Valor
+              <input id="cfg-disc-valor" type="number" step="0.01" min="0">
+            </label>
+
+            <label>
+              Dias antes do vencimento
+              <input id="cfg-disc-dias" type="number" step="1" min="0">
+            </label>
+
+            <label>
+              Multa pós-venc. (%)
+              <input id="cfg-multa" type="number" step="0.01" min="0">
+            </label>
+
+            <label>
+              Juros ao dia (%)
+              <input id="cfg-juros-dia" type="number" step="0.0001" min="0">
+            </label>
+          </div>
+        </details>
+
+        <details class="box" open style="margin-top:14px;">
+          <summary>🔔 Notificações de parcelas</summary>
+          <div class="grid" style="margin-top:10px;">
+            <label style="grid-column: span 12;">
+              <span class="inline">
+                <input id="cfg-not-auto" type="checkbox">
+                <span>Enviar automaticamente (quando habilitado)</span>
+              </span>
+            </label>
+
+            <label>
+              Dias antes (pré)
+              <input id="cfg-off-pre" type="number" step="1" min="0">
+            </label>
+            <label>
+              No dia
+              <input id="cfg-off-dia" type="number" step="1" min="0">
+            </label>
+            <label>
+              Dias depois (pós)
+              <input id="cfg-off-pos" type="number" step="1" min="0">
+            </label>
+
+            <label style="grid-column: span 12;">
+              Canais — Pré-venc.
+              <select id="cfg-canais-pre" multiple>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">E-mail</option>
+                <option value="sms">SMS</option>
+              </select>
+            </label>
+            <label style="grid-column: span 12;">
+              Canais — No dia
+              <select id="cfg-canais-dia" multiple>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">E-mail</option>
+                <option value="sms">SMS</option>
+              </select>
+            </label>
+            <label style="grid-column: span 12;">
+              Canais — Pós-venc.
+              <select id="cfg-canais-pos" multiple>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">E-mail</option>
+                <option value="sms">SMS</option>
+              </select>
+            </label>
+
+            <label style="grid-column: span 12;">
+              Modelo (pré)
+              <select id="cfg-modelo-pre"></select>
+            </label>
+            <label style="grid-column: span 12;">
+              Modelo (no dia)
+              <select id="cfg-modelo-dia"></select>
+            </label>
+            <label style="grid-column: span 12;">
+              Modelo (pós)
+              <select id="cfg-modelo-pos"></select>
+            </label>
+
+            <p class="hint" style="grid-column: span 12;">
+              Os modelos são gerenciados em <b>modelos.html</b>. Esta tela só escolhe quais usar.
+            </p>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button id="btn-back" class="btn secondary">Voltar</button>
+          <button id="btn-save" class="btn">Salvar configurações</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu lateral -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Guard de permissão da página -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const permissao = document.querySelector('meta[name="page-permission"]')?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+
+    // Reaplica depois que o menu for injetado
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) { aplicarPermissoesNaTela(); o.disconnect(); }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Script específico desta tela -->
+  <script src="financeiro-config.js"></script>
+</body>
+</html>
+
+

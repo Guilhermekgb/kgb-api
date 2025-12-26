@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formulário de Formatura - KGB FORMATURAS</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root{
+      --bg:#f8f1e8;
+      --card:#ffffff;
+      --primary:#c29a5d;
+      --primary-dark:#8f6f3c;
+      --text:#4b2d16;
+      --muted:#9a7b58;
+      --border:#ead5be;
+    }
+
+    *{ box-sizing:border-box; }
+
+    html, body{
+      margin:0;
+      padding:0;
+      background:var(--bg);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      color:var(--text);
+    }
+
+    body{
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 12px;
+    }
+
+    .container{
+      width:100%;
+      max-width:920px;
+      margin:0 auto;
+    }
+
+    header{
+      text-align:center;
+      margin-bottom:18px;
+    }
+    header .logo-mini{
+      width:80px;
+      height:80px;
+      border-radius:50%;
+      border:2px solid rgba(0,0,0,.05);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin:0 auto 8px;
+      background:radial-gradient(circle at top, #ffffff, #e9cda3);
+      box-shadow:0 10px 24px rgba(0,0,0,.12);
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      font-size:13px;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      color:#5b3b1d;
+      overflow:hidden;
+    }
+    .logo-mini img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      border-radius:50%;
+      display:block;
+    }
+    header h1{
+      margin:0 0 4px;
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      font-size:24px;
+      color:#5a3e2b;
+    }
+    header p{
+      margin:0;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .card{
+      background:var(--card);
+      border-radius:16px;
+      box-shadow:0 12px 30px rgba(0,0,0,.09);
+      padding:18px 18px 20px;
+      margin-bottom:12px;
+      border:1px solid rgba(255,255,255,.8);
+    }
+
+    h2.secao{
+      margin:0 0 10px;
+      font-size:18px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+    h2.secao i{
+      width:18px; height:18px; color:var(--primary);
+    }
+
+    .descricao-secao{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:8px;
+    }
+
+    .grid-2{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+    }
+    .grid-3{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+    }
+    @media (max-width:720px){
+      .grid-2,
+      .grid-3{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+    }
+    .campo label{
+      font-weight:500;
+      color:#7a5a3c;
+    }
+    .campo small{
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    input[type="text"],
+    input[type="tel"],
+    input[type="email"],
+    input[type="number"],
+    select,
+    textarea,
+    input[type="date"]{
+      border-radius:8px;
+      border:1px solid var(--border);
+      padding:7px 10px;
+      font-size:13px;
+      outline:none;
+      background:#ffffff;
+    }
+    textarea{
+      min-height:70px;
+      resize:vertical;
+    }
+    input:focus,
+    select:focus,
+    textarea:focus{
+      border-color:var(--primary);
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .linha-checkbox{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:4px;
+    }
+    .checkbox-item{
+      display:flex;
+      align-items:center;
+      gap:4px;
+      font-size:12px;
+      color:#6c4b30;
+      background:#f8efe3;
+      border-radius:999px;
+      padding:4px 8px;
+    }
+    .checkbox-item input{
+      width:16px; height:16px;
+    }
+
+    .aviso-obrigatorio{
+      font-size:11px;
+      color:var(--muted);
+      margin-top:8px;
+    }
+
+    .rodape-form{
+      margin-top:14px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      align-items:flex-start;
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    .btn-principal{
+      border:none;
+      border-radius:999px;
+      padding:9px 18px;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+      background:var(--primary);
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 10px 20px rgba(0,0,0,.18);
+      margin-top:4px;
+    }
+    .btn-principal i{
+      width:16px; height:16px;
+    }
+    .btn-principal:active{
+      transform:translateY(1px);
+      box-shadow:0 6px 14px rgba(0,0,0,.18);
+    }
+
+    .msg-sucesso{
+      display:none;
+      margin-top:8px;
+      font-size:12px;
+      color:#1f6b3b;
+      background:#e4f7ec;
+      border-radius:10px;
+      padding:8px 10px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-mini" id="logoFormatura">
+        KGB<br>FORM.
+      </div>
+      <h1>Formulário de Formatura</h1>
+      <p>
+        Preencha seus dados com atenção. Após o envio, nossa equipe irá conferir as informações
+        e enviar o contrato para assinatura.
+      </p>
+    </header>
+
+    <form id="formFormatura">
+      <!-- DADOS DO ALUNO -->
+      <section class="card">
+        <h2 class="secao"><i data-lucide="graduation-cap"></i> Dados do aluno</h2>
+        <p class="descricao-secao">
+          Informações principais do formando. Use os mesmos dados do documento oficial.
+        </p>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="alunoNome">Nome completo *</label>
+            <input id="alunoNome" name="alunoNome" type="text" required>
+          </div>
+          <div class="campo">
+            <label for="alunoEmail">E-mail do aluno *</label>
+            <input id="alunoEmail" name="alunoEmail" type="email" required>
+          </div>
+          <div class="campo">
+            <label for="alunoWhatsapp">WhatsApp do aluno *</label>
+            <input id="alunoWhatsapp" name="alunoWhatsapp" type="tel" placeholder="(00) 00000-0000" required>
+          </div>
+          <div class="campo">
+            <label for="alunoDocumento">RG ou CPF do aluno</label>
+            <input id="alunoDocumento" name="alunoDocumento" type="text" placeholder="Digite apenas números">
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:10px;">
+          <div class="campo">
+            <label for="alunoDataNasc">Data de nascimento</label>
+            <input id="alunoDataNasc" name="alunoDataNasc" type="date">
+          </div>
+          <div class="campo">
+            <label for="alunoAltura">Altura</label>
+            <input id="alunoAltura" name="alunoAltura" type="text" placeholder="Ex.: 1,65 m">
+          </div>
+          <div class="campo">
+            <label for="alunoCalcado">Número do calçado</label>
+            <input id="alunoCalcado" name="alunoCalcado" type="number" min="20" max="60" step="1" placeholder="Ex.: 37">
+          </div>
+          <div class="campo">
+            <label for="alunoEndereco">Endereço completo</label>
+            <input id="alunoEndereco" name="alunoEndereco" type="text" placeholder="Rua, número, bairro, cidade">
+          </div>
+        </div>
+
+        <p class="aviso-obrigatorio">* Campos obrigatórios.</p>
+      </section>
+
+      <!-- RESPONSÁVEL -->
+      <section class="card">
+        <h2 class="secao"><i data-lucide="user-round"></i> Responsável financeiro</h2>
+        <p class="descricao-secao">
+          Caso o aluno seja menor de idade, preencha os dados do responsável. Se for maior, você pode repetir os dados do próprio aluno.
+        </p>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="respNome">Nome completo do responsável *</label>
+            <input id="respNome" name="respNome" type="text" required>
+          </div>
+          <div class="campo">
+            <label for="respWhatsapp">WhatsApp do responsável *</label>
+            <input id="respWhatsapp" name="respWhatsapp" type="tel" placeholder="(00) 00000-0000" required>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:10px;">
+          <div class="campo">
+            <label for="respCpf">CPF do responsável *</label>
+            <input id="respCpf" name="respCpf" type="text" required placeholder="Digite apenas números">
+          </div>
+          <div class="campo">
+            <label for="respRg">RG do responsável</label>
+            <input id="respRg" name="respRg" type="text" placeholder="Opcional">
+          </div>
+          <div class="campo">
+            <label for="respEmail">E-mail do responsável</label>
+            <input id="respEmail" name="respEmail" type="email">
+          </div>
+        </div>
+      </section>
+
+      <!-- ESCOLA / TURMA -->
+      <section class="card">
+        <h2 class="secao"><i data-lucide="school-2"></i> Escola e turma</h2>
+        <p class="descricao-secao">
+          Essas informações ajudam a vincular você à turma e ao evento de formatura correto.
+        </p>
+
+        <div class="grid-2">
+          <div class="campo">
+            <label for="escolaNome">Nome da escola *</label>
+            <select id="escolaNome" name="escolaNome" required>
+              <option value="">Selecione...</option>
+            </select>
+            <small>Se sua escola tiver mais de uma unidade, informe também o bairro.</small>
+          </div>
+          <div class="campo">
+            <label for="turmaDescricao">Série / turma *</label>
+            <input id="turmaDescricao" name="turmaDescricao" type="text" placeholder="Ex.: 3º ano A" required>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-top:10px;">
+          <div class="campo">
+            <label for="anoFormatura">Ano da formatura *</label>
+            <input id="anoFormatura" name="anoFormatura" type="number" min="2000" max="2100" step="1" required placeholder="Ex.: 2025">
+          </div>
+          <div class="campo">
+            <label for="turno">Turno</label>
+            <select id="turno" name="turno">
+              <option value="">Não informado</option>
+              <option>Manhã</option>
+              <option>Tarde</option>
+              <option>Noite</option>
+              <option>Integral</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- TIPOS DE EVENTO / PACOTES -->
+      <section class="card">
+        <h2 class="secao"><i data-lucide="party-popper"></i> Eventos / pacotes desejados</h2>
+        <p class="descricao-secao">
+          Marque quais eventos de formatura você deseja contratar. Os valores finais serão confirmados com a equipe da KGB FORMATURAS.
+        </p>
+
+        <div class="campo">
+          <label>Selecione os eventos desejados *</label>
+          <div class="linha-checkbox" id="linhaEventosCheckbox">
+            <!-- preenchido via JS com os tipos de evento cadastrados -->
+          </div>
+          <small>Você poderá ajustar sua escolha depois, quando estiver fechando o contrato.</small>
+        </div>
+
+        <div class="campo" style="margin-top:10px;">
+          <label for="observacaoEventos">Alguma observação sobre os eventos?</label>
+          <textarea id="observacaoEventos" name="observacaoEventos" placeholder="Ex.: quero mesa reservada, preciso de acessibilidade, etc."></textarea>
+        </div>
+      </section>
+
+      <!-- OBS / ACEITE -->
+      <section class="card">
+        <h2 class="secao"><i data-lucide="file-text"></i> Observações e confirmação</h2>
+
+        <div class="campo">
+          <label for="observacaoGeral">Observações adicionais</label>
+          <textarea id="observacaoGeral" name="observacaoGeral" placeholder="Se tiver alguma informação importante para a equipe, escreva aqui."></textarea>
+        </div>
+
+        <div class="campo" style="margin-top:8px;">
+          <label>
+            <input id="aceiteTermos" type="checkbox" required style="width:16px; height:16px; vertical-align:middle; margin-right:4px;">
+            Confirmo que as informações acima estão corretas e autorizo contato da KGB FORMATURAS pelo WhatsApp e e-mail informados. *
+          </label>
+        </div>
+
+        <div class="rodape-form">
+          <button type="submit" class="btn-principal">
+            <i data-lucide="send"></i>
+            Enviar formulário
+          </button>
+          <div class="msg-sucesso" id="msgSucesso">
+            Formulário enviado! Em breve a equipe da KGB FORMATURAS entrará em contato para confirmar os dados e enviar o contrato.
+          </div>
+          <span>* Após o envio, não é necessário reenviar o formulário. Qualquer correção poderá ser feita diretamente com a equipe.</span>
+        </div>
+      </section>
+    </form>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const LS_KEY_TIPOS_EVENTO    = 'kgb_formaturas_tiposEvento';   // mesma chave usada no sistema
+      const LS_KEY_FORMULARIOS    = 'kgb_formaturas_formularios';
+      const LS_KEY_LOGO_FORMATURA = 'kgb_formaturas_logo_formatura';
+     const LS_KEY_ESCOLAS        = 'kgb-formaturas-escolas';
+
+
+      function criarId(prefixo){
+        return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      }
+
+      /* --------- LOGO DA FORMATURA (puxa do localStorage, se existir) --------- */
+      function aplicarLogoFormatura(){
+        const el = document.getElementById('logoFormatura');
+        if (!el) return;
+        const url = localStorage.getItem(LS_KEY_LOGO_FORMATURA);
+        if (url && typeof url === 'string' && url.trim()){
+          el.innerHTML = '<img src="' + url + '" alt="Logo da formatura">';
+        }
+      }
+
+      /* --------- ESCOLAS (puxa do localStorage) --------- */
+      function carregarEscolas(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_ESCOLAS);
+          const arr = raw ? JSON.parse(raw) : [];
+          return Array.isArray(arr) ? arr : [];
+        }catch(e){
+          console.error('Erro ao carregar escolas', e);
+          return [];
+        }
+      }
+
+      function popularEscolasSelect(){
+        const select = document.getElementById('escolaNome');
+        if (!select) return;
+
+        const escolas = carregarEscolas();
+        const valorAtual = select.value || '';
+
+        // Mantém a opção padrão
+        select.innerHTML = '<option value="">Selecione...</option>';
+
+        escolas.forEach(escola => {
+          if (!escola || !escola.nome) return;
+          const opt = document.createElement('option');
+          opt.value = escola.nome;
+          opt.textContent = escola.nome;
+          select.appendChild(opt);
+        });
+
+        if (valorAtual){
+          select.value = valorAtual;
+        }
+      }
+
+      /* --------- TIPOS DE EVENTO (puxa do localStorage, SEM fictícios) --------- */
+      function carregarTiposEvento(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_TIPOS_EVENTO);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          // não cria nenhum evento fictício aqui; usa apenas o que está cadastrado no sistema
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar tipos de evento', e);
+          return [];
+        }
+      }
+
+      function extrairNomeTipo(obj){
+        if (!obj) return null;
+        if (typeof obj === 'string') return obj;
+        return obj.nome || obj.nomeTipo || obj.titulo || obj.tipoEvento || null;
+      }
+
+      function popularEventosCheckbox(){
+        const container = document.getElementById('linhaEventosCheckbox');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const tipos = carregarTiposEvento();
+        tipos
+          .filter(t => t.ativo !== false) // se tiver campo ativo=false, ignora
+          .forEach(tipo => {
+            const nome = extrairNomeTipo(tipo);
+            if (!nome) return;
+
+            const label = document.createElement('label');
+            label.className = 'checkbox-item';
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'eventosDesejados';
+            input.value = nome;
+
+            const span = document.createElement('span');
+            span.textContent = nome;
+
+            label.appendChild(input);
+            label.appendChild(span);
+            container.appendChild(label);
+          });
+      }
+
+      /* --------- SALVAR FORMULÁRIO NO LOCALSTORAGE --------- */
+      function salvarFormulario(dadosObj){
+        try{
+          const raw = localStorage.getItem(LS_KEY_FORMULARIOS);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+
+          const registro = {
+            id: criarId('form_'),
+            enviadoEm: new Date().toISOString(),
+            ...dadosObj
+          };
+
+          arr.push(registro);
+          localStorage.setItem(LS_KEY_FORMULARIOS, JSON.stringify(arr));
+        }catch(e){
+          console.error('Erro ao salvar formulário de formatura', e);
+        }
+      }
+
+      /* --------- SUBMIT DO FORM --------- */
+      const form = document.getElementById('formFormatura');
+      const msgSucesso = document.getElementById('msgSucesso');
+
+      if (form){
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+
+          const dadosForm = new FormData(form);
+          const obj = {};
+
+          for (const [chave, valor] of dadosForm.entries()){
+            if (obj[chave] !== undefined){
+              if (Array.isArray(obj[chave])){
+                obj[chave].push(valor);
+              }else{
+                obj[chave] = [obj[chave], valor];
+              }
+            }else{
+              obj[chave] = valor;
+            }
+          }
+
+          // garante que eventosDesejados seja sempre array (facilita na tela de listagem depois)
+          if (obj.eventosDesejados && !Array.isArray(obj.eventosDesejados)){
+            obj.eventosDesejados = [obj.eventosDesejados];
+          }
+
+          salvarFormulario(obj);
+
+          if (msgSucesso){
+            msgSucesso.style.display = 'block';
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+
+          // Se quiser limpar o formulário, descomente:
+          // form.reset();
+        });
+      }
+
+      aplicarLogoFormatura();
+      popularEscolasSelect();
+      popularEventosCheckbox();
+
+      if (window.lucide) window.lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

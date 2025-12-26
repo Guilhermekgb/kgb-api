@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Cadastro de Aluno</title>
+ <!-- META PARA O GUARD -->
+  <meta name="page-permission" content="page:kgb-formaturas-aluno-detalhe.html">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+  <link rel="stylesheet" href="kgb-formaturas-aluno-detalhe.css">
+</head>
+<body>
+  <button id="hamburguer">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="menu-backdrop" id="menuBackdrop" hidden></div>
+
+  <div class="wrapper">
+    <!-- MENU LATERAL -->
+    <aside id="menuLateral">
+      <div class="menu-lateral">
+        <div class="logo-area">
+          <img src="logo-kgb-dourado.png" alt="KGB Formatutas" class="logo-menu" />
+        </div>
+        <nav>
+          <a href="index.html" class="item-menu">
+            <i data-lucide="home"></i>
+            Tela inicial
+          </a>
+          <a href="kgb-formaturas-notificacoes.html" class="item-menu">
+            <i data-lucide="bell"></i>
+            Notificações
+          </a>
+          <a href="kgb-formaturas-orcamentos.html" class="item-menu">
+            <i data-lucide="file-spreadsheet"></i>
+            Orçamentos
+          </a>
+          <a href="kgb-formaturas-eventos.html" class="item-menu">
+            <i data-lucide="calendar-heart"></i>
+            Eventos
+          </a>
+          <a href="kgb-formaturas-clientes.html" class="item-menu">
+            <i data-lucide="users"></i>
+            Clientes
+          </a>
+          <a href="kgb-formaturas-financeiro.html" class="item-menu">
+            <i data-lucide="wallet"></i>
+            Financeiro
+          </a>
+          <a href="kgb-formaturas-servicos-produtos.html" class="item-menu">
+            <i data-lucide="wine"></i>
+            Serviços e produtos
+          </a>
+          <a href="kgb-formaturas-relatorios.html" class="item-menu">
+            <i data-lucide="bar-chart-3"></i>
+            Relatórios
+          </a>
+          <a href="kgb-formaturas-configuracoes.html" class="item-menu">
+            <i data-lucide="settings"></i>
+            Configurações
+          </a>
+        </nav>
+        <button class="btn-sair" onclick="window.location.href='index.html'">
+          <i data-lucide="log-out"></i>
+          Voltar
+        </button>
+      </div>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="conteudo-principal">
+      <!-- Cabeçalho / resumo do aluno -->
+      <section class="topo-aluno">
+        <div class="topo-esq">
+          <div class="avatar-aluno">
+            <i data-lucide="graduation-cap"></i>
+            <div class="avatar-badge">
+              <i data-lucide="sparkles"></i> Ativo
+            </div>
+          </div>
+          <div>
+            <div class="topo-nome" id="resumoAlunoNome">
+              Nome do aluno
+            </div>
+            <div class="topo-sub">
+              <span>
+                <i data-lucide="school"></i>
+                <span id="resumoAlunoEscola">Escola não informada</span>
+              </span>
+              <span>
+                <i data-lucide="calendar-clock"></i>
+                <span id="resumoAlunoAno">Ano não informado</span>
+              </span>
+            </div>
+            <div class="topo-aluno-mini-infos">
+              <span><strong>ID:</strong> <span class="badge-aluno-id">#0001</span></span>
+              <span><strong>Status:</strong> <span id="miniStatusAluno">Ativo</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="topo-dir">
+          <span id="resumoAlunoSituacao" class="badge-situacao badge-situacao-ok">
+            <i data-lucide="check-circle-2"></i> Situação OK
+          </span>
+          <div class="resumo-fin-superior">
+            Financeiro: <strong id="resumoAlunoFinanceiro">R$ 0,00 (R$ 0,00 pago)</strong>
+          </div>
+          <button class="btn-secundario" id="btnVoltarListaAlunos">
+            <i data-lucide="arrow-left"></i>
+            Voltar para lista
+          </button>
+        </div>
+      </section>
+
+      <!-- ABAS -->
+      <div class="abas-aluno">
+        <button class="aba-aluno ativa" data-aba="dados">
+          <i data-lucide="id-card"></i> Dados do aluno
+        </button>
+        <button class="aba-aluno" data-aba="responsavel">
+          <i data-lucide="phone"></i> Responsável
+        </button>
+        <button class="aba-aluno" data-aba="eventos">
+          <i data-lucide="party-popper"></i> Eventos contratados
+        </button>
+        <button class="aba-aluno" data-aba="financeiro">
+          <i data-lucide="wallet"></i> Financeiro
+        </button>
+        <button class="aba-aluno" data-aba="convites">
+          <i data-lucide="ticket"></i> Convites
+        </button>
+        <button class="aba-aluno" data-aba="documentos">
+          <i data-lucide="file-text"></i> Documentos / Contrato
+        </button>
+        <button class="aba-aluno" data-aba="historico">
+          <i data-lucide="clock-3"></i> Históricos / Observações
+        </button>
+      </div>
+
+      <!-- ABA: DADOS DO ALUNO -->
+      <section class="aba-conteudo ativa" id="aba-dados">
+        <div class="card-aba">
+          <h2><i data-lucide="id-card"></i> Dados do aluno</h2>
+          <small>Informações principais do formando.</small>
+
+          <div class="grid-2">
+            <div>
+              <div class="grupo-form">
+                <label>Nome completo do aluno</label>
+                <input type="text" id="alunoNome" placeholder="Digite o nome do aluno" />
+              </div>
+
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>Escola</label>
+                  <select id="alunoEscola">
+                    <option value="">Selecionar escola...</option>
+                  </select>
+                </div>
+                <div class="grupo-form">
+                  <label>Série / Turma</label>
+                  <input type="text" id="alunoSerie" placeholder="Ex: 3º ano A" />
+                </div>
+              </div>
+
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>Ano de formatura</label>
+                  <input type="number" id="alunoAnoFormatura" placeholder="2025" />
+                </div>
+                <div class="grupo-form">
+                  <label>Status do aluno</label>
+                  <select id="alunoStatus">
+                    <option value="Ativo">Ativo</option>
+                    <option value="Inadimplente">Inadimplente</option>
+                    <option value="Arquivado">Arquivado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>WhatsApp do aluno</label>
+                  <input type="text" id="alunoWhatsapp" placeholder="(00) 00000-0000" />
+                </div>
+                <div class="grupo-form">
+                  <label>Outro contato (opcional)</label>
+                  <input type="text" id="alunoContatoExtra" placeholder="Telefone alternativo" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="titulo-bloquinho">
+                <i data-lucide="info"></i> Resumo rápido
+              </div>
+              <div class="linha-resumo-pequena">
+                <span class="pill-pequena">
+                  <i data-lucide="graduation-cap"></i> Formando ativo no sistema
+                </span>
+              </div>
+              <div class="linha-resumo-pequena">
+                <span>Escola: <strong id="lblResumoEscola">não informado</strong></span>
+              </div>
+              <div class="linha-resumo-pequena">
+                <span>Ano de formatura: <strong id="lblResumoAno">-</strong></span>
+              </div>
+              <div class="acoes-aluno">
+                <button class="btn-primario" id="btnSalvarDadosAluno">
+                  <i data-lucide="save"></i> Salvar dados do aluno
+                </button>
+                <button class="btn-secundario" id="btnWhatsAluno">
+                  <i data-lucide="message-circle"></i> Abrir WhatsApp do aluno
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA: RESPONSÁVEL -->
+      <section class="aba-conteudo" id="aba-responsavel">
+        <div class="card-aba">
+          <h2><i data-lucide="phone"></i> Responsável financeiro / contato</h2>
+          <small>Dados do responsável principal pelo contrato e pagamentos.</small>
+
+          <div class="grid-2">
+            <div>
+              <div class="grupo-form">
+                <label>Nome completo do responsável</label>
+                <input type="text" id="respNome" placeholder="Nome do responsável" />
+              </div>
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>Parentesco / relação</label>
+                  <input type="text" id="respParentesco" placeholder="Ex: Pai, Mãe, Tia, Próprio aluno..." />
+                </div>
+                <div class="grupo-form">
+                  <label>CPF</label>
+                  <input type="text" id="respCpf" placeholder="000.000.000-00" />
+                </div>
+              </div>
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>RG</label>
+                  <input type="text" id="respRg" placeholder="Documento de identificação" />
+                </div>
+                <div class="grupo-form">
+                  <label>Telefone principal / WhatsApp</label>
+                  <input type="text" id="respTelefone1" placeholder="(00) 00000-0000" />
+                </div>
+              </div>
+              <div class="grupo-inline">
+                <div class="grupo-form">
+                  <label>Telefone adicional</label>
+                  <input type="text" id="respTelefone2" placeholder="Outro contato (opcional)" />
+                </div>
+                <div class="grupo-form">
+                  <label>E-mail</label>
+                  <input type="email" id="respEmail" placeholder="email@exemplo.com" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="grupo-form">
+                <label>Endereço completo do responsável</label>
+                <textarea id="respEndereco" placeholder="Rua, número, complemento, bairro, cidade/UF"></textarea>
+              </div>
+              <div class="acoes-aluno">
+                <button class="btn-primario" id="btnSalvarResponsavel">
+                  <i data-lucide="save"></i> Salvar responsável
+                </button>
+                <button class="btn-secundario" id="btnWhatsResp">
+                  <i data-lucide="message-circle"></i> Abrir WhatsApp do responsável
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA: EVENTOS CONTRATADOS -->
+    <!-- ABA: EVENTOS CONTRATADOS -->
+<section class="aba-conteudo" id="aba-eventos">
+  <div class="card-aba">
+    <h2><i data-lucide="party-popper"></i> Eventos contratados pelo aluno</h2>
+    <small>Controle dos eventos que este aluno contratou com o buffet.</small>
+
+    <div class="grid-2-invert" style="margin-bottom:10px;">
+      <div>
+        <div class="titulo-secao-aba">
+          <i data-lucide="plus-circle"></i> Adicionar / editar eventos
+        </div>
+        <div class="subtexto-secao-aba">
+          Selecione os tipos de evento e valores específicos para este aluno.
+        </div>
+
+        <!-- TIPOS DE EVENTO COM BOLINHAS (CHECKBOX) -->
+        <div class="grupo-form">
+          <label>Tipo de evento</label>
+          <div id="selectTipoEventoAluno" class="lista-tipos-evento">
+            <!-- Preenchido via JS com checkboxes -->
+          </div>
+          <small class="hint">
+            Os tipos aparecem aqui conforme o cadastro em “Tipos de evento”.
+          </small>
+        </div>
+
+        <div class="form-linha-mini">
+          <div class="grupo-form">
+            <label>Valor personalizado (R$)</label>
+            <input type="text" id="valorCustomEvento" placeholder="Ex: 500,00" />
+          </div>
+
+          <div class="grupo-form">
+            <label>Convites extras</label>
+            <input type="number" id="convitesExtrasEvento" min="0" value="0" />
+          </div>
+
+          <div class="grupo-form">
+            <label>Valor do convite extra (R$)</label>
+            <input type="text" id="valorConviteExtraEvento" placeholder="Ex: 30,00" />
+          </div>
+        </div>
+
+        <div class="grupo-form">
+          <label>&nbsp;</label>
+          <button type="button" class="btn-secundario" id="btnSalvarConvitesExtras">
+            Salvar convites extra
+          </button>
+          <small>Gera cobrança e convites extras para este aluno.</small>
+        </div>
+
+        <!-- BOTÃO BONITINHO -->
+        <div class="acoes-aluno acoes-eventos">
+          <button class="btn-primario btn-primario-grande" id="btnAdicionarEventoAluno">
+            <span class="icone-circulo">
+              <i data-lucide="plus"></i>
+            </span>
+            <span class="texto">
+              Adicionar evento para o aluno
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="titulo-secao-aba">
+          <i data-lucide="info"></i> Legenda / observações
+        </div>
+        <div class="subtexto-secao-aba">
+          Aqui você enxerga os eventos que este aluno contratou.
+          Os valores são usados para cálculo do financeiro individual e emissão de convites.
+        </div>
+        <ul class="timeline">
+          <li><small>Convites incluídos</small> Campo padrão por evento, vindo da configuração da escola / evento.</li>
+          <li><small>Convites extras</small> Convites adicionais contratados por este aluno.</li>
+          <li><small>Situação financeira</small> Vai considerar o total contratado x parcelas lançadas e pagas na aba de financeiro.</li>
+        </ul>
+      </div>
+    </div>
+
+    <table class="tabela-simples">
+      <thead>
+        <tr>
+          <th>Evento</th>
+          <th>Valor</th>
+          <th>Convites incluídos</th>
+          <th>Convites extras</th>
+          <th>Total de convites</th>
+          <th>Situação</th>
+          <th style="width:160px;">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyEventosAluno">
+        <!-- preenchido via JS -->
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+      <!-- ABA: FINANCEIRO -->
+      <section class="aba-conteudo" id="aba-financeiro">
+        <div class="card-aba">
+          <h2><i data-lucide="wallet"></i> Financeiro do aluno</h2>
+          <small>Controle das parcelas, pagamentos e situação financeira deste aluno.</small>
+
+          <div class="resumo-valores" id="resumosFinanceiroAluno">
+            <div class="box">
+              <span class="label">Valor total contratado</span>
+              <span class="valor" data-resumo="total">R$ 0,00</span>
+            </div>
+            <div class="box">
+              <span class="label">Total pago</span>
+              <span class="valor" data-resumo="pago">R$ 0,00</span>
+            </div>
+            <div class="box">
+              <span class="label">Valor pendente</span>
+              <span class="valor" data-resumo="pendente">R$ 0,00</span>
+            </div>
+          </div>
+
+          <div class="grid-2-invert" style="margin-bottom:10px;">
+            <div>
+              <div class="titulo-secao-aba">
+                <i data-lucide="plus-circle"></i> Adicionar parcela
+              </div>
+              <div class="subtexto-secao-aba">
+                Use esta área para lançar manualmente as parcelas deste aluno.
+              </div>
+
+              <div class="form-linha-mini">
+                <div class="grupo-form">
+                  <label>Data de vencimento</label>
+                  <input type="date" id="finDataVenc" />
+                </div>
+                <div class="grupo-form">
+                  <label>Valor da parcela</label>
+                  <input type="text" id="finValor" placeholder="Ex: 500,00" />
+                </div>
+              </div>
+
+              <div class="form-linha-mini">
+                <div class="grupo-form">
+                  <label>Referência (evento)</label>
+                  <select id="finTipoEventoRef">
+                    <option value="">Geral (todos os eventos)</option>
+                    <!-- JS vai preencher com os eventos contratados deste aluno -->
+                  </select>
+                </div>
+                <div class="grupo-form">
+                  <label>Forma de pagamento</label>
+                  <select id="finFormaPgto">
+                    <option value="PIX">PIX</option>
+                    <option value="Boleto">Boleto</option>
+                    <option value="Cartão crédito">Cartão de crédito</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="acoes-aluno">
+                <button class="btn-primario" id="btnAdicionarParcela">
+                  <i data-lucide="plus"></i> Adicionar parcela
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div class="titulo-secao-aba">
+                <i data-lucide="info"></i> Dicas rápidas
+              </div>
+              <div class="subtexto-secao-aba">
+                - Ao marcar uma parcela como paga, o sistema atualiza os valores de <strong>Total pago</strong> e <strong>Pendente</strong>.<br>
+                - O botão <em>Enviar cobrança</em> usa a mensagem configurada em Configurações para falar do valor em aberto e data de vencimento.
+              </div>
+            </div>
+          </div>
+
+          <table class="tabela-simples">
+            <thead>
+              <tr>
+                <th>Vencimento</th>
+                <th>Evento</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Diferença</th>
+                <th>Situação</th>
+                <th>Forma</th>
+                <th style="width:260px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyFinanceiroAluno">
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ABA: CONVITES -->
+      <section class="aba-conteudo" id="aba-convites">
+        <div class="card-aba">
+          <h2><i data-lucide="ticket"></i> Convites do aluno</h2>
+          <small>Controle de convites direito do aluno, extras, emissão e status de pagamento.</small>
+
+          <div class="container-filtros-convite">
+            <div class="grupo-form">
+              <label>Filtrar por evento</label>
+              <select id="convitesTipoEvento">
+                <option value="todos">Todos</option>
+                <!-- JS preenche com eventos contratados deste aluno -->
+              </select>
+            </div>
+            <div class="grupo-form">
+              <label>Filtrar por nome do aluno</label>
+              <input type="text" id="convitesFiltroNomeAluno" placeholder="Nome do aluno" />
+            </div>
+            <div class="grupo-form">
+              <label>&nbsp;</label>
+              <span class="pill-filtro">
+                <i data-lucide="info"></i> Se nada estiver selecionado, o Whats envia todos os convites deste aluno.
+              </span>
+            </div>
+          </div>
+
+          <div class="convites-resumo">
+            <div class="convite-badge">
+              <strong>Direito:</strong> <span id="cvDireito">0</span>
+            </div>
+            <div class="convite-badge">
+              <strong>Extras:</strong> <span id="cvExtras">0</span>
+            </div>
+            <div class="convite-badge">
+              <strong>Total:</strong> <span id="cvTotal">0</span>
+            </div>
+            <div class="convite-badge">
+              <strong>Emitidos:</strong> <span id="cvEmitidos">0</span>
+            </div>
+          </div>
+
+          <div class="acoes-aluno" style="margin-bottom:8px;">
+            <button type="button" class="btn-secundario" id="btnEnviarConvitesWhats">
+              <i data-lucide="message-circle"></i>
+              Abrir WhatsApp com convites
+            </button>
+            <button type="button" class="btn-primario" id="btnEmitirConvitesSel">
+              <i data-lucide="printer"></i>
+              Emitir convites selecionados (PDF)
+            </button>
+          </div>
+
+          <table class="tabela-simples">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="chkTodosConvites" /></th>
+                <th>Nº convite</th>
+                <th>Evento</th>
+                <th>Status pagamento</th>
+                <th>Status emissão</th>
+                <th style="width:230px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyConvitesAluno">
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ABA: DOCUMENTOS / CONTRATO -->
+      <section class="aba-conteudo" id="aba-documentos">
+        <div class="card-aba">
+          <h2><i data-lucide="file-text"></i> Documentos / Contrato</h2>
+          <small>Gere, edite e registre os contratos deste aluno, além de anexar documentos assinados.</small>
+
+          <div class="grid-2">
+            <div>
+              <div class="titulo-secao-aba">
+                <i data-lucide="file-pen-line"></i> Gerar contrato com dados do aluno
+              </div>
+              <div class="subtexto-secao-aba">
+                Escolha um modelo de contrato (criado na tela de modelos) e gere uma versão com os dados deste aluno.
+              </div>
+              <div class="grupo-form">
+                <label>Modelo de contrato</label>
+                <select id="modeloContrato">
+                  <option value="">Selecionar modelo...</option>
+                </select>
+              </div>
+              <div class="acoes-aluno">
+                <button class="btn-primario" id="btnGerarContrato">
+                  <i data-lucide="file-text"></i> Gerar contrato com dados do aluno
+                </button>
+                <button class="btn-secundario" id="btnEnviarContratoWhats">
+                  <i data-lucide="message-circle"></i> Enviar contrato via WhatsApp
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div class="titulo-secao-aba">
+                <i data-lucide="upload-cloud"></i> Anexar contrato assinado
+              </div>
+              <div class="subtexto-secao-aba">
+                Depois que o contrato for assinado (digital ou físico), você pode anexar uma cópia aqui para controle.
+              </div>
+              <button type="button" class="btn-secundario" id="btnUploadContrato">
+                <i data-lucide="upload-cloud"></i>
+                Fazer upload de contrato assinado
+              </button>
+              <input type="file" id="inputUploadContrato" accept=".pdf,.jpg,.jpeg,.png" style="display:none;">
+              <p style="font-size:11px; color:#8c6c44; margin-top:6px;">
+                No sistema real, o arquivo será armazenado no servidor. Aqui salvamos apenas o registro para visualização.
+              </p>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="titulo-secao-aba">
+              <i data-lucide="files"></i> Documentos deste aluno
+            </div>
+            <div class="subtexto-secao-aba">
+              Lista de contratos e documentos anexados manualmente.
+            </div>
+
+            <table class="tabela-simples">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Tipo</th>
+                  <th>Data</th>
+                  <th>Observações</th>
+                  <th style="width:180px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyDocumentosAluno">
+                <!-- preenchido via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA: HISTÓRICO / OBSERVAÇÕES -->
+      <section class="aba-conteudo" id="aba-historico">
+        <div class="card-aba">
+          <h2><i data-lucide="clock-3"></i> Históricos / Observações estratégicas</h2>
+          <small>Use esta área para registrar acontecimentos importantes, combinações específicas, etc.</small>
+
+          <div class="grid-2">
+            <div>
+              <div class="grupo-form">
+                <label>Nova observação</label>
+                <textarea id="obsEstrategicasAluno"
+                  placeholder="Ex.: combinamos com o responsável que o pagamento da parcela de novembro será feito apenas dia 20."></textarea>
+              </div>
+              <button class="btn-primario" id="btnSalvarObsHistorico">
+                <i data-lucide="plus"></i> Adicionar ao histórico
+              </button>
+            </div>
+
+            <div>
+              <div class="titulo-secao-aba">
+                <i data-lucide="list"></i> Linha do tempo do aluno
+              </div>
+              <ul class="timeline" id="listaHistoricoAluno">
+                <!-- preenchido via JS -->
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: marcar parcela como paga -->
+  <div id="modalFinOverlay" class="modal-fin-overlay" hidden>
+    <div class="modal-fin">
+      <div class="modal-fin-header">
+        <h3>Marcar parcela como paga</h3>
+        <button type="button" class="modal-fin-close" id="btnFecharModalFin">&times;</button>
+      </div>
+      <div class="modal-fin-body">
+        <div class="grupo-form">
+          <label for="finModalDataPgto">Data do pagamento</label>
+          <input type="date" id="finModalDataPgto">
+        </div>
+        <div class="grupo-form">
+          <label for="finModalValorPago">Valor pago (R$)</label>
+          <input type="number" step="0.01" id="finModalValorPago" placeholder="0,00">
+        </div>
+        <div class="grupo-form">
+          <label for="finModalComprovante">Comprovante (opcional)</label>
+          <input type="file" id="finModalComprovante" accept="image/*,application/pdf">
+          <small>O comprovante fica salvo somente neste navegador (simulação do sistema).</small>
+        </div>
+        <div id="finModalDiferencaInfo" class="fin-modal-diferenca-info"></div>
+      </div>
+      <div class="modal-fin-footer">
+        <button type="button" class="btn-secundario" id="btnCancelarModalFin">Cancelar</button>
+        <button type="button" class="btn-primario" id="btnConfirmarModalFin">Salvar pagamento</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: visualização de comprovante -->
+  <div id="modalComprovanteOverlay" class="modal-fin-overlay" hidden>
+    <div class="modal-fin">
+      <div class="modal-fin-header">
+        <h3>Comprovante do pagamento</h3>
+        <button type="button" class="modal-fin-close" id="btnFecharModalComprovante">&times;</button>
+      </div>
+      <div class="modal-fin-body" id="areaVisualComprovante">
+        <p style="font-size:12px;color:#7a5a3c;">Nenhum comprovante para exibir.</p>
+      </div>
+      <div class="modal-fin-footer" style="justify-content:flex-end;">
+        <button type="button" class="btn-secundario" id="btnAbrirComprovanteNovaAba" style="display:none;">
+          Abrir em nova aba
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS principal da tela -->
+  <script src="kgb-formaturas-aluno-detalhe.js"></script>
+  <script type="module" src="menu-lateral.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Criar Lead de Teste</title>
+</head>
+<body>
+  <h1>Criar Lead de Teste na API</h1>
+
+  <button onclick="criarLead()">Criar lead de teste</button>
+
+  <p id="status"></p>
+  <pre id="resultado" style="background:#f4f4f4; padding:10px;"></pre>
+
+  <script>
+    function criarLead() {
+      document.getElementById('status').textContent = 'Enviando...';
+
+      fetch("http://localhost:3333/leads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          nome: "Casamento Teste",
+          telefone: "11999999999",
+          whatsapp: "11999999999",
+          dataEvento: "2025-12-20",
+          status: "Novo Lead",
+          origem: "Manual",
+          origemTipo: "Teste"
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('status').textContent = 'Lead criado com sucesso!';
+        document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+      })
+      .catch(err => {
+        document.getElementById('status').textContent = 'Erro ao criar lead. Veja o console.';
+        console.error(err);
+      });
+    }
+  </script>
+</body>
+</html>

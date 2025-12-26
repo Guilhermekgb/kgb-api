@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <!-- Identidade RBAC da página -->
+<meta name="page-permission" content="page:pos-evento.html|Administrador|Vendedor|Maitre|Responsável por Evento">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais (precisam vir antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- Guard/RBAC (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <title>Pós-Evento – Perdas e Quebras</title>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="menu-lateral.css"/>
+  <style>
+    :root { --gold:#c29a5d; --brown:#5a3e2b; --beige:#f8f1e8; }
+    html,body{ background:#f8f1e8; margin:0; }
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+
+    main.conteudo-principal{ flex:1; display:flex; justify-content:center; padding:32px; }
+    .conteudo-central{ width:min(1100px,100%); margin:0 auto; padding:0 8px; }
+
+    header.topbar{ background:#fff; padding:10px 16px; display:flex; align-items:center; gap:12px; box-shadow:0 1px 0 rgba(0,0,0,.06); border-radius:14px; }
+    header.topbar h1{ margin:0; font-size:18px; color:var(--brown); }
+
+    .card{ background:#fff; border:1px solid #eadfcd; border-radius:14px; box-shadow:0 2px 6px rgba(0,0,0,.04); padding:14px; }
+    .sec-title{ font-weight:700; color:var(--brown); margin:0 0 8px; }
+    .muted{ color:#7a6a5c; font-size:12px; }
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{ border:1px solid var(--gold); background:#fff; color:var(--brown); padding:8px 12px; border-radius:10px; cursor:pointer; }
+    .btn.primary{ background:var(--gold); color:#fff; }
+
+    label{ font-size:12px; color:var(--brown); display:block; margin-bottom:6px; }
+    select, input[type="text"], input[type="file"]{ width:100%; padding:10px; border-radius:10px; border:1px solid #e0d6c4; background:#fff; }
+
+    table{ width:100%; border-collapse:collapse; background:#fff; border-spacing:0; }
+    th,td{ border-bottom:1px solid #eee; padding:10px; text-align:left; }
+    th{ background:#faf6ef; color:#5a3e2b; font-weight:600; }
+    tfoot td{ font-weight:700; }
+
+    .gallery{ display:flex; flex-wrap:wrap; gap:8px; }
+    .gallery img{ width:140px; height:100px; object-fit:cover; border-radius:8px; border:1px solid #eadfcd; }
+
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal{ width:min(980px, 96vw); max-height:92vh; overflow:auto; background:#fff; border-radius:14px; border:1px solid #eadfcd; }
+    .modal header{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #f0e6d6; }
+    .modal .body{ padding:14px; }
+    .modal .footer{ padding:12px 16px; border-top:1px solid #f0e6d6; display:flex; gap:8px; justify-content:flex-end; }
+
+    @media print{
+      .no-print{ display:none !important; }
+      main.conteudo-principal{ padding:0; }
+      .card{ box-shadow:none; border:none; }
+      header.topbar{ box-shadow:none; }
+    }
+
+    .checklist{
+      display:grid; gap:6px;
+      max-height:220px; overflow:auto;
+      padding:8px; border:1px solid #e0d6c4; border-radius:10px; background:#fff;
+    }
+    .checklist label{ display:flex; align-items:center; gap:8px; font-size:13px; margin:0; }
+    .checklist input[type="checkbox"]{ transform: scale(1.1); }
+    .checklist .muted{ font-size:12px; color:#7a6a5c; }
+    /* —— Modal de Cobrança (visual novo) —— */
+.modal.cobranca{
+  width:min(820px,96vw);
+  border-radius:16px;
+  border:1px solid #eadfcd;
+  box-shadow:0 20px 50px rgba(0,0,0,.18);
+  background:#fff;
+}
+.modal.cobranca header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid #f0e6d6
+}
+.modal.cobranca header .tt{
+  display:flex;align-items:center;gap:10px;color:#5a3e2b;font-weight:700
+}
+.modal.cobranca .body{ padding:16px 18px }
+.modal.cobranca .footer{
+  padding:14px 18px;border-top:1px solid #f0e6d6;display:flex;gap:8px;justify-content:flex-end
+}
+.form-grid{ display:grid;grid-template-columns:1fr 180px;gap:12px }
+.field{ display:flex;flex-direction:column;gap:6px }
+.field label{ font-size:12px;color:#5a3e2b }
+.inp{
+  width:100%;padding:10px 12px;border:1px solid #e0d6c4;background:#fff;border-radius:10px
+}
+.inp[readonly]{ background:#faf6ef;color:#7a6a5c }
+.chip{
+  display:inline-flex;align-items:center;gap:8px;border:1px dashed #e0d6c4;background:#fff;border-radius:12px;
+  padding:8px 10px;color:#5a3e2b
+}
+.help{ font-size:12px;color:#7a6a5c;margin-top:8px }
+.btn.ghost{ background:#fff;border:1px solid #e0d6c4;color:#5a3e2b }
+    /* === MENU MOBILE / HAMBÚRGUER === */
+    #hamburguer{
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 1001;
+      background: #c29a5d;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 22px;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,.18);
+      cursor: pointer;
+    }
+
+    #hamburguer i{
+      width: 20px;
+      height: 20px;
+    }
+
+    #menuBackdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 998;
+    }
+
+    #menuBackdrop[hidden]{
+      display: none;
+    }
+
+    body.no-scroll{
+      overflow: hidden;
+    }
+
+    @media (max-width: 768px){
+      #hamburguer{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .wrapper{
+        padding-left: 0;
+      }
+
+      main.conteudo-principal{
+        padding: 20px 16px 32px;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+<div class="wrapper">
+    <div id="menuBackdrop" hidden></div>
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <header class="topbar">
+          <i data-lucide="receipt"></i>
+          <h1>Pós-Evento – perdas e quebras</h1>
+          <div style="margin-left:auto" class="muted" id="lblEvtId">—</div>
+        </header>
+
+        <section class="card" style="margin-top:12px">
+          <div class="sec-title" id="tituloEvento">Evento</div>
+          <div class="muted">Relatório de itens com <b>retorno menor que a saída</b>. Campos:</div>
+          <ul class="muted" style="margin:6px 0 0 16px">
+            <li><b>Saída</b>: quantidade enviada ao evento</li>
+            <li><b>Retorno</b>: quantidade que retornou</li>
+            <li><b>Faltaram</b> = Saída − Retorno</li>
+            <li><b>Valor de reposição</b>: valor unitário cadastrado no material</li>
+          </ul>
+        </section>
+
+        <section class="card" style="margin-top:12px">
+          <div class="sec-title">Filtros</div>
+          <div class="muted" style="margin-bottom:8px">Dica: marque/desmarque os setores abaixo.</div>
+
+          <div>
+            <label>Setores</label>
+            <div id="listSetores" class="checklist"></div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px">
+            <div>
+              <label>Mostrar</label>
+              <select id="selMostrar">
+                <option value="comfaltas">Apenas com faltas</option>
+                <option value="todos">Todos os itens</option>
+              </select>
+            </div>
+            <div>
+              <label>Fotos (opcional)</label>
+              <input type="file" id="inpFotos" accept="image/*" multiple/>
+              <div id="fotosPreview" class="gallery" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" style="margin-top:12px">
+          <div class="sec-title">Itens</div>
+          <div id="tblWrap"></div>
+        </section>
+
+<section class="card no-print" style="margin-top:12px">
+  <div class="actions" style="justify-content:flex-end">
+    <button class="btn" id="btnImprimir" type="button">Imprimir</button>
+    <button class="btn" id="btnAbrirModalCobranca" type="button">Gerar cobrança</button>
+    <button class="btn primary" id="btnEnviar" type="button">Enviar ao cliente</button>
+
+    <!-- NOVO: botão para salvar o resumo do pós-evento na nuvem -->
+    <button class="btn" id="btnSalvarPosEvento" type="button">
+      Salvar pós-evento
+    </button>
+  </div>
+</section>
+
+
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL de envio -->
+  <div class="modal-backdrop" id="modalSend" aria-modal="true" role="dialog">
+    <div class="modal">
+      <header>
+        <div style="display:flex; align-items:center; gap:8px">
+          <i data-lucide="send"></i>
+          <b>Enviar ao cliente</b>
+        </div>
+        <button class="btn" id="btnFecharModal" type="button">Fechar</button>
+      </header>
+      <div class="body">
+        <div id="modalDoc"></div>
+      </div>
+      <div class="footer">
+        <button class="btn" id="btnModalImprimir" type="button">Imprimir</button>
+        <button class="btn primary" id="btnModalBaixar" type="button">Baixar .html</button>
+      </div>
+    </div>
+  </div>
+<!-- MODAL: Gerar cobrança -->
+<div class="modal-backdrop" id="modalCob" aria-modal="true" role="dialog" style="display:none">
+  <div class="modal cobranca">
+    <header>
+      <div class="tt"><i data-lucide="wallet"></i> Gerar cobrança</div>
+      <button class="btn ghost" id="cobFechar" type="button">Fechar</button>
+    </header>
+
+    <div class="body">
+      <div class="chip">
+        <i data-lucide="calendar"></i>
+        <span id="cobEventoChip">—</span>
+      </div>
+
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field">
+          <label for="cobDesc">Descrição</label>
+          <input id="cobDesc" class="inp" type="text" placeholder="Ex.: Quebras e danos">
+        </div>
+
+        <div class="field">
+          <label for="cobVenc">Vencimento</label>
+          <input id="cobVenc" class="inp" type="date">
+        </div>
+
+        <div class="field">
+          <label for="cobValor">Valor</label>
+         <input id="cobValor" class="inp" type="text" inputmode="decimal">
+        </div>
+
+        <div class="field">
+          <label>Evento (leitura)</label>
+          <input id="cobEvtNome" class="inp" type="text" readonly>
+        </div>
+      </div>
+
+      <div class="help">Os detalhes (categoria, forma de pagamento, baixa etc.) você finaliza depois na tela
+        <b>Financeiro do Evento</b>.
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="btn ghost" id="cobCancelar" type="button">Cancelar</button>
+      <button class="btn primary" id="cobSalvar" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
+
+  <script>try{ lucide.createIcons(); }catch(e){}</script>
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="pos-evento.js"></script>
+   <script>
+  (function initHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    let   back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside) return;
+
+    // garante que exista
+    if (!back){
+      back = document.createElement('div');
+      back.id = 'menuBackdrop';
+      back.hidden = true;
+      document.body.appendChild(back);
+    }
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob) setOpened(false);
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+
+</body>
+</html>
+
+

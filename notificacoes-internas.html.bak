@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:notificacoes-internas.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO: Helpers globais (precisam vir antes do guard) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM: Helpers globais === -->
+
+  <title>Notificações Internas</title>
+
+  <!-- Lucide -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos padrão -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#faf7f2; --surface:#fff; --ink:#2f2a25; --muted:#7a7066; --line:#eadfd1;
+      --brand:#c29a5d; --brand-900:#9f7b45; --danger:#d84a4a; --ok:#2e7d32;
+      --pill:#fff7f0;
+      --radius:14px; --shadow:0 4px 18px rgba(0,0,0,.06);
+    }
+    body{ background:var(--bg); color:var(--ink); }
+
+    /* Cabeçalho da página */
+    .page-header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;
+    }
+    .h1{
+      display:flex; align-items:center; gap:10px;
+      font-family:"Playfair Display", Georgia, serif;
+      font-weight:600; color:#3f3024; font-size:28px;
+      margin:0;
+    }
+
+    /* Toolbar */
+    .toolbar{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin:12px 0 10px;
+    }
+    .toolbar-left, .toolbar-right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .chip{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-size:12px; color:#5a3e2b; }
+    .btn, .btn-ghost{
+      display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer;
+      border-radius:10px; padding:8px 12px; font-size:13px; font-weight:500;
+    }
+    .btn{ background:var(--brand); color:#fff; }
+    .btn:hover{ background:var(--brand-900); }
+    .btn-ghost{ background:#fff; color:#3f3024; border:1px solid var(--line); }
+    .btn-ghost:hover{ background:#fffaf1; }
+    .pill{
+      background:var(--pill); border:1px solid var(--line);
+      padding:8px 12px; border-radius:999px; display:flex; align-items:center; gap:8px;
+    }
+    .pill input{ border:none; outline:0; background:transparent; font-size:13px; width:220px; }
+    @media (max-width:640px){ .pill input{ width:130px; } }
+
+    /* Chips de fonte (abas) */
+    .chips{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px; }
+    .chips .chip{ display:inline-flex; align-items:center; gap:8px; }
+    .chips input[type="radio"]{ accent-color: var(--brand); }
+
+    /* Cards de evento/tarefa */
+    .card{
+      background:var(--surface); border:1px solid var(--line);
+      border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin-bottom:12px;
+    }
+    .card-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;
+    }
+    .card-title{ font-weight:700; color:#5a3e2b; }
+    .card-sub{ color:var(--muted); font-size:12px; }
+
+    /* Lista de tarefas do card (linhas) */
+    .task{
+      display:grid; grid-template-columns: 120px 1fr auto; align-items:center; gap:12px;
+      border-top:1px dashed #eadfd1; padding:10px 0;
+    }
+    .task-date{ color:var(--muted); font-size:12px; }
+    .task-title{ font-size:14px; }
+    .task .btn-ghost{ white-space:nowrap; }
+
+    /* Estado atrasado (leve) */
+    .task.atrasada .task-title{ color:#7a2020; }
+    .task.atrasada .task-date{ color:#a44; }
+
+    /* Vazio */
+    .empty{
+      margin-top:16px; background:#fff; border:1px dashed #e7d9c7; border-radius:14px; padding:18px; text-align:center;
+      color:#705a4a;
+    }
+    .empty strong{ color:#3f3024; }
+
+    /* Skeleton loader */
+    .skeleton{
+      animation: pulse 1.2s ease-in-out infinite; background:linear-gradient(90deg,#eee,#f7f2ec,#eee);
+      background-size:200% 100%;
+    }
+    @keyframes pulse{ 0%{background-position:0 0} 100%{background-position:200% 0} }
+    .sk-card{ height:88px; border-radius:14px; margin-bottom:12px; }
+
+    /* wrapper geral */
+    .conteudo-central{ max-width:960px; margin:0 auto; }
+
+    /* Botão Mobile (compatível com seu tema) */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001;
+      background:#c29a5d; color:#fff; border:none; border-radius:8px;
+      padding:6px 10px; display:none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:inline-flex; align-items:center; gap:6px; }
+      #menuLateral{ position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:1000; width:260px; }
+      #menuLateral.aberto{ transform:translateX(0); }
+      main.conteudo-principal{ margin-left:0; padding:20px; }
+    }
+    .card.notif.is-unread { outline: 2px solid rgba(255, 196, 0, .35); background: #fffdf5; }
+    .card.notif.is-read   { opacity: .72; }
+    .card.notif .notif__actions { display:flex; gap:.5rem; align-items:center; }
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu" aria-controls="menuLateral" aria-expanded="false">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal" role="main">
+      <div class="conteudo-central">
+
+        <div class="page-header">
+          <h1 class="h1"><i data-lucide="bell-ring"></i> Notificações Internas</h1>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <span class="chip" id="chipTotal">—</span>
+
+            <div class="pill">
+              <i data-lucide="search"></i>
+              <input id="busca" type="search" placeholder="Buscar por evento ou tarefa..." />
+            </div>
+
+            <!-- Filtro por público -->
+            <select id="fAudience" class="chip" title="Filtrar por público">
+              <option value="todos">Todos</option>
+              <option value="vendas">Vendas</option>
+              <option value="cozinha">Cozinha</option>
+              <option value="maitre">Maître</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="interno">Interno</option>
+            </select>
+          </div>
+
+          <div class="toolbar-right">
+            <!-- Atualizar (compatível com o JS) -->
+            <button id="btnAtualizar" class="btn-ghost" title="Recarregar notificações">
+              <i data-lucide="refresh-cw"></i> Atualizar
+            </button>
+
+            <!-- Novo: Marcar tudo como lido -->
+            <button id="btnMarkAll" class="btn-ghost" title="Marcar tudo como lido">
+              <i data-lucide="check-check"></i> Marcar tudo como lido
+            </button>
+
+            <button class="btn-ghost" id="filtroTodos"><i data-lucide="list-checks"></i> Todos</button>
+            <button class="btn-ghost" id="filtroHoje"><i data-lucide="sun"></i> Vencem hoje</button>
+            <button class="btn-ghost" id="filtroAtrasados"><i data-lucide="alert-triangle"></i> Atrasados</button>
+            <button id="btnMarcarHoje" class="btn"><i data-lucide="check-circle-2"></i> Marcar “ok” de hoje</button>
+          </div>
+        </div>
+
+        <!-- Abas/Fontes (Checklist = atual; demais para agendaUnified) -->
+        <div class="chips" id="chips-fontes">
+          <label class="chip"><input type="radio" name="fonteNI" value="check" checked> Checklist</label>
+          <label class="chip"><input type="radio" name="fonteNI" value="fin"> Financeiro</label>
+          <label class="chip"><input type="radio" name="fonteNI" value="lead"> Leads</label>
+          <label class="chip"><input type="radio" name="fonteNI" value="funil"> Funil</label>
+          <label class="chip"><input type="radio" name="fonteNI" value="evento"> Eventos</label>
+          <label class="chip"><input type="radio" name="fonteNI" value="interno"> Interno</label>
+        </div>
+
+        <!-- Skeleton inicial -->
+        <div id="skeletonBox">
+          <div class="skeleton sk-card"></div>
+          <div class="skeleton sk-card"></div>
+          <div class="skeleton sk-card"></div>
+        </div>
+
+        <!-- Lista padrão (Checklist) — usado pelo JS atual -->
+        <div id="lista" style="display:none;"></div>
+
+        <!-- Lista alternativa legada (mantida por compatibilidade com seu JS atual) -->
+        <div id="lista-internas" style="display:none;"></div>
+
+        <!-- NOVO: Lista via agendaUnified (IDs que o patch procura) -->
+        <div id="lista-agenda" style="display:none;"></div>
+
+        <!-- NOVO: Feed curto de recentes (IDs que o patch procura) -->
+        <div id="lista-recentes" style="display:none; margin-top:12px;"></div>
+
+        <div id="vazio" class="empty" style="display:none;">
+          <p><strong>Sem pendências no momento.</strong><br/>Volte mais tarde ou ajuste os filtros acima.</p>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu (ES module) -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Proteção -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((m,o)=>{ if (alvo.firstElementChild){ aplicarPermissoesNaTela(); o.disconnect(); } });
+        obs.observe(alvo, { childList:true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Ponte opcional para integrar agendaUnified/notificationsFeed -->
+  <script src="agenda-bridge.js"></script>
+
+  <!-- Script principal da página -->
+  <script defer src="notificacoes-internas.js"></script>
+
+  <script>
+  // BOTÃO/FORM de exemplo: publique um aviso interno
+  function publicarAvisoInterno({ idInterno, titulo, dataISO, timeStart, audience }) {
+    // (opcional) se quiser manter uma lista própria de avisos:
+    // const arr = JSON.parse(localStorage.getItem('avisosInternos')||'[]');
+    // arr.unshift({id:idInterno, titulo, dataISO, timeStart, audience});
+    // localStorage.setItem('avisosInternos', JSON.stringify(arr));
+    // localStorage.setItem('avisosInternos:ping', String(Date.now()));
+
+    // === AGENDA UNIFICADA — Aviso interno (upsert)
+    window.__agendaBridge?.upsertUnifiedItem({
+      id: `int:${idInterno}`,
+      src: 'interno',
+      title: titulo,
+      date: dataISO,
+      timeStart,
+      status: 'scheduled',
+      entity: { type:'interno', id:String(idInterno) }
+    });
+
+    // (opcional) Feed curto "Recentes"
+    window.__agendaBridge?.publishNotificationFeed?.({
+      id:`feed:int:${idInterno}`,
+      title:`Aviso interno: ${titulo}`,
+      level:'info',
+      createdAtISO:new Date().toISOString(),
+      audience
+    });
+  }
+
+  // exemplo de uso (pode substituir por um form real):
+  // publicarAvisoInterno({
+  //   idInterno: 'aviso_' + Date.now().toString(36),
+  //   titulo: 'Reunião rápida na copa',
+  //   dataISO: new Date().toISOString().slice(0,10),
+  //   timeStart: '16:00',
+  //   audience: 'maitre'
+  // });
+
+  // ===== UI: Lucide + Menu Mobile (hambúrguer)
+  // Observação: menu-lateral.js já lida com o hambúrguer e backdrop.
+  // Este fallback só ativa se o menu AINDA não tiver sido inicializado.
+  document.addEventListener('DOMContentLoaded', () => {
+    try { window.lucide?.createIcons?.(); } catch {}
+
+    if (!window.__MENU_LATERAL_INIT__) {
+      const btn  = document.getElementById('hamburguer');
+      const menu = document.getElementById('menuLateral');
+
+      btn?.addEventListener('click', () => {
+        const opened = menu?.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', opened ? 'true' : 'false');
+        document.body.style.overflow = opened ? 'hidden' : '';
+      });
+
+      // Fecha o menu ao clicar fora
+      document.addEventListener('click', (e) => {
+        const clicouDentroDoMenu = menu?.contains(e.target);
+        const clicouNoBotao = btn?.contains(e.target);
+        if (menu?.classList.contains('aberto') && !clicouDentroDoMenu && !clicouNoBotao) {
+          menu.classList.remove('aberto');
+          btn.setAttribute('aria-expanded', 'false');
+          document.body.style.overflow = '';
+        }
+      });
+
+      // Fecha o menu ao redimensionar (evita ficar preso aberto)
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && menu?.classList.contains('aberto')) {
+          menu.classList.remove('aberto');
+          document.body.style.overflow = '';
+          btn?.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  });
+  </script>
+
+</body>
+</html>
+

@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Check-in de Formaturas</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Biblioteca para ler QR Code -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- TOPO / FILTROS --------- */
+
+    .linha-topo-checkin{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo select,
+    .campo input{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+      min-width:180px;
+    }
+    .campo select:focus,
+    .campo input:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    /* --------- GRID PRINCIPAL --------- */
+
+    .grid-checkin{
+      display:grid;
+      grid-template-columns:minmax(0, 1.1fr) minmax(0, 1fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:20px;
+    }
+    @media (max-width:900px){
+      .grid-checkin{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+
+    .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .campo-cheio input{
+      font-size:18px;
+      padding:10px 14px;
+    }
+
+    .texto-suporte{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:4px;
+    }
+
+    .linha-botoes{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .resumo-cards{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:4px;
+    }
+    .card-resumo{
+      background:#fdf7f0;
+      border-radius:10px;
+      padding:8px 12px;
+      min-width:140px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .card-resumo strong{
+      display:block;
+      font-size:12px;
+      color:#4b2d16;
+      margin-bottom:2px;
+    }
+
+    /* --------- TABELAS --------- */
+
+    .tabela-simples{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-simples thead{
+      background:#f5e7d8;
+    }
+    .tabela-simples th,
+    .tabela-simples td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-simples th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-simples tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .tag-evento{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+    }
+
+    .status-entrada{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .status-entrada i{
+      width:12px; height:12px;
+    }
+    .entrada-ok{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .entrada-duplicada{
+      background:#ffe8e5;
+      color:#a32222;
+    }
+    .entrada-cancelada{
+      background:#eee2d3;
+      color:#7a5a3c;
+    }
+    .entrada-nao-encontrado{
+      background:#fff8e2;
+      color:#7a5a00;
+    }
+
+    .status-presenca{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .status-presenca i{
+      width:12px; height:12px;
+    }
+    .presente{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .faltou{
+      background:#ffe8e5;
+      color:#a32222;
+    }
+    .naochegou{
+      background:#fff8e2;
+      color:#7a5a00;
+    }
+
+    .btn-acao-mini{
+      border:none;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:11px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .btn-acao-mini i{
+      width:13px; height:13px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    /* --------- MODAL CÂMERA --------- */
+
+    .backdrop-modal{
+      position:fixed;
+      inset:0;
+      background:rgba(15,10,5,0.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1100;
+    }
+    .backdrop-modal[hidden]{
+      display:none;
+    }
+    .janela-modal{
+      background:#fff;
+      border-radius:16px;
+      padding:16px 18px 14px;
+      width:min(360px, 92vw);
+      box-shadow:0 20px 45px rgba(0,0,0,.25);
+    }
+    .janela-modal header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+    }
+    .janela-modal header h2{
+      font-size:16px;
+      margin:0;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .janela-modal header h2 i{
+      width:16px; height:16px;
+    }
+    .janela-modal header button{
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      padding:4px;
+      border-radius:999px;
+    }
+    .janela-modal header button:hover{
+      background:#f5e7d8;
+    }
+
+    .janela-modal video{
+      width:100%;
+      border-radius:12px;
+      background:#000;
+      max-height:260px;
+      object-fit:cover;
+    }
+    .janela-modal .texto-suporte{
+      margin-top:6px;
+    }
+    .janela-modal .linha-botoes{
+      justify-content:flex-end;
+      margin-top:10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="scan-line"></i> Check-in de Formaturas – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Selecione o evento, faça o check-in por QR Code ou número de convite, controle presença dos formandos e convidados em tempo real.
+        </p>
+
+        <!-- TOPO: seleção do evento -->
+        <div class="linha-topo-checkin">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="selectEventoCheckin">Evento</label>
+              <select id="selectEventoCheckin">
+                <!-- preenchido via JS com eventos do localStorage -->
+              </select>
+            </div>
+          </div>
+
+          <button type="button" class="btn-secundario" id="btnAtualizarResumo">
+            <i data-lucide="refresh-ccw"></i>
+            Atualizar resumo
+          </button>
+        </div>
+
+        <!-- GRID PRINCIPAL: Leitura + Resumo -->
+        <div class="grid-checkin">
+
+          <!-- COLUNA ESQUERDA: LEITURA E HISTÓRICO -->
+          <section class="card" aria-label="Leitura de convites e QR Code">
+            <h2><i data-lucide="scan-line"></i> Leitura de convites</h2>
+
+            <div class="linha-form">
+              <div class="campo campo-cheio" style="flex:1 1 100%;">
+                <label for="inputCodigoConvite">Ler QR Code ou digitar número do convite</label>
+                <input id="inputCodigoConvite" type="text" placeholder="Ex.: C-0001-2025, B-0015-2025...">
+                <div class="texto-suporte">
+                  Aponte o leitor (ou cole o código do QR). Se não tiver leitor, digite o número do convite e clique em "Registrar entrada".
+                </div>
+              </div>
+            </div>
+
+            <div class="linha-botoes">
+              <button type="button" class="btn-primario" id="btnRegistrarEntrada">
+                <i data-lucide="check-circle-2"></i>
+                Registrar entrada
+              </button>
+              <button type="button" class="btn-secundario" id="btnUsarCamera">
+                <i data-lucide="camera"></i>
+                Usar câmera deste aparelho
+              </button>
+            </div>
+
+            <hr style="border:none; border-top:1px solid #f0dfcf; margin:14px 0;">
+
+            <div class="linha-form" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <h3 style="font-size:14px; margin:0; color:#5a3e2b;">Últimas entradas</h3>
+              <div class="campo" style="min-width:180px;">
+                <label for="selectOrdenacaoHistorico">Ordenar por</label>
+                <select id="selectOrdenacaoHistorico">
+                  <option value="horario">Horário de chegada</option>
+                  <option value="convite">Número do convite (crescente)</option>
+                </select>
+              </div>
+            </div>
+
+            <table class="tabela-simples">
+              <thead>
+                <tr>
+                  <th>Nº Convite</th>
+                  <th>Aluno / Convidado</th>
+                  <th>Tipo</th>
+                  <th>Horário</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyHistoricoEntradas">
+                <!-- preenchido via JS -->
+              </tbody>
+            </table>
+
+            <div class="rodape-tabela">
+              <span id="infoResumoEntradas">Exibindo 0 entradas.</span>
+            </div>
+          </section>
+
+          <!-- COLUNA DIREITA: RESUMO DO EVENTO -->
+          <aside class="card" aria-label="Resumo do evento e contagens">
+            <h2><i data-lucide="pie-chart"></i> Resumo do evento</h2>
+
+            <div class="resumo-cards">
+              <div class="card-resumo">
+                <strong>Formandos esperados</strong>
+                <span id="lblFormandosEsperados">0</span>
+              </div>
+              <div class="card-resumo">
+                <strong>Formandos presentes</strong>
+                <span id="lblFormandosPresentes">0</span>
+              </div>
+              <div class="card-resumo">
+                <strong>Formandos faltando</strong>
+                <span id="lblFormandosFaltando">0</span>
+              </div>
+              <div class="card-resumo">
+                <strong>Convites esperados</strong>
+                <span id="lblConvitesEsperados">0</span>
+              </div>
+              <div class="card-resumo">
+                <strong>Convites validados</strong>
+                <span id="lblConvitesValidados">0</span>
+              </div>
+              <div class="card-resumo">
+                <strong>Convites faltando</strong>
+                <span id="lblConvitesFaltando">0</span>
+              </div>
+            </div>
+
+            <div class="texto-suporte">
+              Esses números consideram todos os convites emitidos para o evento selecionado. Os convites são cadastrados na tela do aluno; aqui só são validados (nada é gerado automaticamente).
+            </div>
+
+            <hr style="border:none; border-top:1px solid #f0dfcf; margin:14px 0;">
+
+            <h3 style="font-size:14px; margin:0 0 8px; color:#5a3e2b;">Filtros rápidos</h3>
+            <div class="linha-form">
+              <div class="campo">
+                <label for="filtroPresenca">Filtrar lista de formandos</label>
+                <select id="filtroPresenca">
+                  <option value="todos">Todos</option>
+                  <option value="presente">Somente presentes</option>
+                  <option value="naochegou">Somente não chegaram</option>
+                  <option value="faltou">Somente faltaram</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="texto-suporte">
+              Use estes filtros para acompanhar a chegada da turma, principalmente na hora de iniciar cerimônias e fotos oficiais.
+            </div>
+          </aside>
+
+        </div>
+
+        <!-- LISTA DE FORMANDOS DO EVENTO -->
+        <section class="card" aria-label="Lista de formandos">
+          <h2><i data-lucide="graduation-cap"></i> Formandos neste evento</h2>
+
+          <div class="linha-form" style="justify-content:space-between; align-items:center;">
+            <div class="texto-suporte">
+              Marque a presença do formando manualmente, se necessário. A entrada pelo convite do próprio formando também pode marcar como presente automaticamente.
+            </div>
+            <button type="button" class="btn-secundario" id="btnExportarPresenca">
+              <i data-lucide="download"></i>
+              Exportar lista de presença
+            </button>
+          </div>
+
+          <table class="tabela-simples">
+            <thead>
+              <tr>
+                <th style="width:30px;">#</th>
+                <th>Formando</th>
+                <th>Escola / Turma</th>
+                <th>Eventos</th>
+                <th>Presença</th>
+                <th style="width:180px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyFormandosEvento">
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoFormandos">Exibindo 0 formandos.</span>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL CÂMERA (QR CODE) -->
+  <div id="modalCamera" class="backdrop-modal" hidden>
+    <div class="janela-modal" role="dialog" aria-modal="true" aria-labelledby="tituloModalCamera">
+      <header>
+        <h2 id="tituloModalCamera">
+          <i data-lucide="camera"></i>
+          Leitor de QR Code
+        </h2>
+        <button type="button" id="btnFecharCamera" aria-label="Fechar">
+          <i data-lucide="x"></i>
+        </button>
+      </header>
+      <video id="videoCamera" autoplay playsinline></video>
+      <canvas id="canvasCamera" style="display:none;"></canvas>
+      <div class="texto-suporte">
+        Aponte o QR Code do convite para a câmera. O sistema vai ler o código e registrar a entrada automaticamente.
+      </div>
+      <div class="linha-botoes">
+        <button type="button" class="btn-secundario" id="btnPararCamera">
+          <i data-lucide="square"></i>
+          Parar câmera
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim() || 'page:kgb-formaturas-checkin.html';
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      /* ---------- MENU LATERAL / MOBILE ---------- */
+      (function initHamburguer(){
+        const btn   = document.getElementById('hamburguer');
+        const aside = document.getElementById('menuLateral');
+        const back  = document.getElementById('menuBackdrop');
+
+        if (!btn || !aside || !back) return;
+
+        function setOpened(open){
+          const opened = !!open;
+          aside.classList.toggle('aberto', opened);
+          back.hidden = !opened;
+          document.body.classList.toggle('no-scroll', opened);
+
+          const icon = btn.querySelector('i[data-lucide]');
+          if (icon){
+            icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+            try { window.lucide?.createIcons?.(); } catch(e){}
+          }
+        }
+
+        function isMobile(){ return window.innerWidth <= 768; }
+
+        function syncVisibility(){
+          const mob = isMobile();
+          btn.style.display = mob ? 'block' : 'none';
+          if (!mob){
+            setOpened(false);
+          }
+        }
+
+        if (!btn.hasAttribute('data-bound')){
+          btn.setAttribute('data-bound','1');
+          btn.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            setOpened(!aside.classList.contains('aberto'));
+          });
+        }
+
+        if (!back.hasAttribute('data-bound')){
+          back.setAttribute('data-bound','1');
+          back.addEventListener('click', ()=> setOpened(false));
+        }
+
+        document.addEventListener('click', (e)=>{
+          if (!aside.classList.contains('aberto')) return;
+          if (!aside.contains(e.target) && !btn.contains(e.target)){
+            setOpened(false);
+          }
+        });
+
+        syncVisibility();
+        window.addEventListener('resize', syncVisibility);
+      })();
+
+
+      /* ---------- CONSTANTES LOCALSTORAGE ---------- */
+
+      const LS_KEY_EVENTOS    = 'kgb_formaturas_eventos';
+      const LS_KEY_CONVITES   = 'kgb_formaturas_convites';
+      const LS_KEY_FORMANDOS  = 'kgb_formaturas_formandosEvento';
+      const LS_KEY_HISTORICO  = 'kgb_formaturas_checkinHistorico';
+
+      function criarId(prefixo){
+        return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      }
+
+      function formatarDataBR(iso){
+        if (!iso) return '--/--/----';
+        const [ano, mes, dia] = iso.split('-');
+        if (!ano || !mes || !dia) return iso;
+        return `${dia}/${mes}/${ano}`;
+      }
+
+      function formatarHoraHM(dateOrMs){
+        const d = typeof dateOrMs === 'number' ? new Date(dateOrMs) : dateOrMs;
+        const hh = String(d.getHours()).padStart(2,'0');
+        const mm = String(d.getMinutes()).padStart(2,'0');
+        return `${hh}:${mm}`;
+      }
+
+      function formatarValorBR(num){
+        const n = Number(num) || 0;
+        return n.toLocaleString('pt-BR', {
+          minimumFractionDigits:2,
+          maximumFractionDigits:2
+        });
+      }
+
+      function getQueryParam(nome){
+        const params = new URLSearchParams(window.location.search);
+        return params.get(nome);
+      }
+
+      /* ---------- EVENTOS ---------- */
+
+      function carregarEventos(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_EVENTOS);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar eventos', e);
+          return [];
+        }
+      }
+
+      function salvarEventos(lista){
+        try{
+          localStorage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro ao salvar eventos', e);
+        }
+      }
+
+      /* ---------- CONVITES ---------- */
+
+      function carregarConvites(eventos){
+        try{
+          const raw = localStorage.getItem(LS_KEY_CONVITES);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar convites', e);
+          return [];
+        }
+      }
+
+      function salvarConvites(lista){
+        try{
+          localStorage.setItem(LS_KEY_CONVITES, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro ao salvar convites', e);
+        }
+      }
+
+      /* ---------- FORMANDOS ---------- */
+
+      function carregarFormandos(eventos){
+        try{
+          const raw = localStorage.getItem(LS_KEY_FORMANDOS);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar formandos', e);
+          return [];
+        }
+      }
+
+      function salvarFormandos(lista){
+        try{
+          localStorage.setItem(LS_KEY_FORMANDOS, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro ao salvar formandos', e);
+        }
+      }
+
+      /* ---------- HISTÓRICO DE ENTRADAS (LOG) ---------- */
+
+      function carregarHistorico(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_HISTORICO);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar histórico', e);
+          return [];
+        }
+      }
+
+      function salvarHistorico(lista){
+        try{
+          localStorage.setItem(LS_KEY_HISTORICO, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro ao salvar histórico', e);
+        }
+      }
+
+      /* ---------- CARREGAR DADOS INICIAIS ---------- */
+
+      let eventos   = carregarEventos();
+      let convites  = carregarConvites(eventos);
+      let formandos = carregarFormandos(eventos);
+      let historico = carregarHistorico();
+
+      // tentar amarrar histórico a eventos (por código)
+      if (eventos.length && historico.some(h => !h.eventoId)){
+        historico = historico.map(h => {
+          if (h.eventoId) return h;
+          const conv = convites.find(c => c.codigo === h.codigo);
+          if (conv) return { ...h, eventoId: conv.eventoId };
+          return h;
+        });
+        salvarHistorico(historico);
+      }
+
+      /* ---------- CONTROLES DA TELA ---------- */
+
+      const selectEventoCheckin      = document.getElementById('selectEventoCheckin');
+      const btnAtualizarResumo       = document.getElementById('btnAtualizarResumo');
+
+      const inputCodigoConvite       = document.getElementById('inputCodigoConvite');
+      const btnRegistrarEntrada      = document.getElementById('btnRegistrarEntrada');
+      const btnUsarCamera            = document.getElementById('btnUsarCamera');
+
+      const tbodyHistorico           = document.getElementById('tbodyHistoricoEntradas');
+      const infoResumoEntradas       = document.getElementById('infoResumoEntradas');
+      const selectOrdenacaoHistorico = document.getElementById('selectOrdenacaoHistorico');
+
+      const lblFormandosEsperados    = document.getElementById('lblFormandosEsperados');
+      const lblFormandosPresentes    = document.getElementById('lblFormandosPresentes');
+      const lblFormandosFaltando     = document.getElementById('lblFormandosFaltando');
+      const lblConvitesEsperados     = document.getElementById('lblConvitesEsperados');
+      const lblConvitesValidados     = document.getElementById('lblConvitesValidados');
+      const lblConvitesFaltando      = document.getElementById('lblConvitesFaltando');
+
+      const filtroPresenca           = document.getElementById('filtroPresenca');
+      const tbodyFormandosEvento     = document.getElementById('tbodyFormandosEvento');
+      const infoResumoFormandos      = document.getElementById('infoResumoFormandos');
+      const btnExportarPresenca      = document.getElementById('btnExportarPresenca');
+
+      // modal câmera
+      const modalCamera   = document.getElementById('modalCamera');
+      const videoCamera   = document.getElementById('videoCamera');
+      const canvasCamera  = document.getElementById('canvasCamera');
+      const btnFecharCam  = document.getElementById('btnFecharCamera');
+      const btnPararCam   = document.getElementById('btnPararCamera');
+      let streamCamera    = null;
+      let scanAnimationId = null;
+      let ultimoCodigoLido = null;
+
+      let currentEventoId = null;
+
+      /* ---------- POPULAR SELECT DE EVENTOS ---------- */
+
+      function labelEvento(e){
+        const nome = e.nomeInterno && e.nomeInterno.trim()
+          ? e.nomeInterno.trim()
+          : `${e.tipoEvento || 'Evento'} ${e.anoFormatura || ''}`;
+        const data = formatarDataBR(e.dataISO);
+        return `${nome} – ${data}`;
+      }
+
+      function preencherSelectEventos(){
+        if (!selectEventoCheckin) return;
+        selectEventoCheckin.innerHTML = '';
+
+        if (!eventos.length){
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'Nenhum evento cadastrado';
+          selectEventoCheckin.appendChild(opt);
+          currentEventoId = null;
+          return;
+        }
+
+        const qEventoId = getQueryParam('eventoId');
+        let selecionadoId = null;
+
+        eventos.forEach(evt => {
+          const opt = document.createElement('option');
+          opt.value = evt.id;
+          opt.textContent = labelEvento(evt);
+          selectEventoCheckin.appendChild(opt);
+        });
+
+        if (qEventoId && eventos.some(e => e.id === qEventoId)){
+          selecionadoId = qEventoId;
+        }else{
+          selecionadoId = eventos[0].id;
+        }
+
+        selectEventoCheckin.value = selecionadoId;
+        currentEventoId = selecionadoId;
+      }
+
+      preencherSelectEventos();
+
+      /* ---------- FUNÇÕES DE APOIO POR EVENTO ---------- */
+
+      function getConvitesDoEvento(){
+        if (!currentEventoId) return [];
+        return convites.filter(c => c.eventoId === currentEventoId);
+      }
+
+      function getFormandosDoEvento(){
+        if (!currentEventoId) return [];
+        return formandos.filter(f => f.eventoId === currentEventoId);
+      }
+
+      function getHistoricoDoEvento(){
+        if (!currentEventoId) return [];
+        return historico.filter(h => h.eventoId === currentEventoId);
+      }
+
+      /* ---------- RESUMO DO EVENTO ---------- */
+
+      function atualizarResumoEvento(){
+        const convEvt   = getConvitesDoEvento();
+        const formEvt   = getFormandosDoEvento();
+
+        const totalForm = formEvt.length;
+        const formPres  = formEvt.filter(f => f.statusPresenca === 'presente').length;
+        const formFaltou= formEvt.filter(f => f.statusPresenca === 'faltou').length;
+        const formFalt  = totalForm - formPres - formFaltou;
+
+        const totalConv = convEvt.length;
+        const convVal   = convEvt.filter(c => c.usado && !c.cancelado).length;
+        const convFalt  = totalConv - convVal;
+
+        if (lblFormandosEsperados) lblFormandosEsperados.textContent = totalForm;
+        if (lblFormandosPresentes) lblFormandosPresentes.textContent = formPres;
+        if (lblFormandosFaltando)  lblFormandosFaltando.textContent  = formFalt < 0 ? 0 : formFalt;
+
+        if (lblConvitesEsperados)  lblConvitesEsperados.textContent  = totalConv;
+        if (lblConvitesValidados)  lblConvitesValidados.textContent  = convVal;
+        if (lblConvitesFaltando)   lblConvitesFaltando.textContent   = convFalt < 0 ? 0 : convFalt;
+      }
+
+      /* ---------- HISTÓRICO DE ENTRADAS ---------- */
+
+      function renderHistoricoEntradas(){
+        if (!tbodyHistorico) return;
+
+        let lista = getHistoricoDoEvento().slice();
+        const criterio = selectOrdenacaoHistorico ? selectOrdenacaoHistorico.value : 'horario';
+
+        if (criterio === 'convite'){
+          lista.sort((a,b) => {
+            const numA = parseInt((a.codigo || '').replace(/\D/g,''),10);
+            const numB = parseInt((b.codigo || '').replace(/\D/g,''),10);
+            if (isNaN(numA) || isNaN(numB)) return (a.codigo||'').localeCompare(b.codigo||'');
+            return numA - numB;
+          });
+        }else{
+          // horário: mais recente primeiro
+          lista.sort((a,b) => (b.horarioMs || 0) - (a.horarioMs || 0));
+        }
+
+        tbodyHistorico.innerHTML = '';
+
+        lista.forEach(item => {
+          const tr = document.createElement('tr');
+
+          let cls   = 'entrada-ok';
+          let texto = 'Entrada liberada';
+          let icon  = 'check-circle-2';
+
+          if (item.statusEntrada === 'duplicada'){
+            cls = 'entrada-duplicada';
+            texto = 'Convite já utilizado';
+            icon = 'alert-triangle';
+          }else if (item.statusEntrada === 'cancelada'){
+            cls = 'entrada-cancelada';
+            texto = 'Convite cancelado';
+            icon = 'x-circle';
+          }else if (item.statusEntrada === 'nao_encontrado'){
+            cls = 'entrada-nao-encontrado';
+            texto = 'Convite não encontrado';
+            icon = 'help-circle';
+          }
+
+          const hora = item.horarioMs ? formatarHoraHM(item.horarioMs) : '--:--';
+
+          tr.innerHTML = `
+            <td>${item.codigo || '-'}</td>
+            <td>${item.alunoNome || '---'}</td>
+            <td>${item.tipoResumo || 'Evento'}</td>
+            <td>${hora}</td>
+            <td>
+              <span class="status-entrada ${cls}">
+                <i data-lucide="${icon}"></i> ${texto}
+              </span>
+            </td>
+          `;
+          tbodyHistorico.appendChild(tr);
+        });
+
+        if (infoResumoEntradas){
+          infoResumoEntradas.textContent = `Exibindo ${lista.length} entrad${lista.length === 1 ? 'a' : 'as'}.`;
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      /* ---------- LISTA DE FORMANDOS ---------- */
+
+      function renderFormandos(){
+        if (!tbodyFormandosEvento) return;
+
+        const formEvt = getFormandosDoEvento();
+        const filtro  = filtroPresenca ? filtroPresenca.value : 'todos';
+
+        let lista = formEvt.slice();
+
+        if (filtro === 'presente'){
+          lista = lista.filter(f => f.statusPresenca === 'presente');
+        }else if (filtro === 'naochegou'){
+          lista = lista.filter(f => f.statusPresenca === 'naochegou');
+        }else if (filtro === 'faltou'){
+          lista = lista.filter(f => f.statusPresenca === 'faltou');
+        }
+
+        tbodyFormandosEvento.innerHTML = '';
+
+        lista.forEach((f, idx) => {
+          const tr = document.createElement('tr');
+
+          let cls   = 'naochegou';
+          let texto = 'Não chegou';
+          let icon  = 'clock-3';
+
+          if (f.statusPresenca === 'presente'){
+            cls = 'presente';
+            texto = 'Presente';
+            icon = 'check-circle-2';
+          }else if (f.statusPresenca === 'faltou'){
+            cls = 'faltou';
+            texto = 'Faltou';
+            icon = 'x-circle';
+          }
+
+          const eventosHtml = (f.eventos || []).map(ev => `<span class="tag-evento">${ev}</span>`).join(' ');
+
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${f.nome || '-'}</td>
+            <td>${f.escolaTurma || '-'}</td>
+            <td>${eventosHtml}</td>
+            <td>
+              <span class="status-presenca ${cls}">
+                <i data-lucide="${icon}"></i> ${texto}
+              </span>
+            </td>
+            <td>
+              <button class="btn-acao-mini btn-marcar-presente" data-id="${f.id}">
+                <i data-lucide="user-check"></i> Presente
+              </button>
+              <button class="btn-acao-mini btn-marcar-faltou" data-id="${f.id}">
+                <i data-lucide="user-x"></i> Faltou
+              </button>
+            </td>
+          `;
+          tbodyFormandosEvento.appendChild(tr);
+        });
+
+        if (infoResumoFormandos){
+          infoResumoFormandos.textContent = `Exibindo ${lista.length} formando${lista.length === 1 ? '' : 's'}.`;
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      /* ---------- REGISTRAR ENTRADA (CHECK-IN) ---------- */
+
+      function registrarEntradaPorCodigo(codigoBruto){
+        const codigo = (codigoBruto || '').trim().toUpperCase();
+        if (!codigo){
+          alert('Digite ou leia o número do convite.');
+          if (inputCodigoConvite) inputCodigoConvite.focus();
+          return;
+        }
+        if (!currentEventoId){
+          alert('Selecione um evento para fazer o check-in.');
+          return;
+        }
+
+        const agoraMs = Date.now();
+        const convEvt = getConvitesDoEvento();
+        const conv    = convEvt.find(c => (c.codigo || '').toUpperCase() === codigo);
+
+        let statusEntrada = 'liberada';
+        let alunoNome     = '---';
+        let tipoResumo    = 'Evento';
+
+        if (!conv){
+          statusEntrada = 'nao_encontrado';
+        }else{
+          alunoNome  = conv.alunoNome || alunoNome;
+          tipoResumo = conv.tipoEvento || tipoResumo;
+
+          if (conv.cancelado || conv.statusConvite === 'cancelado'){
+            statusEntrada = 'cancelada';
+          }else if (conv.usado){
+            statusEntrada = 'duplicada';
+          }else{
+            // primeira entrada válida
+            conv.usado = true;
+            conv.dataHoraCheckin = agoraMs;
+            salvarConvites(convites);
+
+            // se for o convite do formando, marca presença
+            if (conv.ehDoFormando && conv.alunoId){
+              const idxForm = formandos.findIndex(f => f.eventoId === currentEventoId && f.id === conv.alunoId);
+              if (idxForm >= 0){
+                formandos[idxForm].statusPresenca = 'presente';
+                salvarFormandos(formandos);
+              }
+            }
+          }
+        }
+
+        historico.push({
+          id: criarId('log_'),
+          eventoId: currentEventoId,
+          codigo,
+          alunoNome,
+          tipoResumo,
+          horarioMs: agoraMs,
+          statusEntrada
+        });
+        salvarHistorico(historico);
+
+        // Atualiza tudo
+        atualizarResumoEvento();
+        renderHistoricoEntradas();
+        renderFormandos();
+
+        if (inputCodigoConvite){
+          inputCodigoConvite.value = '';
+          inputCodigoConvite.focus();
+        }
+      }
+
+      /* ---------- CÂMERA / QR CODE (LENDO E MARCANDO PRESENÇA) ---------- */
+
+      async function abrirCamera(){
+        if (!modalCamera || !videoCamera) return;
+        modalCamera.hidden = false;
+
+        if (window.lucide) window.lucide.createIcons();
+
+        try{
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+            alert('Este navegador não permite acesso à câmera.');
+            fecharCamera();
+            return;
+          }
+
+          streamCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          videoCamera.srcObject = streamCamera;
+          ultimoCodigoLido = null;
+
+          videoCamera.onloadedmetadata = () => {
+            iniciarLoopLeituraQR();
+          };
+        }catch(e){
+          console.error('Erro ao acessar câmera', e);
+          alert('Não foi possível acessar a câmera deste aparelho.');
+          fecharCamera();
+        }
+      }
+
+      function fecharCamera(){
+        if (scanAnimationId){
+          cancelAnimationFrame(scanAnimationId);
+          scanAnimationId = null;
+        }
+        if (streamCamera){
+          streamCamera.getTracks().forEach(t => t.stop());
+          streamCamera = null;
+        }
+        if (videoCamera){
+          videoCamera.srcObject = null;
+          videoCamera.onloadedmetadata = null;
+        }
+        if (modalCamera){
+          modalCamera.hidden = true;
+        }
+      }
+
+      function iniciarLoopLeituraQR(){
+        if (!canvasCamera || !videoCamera) return;
+        if (!window.jsQR){
+          console.warn('jsQR não carregado, não será possível ler o QR Code.');
+          return;
+        }
+
+        const ctx = canvasCamera.getContext('2d');
+
+        const loop = () => {
+          if (!videoCamera.videoWidth || !videoCamera.videoHeight){
+            scanAnimationId = requestAnimationFrame(loop);
+            return;
+          }
+
+          canvasCamera.width  = videoCamera.videoWidth;
+          canvasCamera.height = videoCamera.videoHeight;
+
+          ctx.drawImage(videoCamera, 0, 0, canvasCamera.width, canvasCamera.height);
+          const imageData = ctx.getImageData(0, 0, canvasCamera.width, canvasCamera.height);
+
+          const qrCode = jsQR(imageData.data, canvasCamera.width, canvasCamera.height);
+
+          if (qrCode && qrCode.data){
+            const codigoLido = qrCode.data.trim().toUpperCase();
+
+            if (codigoLido && codigoLido !== ultimoCodigoLido){
+              ultimoCodigoLido = codigoLido;
+              registrarEntradaPorCodigo(codigoLido);
+              fecharCamera();
+              return;
+            }
+          }
+
+          scanAnimationId = requestAnimationFrame(loop);
+        };
+
+        loop();
+      }
+
+      /* ---------- LISTENERS ---------- */
+
+      if (selectEventoCheckin){
+        selectEventoCheckin.addEventListener('change', () => {
+          currentEventoId = selectEventoCheckin.value || null;
+          atualizarResumoEvento();
+          renderHistoricoEntradas();
+          renderFormandos();
+        });
+      }
+
+      if (btnAtualizarResumo){
+        btnAtualizarResumo.addEventListener('click', () => {
+          atualizarResumoEvento();
+          renderHistoricoEntradas();
+          renderFormandos();
+        });
+      }
+
+      if (btnRegistrarEntrada && inputCodigoConvite){
+        btnRegistrarEntrada.addEventListener('click', () => {
+          registrarEntradaPorCodigo(inputCodigoConvite.value);
+        });
+
+        inputCodigoConvite.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter'){
+            ev.preventDefault();
+            registrarEntradaPorCodigo(inputCodigoConvite.value);
+          }
+        });
+      }
+
+      if (selectOrdenacaoHistorico){
+        selectOrdenacaoHistorico.addEventListener('change', () => {
+          renderHistoricoEntradas();
+        });
+      }
+
+      if (filtroPresenca){
+        filtroPresenca.addEventListener('change', () => {
+          renderFormandos();
+        });
+      }
+
+      if (tbodyFormandosEvento){
+        tbodyFormandosEvento.addEventListener('click', (ev) => {
+          const btnPresente = ev.target.closest('.btn-marcar-presente');
+          const btnFaltou   = ev.target.closest('.btn-marcar-faltou');
+
+          if (!btnPresente && !btnFaltou) return;
+
+          const alunoId = (btnPresente || btnFaltou).getAttribute('data-id');
+          if (!alunoId || !currentEventoId) return;
+
+          const idx = formandos.findIndex(f => f.eventoId === currentEventoId && f.id === alunoId);
+          if (idx < 0) return;
+
+          if (btnPresente){
+            formandos[idx].statusPresenca = 'presente';
+          }else if (btnFaltou){
+            formandos[idx].statusPresenca = 'faltou';
+          }
+
+          salvarFormandos(formandos);
+          atualizarResumoEvento();
+          renderFormandos();
+        });
+      }
+
+      if (btnExportarPresenca){
+        btnExportarPresenca.addEventListener('click', () => {
+          alert('Aqui o sistema vai gerar um arquivo (Excel/PDF) com a lista de presença deste evento.');
+        });
+      }
+
+      if (btnUsarCamera){
+        btnUsarCamera.addEventListener('click', () => {
+          abrirCamera();
+        });
+      }
+      if (btnFecharCam){
+        btnFecharCam.addEventListener('click', () => {
+          fecharCamera();
+        });
+      }
+      if (btnPararCam){
+        btnPararCam.addEventListener('click', () => {
+          fecharCamera();
+        });
+      }
+      if (modalCamera){
+        modalCamera.addEventListener('click', (ev) => {
+          if (ev.target === modalCamera){
+            fecharCamera();
+          }
+        });
+      }
+
+      /* ---------- PRIMEIRO RENDER ---------- */
+
+      if (eventos.length && currentEventoId){
+        atualizarResumoEvento();
+        renderHistoricoEntradas();
+        renderFormandos();
+      }else{
+        renderHistoricoEntradas();
+        renderFormandos();
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

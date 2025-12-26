@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:cardapios-e-produtos.html">
+
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Gestão de Cardápios e Produtos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+<!-- 1) Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Estilos globais do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <!-- Estilo específico desta página -->
+  <link rel="stylesheet" href="cardapios-e-produtos.css" />
+
+  <!-- Layout base (mesmo padrão do seu modelo) -->
+  <style>
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Menu Lateral: o menu-lateral.js injeta o conteúdo dentro deste <aside> */
+    #menuLateral { flex-shrink:0; background-color:#5a3e2b; height:100vh; overflow-y:auto; }
+
+    /* Conteúdo principal */
+    main.conteudo-principal { flex-grow:1; padding:40px; height:100vh; overflow-y:auto; }
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+
+    /* Tipografia apenas no conteúdo (não mexe no menu) */
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1, .conteudo-principal h2, .conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1 { font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+
+    /* Botão hamburguer (mobile) */
+    #hamburguer{
+      position: fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff; font-size:24px;
+      padding:6px 12px; border-radius:8px; z-index:1001; display:none;
+    }
+
+    /* Off-canvas no mobile (mesma lógica do seu modelo base) */
+    @media (max-width: 768px) {
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed; transform:translateX(-100%); transition:transform .3s ease;
+        z-index:999; width:260px;
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* Destaque de item ativo no menu */
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <!-- Wrapper geral (como no modelo) -->
+  <div class="wrapper">
+    <!-- Menu lateral injetado pelo menu-lateral.js -->
+    <aside id="menuLateral"></aside>
+    <!-- Backdrop do off-canvas (opcional; o menu-lateral.js pode usar esse elemento) -->
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="chef-hat"></i> Gestão de Cardápios e Produtos</h1>
+
+        <!-- Tabs + atalhos -->
+        <div class="tabs">
+          <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="tab ativo" data-aba="cardapios">Cardápios</button>
+            <button class="tab" data-aba="adicionais">Adicionais</button>
+            <button class="tab" data-aba="servicos">Serviços</button>
+
+            <a href="montagem-cardapio.html" class="botao-externo" title="Abrir Montagem de Cardápio">
+              <i data-lucide="layers"></i> Montagem de Cardápio
+            </a>
+            <a href="custos-fixo.html" class="botao-externo" title="Custos por evento (fixos)">
+              <i data-lucide="clipboard-check"></i> Custos Fixos
+            </a>
+          </div>
+        </div>
+
+        <!-- Aba Cardápios -->
+        <div class="conteudo-aba" id="aba-cardapios">
+          <div id="msgProduto" class="alerta-sucesso" style="display:none;">Produto cadastrado com sucesso!</div>
+
+          <div class="card-produto">
+            <form id="formProduto">
+              <div class="form-grid">
+                <div>
+                  <label>Nome do Cardápio:</label>
+                  <input type="text" id="nomeProduto" required class="input" />
+                </div>
+
+                <div>
+                  <label>Tipo:</label>
+                  <select id="tipoProduto" required class="input">
+                    <option value="cardapio" selected>Cardápio Principal</option>
+                  </select>
+                </div>
+
+                <div class="full">
+                  <label>Descrição / Observações:</label>
+                  <textarea id="descricaoProduto" class="input" rows="2"></textarea>
+                </div>
+
+                <div class="full">
+                  <label>Imagens (opcional):</label>
+                  <input type="file" id="imagemProduto" class="input" multiple accept="image/*" />
+                  <div id="previewImagens" class="preview-imagens"></div>
+                </div>
+              </div>
+
+              <!-- Faixas -->
+              <div id="faixasContainer" style="margin-top: 20px;"></div>
+
+              <div style="margin-top:10px;">
+                <button type="button" id="btnAddFaixa" class="botao-dourado">+ Adicionar faixa</button>
+              </div>
+
+              <div style="margin-top:20px;">
+                <button type="submit" class="btn-salvar">
+                  <i data-lucide="check-circle" style="margin-right:6px;"></i> Salvar Cardápio
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <hr />
+
+          <h3>Cardápios Cadastrados</h3>
+          <table id="tabelaProdutos">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Faixas</th>
+                <th>Observações</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Aba Adicionais -->
+        <div class="conteudo-aba" id="aba-adicionais" style="display:none;">
+          <div id="msgAdicional" class="alerta-sucesso" style="display:none;">Adicional salvo com sucesso!</div>
+
+          <div class="card-produto">
+            <form id="formAdicional">
+              <div class="form-grid">
+                <div>
+                  <label>Nome do Adicional:</label>
+                  <input type="text" id="nomeAdicional" required class="input" />
+                </div>
+
+                <div>
+                  <label>Tipo:</label>
+                  <select id="tipoAdicional" required class="input">
+                    <option value="">Selecione</option>
+                    <option value="adicional">Adicional</option>
+                    <option value="pacote">Pacote</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>Cobrado por:</label>
+                  <select id="cobrancaAdicional" required class="input">
+                    <option value="">Selecione</option>
+                    <option value="pessoa">Pessoa</option>
+                    <option value="quantidade">Quantidade</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>Unidade de Medida:</label>
+                  <input type="text" id="unidadeAdicional" class="input" placeholder="ex: porções, litros" />
+                </div>
+
+                <div>
+                  <label>Valor R$:</label>
+                  <input type="number" id="valorAdicional" class="input" placeholder="ex: 50.00" step="0.01" />
+                </div>
+
+                <div class="full">
+                  <label>Descrição / Observações:</label>
+                  <textarea id="descricaoAdicional" class="input" rows="2"></textarea>
+                </div>
+
+                <div class="full">
+                  <label>Imagens (opcional):</label>
+                  <input type="file" id="imagemAdicional" class="input" multiple accept="image/*" />
+                  <div id="previewAdicional" class="preview-imagens"></div>
+                </div>
+              </div>
+
+              <div style="margin-top: 20px;">
+                <button type="submit" class="btn-salvar">
+                  <i data-lucide="check-circle" style="margin-right: 6px;"></i> Salvar Adicional
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <hr />
+
+          <h3>Adicionais Cadastrados</h3>
+          <table id="tabelaAdicionais">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Cobrança</th>
+                <th>Unidade</th>
+                <th>Valor</th>
+                <th>Observações</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Aba Serviços -->
+        <div class="conteudo-aba" id="aba-servicos" style="display:none;">
+          <div class="card-produto">
+            <form id="formServico">
+              <div class="form-grid">
+                <div>
+                  <label>Nome do Serviço:</label>
+                  <input type="text" id="nomeServico" class="input" required />
+                </div>
+
+                <div>
+                  <label>Categoria:</label>
+                  <select id="categoriaServico" class="input" required>
+                    <option value="">Selecione</option>
+                  </select>
+                  <div style="margin-top:4px;">
+                    <a href="categorias-gerais.html#servicos" target="_blank" style="font-size:12px; color:#c29a5d;">
+                      + Gerenciar Categorias
+                    </a>
+                  </div>
+                </div>
+
+                <div>
+                  <label>Valor R$:</label>
+                  <input type="number" id="valorServico" class="input" placeholder="ex: 1500.00" step="0.01" required />
+                </div>
+
+                <div>
+                  <label>Cobrado por:</label>
+                  <select id="cobrancaServico" class="input" required>
+                    <option value="">Selecione</option>
+                    <option value="pessoa">Pessoa</option>
+                    <option value="total">Total</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>Fornecedor:</label>
+                  <select id="fornecedorServico" class="input">
+                    <option value="">Selecione</option>
+                  </select>
+                </div>
+
+                <div class="full">
+                  <label>Descrição:</label>
+                  <textarea id="descricaoServico" class="input" rows="2"></textarea>
+                </div>
+              </div>
+
+              <div style="margin-top:20px;">
+                <button type="submit" class="botao-dourado">
+                  <i data-lucide="check-circle" style="margin-right:6px;"></i> Salvar Serviço
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <hr />
+
+          <div class="card-produto">
+            <h3>Serviços Cadastrados</h3>
+            <table id="tabelaServicos">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Cobrança</th>
+                  <th>Fornecedor</th>
+                  <th>Descrição</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script>
+    // Hamburguer abre/fecha o menu no mobile
+    document.getElementById('hamburguer')?.addEventListener('click', () => {
+      document.getElementById('menuLateral')?.classList.toggle('aberto');
+      document.getElementById('menuBackdrop')?.toggleAttribute('hidden');
+    });
+    // Ícones
+    document.addEventListener('DOMContentLoaded', () => { try { lucide.createIcons(); } catch {} });
+  </script>
+<!-- Adapter de API -->
+<script type="module" src="./api/remote-adapter.js"></script>
+
+   <script src="cardapios-e-produtos.js" defer></script>
+   <!-- Guard / RBAC -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim();
+  if (permissao) guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+</body>
+</html>
+

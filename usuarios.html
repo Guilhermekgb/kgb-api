@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:usuarios.html">
+  <meta charset="UTF-8" />
+   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Desenvolvimento local (quando você rodar na sua máquina)
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+  <title>Usuários | Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#f9f4ea; --ink:#3e2b20; --gold:#d4af37; --gold-2:#f3e4c5; --danger:#c0392b; --zap:#25d366; --line:#eee;
+    }
+
+    html, body { margin:0; padding:0; background:var(--bg); }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Menu lateral (injetado por menu-lateral.js) */
+    #menuLateral { flex-shrink:0; height:100vh; overflow:auto; }
+
+    /* Conteúdo principal */
+    main.conteudo-principal {
+      flex-grow:1; padding:40px; height:100vh; overflow:auto; transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    /* Tipografia apenas no conteúdo (não mexe no menu) */
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+      color:var(--ink);
+    }
+    h1{ font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; margin:0 0 10px; }
+
+    /* Botão hambúrguer no mobile */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001; display:none;
+      background:#c29a5d; color:#fff; border:none; font-size:24px; padding:6px 12px; border-radius:8px;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{ position:fixed; left:0; top:0; height:100vh; width:260px;
+        transform:translateX(-100%); transition:.25s ease; z-index:999; }
+      #menuLateral.aberto{ transform:none; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* Destaque de item ativo no menu */
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    /* Tabela */
+    .card{
+      background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:16px; padding:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,.04); margin-top:12px;
+    }
+    table{ width:100%; border-collapse:collapse; overflow:hidden; border-radius:12px; }
+    thead th{
+      background:var(--gold-2); color:#5a3300; text-align:left; padding:14px 16px; font-weight:700;
+      border-bottom:1px solid #e9dfd0;
+    }
+    tbody td{ padding:12px 16px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    tbody tr:nth-child(even){ background:#fcfaf6; }
+
+    /* Botões de ação */
+    .acoes{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{
+      border:none; border-radius:8px; padding:8px 12px; cursor:pointer; font-weight:600; font-size:14px; color:#fff;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .btn-zap{ background:var(--zap); }
+    .btn-editar{ background:var(--gold); color:#3b2b12; }
+    .btn-excluir{ background:var(--danger); }
+
+    /* Texto fraco */
+    .muted{ color:#7a6a5f; font-size:14px; }
+        /* Backdrop do menu (mesmo padrão agenda/configurações) */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.35);
+      z-index:990;
+    }
+
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+  <!-- Menu lateral -->
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <!-- Conteúdo -->
+  <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="users"></i> Usuários Cadastrados</h1>
+
+        <div class="card">
+          <table id="tabela-usuarios">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>WhatsApp</th>
+                <th>Perfil</th>
+                <th style="width:220px">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyUsuarios">
+              <!-- render -->
+            </tbody>
+          </table>
+          <p id="vazio" class="muted" style="display:none; margin:10px 2px 0;">
+            Nenhum usuário cadastrado.
+          </p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu (módulo) -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Guard / proteção de página -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+  </script>
+
+  <!-- Lógica da listagem de usuários (AGORA DIRETO DO LOCALSTORAGE) -->
+  <!-- Lógica da listagem de usuários (AGORA VIA API /usuarios) -->
+  <script type="module">
+    import { handleRequest } from './api/routes.js';
+    // Menu mobile (padrão agenda/configurações)
+    const hb = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const backdrop = document.getElementById('menuBackdrop');
+    const mq = window.matchMedia('(max-width:768px)');
+
+    function syncHamb(){
+      if (!hb) return;
+      hb.style.display = mq.matches ? 'block' : 'none';
+
+      // Ao voltar pro desktop, garante tudo fechado
+      if (!mq.matches){
+        aside?.classList.remove('aberto');
+        if (backdrop) backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+    }
+
+    mq.addEventListener('change', syncHamb);
+    syncHamb();
+
+    if (hb && aside && backdrop){
+      hb.addEventListener('click', () => {
+        const aberto = aside.classList.toggle('aberto');
+        backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      });
+
+      backdrop.addEventListener('click', () => {
+        aside.classList.remove('aberto');
+        backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      });
+    }
+
+
+    // Função para deixar o telefone só com números
+    const safePhone = (v) => String(v || '').replace(/\D/g, '');
+
+    // Abrir conversa no WhatsApp
+    function abrirWhatsApp(numero) {
+      const w = safePhone(numero);
+      if (!w) {
+        alert('Usuário sem WhatsApp cadastrado.');
+        return;
+      }
+      window.open('https://wa.me/55' + w, '_blank');
+    }
+
+    // Excluir usuário via API
+    async function excluirUsuario(id) {
+      if (!id) {
+        alert('ID de usuário inválido.');
+        return;
+      }
+      if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+
+      try {
+        const resp = await handleRequest('/usuarios', {
+          method: 'DELETE',
+          body: { id }
+        });
+
+        if (!resp || resp.status !== 200) {
+          const msg =
+            (resp && (resp.error || resp.data?.error)) ||
+            'Não foi possível excluir o usuário.';
+          alert(msg);
+          return;
+        }
+
+        alert('Usuário excluído com sucesso!');
+        renderizarUsuarios();
+      } catch (e) {
+        console.error(e);
+        alert('Erro ao excluir usuário. Tente novamente em alguns instantes.');
+      }
+    }
+
+    // Ir para a tela de edição com o ID na URL
+    function editarUsuario(id) {
+      if (!id) {
+        alert('Não foi possível identificar o usuário.');
+        return;
+      }
+      location.href = `cadastro-usuario.html?id=${encodeURIComponent(id)}`;
+    }
+
+    // Buscar usuários na API e montar a tabela
+    async function renderizarUsuarios() {
+      const tbody = document.querySelector('#tbodyUsuarios');
+      const vazio = document.querySelector('#vazio');
+      if (!tbody) return;
+
+      try {
+        const resp = await handleRequest('/usuarios', { method: 'GET' });
+
+        if (!resp || resp.status !== 200 || !Array.isArray(resp.data)) {
+          console.error('Erro ao carregar usuários:', resp);
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align:center; padding:16px;">
+                Não foi possível carregar a lista de usuários.
+              </td>
+            </tr>
+          `;
+          if (vazio) vazio.style.display = 'none';
+          return;
+        }
+
+        const lista = resp.data;
+
+        if (!lista.length) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align:center; padding:16px;">
+                Nenhum usuário encontrado.
+              </td>
+            </tr>
+          `;
+          if (vazio) vazio.style.display = 'none';
+          return;
+        }
+
+        tbody.innerHTML = '';
+        if (vazio) vazio.style.display = 'none';
+
+        lista.forEach((u) => {
+          const tr = document.createElement('tr');
+
+          const tdNome = document.createElement('td');
+          tdNome.textContent = u.nome || '';
+
+          const tdEmail = document.createElement('td');
+          tdEmail.textContent = u.email || '';
+
+          const tdWhats = document.createElement('td');
+          tdWhats.textContent = safePhone(u.whatsapp || u.telefone || '');
+
+          const tdPerfil = document.createElement('td');
+          tdPerfil.textContent =
+            u.perfil || (Array.isArray(u.perfis) ? u.perfis.join(', ') : '');
+
+          const tdAcoes = document.createElement('td');
+          tdAcoes.className = 'acoes';
+
+          const bZap = document.createElement('button');
+          bZap.className = 'btn btn-zap';
+          bZap.innerHTML = '<i data-lucide="message-circle"></i> Zap';
+          bZap.addEventListener(
+            'click',
+            () => abrirWhatsApp(u.whatsapp || u.telefone || '')
+          );
+
+          const bEdit = document.createElement('button');
+          bEdit.className = 'btn btn-editar';
+          bEdit.innerHTML = '<i data-lucide="pencil"></i> Editar';
+          bEdit.addEventListener('click', () => editarUsuario(u.id));
+
+          const bDel = document.createElement('button');
+          bDel.className = 'btn btn-excluir';
+          bDel.innerHTML = '<i data-lucide="trash-2"></i> Excluir';
+          bDel.addEventListener('click', () => excluirUsuario(u.id));
+
+          tdAcoes.append(bZap, bEdit, bDel);
+          tr.append(tdNome, tdEmail, tdWhats, tdPerfil, tdAcoes);
+          tbody.appendChild(tr);
+        });
+
+        try {
+          window.lucide?.createIcons?.();
+        } catch {}
+      } catch (e) {
+        console.error(e);
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align:center; padding:16px;">
+              Erro ao carregar usuários. Tente novamente em alguns instantes.
+            </td>
+          </tr>
+        `;
+        if (vazio) vazio.style.display = 'none';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', renderizarUsuarios);
+  </script>
+
+</body>
+</html>
