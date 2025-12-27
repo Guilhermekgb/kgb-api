@@ -1,0 +1,260 @@
+/* ========= TEMA ========= */
+:root{
+  --bg:#f8f1e8;
+  --marrom:#5a3e2b;
+  --dourado:#c29a5d;
+  --borda:#e7d9c9;
+  --texto:#2b2b2b;
+  --cinza:#6b7280;
+  --white:#fff;
+
+  /* largura do menu lateral (desktop) */
+  --sidebar-w:260px;
+}
+
+*{ box-sizing:border-box; }
+html,body{ background:var(--bg); color:var(--texto); height:100%; }
+/* Botão hamburguer (mobile) */
+#hamburguer{
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: var(--dourado);
+  color: #fff;
+  border: none;
+  font-size: 22px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.12);
+  z-index: 1001;
+  display: none; /* some no desktop */
+}
+
+/* ========= LAYOUT CENTRAL (miolo cheio) ========= */
+/* Estrutura base */
+.wrapper{ display:flex; min-height:100vh; }
+
+/* Main ocupa toda a faixa útil à direita do menu
+   (anula qualquer max-width/margem vindos do style.css) */
+main.conteudo-principal{
+  flex:1;
+  min-height:100vh;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:24px clamp(16px, 3vw, 32px) 40px;
+}
+
+/* “Achata” o wrapper interno para não limitar a largura */
+main.conteudo-principal > .conteudo-central{
+  display:contents !important; /* filhos passam a ocupar 100% da faixa */
+}
+
+/* Reserva do menu apenas uma vez no desktop */
+@media (min-width:769px){
+  #menuLateral{
+    position:fixed; inset:0 auto 0 0;
+    width:var(--sidebar-w); height:100vh; z-index:999;
+  }
+  .wrapper{ padding-left:var(--sidebar-w) !important; }
+}
+
+/* Mobile: menu fora da tela por padrão; conteúdo sem reserva fixa */
+@media (max-width:768px){
+  .wrapper{ padding-left:0 !important; }
+  #menuLateral{
+    position:fixed;
+    transform:translateX(-100%);
+    transition:transform .25s ease;
+    width:var(--sidebar-w); z-index:999;
+  }
+  #menuLateral.aberto{ transform:translateX(0); }
+}
+
+/* Garantir que blocos internos não “apertem” o miolo */
+.topo, .tabs, .filtros.fancy, .tabela, .panel-actions{
+  width:100% !important;
+  max-width:none !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+}
+
+/* ========= TOPO / TÍTULO ========= */
+.topo{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-bottom:8px;
+}
+.topo h1{ margin:0; color:var(--marrom); font-family:"Playfair Display",serif; }
+
+/* ========= ABAS ========= */
+.tabs{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px; }
+.tabs .tab{
+  padding:8px 12px; border-radius:10px; border:1px solid var(--borda);
+  background:#fff; cursor:pointer; color:var(--marrom); font-weight:600;
+}
+.tabs .tab.active{ background:var(--dourado); border-color:var(--dourado); color:#fff; }
+
+/* ========= BOTÕES ========= */
+.btn{
+  border:1px solid var(--borda); background:#fff;
+  padding:8px 12px; border-radius:10px; cursor:pointer;
+}
+.btn:hover{ background:#faf7f2; }
+.btn.primario{ background:var(--dourado); border-color:var(--dourado); color:#fff; }
+.btn-ghost{ background:#f9fafb; border:1px solid #d1d5db; padding:6px 10px; border-radius:8px; cursor:pointer; }
+.btn-ghost:hover{ background:#f3f4f6; }
+
+/* ========= TABELAS ========= */
+.tabela{
+  background:#fff; border:1px solid var(--borda);
+  border-radius:14px; padding:10px; width:100% !important; max-width:none !important;
+}
+.tabela table{ width:100%; border-collapse:collapse; }
+.tabela thead th{
+  text-align:left; padding:10px; color:var(--marrom); font-weight:600;
+  border-bottom:1px solid var(--borda); background:#fcf8f2;
+}
+.tabela tbody td{ padding:10px; border-bottom:1px dotted var(--borda); vertical-align:middle; }
+.tabela .acoes{ display:flex; gap:8px; }
+.hint{ padding:14px; color:var(--cinza); }
+
+/* Cor da categoria */
+.tabela .cor{
+  display:inline-block; width:16px; height:16px; border-radius:50%;
+  border:1px solid #d1d5db; background:var(--cor,#999);
+}
+
+/* Subcategoria recuada na lista principal */
+.conteudo-principal .tabela tr.is-sub td { padding-left:32px; opacity:.95; }
+.conteudo-principal .tabela tr.is-sub td:first-child .cor { transform:scale(.9); }
+
+/* Painel de ações embaixo */
+.panel-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
+
+/* ========= FILTROS / SELECT ========= */
+.filtros.fancy{
+  display:flex; gap:10px; flex-wrap:wrap; margin:0 0 12px;
+  background:#fff; border:1px solid var(--borda); border-radius:12px; padding:10px;
+}
+.filtros.fancy label{ display:flex; flex-direction:column; gap:6px; font-size:.92rem; color:var(--marrom); }
+
+select{
+  -webkit-appearance:none; -moz-appearance:none; appearance:none;
+  padding:8px 36px 8px 10px; border-radius:10px; border:1px solid var(--borda); background:#fff;
+  background-image:url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%235a3e2b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center; background-size:18px;
+}
+select:focus{ outline:2px solid rgba(194,154,93,.35); border-color:var(--dourado); }
+
+/* ========= MODAL ========= */
+.modal{ border:none; border-radius:16px; padding:0; width:min(720px,92vw); }
+.modal::backdrop{ background:rgba(0,0,0,.35); }
+.modal-box{ background:#fff; border-radius:16px; overflow:hidden; }
+.modal-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--borda); }
+.modal-header h3{ margin:0; color:var(--marrom); }
+.modal-actions{ display:flex; justify-content:flex-end; gap:10px; padding:12px 14px; border-top:1px solid var(--borda); }
+
+.form-grid{
+  display:grid; gap:12px; padding:14px;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+}
+.form-grid .full{ grid-column:1 / -1; }
+.form-grid input, .form-grid select{
+  padding:8px 10px; border-radius:10px; border:1px solid var(--borda); background:#fff;
+}
+@media (max-width:720px){ .form-grid{ grid-template-columns:1fr; } }
+
+/* Subcategorias no modal */
+.subcats{ margin:0 14px 14px; border-top:1px dashed #c9b9a6; padding-top:12px; }
+.subcats-header{ display:flex; align-items:baseline; gap:12px; }
+.subcats-header h4{ margin:0; font-size:1rem; color:var(--marrom); }
+.muted{ color:var(--cinza); font-size:.85rem; }
+
+.subcats-add{ display:flex; gap:8px; margin:8px 0 12px; }
+.subcats-add input{ flex:1; }
+.subcats-add button{ padding:6px 10px; border-radius:8px; border:1px solid var(--dourado); background:#f8f1e8; cursor:pointer; }
+
+.subcats-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.subcats-list li{ display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid var(--borda); border-radius:10px; background:#fff; }
+.subcats-list .left{ display:flex; align-items:center; gap:8px; }
+.subcats-list .dot{ width:12px; height:12px; border-radius:50%; background:var(--cor,#999); border:1px solid #ddd; }
+.subcats-list .name{ font-weight:500; }
+.subcats-list .actions{ display:flex; gap:6px; }
+.subcats-list .btn{ padding:4px 8px; border-radius:8px; border:1px solid #d1d5db; background:#f9fafb; cursor:pointer; font-size:.85rem; }
+.subcats-list .btn:hover{ background:#f3f4f6; }
+
+/* Fallback p/ browsers sem <dialog> */
+.dialog-fallback{ display:block !important; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1000; }
+.dialog-fallback .modal-box{ background:#fff; width:min(720px,92vw); margin:7vh auto; border-radius:16px; overflow:hidden; }
+/* ===== FORCE FULL-WIDTH DO MIÔLO ===== */
+
+/* 0) Garante reserva do menu só uma vez (desktop) */
+@media (min-width: 769px){
+  .wrapper{ padding-left: 260px !important; }  /* mesmo valor do menu */
+  #menuLateral{ position: fixed; inset: 0 auto 0 0; width: 260px; height: 100vh; z-index: 999; }
+}
+
+/* 1) <main> sem limites */
+main.conteudo-principal{
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 24px clamp(16px, 3vw, 32px) 40px !important;
+}
+
+/* 2) “Arrasa quarteirão”: remove max-width/margens do PRIMEIRO WRAPPER e dos filhos diretos,
+      que é onde o style.css costuma impor a caixa estreita. */
+main.conteudo-principal > *{
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+main.conteudo-principal > * > *{
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* 3) Se existir .conteudo-central, achata pra não limitar nada */
+main.conteudo-principal > .conteudo-central{
+  display: contents !important;
+}
+
+/* 4) Blocos comuns não podem limitar a largura */
+.topo, .tabs, .filtros.fancy, .tabela, .panel-actions{
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* 5) Tabela sempre ocupando toda a faixa */
+.tabela{ width: 100% !important; max-width: none !important; }
+.tabela table{ width: 100% !important; }
+
+@media (max-width: 768px){
+  .wrapper{ padding-left: 0 !important; }
+  #menuLateral{
+    position: fixed; transform: translateX(-100%); transition: transform .25s ease;
+    width: 260px; z-index: 999;
+  }
+  #menuLateral.aberto{ transform: translateX(0); }
+
+  /* mostra o botão só no mobile */
+  #hamburguer{
+    display: block;
+  }
+}
+
+/* Botão de ação no TOPO para QUALQUER aba ativa */
+.panel.active{
+  display: flex;              /* só vira flex quando ativa */
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel.active .panel-actions{
+  order: -1;                  /* sobe para o topo */
+  align-self: flex-end;       /* alinha à direita */
+  margin: 0;
+}

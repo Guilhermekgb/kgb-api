@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:documentacao-api.html">
+  <meta charset="UTF-8" />
+  <title>Documentação da API – Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    /* NÃO definir fonte global p/ não afetar o menu */
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Área principal: margem dinâmica no desktop (ajustada via JS) */
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+      background-color: #fef7ec; /* visual da doc */
+      box-sizing: border-box;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    /* Tipografia da ÁREA PRINCIPAL (menu preservado) */
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    /* Títulos só dentro da área de conteúdo, não no menu */
+    .conteudo-principal h1,
+    .conteudo-principal h2,
+    .conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    /* Cabeçalho */
+    .conteudo-principal h1{
+      text-align:center; margin:0 0 20px; font-size:28px; color:#5c4033;
+      display:flex; justify-content:center; align-items:center; gap:10px;
+    }
+
+    /* Cartões de rota */
+    .rota {
+      background: #fff8e7;
+      padding: 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.05);
+      margin-bottom: 1.5rem;
+    }
+    .rota h2 { margin:0 0 .6rem; font-size:1.2rem; color:#7d4e24; }
+
+    code { background:#eee; padding:.2rem .4rem; border-radius:4px; }
+    pre  {
+      background:#2d2d2d; color:#f8f8f2; padding:1rem;
+      border-radius:5px; overflow-x:auto; font-size:.9rem;
+    }
+
+    button.botao-acao{
+      background:#d4a373; color:#fff; border:none; padding:.4rem 1rem;
+      border-radius:5px; cursor:pointer; margin-top:.5rem;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+
+    #token { font-size:.9rem; }
+
+    /* Botão hambúrguer só no mobile, como no modelo */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001; display:none;
+      background:#c29a5d; color:#fff; border:none; font-size:24px; padding:6px 12px; border-radius:8px;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+      .conteudo-principal h1{ font-size:22px; flex-direction:column; gap:6px; }
+    }
+
+    /* Realce de item ativo no menu (ok repetir localmente) */
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Botão Mobile (comportamento controlado por menu-lateral.js) -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado via JS do projeto) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <a id="btnVoltarDashboard" style="display:inline-block; margin: 0 0 16px; color:#5c4033; text-decoration:none; cursor:pointer;">
+          <i data-lucide="arrow-left"></i> Voltar ao Dashboard
+        </a>
+
+        <h1><i data-lucide="book-open-text"></i> Documentação da API</h1>
+
+        <div style="text-align:right; margin-bottom:1rem;">
+          <button class="botao-acao" id="btnCopiarToken"><i data-lucide="clipboard"></i> Copiar Token</button>
+          <code id="token">Bearer autenticado</code>
+        </div>
+
+        <!-- Rotas da API (exemplos) -->
+        <div class="rota">
+          <h2>GET /leads</h2>
+          <p><strong>Descrição:</strong> Retorna todos os leads cadastrados</p>
+          <p><strong>Método:</strong> <code>GET</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 200,
+  "data": [
+    {
+      "id": 1721409420000,
+      "nome": "Camila",
+      "evento": "Casamento",
+      "data": "2025-12-10"
+    }
+  ]
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>POST /leads</h2>
+          <p><strong>Descrição:</strong> Cadastra um novo lead</p>
+          <p><strong>Método:</strong> <code>POST</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Body:</strong></p>
+<pre>{
+  "nome": "Camila",
+  "evento": "Casamento",
+  "data": "2025-12-10"
+}</pre>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 201,
+  "data": {
+    "id": 1721409420000,
+    "nome": "Camila",
+    "evento": "Casamento",
+    "data": "2025-12-10"
+  }
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>PUT /leads/update</h2>
+          <p><strong>Descrição:</strong> Atualiza um lead existente pelo ID</p>
+          <p><strong>Método:</strong> <code>PUT</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Body:</strong></p>
+<pre>{
+  "id": 1721409420000,
+  "nome": "Camila",
+  "evento": "Casamento Atualizado",
+  "data": "2025-12-20"
+}</pre>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 200,
+  "data": {
+    "id": 1721409420000,
+    "nome": "Camila",
+    "evento": "Casamento Atualizado",
+    "data": "2025-12-20"
+  }
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>DELETE /leads/delete</h2>
+          <p><strong>Descrição:</strong> Remove um lead pelo ID</p>
+          <p><strong>Método:</strong> <code>DELETE</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Body:</strong></p>
+<pre>{
+  "id": 1721409420000
+}</pre>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 200,
+  "data": {
+    "mensagem": "Lead removido com sucesso"
+  }
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>GET /eventos</h2>
+          <p><strong>Descrição:</strong> Retorna todos os eventos cadastrados</p>
+          <p><strong>Método:</strong> <code>GET</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 200,
+  "data": [
+    {
+      "id": 1,
+      "cliente": "João",
+      "data": "2025-11-20",
+      "tipo": "Aniversário"
+    }
+  ]
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>GET /usuarios</h2>
+          <p><strong>Descrição:</strong> Retorna todos os usuários cadastrados</p>
+          <p><strong>Método:</strong> <code>GET</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 200,
+  "data": [
+    {
+      "id": 1,
+      "nome": "Erick",
+      "perfil": "Administrador"
+    }
+  ]
+}</pre>
+        </div>
+
+        <div class="rota">
+          <h2>POST /notificacoes</h2>
+          <p><strong>Descrição:</strong> Cria uma nova notificação no sistema</p>
+          <p><strong>Método:</strong> <code>POST</code></p>
+          <p><strong>Headers:</strong> <code>Authorization: Bearer autenticado</code></p>
+          <p><strong>Body:</strong></p>
+<pre>{
+  "titulo": "Novo Lead",
+  "descricao": "Camila foi cadastrada como novo lead",
+  "tipo": "lead"
+}</pre>
+          <p><strong>Resposta:</strong></p>
+<pre>{
+  "status": 201,
+  "data": {
+    "id": 1721409421111,
+    "titulo": "Novo Lead",
+    "descricao": "Camila foi cadastrada como novo lead",
+    "tipo": "lead",
+    "data": "2025-07-17T19:50:00Z",
+    "lida": false
+  }
+}</pre>
+        </div>
+
+        <!-- ...outras rotas -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu precisa ser módulo (usa import.meta) -->
+  <script type="module" src="menu-lateral.js"></script>
+<!-- === INÍCIO PATCH GUARD (doc API) === -->
+<script type="module">
+  import guard, { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim() || 'page:documentacao-api.html';
+  guard({ permissao });
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
+  });
+</script>
+<!-- === FIM PATCH GUARD (doc API) === -->
+
+  <!-- Ícones + ajuste de margem no desktop + handlers -->
+  <script>
+    // Ícones após DOM pronto
+    document.addEventListener('DOMContentLoaded', () => { window.lucide?.createIcons?.(); });
+
+    // Ajusta margem-left no DESKTOP para o conteúdo não ficar sob o menu
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // Botões de ação
+    document.addEventListener('DOMContentLoaded', () => {
+      const btnVoltar = document.getElementById('btnVoltarDashboard');
+      const btnCopiar = document.getElementById('btnCopiarToken');
+
+      btnVoltar?.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'dashboard.html';
+      });
+
+      btnCopiar?.addEventListener('click', () => {
+        const token = document.getElementById('token')?.innerText || '';
+        navigator.clipboard.writeText(token).then(() => {
+          alert('Token copiado para a área de transferência!');
+        }).catch(() => alert('Não foi possível copiar o token.'));
+      });
+    });
+  </script>
+</body>
+</html>

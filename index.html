@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <!-- Opcional: define API_BASE também no index.html -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+ var PROD_API = "https://kgb-api.onrender.com";
+var DEV_API  = "http://127.0.0.1:3333";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+  })();
+</script>
+
+  <title>Buffet KGB — Início</title>
+  <style>
+    /* splash bem leve só pra evitar "piscada" */
+    html,body{height:100%}
+    body{margin:0;display:grid;place-items:center;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    .wrap{opacity:.7;text-align:center}
+    .wrap .logo{font-weight:700;letter-spacing:.5px;margin-bottom:.3rem}
+    .muted{opacity:.6}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">Buffet KGB</div>
+    <div class="muted">carregando…</div>
+    <noscript>
+      <p>O JavaScript está desabilitado. Acesse:</p>
+      <p>
+        <a href="login.html">Login</a> • <a href="dashboard.html">Dashboard</a>
+      </p>
+    </noscript>
+  </div>
+
+  <script>
+    (function () {
+      // --- util ---
+      const safeJSON = (s)=>{ try{ return JSON.parse(s); }catch{ return null; } };
+      const get = (k)=> window.localStorage.getItem(k);
+
+      // -> checa várias chaves que você já usa no projeto
+      function isLogged() {
+        try {
+          const u1 = safeJSON(get('auth:user'));
+          const u2 = safeJSON(get('usuarioLogado'));
+          const u3 = safeJSON(get('usuario'));
+          const u4 = safeJSON(get('currentUser'));
+          const token = get('auth:token') || get('token');
+
+          // heurística: existe objeto com algum identificador OU token
+          const hasObj =
+            (u1 && (u1.id || u1.email || u1.nome)) ||
+            (u2 && (u2.id || u2.email || u2.nome)) ||
+            (u3 && (u3.id || u3.email || u3.nome)) ||
+            (u4 && (u4.id || u4.email || u4.nome));
+
+          return !!(hasObj || token);
+        } catch {
+          return false;
+        }
+      }
+
+      // --- destino por query (?to=/page.html ou ?next=...) com allowlist ---
+      const params = new URLSearchParams(location.search);
+      const qTo   = params.get('to')   || params.get('next') || '';
+      const allow = [
+        'dashboard.html','agenda.html','evento-detalhado.html',
+        'lista-propostas.html','degustacoes-disponiveis.html',
+        'financeiro-lancamentos.html','notificacoes.html'
+      ];
+      const isAllowed = (p)=> allow.some(a => p && p.replace(/^\//,'').startsWith(a));
+
+      const DASH = 'dashboard.html';
+      const LOGIN = 'login.html';
+
+      // se já estiver logado -> manda para destino válido ou dashboard
+      // senão -> manda para login com ?next=...
+      const go = (href) => { location.replace(href); };
+
+      const next = (isAllowed(qTo) ? qTo.replace(/^\//,'') : '');
+      if (isLogged()) {
+        go(next || DASH);
+      } else {
+        // se tinha intenção de ir a uma página, preserva como next
+        const dest = next ? `${LOGIN}?next=${encodeURIComponent(next)}` : LOGIN;
+        go(dest);
+      }
+    })();
+  </script>
+</body>
+</html>

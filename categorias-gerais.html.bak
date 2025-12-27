@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:categorias-gerais.html">
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+  <title>Categorias Gerais</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- Estilos desta página -->
+  <link rel="stylesheet" href="categorias-gerais.css" />
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral dinâmico -->
+    <aside id="menuLateral" class="menu-lateral" role="navigation" aria-label="Menu lateral"></aside>
+
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1 class="titulo-pagina">
+          <i data-lucide="settings"></i>
+          <span>Gerenciar Categorias</span>
+        </h1>
+
+        <!-- Abas -->
+        <div class="tabs" role="tablist" aria-label="Categorias">
+          <button class="tab-btn ativo" data-tab="colunas" role="tab" aria-selected="true">COLUNAS DO FUNIL</button>
+          <button class="tab-btn" data-tab="conheceu" role="tab">COMO CONHECEU</button>
+          <button class="tab-btn" data-tab="motivos" role="tab">MOTIVOS DE ARQUIVAMENTO</button>
+          <button class="tab-btn" data-tab="servicos" role="tab">CATEGORIAS DE SERVIÇOS</button>
+          <button class="tab-btn" data-tab="cardapio" role="tab">CATEGORIAS DE CARDÁPIO</button>
+          <button class="tab-btn" data-tab="tipos" role="tab">TIPOS DE EVENTO</button>
+          <button class="tab-btn" data-tab="funcoesEquipe" role="tab">FUNÇÕES DA EQUIPE</button>
+          <button class="tab-btn" data-tab="tiposAgenda" role="tab">TIPOS DE AGENDA</button>
+        </div>
+
+        <!-- Colunas do Funil -->
+        <section id="colunas" class="aba ativa" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="columns-3"></i> Colunas do Funil de Leads</h2>
+
+            <div class="grid-form">
+              <div class="campo">
+                <label>Nome da Coluna</label>
+                <input id="nomeColuna" type="text" />
+              </div>
+              <div class="campo">
+                <label>Ícone (Lucide)</label>
+                <input id="iconeColuna" type="text" placeholder="Ex: handshake" />
+              </div>
+              <div class="campo full">
+                <label>Descrição</label>
+                <textarea id="descricaoColuna" rows="3" placeholder="Breve descrição do uso desta etapa no funil..."></textarea>
+              </div>
+              <div class="acoes">
+                <button id="btnAddColuna" class="btn btn-dourado">➕ Adicionar Coluna</button>
+              </div>
+            </div>
+
+            <div id="listaColunas" class="lista-colunas"></div>
+          </div>
+        </section>
+
+        <!-- Como Conheceu -->
+        <section id="conheceu" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="users"></i> Como Conheceu o Buffet</h2>
+            <p class="hint"><strong>Tela usada em:</strong> Formulário Lead / Formulário Cliente / Novo Orçamento / Orçamento Detalhado</p>
+
+            <div class="add-row">
+              <input type="text" id="novaFonte" placeholder="Ex: Instagram, Indicação, Feira..." />
+              <button id="btnAddFonte" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaFontes" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Motivos de Arquivamento -->
+        <section id="motivos" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="x-circle"></i> Motivos de Arquivamento</h2>
+
+            <div class="add-row">
+              <input type="text" id="novoMotivo" placeholder="Ex: Fora do orçamento, Fechou com outro buffet..." />
+              <button id="btnAddMotivo" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaMotivos" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Categorias de Serviços -->
+        <section id="servicos" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="briefcase"></i> Categorias de Serviços</h2>
+
+            <div class="add-row">
+              <input type="text" id="novoServico" placeholder="Ex: Bar, Garçom, Cozinha, Segurança..." />
+              <button id="btnAddServico" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaServicos" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Categorias de Cardápio -->
+        <section id="cardapio" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="chef-hat"></i> Categorias de Cardápio</h2>
+
+            <div class="add-row">
+              <input type="text" id="novoCardapio" placeholder="Ex: Finger Food, Churrasco, Ilha de Massas..." />
+              <button id="btnAddCardapio" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaCardapio" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Tipos de Evento -->
+        <section id="tipos" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="calendar-heart"></i> Tipos de Evento</h2>
+
+            <div class="add-row">
+              <input type="text" id="novoTipoEvento" placeholder="Ex: Casamento, Debutante, Formatura..." />
+              <button id="btnAddTipoEvento" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaTiposEvento" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Funções da Equipe -->
+        <section id="funcoesEquipe" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="users-2"></i> Funções da Equipe</h2>
+            <p class="hint">Usado no modal <strong>Gerenciar equipe</strong> (equipe.html).</p>
+
+            <div class="add-row">
+              <input type="text" id="novaFuncaoEquipe" placeholder="Ex: Maître, Garçom, Churrasqueiro..." />
+              <button id="btnAddFuncaoEquipe" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaFuncoesEquipe" class="lista-simples"></ul>
+          </div>
+        </section>
+
+        <!-- Tipos de Agenda -->
+        <section id="tiposAgenda" class="aba" role="tabpanel">
+          <div class="caixa-interna">
+            <h2 class="subtitulo"><i data-lucide="calendar-clock"></i> Tipos de Agenda</h2>
+
+            <div class="add-row">
+              <input type="text" id="novoTipoAgenda" placeholder="Ex: Degustação, Reunião, Visita técnica..." />
+              <button id="btnAddTipoAgenda" class="btn">Adicionar</button>
+            </div>
+
+            <ul id="listaTiposAgenda" class="lista-simples"></ul>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts globais -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Script desta página -->
+  <script type="module" src="categorias-gerais.js"></script>
+</body>
+</html>

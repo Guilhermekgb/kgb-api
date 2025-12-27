@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta name="page-permission" content="page:comissoes.html" />
+
+  <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH kgb-common (precisa vir cedo no <head>) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM PATCH kgb-common === -->
+<script type="module" src="./financeiro-shared.js"></script>
+
+  <title>Comissões</title>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <!-- Estilos específicos da página -->
+  <link rel="stylesheet" href="comissoes.css" />
+
+  <style>
+    /* Mantém a base do seu modelo */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #f8f1e8;
+      height: 100%;
+    }
+    main.conteudo-principal,
+    input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3 { font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif; }
+
+    .wrapper { display: flex; min-height: 100vh; overflow: hidden; }
+    #menuLateral { flex-shrink: 0; background-color: #5a3e2b; height: 100vh; overflow-y: auto; }
+    main.conteudo-principal { flex-grow: 1; padding: 28px; height: 100vh; overflow-y: auto; }
+
+    .conteudo-central { max-width: 1200px; margin: 0 auto; }
+
+    #hamburguer {
+      position: fixed; top: 12px; left: 12px;
+      background: #c29a5d; border: none; color: #fff;
+      font-size: 24px; padding: 6px 12px; border-radius: 8px;
+      z-index: 1001; display: none;
+    }
+    @media (max-width: 768px) {
+      #hamburguer { display: block; }
+      #menuLateral {
+        position: fixed; transform: translateX(-100%);
+        transition: transform .3s ease; z-index: 999; width: 260px;
+      }
+      #menuLateral.aberto { transform: translateX(0); }
+      main.conteudo-principal { padding: 20px; }
+    }
+
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo {
+      background-color: #f3e8da;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .tr { border-top: 1px solid #eee1d3; padding: 10px 12px; }
+    .muted { color:#7b6a57; }
+    .btn.outline {
+      border: 1px solid #eadfd1; background: #fff; color: #5a3e2b;
+      border-radius: 10px; padding: 8px 10px; cursor: pointer;
+    }
+    .btn.outline:hover { background: #f8efe3; }
+  </style>
+
+   <link rel="icon" type="image/png" href="logo.png">
+
+</head>
+<body class="pagina-comissoes">
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <!-- Topo + KPIs -->
+        <header class="topo" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px;margin-bottom:16px;">
+          <h1 style="margin:0;color:#5a3e2b;display:flex;align-items:center;gap:10px;">
+            <i data-lucide="hand-coins"></i> Controle de Comissões
+          </h1>
+
+          <div class="kpis" style="display:grid;grid-auto-flow:column;gap:12px;">
+            <div class="kpi" style="background:#fff;border:1px solid #eadfd1;border-radius:12px;padding:10px 14px;min-width:160px;">
+              <div class="label" style="font-size:12px;color:#7b6a57;">Total (mês)</div>
+              <div id="kpiTotalMes" class="valor" style="font-weight:700;color:#5a3e2b;margin-top:2px;">R$ 0,00</div>
+            </div>
+            <div class="kpi" style="background:#fff;border:1px solid #eadfd1;border-radius:12px;padding:10px 14px;min-width:160px;">
+              <div class="label" style="font-size:12px;color:#7b6a57;">Pendentes</div>
+              <div id="kpiPendentesMes" class="valor" style="font-weight:700;color:#5a3e2b;margin-top:2px;">R$ 0,00</div>
+            </div>
+            <div class="kpi" style="background:#fff;border:1px solid #eadfd1;border-radius:12px;padding:10px 14px;min-width:160px;">
+              <div class="label" style="font-size:12px;color:#7b6a57;">Pagas</div>
+              <div id="kpiPagasMes" class="valor" style="font-weight:700;color:#5a3e2b;margin-top:2px;">R$ 0,00</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Filtros -->
+        <section class="filtros" style="display:grid;grid-template-columns:160px 160px 1fr 2fr 140px;gap:12px;margin:18px 0;">
+          <div class="grupo" style="display:grid;gap:6px;">
+            <label>Mês</label>
+            <input type="month" id="fMes" style="background:#fff;border:1px solid #eadfd1;border-radius:10px;padding:8px 10px;">
+          </div>
+          <div class="grupo" style="display:grid;gap:6px;">
+            <label>Status</label>
+            <select id="fStatus" style="background:#fff;border:1px solid #eadfd1;border-radius:10px;padding:8px 10px;">
+              <option value="">Todos</option>
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <div class="grupo" style="display:grid;gap:6px;">
+            <label>Vendedor</label>
+            <select id="fVendedor" style="background:#fff;border:1px solid #eadfd1;border-radius:10px;padding:8px 10px;">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="grupo" style="display:grid;gap:6px;grid-column:auto / span 1;">
+            <label>Busca (evento)</label>
+            <input type="search" id="fBusca" placeholder="Ex.: Aniversário do João" style="background:#fff;border:1px solid #eadfd1;border-radius:10px;padding:8px 10px;">
+          </div>
+          <div class="grupo" style="display:grid;gap:6px;">
+            <label>&nbsp;</label>
+            <button id="btnLimpar" class="btn outline"><i data-lucide="eraser"></i> Limpar</button>
+          </div>
+        </section>
+
+        <!-- Tabela -->
+       <section class="tabela" style="background:#fff;border:1px solid #eadfd1;border-radius:14px;overflow-x:auto;overflow-y:hidden;">
+          <div class="thead" style="background:#f3e8da;color:#5a3e2b;padding:10px 12px;font-weight:600;display:grid;grid-template-columns:140px 1fr 220px 140px 140px 140px;align-items:center;">
+            <div>Vencimento</div>
+            <div>Evento</div>
+            <div>Vendedor</div>
+            <div class="num" style="text-align:right;">Valor</div>
+            <div>Status</div>
+            <div>Pago em</div>
+          </div>
+          <div id="tbComissoes" class="tbody"></div>
+          <div id="hintSemReg" class="hint" hidden style="text-align:center;padding:16px;color:#7b6a57;">Nenhum registro neste filtro.</div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+   <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module" src="comissoes.js"></script>
+
+  <script>
+    // Menu mobile (hambúrguer)
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn  = document.getElementById('hamburguer');
+      const menu = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) return;
+
+      function abrirMenu() {
+        menu.classList.add('aberto');
+        btn.setAttribute('aria-expanded', 'true');
+        if (backdrop) backdrop.hidden = false;
+        document.body.style.overflow = 'hidden';
+      }
+
+      function fecharMenu() {
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+        if (backdrop) backdrop.hidden = true;
+        document.body.style.overflow = '';
+      }
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menu.classList.contains('aberto')) {
+          fecharMenu();
+        } else {
+          abrirMenu();
+        }
+      });
+
+      // Clicar fora fecha
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        const clicouNoMenu  = menu.contains(e.target);
+        const clicouNoBotao = btn.contains(e.target);
+        if (!clicouNoMenu && !clicouNoBotao) {
+          fecharMenu();
+        }
+      });
+
+      // Se tiver backdrop e clicar nele, também fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Se voltar para desktop, garante menu fechado como overlay
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+  </script>
+
+  <!-- Guard de permissão -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  
+  </script>
+</body>
+</html>
+

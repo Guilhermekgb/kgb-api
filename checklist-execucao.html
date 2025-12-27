@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<title>Execução do Checklist - Retorno</title>
+
+  <!-- (opcional) seu CSS global -->
+  <link rel="stylesheet" href="style.css"/>
+
+  <style>
+    :root { --gold:#c29a5d; --brown:#5a3e2b; --beige:#f8f1e8; }
+    html,body { background:#f8f1e8; margin:0; font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif; }
+
+    /* topo */
+    header.topbar{
+      position:static !important;
+      background:#fff;
+      padding:10px 16px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      box-shadow:0 1px 0 rgba(0,0,0,.06);
+    }
+    header.topbar h1{ margin:0; font-size:18px; color:var(--brown); }
+
+    /* layout */
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; background:#5a3e2b; height:100vh; overflow-y:auto; }
+
+    main.conteudo-principal{
+      flex:1;
+      display:flex;
+      justify-content:center;
+      padding:40px;
+      min-height:100vh;
+    }
+    .conteudo-central{
+      width:min(1100px,100%);
+      margin:0 auto;
+      padding:0 8px;
+    }
+
+    /* básicos */
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn{ border:1px solid var(--gold); background:#fff; color:var(--brown); padding:8px 12px; border-radius:10px; cursor:pointer; }
+    .btn.primary{ background:var(--gold); color:#fff; }
+    .card{ background:#fff; border:1px solid #eadfcd; border-radius:14px; box-shadow:0 2px 6px rgba(0,0,0,.04); padding:14px; }
+    .grid{ display:grid; gap:12px; }
+    .grid.cols-3{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+    label{ font-size:12px; color:var(--brown); display:block; margin-bottom:6px; }
+    input[type="text"],input[type="number"],select,textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid #e0d6c4; background:#fff; }
+    .pill{ padding:2px 6px; border-radius:6px; border:1px dashed #dac8a7; background:#fff8ef; color:#3b2a21; }
+
+    /* tabela */
+    table{ width:100%; border-collapse:collapse; background:#fff; border-spacing:0; }
+    th,td{ border-bottom:1px solid #eee; padding:10px; text-align:left; }
+    th{ background:#faf6ef; color:#5a3e2b; font-weight:600; }
+    tbody tr:hover{ background:#fffdf6; }
+    td input[type="number"], td input[type="text"]{
+      width:100%; box-sizing:border-box; padding:8px; border:1px solid #e8e0cf; border-radius:8px;
+    }
+    section.card{ margin-bottom:14px; }
+
+    /* impressão */
+    @media print{
+      #menuLateral, #hamburguer, .no-print{ display:none !important; }
+      main.conteudo-principal{ padding:0; }
+      .card{ box-shadow:none; border:none; }
+      header.topbar{ box-shadow:none; border-bottom:1px solid #ddd; }
+      .page-break{ page-break-before:always; }
+    }
+
+    /* ===== Tela de execução: SEM menu lateral ===== */
+    body.execucao #menuLateral,
+    body.execucao #hamburguer { display: none !important; }
+
+    body.execucao .wrapper { display: block; }
+
+    body.execucao main.conteudo-principal{
+      margin:0 !important;
+      padding:24px;
+      display:flex;
+      justify-content:center;
+    }
+    body.execucao .conteudo-central{
+      width:100%;
+      max-width: clamp(860px, 90vw, 1100px);
+      margin:0 auto;
+      padding:0 8px;
+    }
+    body.execucao thead th{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+.btn-foto,
+.foto-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px; padding:0; margin-left:6px;
+  border:1px solid #dac8a7; background:#fffdf8; border-radius:6px; cursor:pointer;
+}
+.btn-foto:hover,
+.foto-btn:hover{ background:#fff7ea; }
+
+
+  </style>
+</head>
+
+<body class="execucao">
+  <!-- (fica oculto em execucao) -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <header class="topbar">
+          <i data-lucide="check-square"></i>
+          <h1>Execução do Checklist - Retorno</h1>
+          <div style="margin-left:auto" class="muted" id="lblModo"></div>
+        </header>
+
+        <!-- Barra: Impressão por setor -->
+        <section class="card no-print" id="printBar" style="margin-top:10px;padding:10px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+          <div>
+            <label style="font-size:12px;color:#5a3e2b">Setor</label>
+            <select id="printSetorSel" style="min-width:220px;padding:8px;border:1px solid #e0d6c4;border-radius:8px"></select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:#5a3e2b">O que imprimir</label>
+            <select id="printTipoSel" style="min-width:180px;padding:8px;border:1px solid #e0d6c4;border-radius:8px">
+              <option value="saida">Saída</option>
+              <option value="retorno">Retorno</option>
+              <option value="ambos">Saída + Retorno</option>
+            </select>
+          </div>
+          <button class="btn" id="btnPrintExecSetor" type="button">Imprimir setor</button>
+        </section>
+
+        <!-- Cabeçalho do evento -->
+        <section class="card">
+          <div class="grid cols-3">
+            <div>
+              <label>Evento</label>
+              <div id="lblEvento" class="pill">-</div>
+            </div>
+            <div>
+              <label>Evento ID</label>
+              <div id="lblEvtId" class="pill">-</div>
+            </div>
+            <div>
+              <label>Convidados</label>
+              <div id="lblConvidados" class="pill">-</div>
+            </div>
+          </div>
+          <div class="muted" style="margin-top:6px">Saída está travada aqui; edite apenas o <b>Retorno</b>.</div>
+        </section>
+
+        <!-- Listas por setor -->
+        <section class="card" style="margin-top:12px">
+          <div class="sec-title">Retorno por Setor</div>
+          <div id="listas"></div>
+        </section>
+
+        <!-- Ações -->
+        <section class="card no-print" style="margin-top:12px">
+          <div class="actions" style="justify-content:flex-end">
+            <button class="btn" id="btnSalvar">Salvar</button>
+            <button class="btn primary" id="btnFinalizar">Finalizar Retorno</button>
+            <button class="btn" id="btnImprimir">Imprimir A4</button>
+          </div>
+
+          <!-- Dialog: Imprimir por setor (seleção múltipla) -->
+          <dialog id="dlgPrintSetores">
+            <form method="dialog" style="min-width:520px;max-width:90vw">
+              <div class="sec-title">Imprimir por setor</div>
+              <div class="muted">Selecione os setores para imprimir.</div>
+              <div id="printSetoresLista" style="margin-top:10px"></div>
+              <div class="actions" style="justify-content:flex-end; margin-top:12px">
+                <button class="btn" value="cancel">Cancelar</button>
+                <button class="btn" id="btnPrintSelecionado" value="default">Imprimir selecionados</button>
+                <button class="btn primary" id="btnPrintTodos" value="default">Imprimir tudo</button>
+              </div>
+            </form>
+          </dialog>
+
+          <div class="muted" style="margin-top:6px">
+            Após finalizar, as <b>ocorrências</b> (faltas/quebras) serão geradas para o Módulo Pós-Evento.
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL ÚNICO de Foto do Material (IDs alinhados com o JS) -->
+  <dialog id="dlgFotoMat" style="padding:0;border:0;border-radius:14px;max-width:90vw">
+    <div style="background:#fff; border:1px solid #eadfcd; border-radius:14px; overflow:hidden; max-width:min(720px, 90vw)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fbf5ee;border-bottom:1px solid #eadfcd">
+        <strong id="fotoMatTitulo" style="color:#5a3e2b">Foto do material</strong>
+        <button class="btn" onclick="document.getElementById('dlgFotoMat').close()" style="background:#fff;border-color:#eadfcd">Fechar</button>
+      </div>
+      <div style="padding:10px;background:#fff">
+        <img id="fotoMatImg" src="" alt="Foto do material" style="display:block;max-width:100%;height:auto;border-radius:10px">
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>try{ lucide.createIcons(); }catch(e){} </script>
+
+  <!-- Seu JS desta tela -->
+  <script src="checklist-execucao.js"></script>
+</body>
+</html>
+

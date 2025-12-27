@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:alertas.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- API base -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+      var PROD_API = "https://kgb-api.onrender.com";
+      var DEV_API  = "http://127.0.0.1:3333";
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+    })();
+  </script>
+
+  <!-- Permissões globais -->
+  <script type="module" src="./kgb-common.js"></script>
+  <script src="./kgb-api/public/api/storage-adapter.js"></script>
+  <script src="./kgb-api/public/js/fotos-shim.js"></script>
+  <script src="./kgb-api/public/api/storage-adapter.js"></script>
+  <script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+  <title>Painel de Alertas</title>
+
+  <!-- Ícones + Estilos -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#faf7f2; --surface:#fff; --ink:#2f2a25; --muted:#7a7066; --line:#eadfd1;
+      --brand:#c29a5d; --brand-900:#9f7b45; --danger:#d84a4a; --ok:#2e7d32;
+      --pill:#fff7f0; --radius:14px; --shadow:0 4px 18px rgba(0,0,0,.06);
+    }
+
+    body{ background:var(--bg); color:var(--ink); }
+
+    .wrapper{display:flex; min-height:100vh; overflow:hidden;}
+
+    .conteudo-principal{
+      flex-grow:1;
+      min-height:100vh;
+      overflow:auto;
+      padding:32px;
+    }
+
+    /* Botão hambúrguer */
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:var(--brand);
+      border:none; color:#fff;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      z-index:1001;
+      display:none;
+    }
+
+    /* Backdrop p/ mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:998;
+    }
+
+    @media(max-width:768px){
+      #hamburguer{ display:block; }
+      .conteudo-principal{
+        margin-left:0!important;
+        padding:20px;
+      }
+    }
+
+    .page-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    h1{ font-family:"Playfair Display",serif; font-weight:600; font-size:28px; margin:0; display:flex; align-items:center; gap:10px; }
+
+    .toolbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 10px; }
+    .pill{ background:var(--pill); border:1px solid var(--line); padding:8px 12px; border-radius:999px; display:flex; align-items:center; gap:8px; }
+    .pill input{ border:0; outline:0; background:transparent; font-size:13px; width:220px; }
+
+    .grid{ display:grid; grid-template-columns:1fr; gap:12px; }
+    @media(min-width:900px){ .grid{ grid-template-columns:1fr 1fr; } }
+
+    .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; }
+
+    table{ width:100%; border-collapse:separate; border-spacing:0; }
+    thead th{background:#fff9f1; color:#3f3024; font-weight:800; padding:10px; border-bottom:1px solid var(--line);}
+    tbody td{ padding:10px; border-bottom:1px dashed #eadfd1; font-size:13px; }
+  </style>
+
+</head>
+<body>
+
+<button id="hamburguer" aria-label="Abrir menu">
+  <i data-lucide="menu"></i>
+</button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="conteudo-principal">
+    <div class="page-header">
+      <h1><i data-lucide="bell"></i> Painel de Alertas</h1>
+      <div class="pill" id="chipTotal">0 alerta(s)</div>
+    </div>
+
+    <div class="toolbar">
+      <label class="pill">
+        <i data-lucide="search"></i>
+        <input id="f-busca" type="search" placeholder="Buscar...">
+      </label>
+      <label class="pill">
+        <i data-lucide="calendar-clock"></i>
+        <input id="f-janela" type="number" min="1" value="7" style="width:80px"> dias
+      </label>
+    </div>
+
+    <!-- Skeleton -->
+    <div id="sk1" class="skeleton" aria-hidden="true"></div>
+
+    <section class="grid" aria-live="polite">
+      <!-- A Vencer -->
+      <article class="card">
+        <h2><i data-lucide="timer"></i> A vencer (<span id="spanVencerDias">7</span>d)</h2>
+        <table class="table-alertas alertas"><tbody id="tb-vencer"></tbody></table>
+      </article>
+
+      <!-- Hoje & Atrasados -->
+      <article class="card">
+        <h2><i data-lucide="flag"></i> Hoje & Atrasados</h2>
+        <table class="table-alertas alertas"><tbody id="tb-hoje-atrasado"></tbody></table>
+      </article>
+    </section>
+  </main>
+</div>
+
+<!-- Menu -->
+<script type="module" src="menu-lateral.js"></script>
+
+<!-- Lógica -->
+<script src="alertas.js"></script>
+
+<!-- Toasts -->
+<div id="toastHost" aria-live="polite" style="position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:9999"></div>
+
+<script>
+  document.addEventListener("DOMContentLoaded",()=>{
+    window.lucide?.createIcons?.();
+  });
+</script>
+
+</body>
+</html>

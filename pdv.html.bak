@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:pdv.html">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- === INÍCIO PATCH FORCE-API (remova quando não precisar mais) === -->
+<script>
+(function(){
+  // 1) força a base da API para o Render
+  var RENDER = 'https://kgb-api.onrender.com';
+  try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+  window.__API_BASE__ = RENDER; // redundância útil
+
+  // 2) mostra um selinho no canto para você confirmar visualmente
+  try{
+    var tag = document.createElement('div');
+    tag.id = 'kgb_api_badge';
+    tag.textContent = 'API: Render';
+    tag.style.cssText = ''+
+      'position:fixed; z-index:99999; right:10px; bottom:10px;'+
+      'background:#0ea5e9; color:#fff; font:600 12px/1.2 Inter, Arial;'+
+      'padding:6px 10px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.15);';
+    document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(tag); });
+  }catch(e){}
+})();
+</script>
+<!-- === FIM PATCH FORCE-API === -->
+
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<title>PDV — Venda Rápida</title>
+
+<link rel="stylesheet" href="./kgb-common.css"/>
+<link rel="stylesheet" href="./menu-lateral.css"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- Guard / RBAC (lê a meta page-permission) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+
+<style>
+  :root{ --sidebar-w:260px; --card-bg:#fff; --muted:#666; }
+  .kgb-content{ margin-left: var(--sidebar-w); }
+  @media (max-width: 1024px){ .kgb-content{ margin-left: 0; } }
+
+  .container{ max-width:1100px; margin:24px auto; padding:0 12px; }
+  .card{ background:var(--card-bg); border-radius:16px; box-shadow:var(--shadow-1); padding:12px; }
+  .h.h1{ font-size:26px; font-weight:800; margin:8px 0 16px; }
+  .h.h2{ font-size:18px; font-weight:700; margin:0 0 8px; }
+  .h.h3{ font-size:16px; font-weight:700; margin:0 0 8px; color:#333; }
+
+  .row-flex{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .row-flex label{ display:flex; flex-direction:column; gap:4px; font-size:13px; }
+  .spacer{ flex:1; }
+  .small{ font-size:12px; color:var(--muted); }
+
+  .tabs{ display:flex; gap:8px; margin:14px 0 10px; }
+  .tabs .tab{ padding:8px 12px; border-radius:999px; background:#f3f3f3; cursor:pointer; border:1px solid #eee; user-select:none; transition:all .15s ease; }
+  .tabs .tab:hover{ background:#eee; }
+  .tabs .tab.active{ background:#111; color:#fff; border-color:#111; }
+
+  .layout{ display:grid; grid-template-columns: 1.2fr .8fr; gap:12px; }
+  @media (max-width: 900px){ .layout{ grid-template-columns: 1fr; } }
+
+  .grid-items{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:10px; }
+  .item-btn{ padding:16px; border-radius:14px; background:#fafafa; border:1px solid #eee; cursor:pointer; text-align:left; transition:transform .12s ease, background .12s ease; }
+  .item-btn:hover{ background:#f2f2f2; transform:translateY(-1px); }
+  .item-btn .muted{ color:#666; font-size:12px; }
+  .item-btn .stock{ margin-top:6px; font-size:12px; color:#444; }
+
+  .cart{ border:1px solid #eee; border-radius:14px; padding:10px; }
+  .cart table{ width:100%; border-collapse:collapse; }
+  .cart table th, .cart table td{ text-align:left; padding:10px; border-bottom:1px solid #eee; }
+  .k-right{ text-align:right; }
+
+  .input{ height:36px; }
+  .btn{ height:36px; }
+
+  .badge{ background:#eee; color:#333; border-radius:999px; padding:2px 8px; font-size:12px; }
+  .badge.ok{ background:#dcfce7; color:#166534; }
+  .badge.warn{ background:#fee2e2; color:#991b1b; }
+  .badge.gray{ background:#e5e7eb; color:#374151; }
+
+  .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+
+  .toast{ position:fixed; right:18px; bottom:18px; background:#2e7d32; color:#fff; padding:10px 14px; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.18); opacity:0; transform:translateY(10px); transition:.25s; z-index:9999; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.warn{ background:#a56b00; }
+  .toast.bad{ background:#b3261e; }
+  #hamburguer{
+    position:fixed;
+    top:12px;
+    left:12px;
+    z-index:1001;
+    background:#c29a5d;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:6px 12px;
+    font-size:24px;
+    box-shadow:0 6px 16px rgba(0,0,0,.18);
+    cursor:pointer;
+    display:none;
+  }
+  @media (max-width:768px){
+    #hamburguer{ display:block; }
+  }
+</style>
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+<div class="app">
+  <aside id="menuLateral" class="no-print"></aside>
+<div id="menuBackdrop" hidden></div>
+  <main class="kgb-content">
+    <div class="container">
+      <div class="h h1">PDV — Venda Rápida</div>
+
+      <!-- TOPO (evento + categoria padrão + caixa) -->
+      <div class="card">
+        <div class="row-flex">
+          <label>Evento
+            <select id="selEvento" class="input" style="min-width:260px"></select>
+          </label>
+          <label>Categoria (entrada)
+            <select id="catPadrao" class="input" style="min-width:200px"></select>
+          </label>
+          <label>Subcategoria
+            <select id="subPadrao" class="input" style="min-width:200px">
+              <option value="">(opcional)</option>
+            </select>
+          </label>
+          <div class="spacer"></div>
+          <span class="small">Operador: <b id="operadorNome">Caixa</b></span>
+        </div>
+
+        <div class="row-flex" style="margin-top:8px">
+          <span id="flagCaixa" class="badge">Caixa: Fechado</span>
+          <span class="small">Saldo: <b id="saldoCaixa">R$ 0,00</b></span>
+          <span class="small">| Dinheiro: <b id="saldoDin">R$ 0,00</b></span>
+          <span class="small">| Cartões/Pix: <b id="saldoElec">R$ 0,00</b></span>
+          <div class="spacer"></div>
+
+          <label>Abertura (R$)
+            <input id="vlAbertura" class="input" placeholder="0,00">
+          </label>
+          <label>Responsável abertura
+            <input id="respAbertura" class="input" placeholder="Nome">
+          </label>
+          <button class="btn" id="btnAbrirCaixa">Abrir caixa</button>
+
+          <label style="margin-left:12px">Sangria (R$)
+            <input id="vlSangria" class="input" placeholder="0,00">
+          </label>
+          <label>Responsável sangria
+            <input id="respSangria" class="input" placeholder="Nome">
+          </label>
+          <button class="btn" id="btnSangria">Fazer sangria</button>
+
+          <label style="margin-left:12px">Responsável fechamento
+            <input id="respFechamento" class="input" placeholder="Nome">
+          </label>
+          <button class="btn bad" id="btnFecharCaixa">Fechar caixa</button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs no-print">
+        <div class="tab active" data-tab="itens">Itens/Fichas</div>
+        <div class="tab" data-tab="ingressos">Ingressos</div>
+      </div>
+
+      <!-- ITENS/FICHAS -->
+      <div class="card" data-pane="itens">
+        <div class="layout">
+          <div>
+            <div class="grid-items" id="gridItens"></div>
+            <div class="small">Dica: clique nos cards para adicionar.</div>
+          </div>
+          <div>
+            <div class="cart">
+              <div class="h h2">Carrinho</div>
+              <table id="tabCart">
+                <thead><tr><th>Item</th><th class="k-right">Qtd</th><th class="k-right">Preço</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+
+              <div class="row-flex" style="margin-top:6px">
+                <div>Total: <b id="totCart">R$ 0,00</b></div>
+                <div class="spacer"></div>
+                <label>Desconto (R$)
+                  <input id="desconto" class="input" style="width:120px" placeholder="0,00">
+                </label>
+                <div>Total c/ desconto: <b id="totComDesc">R$ 0,00</b></div>
+              </div>
+
+              <div class="row-flex">
+                <label>Forma de pagamento
+                  <select id="forma" class="input" style="min-width:140px"></select>
+                </label>
+                <label>Valor pago
+                  <input id="valPago" class="input" style="width:140px" placeholder="0,00">
+                </label>
+                <div>Troco: <b id="troco">R$ 0,00</b></div>
+                <div class="spacer"></div>
+                <button class="btn" id="finalizar">Finalizar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INGRESSOS -->
+      <div class="card" data-pane="ingressos" style="display:none">
+        <div class="layout">
+          <div>
+            <div class="card" style="background:#fafafa">
+              <div class="h h3">Ingressos</div>
+              <div class="row-flex">
+                <label>Tipo
+                  <select id="ingTipo" class="input"><option value="">(todos)</option></select>
+                </label>
+                <label>Status
+                  <select id="ingStatus" class="input">
+                    <option value="">(todos)</option>
+                    <option value="disponivel">Disponíveis</option>
+                    <option value="vendido">Vendidos</option>
+                  </select>
+                </label>
+                <label>Nº <input id="ingNum" class="input" placeholder="ex.: 0012"></label>
+                <label>Faixa <input id="ingFaixa" class="input" placeholder="ex.: 0030-0044"></label>
+                <button class="btn" id="ingBuscar">Buscar</button>
+              </div>
+              <table class="table" id="ingTab">
+                <thead><tr><th></th><th>Nº</th><th>Tipo</th><th>Status</th><th class="k-right">Preço</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="cart">
+              <div class="h h2">Carrinho (Ingressos)</div>
+              <table class="table" id="ingCart">
+                <thead><tr><th>Nº</th><th>Tipo</th><th class="k-right">Preço</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+
+              <div class="row-flex" style="margin-top:6px">
+                <div>Total: <b id="ingTot">R$ 0,00</b></div>
+                <div class="spacer"></div>
+                <label>Desconto (R$) <input id="ingDesc" class="input" style="width:120px" placeholder="0,00"></label>
+                <div>Total c/ desconto: <b id="ingTotComDesc">R$ 0,00</b></div>
+              </div>
+              <div class="row-flex">
+                <label>Forma de pagamento
+                  <select id="ingForma" class="input" style="min-width:140px"></select>
+                </label>
+                <label>Valor pago <input id="ingPago" class="input" style="width:140px" placeholder="0,00"></label>
+                <div>Troco: <b id="ingTroco">R$ 0,00</b></div>
+                <div class="spacer"></div>
+                <button class="btn" id="ingFinalizar">Finalizar venda de ingressos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast">Pronto!</div>
+
+<script>
+  // === Helpers dinheiro/data (PDV) ===
+function _parseMoneyBRL(x){
+  if (typeof x === 'number') return x;
+  const s = String(x||'').trim();
+  if (!s) return 0;
+  // troca separador BR → en-US
+  return Number(s.replace(/\./g,'').replace(',','.')) || 0;
+}
+function _todayLocalISO(){
+  const d = new Date();
+  const tz = d.getTimezoneOffset()*60000;
+  return new Date(Date.now()-tz).toISOString().slice(0,10);
+}
+
+/* ===== Helpers/compat ===== */
+window.$=window.$||((s,e=document)=>e.querySelector(s));
+window.$$=window.$$||((s,e=document)=>Array.from(e.querySelectorAll(s)));
+window.readLS=window.readLS||((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
+window.writeLS=window.writeLS||((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
+window.uid = window.uid || ((p='id_')=> p + Math.random().toString(36).slice(2,9));
+window.fmtBRL = window.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+/* ===== Financeiro (lancamentos/parcela) — helpers ===== */
+const FG_KEY = 'financeiroGlobal';
+function readFG(){ try{ return JSON.parse(localStorage.getItem(FG_KEY)||'{}')||{}; }catch{return{};} }
+function writeFG(g){ localStorage.setItem(FG_KEY, JSON.stringify(g||{})); 
+  // === AUTO-BACKUP M34 ===
+  try {
+    if (window.kgbBackup?.saveWithBackup) {
+      // salva a chave e cria snapshot com retenção (KEEP=5)
+      kgbBackup.saveWithBackup('financeiroGlobal', g);
+    } else {
+      // fallback absoluto: pelo menos gera um snapshot bruto
+      localStorage.setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g));
+    }
+  } catch (e) {
+    console.warn('Auto-backup falhou:', e);
+  }
+}
+function pingFG(){ localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }
+
+// nome do evento por id (reaproveita loadEventos já existente)
+function getEventoById(evtId){
+  const evs = loadEventos() || [];
+  return evs.find(e => String(e.id)===String(evtId)) || null;
+}
+/* ===== PDV: persistir venda e avisar etiquetas ===== */
+const K_PDV = {
+  VENDAS:  (window.K_KEYS?.VENDAS  || 'm31.vendas'),  // mesma chave usada em etiquetas
+  TICK:    'm31.vendas.tick'                          // pulso p/ disparar 'storage'
+};
+
+function lerLS(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} }
+function gravarLS(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+const MAX_VENDAS = 400; // ajuste se quiser (200~500 é um bom número)
+
+function salvarVendaNoLS(venda){
+  const arr = lerLS(K_PDV.VENDAS, []);
+  const id  = String(venda.id);
+  const i   = arr.findIndex(v => String(v.id) === id);
+  if (i >= 0) arr[i] = venda; else arr.push(venda);
+
+  // mantém somente as últimas N (mais recentes)
+  if (arr.length > MAX_VENDAS) {
+    arr.splice(0, arr.length - MAX_VENDAS);
+  }
+
+  try {
+    gravarLS(K_PDV.VENDAS, arr);
+  } catch (e) {
+    // storage cheio: descarta mais antigas e tenta de novo
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+      const drop = Math.ceil(arr.length * 0.2); // remove 20% das mais antigas
+      arr.splice(0, drop);
+      try { gravarLS(K_PDV.VENDAS, arr); }
+      catch (e2) {
+        console.warn('[PDV] localStorage cheio; limpando m31.vendas.', e2);
+        // última tentativa: guarda só a venda atual
+        try { gravarLS(K_PDV.VENDAS, [venda]); } catch {}
+      }
+    } else {
+      console.warn('[PDV] Falha ao salvar venda no LS:', e);
+    }
+  }
+
+  // Pulso para outras abas
+  try { localStorage.setItem(K_PDV.TICK, String(Date.now())); } catch {}
+}
+
+/** Envia broadcast em tempo real para a tela de etiquetas (se aberta) */
+function avisarEtiquetasBroadcast(venda){
+  try{
+    const bc = new BroadcastChannel('pdv-vendas');
+    bc.postMessage({ type:'venda-finalizada', venda });
+    bc.close?.();
+  }catch(e){
+    console.warn('[PDV] BroadcastChannel indisponível, usando fallback via storage.', e);
+    // Fallback: a tela de etiquetas já observa K_PDV.TICK, então nada a fazer aqui.
+  }
+}
+// ====== API: salvar venda e registrar movimentos de caixa no backend ======
+function getApiBase(){
+  try{
+    const fromWin = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : null;
+    const fromLS  = localStorage.getItem('API_BASE');
+    const base = (fromWin || fromLS || '').trim();
+    return base ? base.replace(/\/+$/, '') : '';
+  }catch{ return ''; }
+}
+
+async function apiSalvarVendaPDV(venda, origem, formaLabel){
+  const base = getApiBase();
+  if (!base) return;
+  try{
+    await fetch(base + '/pdv/vendas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venda,
+        origem: origem || null,
+        formaLabel: formaLabel || ''
+      })
+    });
+  }catch(e){
+    console.warn('[PDV] Falha ao salvar venda na API (mantendo só local).', e);
+  }
+}
+
+async function apiRegistrarMovimentoCaixaPDV(payload){
+  const base = getApiBase();
+  if (!base) return;
+  try{
+    await fetch(base + '/pdv/caixa/movimentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+  }catch(e){
+    console.warn('[PDV] Falha ao registrar movimento de caixa na API.', e);
+  }
+}
+
+// Converte centavos -> reais com segurança
+function centsToReais(c){ const n = Number(c||0); return Number.isFinite(n)? (n/100) : 0; }
+// === Espelha uma venda do PDV no "financeiro.lancamentos" (usado por Financeiro → Lançamentos) ===
+function espelharVendaNoLocalLancamentos(venda, formaLabel, catId, subId){
+  try{
+    const ESP_KEY = 'financeiro.lancamentos';
+    const lista = JSON.parse(localStorage.getItem(ESP_KEY) || '[]') || [];
+
+    // dados do evento (nome/categoria padrão)
+    const evs = (function(){
+      try{
+      const a = JSON.parse(localStorage.getItem((window.K_KEYS?.EVENTOS)||'m30.eventos') || '[]');
+const b = JSON.parse(localStorage.getItem('eventos') || '[]');
+const map = new Map();
+[...a, ...b].forEach(e => { if (e && e.id != null) map.set(String(e.id), e); });
+
+
+        return Array.from(map.values());
+      }catch{ return []; }
+    })();
+    const ev = (evs||[]).find(e => String(e.id) === String(venda.eventoId)) || {};
+    const nomeEvento = ev.nome || ev.titulo || '';
+    const categoriaId = catId ?? ev.categoriaEntradaId ?? null;
+    const subcategoriaId = subId ?? ev.subcategoriaEntradaId ?? null;
+
+    const bruto = Number(venda.valorBruto||0);
+    const desc  = Number(venda.desconto||0);
+    const liquidoCent = Math.max(0, bruto - desc);
+    const liquidoReais = liquidoCent / 100;
+   const hojeLocalISO2 = new Date(Date.now() - new Date().getTimezoneOffset()*60000)
+  .toISOString().slice(0,10);
+const data = String(venda.createdAt || hojeLocalISO2).slice(0,10);
+
+
+    // evita duplicar no espelho local
+    const idEsp = `venda_${venda.id}`;
+    if (!lista.some(x => String(x.id) === idEsp)){
+      lista.push({
+        id: idEsp,
+        tipo: 'receita',
+        descricao: `Venda PDV — ${formaLabel||''}`,
+        categoria: 'PDV',                // campo textual (compat)
+        categoriaId,                     // IDs que outras telas usam
+        subcategoriaId,
+        origem: 'empresa',
+        conta: formaLabel||'',
+        fornecedor: '',
+        valor: liquidoReais,             // EM REAIS no espelho
+        status: 'baixado',
+        data,
+        dataCompetencia: data,
+        dataBaixa: data,
+        idEvento: venda.eventoId,
+        nomeEvento
+      });
+      localStorage.setItem(ESP_KEY, JSON.stringify(lista));
+      // avisa as outras telas que o espelho mudou
+      try{ window.dispatchEvent(new Event('fin-store-changed')); }catch{}
+    }
+  }catch(e){ console.warn('espelho PDV → financeiro.lancamentos falhou', e); }
+}
+// Substitua TUDO pela versão abaixo
+function criarLancamentoFinanceiroAPartirDaVenda(v){
+  try{
+    // carrega FG com arrays garantidos
+    const G = (function(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{return{};} })();
+    if(!Array.isArray(G.lancamentos)) G.lancamentos=[];
+    if(!Array.isArray(G.parcelas))    G.parcelas=[];
+    if(!Array.isArray(G.movimentos))  G.movimentos=[];
+    if(!Array.isArray(G.contas))      G.contas=[];
+
+    const evtId = v.eventoId;
+    if (!evtId) return;
+
+    // pega o evento (m30.eventos + eventos)
+    const eventos = (readLS((window.K_KEYS?.EVENTOS)||'m30.eventos',[])||[]).concat(readLS('eventos',[])||[]);
+    const ev = eventos.find(e => String(e.id) === String(evtId)) || {};
+
+    // categoria/subcategoria do evento pago
+    const catId = ev?.categoriaEntradaId ?? ev?.categoriaId ?? ev?.categoria ?? null;
+    const subId = ev?.subcategoriaEntradaId ?? ev?.subcategoriaId ?? ev?.subcategoria ?? null;
+
+    // CONTA do evento pago (prioritária) ou heurística por forma de pagamento
+    const contaEventoId = ev?.contaEntradaId ?? ev?.contaId ?? null;
+    const cfg = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} })();
+    const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
+    const contaEvento = contasCfg.find(c => String(c.id) === String(contaEventoId)) || null;
+    const conta = contaEvento
+      ? { id: String(contaEvento.id), nome: String(contaEvento.nome||'') }
+      : (typeof pickContaForForma === 'function' ? pickContaForForma(v.forma) : { id:'', nome:'' });
+
+    // valores (centavos -> reais) — evita o 40 virar 4.000,00
+    const bruto = Number(v.valorBruto||0);
+    const desc  = Number(v.desconto||0);
+    const liquidoReais = Math.max(0, bruto - desc) / 100;
+
+    // data local (YYYY-MM-DD) — sem horário/UTC
+    const hojeLocalISO = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+    const dataISO = String(v.createdAt || hojeLocalISO).slice(0,10);
+
+    // INÍCIO PATCH saldoPorConta (espelho rápido) + garantir conta cadastrada
+    G.saldoPorConta = (G.saldoPorConta && typeof G.saldoPorConta==='object') ? G.saldoPorConta : {};
+    const cid = String(conta?.id || '');
+    if (cid) {
+      const atual = Number(G.saldoPorConta[cid] || 0);
+      G.saldoPorConta[cid] = atual + Number(liquidoReais || 0);
+    }
+    // mantém o cadastro da conta também no array G.contas (evita “conta órfã”)
+    if (cid) {
+      const jaTem = Array.isArray(G.contas) && G.contas.some(c => String(c.id) === cid);
+      if (!jaTem) {
+        (G.contas = Array.isArray(G.contas) ? G.contas : []).push({
+          id: cid, nome: (conta?.nome || ''), saldoInicial: 0
+        });
+      }
+    }
+    // FIM PATCH saldoPorConta
+
+    // limpa espelhos PDV antigos desse evento (evita duplicar)
+    const idsPDV = new Set((G.lancamentos||[])
+      .filter(l => String(l.eventoId||'')===String(evtId) && String(l.id).startsWith('pdv:'))
+      .map(l => String(l.id)));
+    G.lancamentos = (G.lancamentos||[]).filter(l => !(String(l.eventoId||'')===String(evtId) && String(l.id).startsWith('pdv:')));
+    G.parcelas    = (G.parcelas||[]).filter(p => !idsPDV.has(String(p.lancamentoId)));
+    G.movimentos  = (G.movimentos||[]).filter(m => !(String(m.refKey||'').startsWith(`lanc:pdv:`)));
+
+    // descrição: PDV — nome do evento (se houver) ou forma
+    const descVenda = (function(){
+      // tenta evento
+      const nomeEv = ev?.nome || ev?.titulo || '';
+      if (nomeEv) return `Venda PDV — ${nomeEv}`;
+      // fallback: forma
+      const mapFormas = (typeof formasMap==='function') ? (formasMap()||new Map()) : new Map();
+      const forma = (mapFormas.get(String(v.forma))||v.forma||'forma não informada');
+      return `Venda PDV — ${forma}`;
+    })();
+
+    // cria lançamento (ENTRADA)
+    const lancId = `pdv:${v.id}`;
+    G.lancamentos.push({
+      id: lancId,
+      origem: 'empresa',            // ou 'pdv' se você preferir identificar
+      tipo: 'entrada',
+      categoriaId: catId,
+      subcategoriaId: subId,
+      categoriaNome: 'PDV',
+      descricao: descVenda,
+      valor: liquidoReais,
+      valorTotal: liquidoReais,
+      status: 'recebido',           // entrada => 'recebido'
+      dataISO,
+      dataPagamentoISO: dataISO,
+      contaId: conta.id,
+      contaNome: conta.nome,
+      eventoId: evtId,
+      eventoNome: ev?.nome || ev?.titulo || ''
+    });
+
+    // parcela quitada (status RECEBIDO p/ ENTRADA) + numero/total
+    const parcId = `pdv:${v.id}:p1`;
+    G.parcelas.push({
+      id: parcId,
+      lancamentoId: lancId,
+      status: 'recebido',           // << importante: análises (base=pagamento) contam 'recebido' para entrada
+      valor: liquidoReais,
+      totalPago: liquidoReais,
+      vencimentoISO: dataISO,
+      dataPagamentoISO: dataISO,
+      contaId: conta.id,
+      contaNome: conta.nome,
+      numero: 1,                    // evita "(undefined/1)"
+      total: 1
+    });
+
+    // movimento de crédito na conta
+    G.movimentos.push({
+      id: (Date.now().toString(36) + Math.random().toString(36).slice(2,10)),
+      refKey: `lanc:pdv:${v.id}:parc:${parcId}`,
+      origem: 'lancamento',
+      lancamentoId: lancId,
+      parcelaId: parcId,
+      contaId: conta.id,
+      contaNome: conta.nome,
+      tipo: 'credito',
+      valor: liquidoReais,
+      dataISO
+    });
+
+    // salva + ping (para as telas reagirem)
+    localStorage.setItem('financeiroGlobal', JSON.stringify(G));
+    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    window.dispatchEvent(new Event('fin-store-changed')); // garante update na mesma aba
+  } catch(e){
+    console.warn('criarLancamentoFinanceiroAPartirDaVenda falhou:', e);
+  }
+}
+
+
+/* ===== Parser robusto de moeda (centavos) ===== */
+function toCents(raw){
+  if (raw == null) return 0;
+  let s = String(raw).trim();
+  s = s.replace(/[R$\s\u00A0]/gi, '');
+  const hasComma = s.includes(','), hasDot = s.includes('.');
+  if (hasComma && hasDot){
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (hasComma){
+    s = s.replace(/\./g,'').replace(',', '.');
+  }
+  if (s === '' || s === '.' || s === ',') s = '0';
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+if (typeof window.ISO !== 'function') window.ISO = () => new Date().toISOString();
+
+/* ===== helpers de forma de pagamento ===== */
+function getFormaSelecionada(selId){
+  const sel = document.getElementById(selId);
+  const id = sel?.value || '';
+  const label = sel?.options?.[sel.selectedIndex]?.text?.trim() || id;
+  return { id, label };
+}
+function ehDinheiroForma(id, label){
+  const s = `${id} ${label}`.toLowerCase();
+  return /\bdinheiro\b|esp[eé]cie/.test(s);
+}
+
+/* ===== Normalização de preço antigo + leitura de estoque ===== */
+function toCentsSafe(x){
+  const n = Number(x ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (Number.isInteger(n)) {
+    return n < 1000 ? n * 100 : n;
+  }
+  return Math.round(n * 100);
+}
+
+// Lê o estoque do item (campos novos e legados; aceita números em string)
+function getItemStock(it){
+  const campos = [
+    'estoqueAtual',   // novo
+    'estoque',        // comum
+    'saldo',          // legado
+    'qtdEstoque',     // variantes
+    'quantidade',
+    'qtde',
+    'estoqueInicial'  // **importante**: alguns cadastros usam este
+  ];
+  for (const k of campos){
+    if (it && Object.prototype.hasOwnProperty.call(it, k)) {
+      const v = Number(it[k]);
+      if (Number.isFinite(v)) return Math.max(0, v);
+    }
+  }
+  return null; // sem controle de estoque
+}
+
+/* ===== Chaves de storage ===== */
+window.K_KEYS = {
+  EVENTOS: 'm30.eventos',   // principal
+  EVENTOS_FALL: 'eventos',  // compat
+  INGRESSO_TIPOS: 'ingresso_tipos',
+  INGRESSOS: 'ingressos',
+  TICKETS: 'm30.tickets',
+  ITENS: 'm31.itens',
+  VENDAS: 'm31.vendas',
+  PDV_CAIXAS: 'pdv_caixas'
+};
+
+/* ====== ITENS/FICHAS — helpers ====== */
+function listItens(evId){
+  const newKey = K_KEYS?.ITENS || 'm31.itens';  // novo
+  let xs = readLS?.(newKey, []) || [];
+
+  if (!Array.isArray(xs) || xs.length === 0) {
+    const legacyA = readLS?.('m31.itens', []) || [];
+    const legacyB = readLS?.('itens', []) || [];
+    const merged = [...legacyA, ...legacyB];
+    if (merged.length) {
+      xs = merged.slice();
+      try { writeLS?.(newKey, xs); } catch {}
+    }
+  }
+
+  const seenIds = new Set();
+  const uniq1 = [];
+  xs.forEach(it => {
+    const id = String(it?.id ?? '');
+    if (!seenIds.has(id)) { seenIds.add(id); uniq1.push(it); }
+  });
+
+  const seenComp = new Set();
+  const uniq = [];
+  uniq1.forEach(it => {
+    const comp = `${it?.eventoId||''}::${(it?.nome||'').trim().toLowerCase()}::${it?.preco||0}`;
+    if (!seenComp.has(comp)) { seenComp.add(comp); uniq.push(it); }
+  });
+
+  try { writeLS?.(newKey, uniq); writeLS?.('itens', uniq); } catch {}
+
+  return evId ? uniq.filter(i => String(i.eventoId) === String(evId)) : uniq;
+}
+
+function saveItens(all){
+  const key = (K_KEYS?.ITENS || 'm31.itens');
+  writeLS?.(key, all);
+  try{ writeLS?.('itens', all); }catch{}
+}
+(function normalizeOldItemPrices(){ const all = listItens() || []; let changed = false; all.forEach(it => { const norm = toCentsSafe(it.preco); if (Number(norm) !== Number(it.preco)){ it.preco = norm; changed = true; } }); if (changed) saveItens(all); })();
+
+// baixa de estoque se o item tiver controle de estoque
+function baixaEstoque(itemsVendidos){
+  const all = listItens();
+  let changed = false;
+  itemsVendidos.forEach(l => {
+    const it = all.find(x => String(x.id) === String(l.itemId));
+    if (!it) return;
+    const campos = ['estoqueAtual', 'estoque', 'saldo', 'estoqueInicial'];
+    const k = campos.find(c => Number.isFinite(Number(it[c])));
+    if (!k) return;
+    const qtd = Number(l.qtd || 1);
+    if (!Number.isFinite(qtd) || qtd <= 0) return;
+    it[k] = Math.max(0, Number(it[k] || 0) - qtd);
+    changed = true;
+  });
+  if (changed) saveItens(all);
+}
+
+function showToast(text='Pronto!', type='ok'){
+  const t = $("#toast"); if(!t) return;
+  t.textContent = text;
+  t.classList.remove('warn','bad');
+  if(type==='warn') t.classList.add('warn');
+  if(type==='bad') t.classList.add('bad');
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 1800);
+}
+
+/* Quiosque (?kiosk=1) */
+(function(){
+  const params = new URLSearchParams(location.search);
+  if (params.get('kiosk') === '1') {
+    const aside = document.getElementById('menuLateral');
+    const main  = document.querySelector('.kgb-content');
+    if (aside) aside.style.display = 'none';
+    if (main)  main.style.marginLeft = '0';
+    document.documentElement.style.setProperty('--sidebar-w', '0px');
+  }
+})();
+
+/* ==== Financeiro (categorias + formas) ==== */
+function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} }
+function listCategoriasEntrada(){
+  const xs = Array.isArray(_cfgFin().categorias) ? _cfgFin().categorias : [];
+  return xs.filter(c => String(c.tipo).toLowerCase()==='entrada' && c.paiId==null)
+           .sort((a,b)=> String(a.descricao||'').localeCompare(String(b.descricao||'')));
+}
+function listarSubcats(paiId){
+  const cfg = _cfgFin() || {};
+  const xs = Array.isArray(cfg.categorias) ? cfg.categorias : [];
+  return xs
+    .filter(c => String(c.paiId) === String(paiId))
+    .sort((a,b) => String(a.descricao||'').localeCompare(String(b.descricao||'')));
+}
+
+function listFormasPagamento(){
+  try{
+    const cfg = JSON.parse(localStorage.getItem('configFinanceiro')||'{}') || {};
+    const arr = cfg?.formasPagamento ?? cfg?.formas ?? cfg?.tipos ?? [];
+    return (Array.isArray(arr) ? arr : []).map(t => ({
+      id: String(t.id ?? t.codigo ?? t.valor ?? (t.descricao || t.nome)),
+      descricao: String(t.descricao || t.nome || t.label || t.id).trim()
+    })).filter(x=>x.descricao);
+  }catch(e){ return []; }
+}
+
+/* ==== Dados base ==== */
+function loadEventos(){
+  try{
+    if (typeof listEventos === 'function') return (listEventos() || []);
+  }catch(e){}
+  const a = readLS(K_KEYS.EVENTOS, []) || [];
+  const b = readLS(K_KEYS.EVENTOS_FALL, []) || [];
+  const map = new Map();
+  [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
+  return Array.from(map.values());
+}
+
+function itensByEvento(evtId){
+  return (listItens(evtId) || []).filter(i => i.ativo !== false);
+}
+
+function tiposByEvento(evtId){
+  return (readLS(K_KEYS.INGRESSO_TIPOS,[])||[]).filter(t => String(t.eventoId) === String(evtId) && t.ativo !== false);
+}
+function ticketsAll(evtId){
+  const novos = readLS(K_KEYS.INGRESSOS,[]) || [];
+  const antigos = readLS(K_KEYS.TICKETS,[]) || [];
+  const todos = novos.concat(antigos);
+  return todos.filter(t => String(t.eventoId) === String(evtId));
+}
+function ticketsPendentes(evtId){
+  return ticketsAll(evtId).filter(t => (t.status === 'pendente' || !t.status));
+}
+
+/* ==== Caixa (por evento) ==== */
+function readCaixas(){ return readLS(K_KEYS.PDV_CAIXAS,[])||[]; }
+function writeCaixas(xs){ writeLS(K_KEYS.PDV_CAIXAS,xs); }
+function normalizeCaixa(c, evtId){
+  const obj = c || {};
+  obj.eventoId = obj.eventoId ?? evtId;
+  obj.aberto   = !!obj.aberto;
+  obj.saldoDinheiro   = Number(obj.saldoDinheiro||0);
+  obj.saldoEletronico = Number(obj.saldoEletronico||0);
+  obj.saldo = obj.saldoDinheiro + obj.saldoEletronico;
+  if (!Array.isArray(obj.movimentos)) obj.movimentos = [];
+  return obj;
+}
+function getCaixa(evtId){
+  const found = readCaixas().find(c=> String(c.eventoId)===String(evtId));
+  return normalizeCaixa(found, evtId);
+}
+function upsertCaixa(c){
+  const cx = normalizeCaixa(c, c?.eventoId);
+  const xs=readCaixas(); const i=xs.findIndex(x=> String(x.eventoId)===String(cx.eventoId));
+  if(i>=0) xs[i]=cx; else xs.push(cx); writeCaixas(xs);
+}
+
+/* Hash de evento */
+let currentEventoId=null;
+function hashEvento(){ return location.hash.match(/evento=([^&]+)/)?.[1] || null; }
+function setHashEvento(id){ if (id) location.hash = '#evento='+id; }
+
+/* ==== UI topo ==== */
+function hydrateEventos(){
+  const sel=$("#selEvento"); sel.innerHTML='';
+  const xs = loadEventos().filter(e => {
+    return (String(e.modulo||'') === 'eventos-pagos') || (e.modulo == null);
+  });
+
+  if(!xs.length){ sel.innerHTML='<option>— Nenhum evento pago —</option>'; currentEventoId=null; return; }
+  xs.forEach(e=>{
+    const o=document.createElement('option'); o.value=e.id;
+    o.textContent=`${e.nome||'(sem nome)'} — ${e.data||''}`;
+    sel.appendChild(o);
+  });
+  const want = hashEvento();
+  if (want && xs.some(e => String(e.id)===String(want))) currentEventoId=want;
+  else if(!currentEventoId) currentEventoId=xs[0].id;
+  sel.value=currentEventoId;
+}
+function hydrateCategoriasPadrao(){
+  const catSel=$("#catPadrao"), subSel=$("#subPadrao");
+  const cats=listCategoriasEntrada();
+  catSel.innerHTML = '<option value="">(selecione)</option>' + cats.map(c=>`<option value="${c.id}">${c.descricao}</option>`).join('');
+  subSel.innerHTML = '<option value="">(opcional)</option>';
+catSel.onchange = () => {
+  const pid = catSel.value || '';
+  const subs = pid ? listarSubcats(pid) : [];
+  subSel.innerHTML = '<option value="">(opcional)</option>' + subs.map(s=>`<option value="${s.id}">${s.descricao}</option>`).join('');
+  subSel.disabled = (subs.length === 0);
+  if (subs.length > 0) subSel.removeAttribute('disabled');
+};
+
+
+  const ev = getEventoAtual();
+  if (ev?.categoriaEntradaId){
+    catSel.value = String(ev.categoriaEntradaId);
+    const subs = listarSubcats(ev.categoriaEntradaId);
+    subSel.innerHTML = '<option value="">(opcional)</option>' + subs.map(s=>`<option value="${s.id}">${s.descricao}</option>`).join('');
+    subSel.disabled = subs.length===0;
+    if (ev.subcategoriaEntradaId && subs.some(s=> String(s.id)===String(ev.subcategoriaEntradaId))) subSel.value = String(ev.subcategoriaEntradaId);
+  }
+}
+function hydrateFormas(){
+  const formas = listFormasPagamento();
+  const html = formas.length
+    ? formas.map(f => `<option value="${f.id}">${f.descricao}</option>`).join('')
+    : '<option value="">(cadastre em Financeiro)</option>';
+
+  ['forma','ingForma'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = html;
+  });
+}
+function renderCaixaHeader(){
+  if(!currentEventoId) return;
+  const cx=getCaixa(currentEventoId);
+  const flag=$("#flagCaixa");
+  const saldo=$("#saldoCaixa");
+  const sDin=$("#saldoDin");
+  const sElec=$("#saldoElec");
+  flag.textContent = `Caixa: ${cx.aberto ? 'Aberto' : 'Fechado'}`;
+  flag.classList.toggle('ok', cx.aberto);
+  saldo.textContent = fmtBRL.format((cx.saldoDinheiro + cx.saldoEletronico)/100);
+  sDin.textContent  = fmtBRL.format((cx.saldoDinheiro||0)/100);
+  sElec.textContent = fmtBRL.format((cx.saldoEletronico||0)/100);
+}
+
+/* ==== Evento atual ==== */
+function getEventoAtual(){
+  const id=currentEventoId;
+  const evs=loadEventos()||[];
+  return evs.find(e=> String(e.id)===String(id)) || null;
+}
+
+/* ==== Tabs ==== */
+$$('.tab').forEach(t=> t.addEventListener('click', ()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const tab=t.dataset.tab;
+  $$('[data-pane]').forEach(p=> p.style.display = (p.dataset.pane===tab)?'block':'none');
+}));
+
+/* === ITENS === */
+let cart=[];
+function cartTotalCents(){ return cart.reduce((s,l)=> s + (l.preco*l.qtd), 0); }
+
+function renderGridItens(){
+  const grid = $("#gridItens");
+  grid.innerHTML = '';
+
+  (itensByEvento(currentEventoId) || []).forEach(i => {
+    const estoque = getItemStock(i);
+    const precoCents = toCentsSafe(i.preco);
+
+    const d = document.createElement('button');
+    d.className = 'item-btn';
+    d.innerHTML = `
+      <div class="h h3">${i.nome || 'Item'}</div>
+      <div class="small">${fmtBRL.format(precoCents / 100)}</div>
+      ${Number.isFinite(estoque) ? `<div class="small" style="margin-top:6px;opacity:.8">Estoque: <b>${estoque}</b></div>` : ''}
+    `;
+    d.addEventListener('click', () => addToCart(i));
+    grid.appendChild(d);
+  });
+}
+
+function addToCart(item){
+  let line = cart.find(x => x.itemId === item.id);
+  const estoque = getItemStock(item);   // null = sem controle
+
+  const atualNoCarrinho = line ? Number(line.qtd || 0) : 0;
+  if (Number.isFinite(estoque) && atualNoCarrinho >= estoque){
+    showToast('Não há estoque suficiente para este item.', 'warn');
+    return;
+  }
+
+  if (!line){
+    line = { id: uid('c_'), itemId: item.id, nome: item.nome, preco: toCentsSafe(item.preco), qtd: 0 };
+    cart.push(line);
+  }
+  line.qtd++;
+  renderCart();
+}
+
+function renderCart(){
+  const tb=$("#tabCart tbody"); tb.innerHTML='';
+  cart.forEach(l=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${l.nome}</td>
+      <td class="k-right">${l.qtd}</td>
+      <td class="k-right">${fmtBRL.format((l.preco*l.qtd)/100)}</td>
+      <td class="k-right"><button class="btn ghost" data-del="${l.id}">Remover</button></td>`;
+    tb.appendChild(tr);
+  });
+  $("#totCart").textContent = fmtBRL.format(cartTotalCents()/100);
+  updateDescontoETroco();
+}
+$("#tabCart").addEventListener('click', (ev)=>{
+  const id=ev.target?.dataset?.del; if(!id) return;
+  cart=cart.filter(l=>l.id!==id); renderCart();
+});
+function updateDescontoETroco(){
+  const tot = cartTotalCents();
+  const desc= toCents($("#desconto").value||'0');
+  const pago= toCents($("#valPago").value||'0');
+  const liquido=Math.max(0, tot - desc);
+  $("#totComDesc").textContent = fmtBRL.format(liquido/100);
+  const troco=Math.max(0, pago - liquido);
+  $("#troco").textContent = fmtBRL.format(troco/100);
+}
+$("#desconto").addEventListener('input', updateDescontoETroco);
+$("#valPago").addEventListener('input', updateDescontoETroco);
+
+function finalizarItens(){
+  if (!Array.isArray(cart) || !cart.length){
+    alert('Carrinho de itens vazio');
+    return;
+  }
+
+  const tot   = cart.reduce((s,l)=> s + (Number(l.preco||0) * Number(l.qtd||1)), 0);
+  const desc  = toCents($("#desconto")?.value || '0');
+  const pago  = toCents($("#valPago")?.value || '0');
+  const liquido = Math.max(0, tot - desc);
+
+  const { id: forma, label: formaLabel } = getFormaSelecionada('forma');
+  const isDin = ehDinheiroForma(forma, formaLabel);
+
+  const recebidoDin  = isDin ? (pago ? (pago - Math.max(0, pago - liquido)) : liquido) : 0;
+  const recebidoElec = isDin ? 0 : liquido;
+  const troco = Math.max(0, (isDin ? (pago || liquido) : pago) - liquido);
+
+  const catId = $("#catPadrao")?.value || null;
+  const subId = $("#subPadrao")?.value || null;
+
+  const linhas = cart.map(l => ({
+    kind: 'item',
+    itemId: l.itemId,
+    qtd: Number(l.qtd||1),
+    precoUnit: Number(l.preco||0)
+  }));
+
+  const venda = {
+    id: uid('vd_'),
+    eventoId: currentEventoId,
+    createdAt: _todayLocalISO(), // data local YYYY-MM-DD
+    operador: $("#operadorNome")?.textContent || 'Caixa',
+    forma,
+    valorBruto: tot,
+    desconto: desc,
+    valorPago: (pago || liquido),
+    troco,
+    categoriaId: catId,
+    subcategoriaId: subId,
+    itens: linhas
+  };
+
+  // grava a venda (função já trata quota e mantém só as últimas N)
+  salvarVendaNoLS(venda);
+
+  // notifica em tempo real a aba "Etiquetas" (se estiver aberta)
+  avisarEtiquetasBroadcast(venda);
+  // envia espelho da venda para a API (nuvem)
+  try {
+    apiSalvarVendaPDV(venda, 'itens', formaLabel);
+  } catch(e) {
+    console.warn('PDV itens → API falhou (segue local)', e);
+  }
+
+  try {
+    baixaEstoque(venda.itens.filter(l => String(l.kind)==='item'));
+  } catch(e) { console.warn('baixaEstoque falhou', e); }
+
+  // 1) cria o lançamento de ENTRADA no financeiroGlobal (usa a venda completa)
+  try{
+    criarLancamentoFinanceiroAPartirDaVenda(venda);
+  }catch(e){ console.warn('PDV→FG (entrada) falhou', e); }
+
+  // 2) espelha no "financeiro.lancamentos" (tela de Lançamentos)
+  try{
+    const { label } = getFormaSelecionada('forma');
+    espelharVendaNoLocalLancamentos(venda, (label || ''), venda.categoriaId, venda.subcategoriaId);
+  }catch(e){ console.warn('PDV→espelho local falhou', e); }
+
+  // 3) ping geral para Resumo/Análises/Lançamentos recarregarem
+  try{
+    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    window.dispatchEvent(new Event('fin-store-changed'));
+  }catch{}
+
+  // ==== Caixa ====
+  const cx = getCaixa(currentEventoId);
+  cx.movimentos = Array.isArray(cx.movimentos) ? cx.movimentos : [];
+  cx.saldoDinheiro   = (cx.saldoDinheiro||0)   + recebidoDin;
+  cx.saldoEletronico = (cx.saldoEletronico||0) + recebidoElec;
+  cx.movimentos.push({ tipo:'venda', id:venda.id, forma: formaLabel, valor: isDin ? recebidoDin : recebidoElec, ts: ISO() });
+
+  // **APARAR HISTÓRICO** (evita QuotaExceeded)
+  if (cx.movimentos.length > 1000) {
+    cx.movimentos = cx.movimentos.slice(-600); // mantém os 600 mais recentes
+  }
+
+  upsertCaixa(cx);
+  renderCaixaHeader?.();
+  // registra o movimento de caixa na API
+  try {
+    apiRegistrarMovimentoCaixaPDV({
+      eventoId: currentEventoId,
+      tipo: 'venda-itens',
+      formaLabel,
+      valorCents: isDin ? recebidoDin : recebidoElec,
+      saldoDinheiroCents: cx.saldoDinheiro,
+      saldoEletronicoCents: cx.saldoEletronico,
+      resp: $("#operadorNome")?.textContent || 'Caixa'
+    });
+  } catch(e) {
+    console.warn('mov caixa (itens) → API falhou', e);
+  }
+
+   // limpar UI
+  cart = [];
+  renderCart?.();
+  if ($("#desconto")) $("#desconto").value = '';
+  if ($("#valPago"))  $("#valPago").value  = '';
+  if ($("#troco"))    $("#troco").textContent = 'R$ 0,00';
+  if ($("#totComDesc")) $("#totComDesc").textContent = 'R$ 0,00';
+
+  showToast?.('Itens/fichas vendidos ✅');
+  renderGridItens(); // atualiza estoques exibidos
+}
+
+
+/* === INGRESSOS === */
+let ingSel=[];
+function hydrateTiposIngresso(){
+  const sel=$("#ingTipo"); sel.innerHTML='<option value="">(todos)</option>';
+  (tiposByEvento(currentEventoId)||[]).forEach(t=>{
+    const o=document.createElement('option'); o.value=t.id; o.textContent=t.nome; sel.appendChild(o);
+  });
+}
+function parseFaixa(s){
+  if(!s) return null;
+  const m=s.replace(/\s/g,'').match(/^(\d+)\-(\d+)$/); if(!m) return null;
+  const a=Number(m[1]), b=Number(m[2]); return {min:Math.min(a,b), max:Math.max(a,b)};
+}
+function ingTotalCents(){ return ingSel.reduce((s,t)=> s + (t.precoUnit||0), 0); }
+function badgeStatus(st){
+  const s = String(st||'').toLowerCase();
+  if (s==='vendido') return '<span class="badge gray">Vendido</span>';
+  if (s==='checkin') return '<span class="badge gray">Check-in</span>';
+  return '<span class="badge ok">Disponível</span>';
+}
+
+function buscarIngressos(){
+  const tipo   = $("#ingTipo")?.value?.trim() || "";
+  const status = $("#ingStatus")?.value?.trim() || "";
+  const n      = $("#ingNum")?.value?.trim() || "";
+  const fa     = parseFaixa($("#ingFaixa")?.value || "");
+
+  let xs = ticketsAll(currentEventoId) || [];
+
+  if (tipo) xs = xs.filter(t => String(t.tipoId) === String(tipo));
+
+  if (status === 'vendido'){
+    xs = xs.filter(t => String(t.status).toLowerCase() === 'vendido');
+  } else if (status === 'disponivel'){
+    xs = xs.filter(t => !t.status || String(t.status).toLowerCase() === 'pendente');
+  }
+
+  if (n)    xs = xs.filter(t => String(t.numero) === String(n));
+  if (fa)   xs = xs.filter(t => {
+    const nn = Number(String(t.numero).replace(/\D/g, ""));
+    return nn >= fa.min && nn <= fa.max;
+  });
+
+  xs.sort((a, b) =>
+    String(a.numero ?? "").localeCompare(String(b.numero ?? ""), "pt-BR", { numeric: true })
+  );
+
+  const tb = $("#ingTab tbody");
+  if (!tb) return;
+  tb.innerHTML = "";
+
+  const tipos = tiposByEvento(currentEventoId) || [];
+  xs.forEach(t => {
+    const tipoNome = (tipos.find(x => String(x.id) === String(t.tipoId)) || {}).nome || "—";
+    const vendido = String(t.status||'').toLowerCase() === 'vendido';
+    const btn = `<button class="btn ghost" data-add="${t.id}" ${vendido ? 'disabled' : ''}>+</button>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${btn}</td>
+      <td><b>${t.numero}</b></td>
+      <td>${tipoNome}</td>
+      <td>${badgeStatus(t.status)}</td>
+      <td class="k-right">${fmtBRL.format((t.precoUnit || 0) / 100)}</td>
+    `;
+    tb.appendChild(tr);
+  });
+
+  if (!xs.length){
+    tb.innerHTML = '<tr><td colspan="5" class="small" style="text-align:center">— sem ingressos —</td></tr>';
+  }
+}
+$("#ingBuscar").addEventListener('click', buscarIngressos);
+$("#ingTab").addEventListener('click', (ev)=>{
+  const id=ev.target?.dataset?.add; if(!id) return;
+  const all = ticketsAll(currentEventoId);
+  const t=all.find(x=> String(x.id)===String(id) && String(x.eventoId)===String(currentEventoId));
+  if(!t){ alert('Ingresso não encontrado.'); return; }
+  if(String(t.status||'').toLowerCase()==='vendido'){ showToast('Este ingresso já foi vendido','warn'); return; }
+  if(ingSel.some(x=> String(x.id)===String(id))) return;
+  ingSel.push({...t}); renderIngCart();
+});
+function renderIngCart(){
+  const tb=$("#ingCart tbody"); tb.innerHTML=''; let tot=0;
+  ingSel.forEach(t=>{
+    const tipoNome=(tiposByEvento(currentEventoId).find(x=> String(x.id)===String(t.tipoId))||{}).nome||'—';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${t.numero}</td><td>${tipoNome}</td>
+      <td class="k-right">${fmtBRL.format((t.precoUnit||0)/100)}</td>
+      <td class="k-right"><button class="btn ghost" data-del="${t.id}">Remover</button></td>`;
+    tb.appendChild(tr);
+    tot += (t.precoUnit||0);
+  });
+  $("#ingTot").textContent=fmtBRL.format(tot/100);
+  updateIngTotTroco();
+}
+$("#ingCart").addEventListener('click', (ev)=>{
+  const id=ev.target?.dataset?.del; if(!id) return;
+  ingSel=ingSel.filter(t=> String(t.id)!==String(id)); renderIngCart();
+});
+function updateIngTotTroco(){
+  const tot = ingTotalCents();
+  const desc= toCents($("#ingDesc").value||'0');
+  const pago= toCents($("#ingPago").value||'0');
+  const liquido=Math.max(0, tot - desc);
+  $("#ingTotComDesc").textContent = fmtBRL.format(liquido/100);
+  const troco=Math.max(0, pago - liquido);
+  $("#ingTroco").textContent = fmtBRL.format(troco/100);
+}
+$("#ingDesc").addEventListener('input', updateIngTotTroco);
+$("#ingPago").addEventListener('input', updateIngTotTroco);
+
+// === INÍCIO PATCH FF-SYNC · PDV finalizarIngressos ===
+function finalizarIngressos(){
+  // 0) Validações básicas
+  if (!currentEventoId){ alert('Selecione um evento antes de vender.'); return; }
+  if (!Array.isArray(ingSel) || !ingSel.length){ alert('Carrinho de ingressos vazio'); return; }
+
+  // 1) Totais em CENTAVOS (mantemos tudo consistente em cents)
+  //    ATENÇÃO: aqui assumo que t.precoUnit já está em cents (padrão do seu PDV).
+  const tot   = ingSel.reduce((s,t)=> s + (Number(t.precoUnit) || 0), 0);
+  const desc  = toCents($("#ingDesc")?.value || '0');
+  const pago  = toCents($("#ingPago")?.value || '0');
+  const liquido = Math.max(0, tot - desc);
+
+  // 2) Forma de pagamento
+  const formaSel   = getFormaSelecionada('ingForma') || {};
+  const forma      = String(formaSel.id || '');
+  const formaLabel = String(formaSel.label || forma || '—');
+  const isDin      = ehDinheiroForma(forma, formaLabel);
+
+   // 3) Rateio recebido em dinheiro/eletrônico e troco
+  //    - recebidoDin = min(pago, liquido) quando é dinheiro; senão 0
+  //    - recebidoElec = liquido inteiro quando NÃO é dinheiro
+  const recebidoDin  = isDin ? (pago ? (pago - Math.max(0, pago - liquido)) : liquido) : 0;
+  const recebidoElec = isDin ? 0 : liquido;
+  const troco        = Math.max(0, (isDin ? (pago || liquido) : pago) - liquido);
+
+  // 4) Categoria/subcategoria (mesma lógica dos Itens/Fichas)
+  const catId = $("#catPadrao")?.value || null;
+  const subId = $("#subPadrao")?.value || null;
+
+  // 5) Linhas dos ingressos vendidos (mantendo tudo em CENTAVOS)
+  const linhas = ingSel.map(t => ({
+    kind:      'ingresso',
+    ticketId:  t.id,
+    numero:    t.numero,
+    tipoId:    t.tipoId,
+    precoUnit: Number(t.precoUnit || 0)
+  }));
+
+  // 6) Monta objeto de venda (compatível com salvarVendaNoLS / financeiro)
+  const venda = {
+    id:           uid('vd_'),
+    eventoId:     currentEventoId,
+    createdAt:    _todayLocalISO(), // data local YYYY-MM-DD
+    operador:     $("#operadorNome")?.textContent || 'Caixa',
+    forma:        forma,
+    valorBruto:   tot,
+    desconto:     desc,
+    valorPago:    (pago || liquido),
+    troco,
+    categoriaId:  catId,
+    subcategoriaId: subId,
+    ingressos:    linhas    // distingue das vendas de itens
+  };
+
+  // 7) Salva venda + avisa etiquetas (mesma infra de Itens/Fichas)
+  salvarVendaNoLS(venda);
+  avisarEtiquetasBroadcast(venda);
+  // envia espelho da venda de ingressos para a API
+  try {
+    apiSalvarVendaPDV(venda, 'ingressos', formaLabel);
+  } catch(e) {
+    console.warn('PDV ingressos → API falhou (segue local)', e);
+  }
+
+  // 8) Marca ingressos como VENDIDOS na base local
+  (function marcarIngressosComoVendidos(){
+    const novos   = readLS(K_KEYS.INGRESSOS, []) || [];
+    const antigos = readLS(K_KEYS.TICKETS,   []) || [];
+    const ids     = new Set(ingSel.map(t => String(t.id)));
+    const agoraISO = ISO();
+
+    const marcaLista = (lista) => {
+      lista.forEach(t => {
+        if (!t || !ids.has(String(t.id))) return;
+        t.status     = 'vendido';
+        t.vendaId    = venda.id;
+        t.updatedAt  = agoraISO;
+      });
+    };
+
+    marcaLista(novos);
+    marcaLista(antigos);
+
+    try { writeLS(K_KEYS.INGRESSOS, novos); } catch(e){}
+    try { writeLS(K_KEYS.TICKETS,   antigos); } catch(e){}
+  })();
+
+  // 9) Cria lançamento financeiro (entrada) + espelho em "financeiro.lancamentos"
+  try {
+    criarLancamentoFinanceiroAPartirDaVenda(venda);
+  } catch(e) {
+    console.warn('PDV→FG (entrada ingressos) falhou', e);
+  }
+
+  try {
+    espelharVendaNoLocalLancamentos(venda, formaLabel, venda.categoriaId, venda.subcategoriaId);
+  } catch(e) {
+    console.warn('PDV→espelho local ingressos falhou', e);
+  }
+
+  try{
+    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    window.dispatchEvent(new Event('fin-store-changed'));
+  }catch{}
+
+  // 10) Atualiza o CAIXA (mesma lógica de finalizarItens)
+  const cx = getCaixa(currentEventoId);
+  cx.movimentos = Array.isArray(cx.movimentos) ? cx.movimentos : [];
+  cx.saldoDinheiro   = (cx.saldoDinheiro   || 0) + recebidoDin;
+  cx.saldoEletronico = (cx.saldoEletronico || 0) + recebidoElec;
+  cx.movimentos.push({
+    tipo:  'venda-ingresso',
+    id:    venda.id,
+    forma: formaLabel,
+    valor: isDin ? recebidoDin : recebidoElec,
+    ts:    ISO()
+  });
+
+  // APARAR HISTÓRICO (para não lotar localStorage)
+  if (cx.movimentos.length > 1000) {
+    cx.movimentos = cx.movimentos.slice(-600);
+  }
+
+  upsertCaixa(cx);
+  renderCaixaHeader?.();
+  // registra o movimento de caixa na API
+  try {
+    apiRegistrarMovimentoCaixaPDV({
+      eventoId: currentEventoId,
+      tipo: 'venda-ingressos',
+      formaLabel,
+      valorCents: isDin ? recebidoDin : recebidoElec,
+      saldoDinheiroCents: cx.saldoDinheiro,
+      saldoEletronicoCents: cx.saldoEletronico,
+      resp: $("#operadorNome")?.textContent || 'Caixa'
+    });
+  } catch(e) {
+    console.warn('mov caixa (ingressos) → API falhou', e);
+  }
+
+  // 11) Limpa UI e feedback
+  ingSel = [];
+  renderIngCart?.();
+
+  if ($("#ingDesc"))  $("#ingDesc").value  = '';
+  if ($("#ingPago"))  $("#ingPago").value  = '';
+  if ($("#ingTroco")) $("#ingTroco").textContent = 'R$ 0,00';
+  if ($("#ingTotComDesc")) $("#ingTotComDesc").textContent = 'R$ 0,00';
+
+  showToast?.('Ingressos vendidos ✅');
+
+  // recarrega a tabela de ingressos com status atualizados
+  try { buscarIngressos(); } catch(e){}
+}
+
+// === FIM PATCH FF-SYNC · PDV finalizarIngressos ===
+
+
+/* ==== Listeners topo ==== */
+$("#selEvento").addEventListener('change',(e)=>{
+  currentEventoId=e.target.value;
+  setHashEvento(currentEventoId);
+    try {
+    const f = document.getElementById('etqWorker');
+    if (f && f.contentWindow) f.contentWindow.location.hash = '#evento=' + currentEventoId;
+    if (window.__etqWin && !window.__etqWin.closed) {
+      try { window.__etqWin.location.hash = '#evento=' + currentEventoId; } catch {}
+    }
+  } catch {}
+  hydrateCategoriasPadrao();
+  hydrateFormas();
+  renderGridItens();
+  hydrateTiposIngresso();
+  buscarIngressos();
+  renderCaixaHeader();
+});
+window.addEventListener('hashchange', ()=>{
+  const h=hashEvento();
+  if(h && h!==currentEventoId){
+    currentEventoId=h; $("#selEvento").value=currentEventoId;
+    hydrateCategoriasPadrao(); hydrateFormas();
+    renderGridItens(); hydrateTiposIngresso(); buscarIngressos(); renderCaixaHeader();
+  }
+});
+
+/* ==== Botões caixa ==== */
+$("#btnAbrirCaixa").addEventListener('click', () => {
+  if (!currentEventoId) { showToast('Selecione um evento','warn'); return; }
+
+  const cx = getCaixa(currentEventoId);
+  if (cx.aberto) { showToast('Caixa já está aberto','warn'); return; }
+
+  const v = toCents($("#vlAbertura")?.value || '0');
+  if (!Number.isFinite(v) || v <= 0) { showToast('Informe um valor de abertura válido','warn'); return; }
+
+  cx.aberto = true;
+  cx.saldoDinheiro = (cx.saldoDinheiro || 0) + v;
+
+  cx.movimentos = Array.isArray(cx.movimentos) ? cx.movimentos : [];
+  cx.movimentos.push({
+    tipo: 'abertura',
+    valor: v,
+    resp: ($("#respAbertura")?.value || '').trim(),
+    ts: ISO()
+  });
+
+  // APARAR HISTÓRICO (evita QuotaExceeded no localStorage)
+  if (cx.movimentos.length > 1000) {
+    cx.movimentos = cx.movimentos.slice(-600);
+  }
+
+  upsertCaixa(cx);
+  renderCaixaHeader?.();
+  showToast('Caixa aberto ✅');
+
+    try {
+    apiRegistrarMovimentoCaixaPDV({
+      eventoId: currentEventoId,
+      tipo: 'abertura',
+      formaLabel: '',
+      valorCents: v,
+      saldoDinheiroCents: cx.saldoDinheiro,
+      saldoEletronicoCents: cx.saldoEletronico,
+      resp: ($("#respAbertura")?.value || '').trim()
+    });
+  } catch(e) {
+    console.warn('mov caixa (abertura) → API falhou', e);
+  }
+
+});
+
+$("#btnSangria").addEventListener('click', () => {
+  if (!currentEventoId) { showToast('Selecione um evento','warn'); return; }
+
+  const cx = getCaixa(currentEventoId);
+  if (!cx.aberto) { showToast('Abra o caixa primeiro','warn'); return; }
+
+  const v = toCents($("#vlSangria")?.value || '0');
+  if (!Number.isFinite(v) || v <= 0) { showToast('Informe o valor da sangria','warn'); return; }
+
+  const saldoDin = Number(cx.saldoDinheiro || 0);
+  if (v > saldoDin) {
+    // evita ficar negativo; avisa o operador
+    showToast('Sangria maior que o saldo em dinheiro — ajustado ao saldo.', 'warn');
+  }
+
+  cx.saldoDinheiro = Math.max(0, saldoDin - v);
+
+  cx.movimentos = Array.isArray(cx.movimentos) ? cx.movimentos : [];
+  cx.movimentos.push({
+    tipo: 'sangria',
+    valor: v,
+    resp: ($("#respSangria")?.value || '').trim(),
+    ts: ISO()
+  });
+
+  // APARAR HISTÓRICO (evita QuotaExceeded no localStorage)
+  if (cx.movimentos.length > 1000) {
+    cx.movimentos = cx.movimentos.slice(-600);
+  }
+
+  upsertCaixa(cx);
+  renderCaixaHeader?.();
+
+  $("#vlSangria").value = '';
+  showToast('Sangria registrada ✅');
+    try {
+    apiRegistrarMovimentoCaixaPDV({
+      eventoId: currentEventoId,
+      tipo: 'sangria',
+      formaLabel: '',
+      valorCents: v,
+      saldoDinheiroCents: cx.saldoDinheiro,
+      saldoEletronicoCents: cx.saldoEletronico,
+      resp: ($("#respSangria")?.value || '').trim()
+    });
+  } catch(e) {
+    console.warn('mov caixa (sangria) → API falhou', e);
+  }
+
+});
+
+$("#btnFecharCaixa").addEventListener('click', () => {
+  if (!currentEventoId) { showToast('Selecione um evento','warn'); return; }
+
+  const cx = getCaixa(currentEventoId);
+  if (!cx.aberto) { showToast('Caixa já está fechado','warn'); return; }
+
+  // garante estrutura
+  cx.movimentos = Array.isArray(cx.movimentos) ? cx.movimentos : [];
+
+  // snapshot dos saldos no momento do fechamento
+  const saldoDin  = Number(cx.saldoDinheiro || 0);
+  const saldoElec = Number(cx.saldoEletronico || 0);
+  const saldoTot  = saldoDin + saldoElec;
+
+  cx.aberto = false;
+  cx.movimentos.push({
+    tipo: 'fechamento',
+    resp: ($("#respFechamento")?.value || '').trim(),
+    ts: ISO(),
+    saldoDinheiro: saldoDin,
+    saldoEletronico: saldoElec,
+    saldoTotal: saldoTot
+  });
+
+  // aparar histórico para evitar estourar localStorage em uso intenso
+  if (cx.movimentos.length > 1000) {
+    cx.movimentos = cx.movimentos.slice(-600);
+  }
+
+  upsertCaixa(cx);
+  renderCaixaHeader?.();
+  showToast('Caixa fechado ✅');
+    try {
+    apiRegistrarMovimentoCaixaPDV({
+      eventoId: currentEventoId,
+      tipo: 'fechamento',
+      formaLabel: '',
+      valorCents: saldoTot,
+      saldoDinheiroCents: saldoDin,
+      saldoEletronicoCents: saldoElec,
+      resp: ($("#respFechamento")?.value || '').trim()
+    });
+  } catch(e) {
+    console.warn('mov caixa (fechamento) → API falhou', e);
+  }
+
+});
+
+
+/* ==== Finalizar ==== */
+$("#finalizar").addEventListener('click', finalizarItens);
+$("#ingFinalizar").addEventListener('click', finalizarIngressos);
+window.addEventListener('storage', (ev)=>{
+  if (ev.key === 'configFinanceiro') hydrateFormas();
+});
+
+/* ==== Init ==== */
+(function init(){
+  hydrateEventos();
+  hydrateCategoriasPadrao();
+  hydrateFormas();
+  renderGridItens();
+  hydrateTiposIngresso();
+  buscarIngressos();
+  renderCaixaHeader();
+})();
+</script>
+
+<!-- menu --><!-- Worker invisível da impressora de fichas -->
+<iframe id="etqWorker"
+        src="./etiquetas.html?worker=1"
+        style="position:fixed;left:-99999px;top:-99999px;width:1px;height:1px;opacity:0;border:0"
+        aria-hidden="true"></iframe>
+<script>
+  // opcional: já informa o evento atual no hash
+  window.addEventListener('load', () => {
+    const sel = document.getElementById('selEvento');
+    const evId = sel?.value || '';
+    const f = document.getElementById('etqWorker');
+    if (f && evId) f.contentWindow.location.hash = '#evento=' + evId;
+  });
+</script>
+<script>
+  // Abre/reaproveita o worker (precisa de 1 clique do operador em QUALQUER lugar do PDV)
+  let __etqWin = null;
+  function ensureEtiquetasWorker() {
+    try {
+      if (!__etqWin || __etqWin.closed) {
+        __etqWin = window.open('etiquetas.html?worker=1&kiosk=1', 'etq_worker',
+          'width=420,height=320,menubar=no,toolbar=no,location=no,status=no');
+        setTimeout(() => { try { __etqWin.blur(); window.focus(); } catch {} }, 300);
+         // envia o evento atual para o worker recém-aberto
+      try {
+        const evId = document.getElementById('selEvento')?.value || '';
+        if (evId) __etqWin.location.hash = '#evento=' + evId;
+      } catch {}
+      }
+    } catch (e) {
+      console.warn('Popup bloqueado para a janela de etiquetas.', e);
+      alert('Libere pop-ups para abrir a janela de impressão automática.');
+    }
+  }
+  (function attachOneTimeOpen(){
+    const once = () => { document.removeEventListener('click', once, true); ensureEtiquetasWorker(); };
+    document.addEventListener('click', once, true);
+  })();
+ 
+</script>
+
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    if (!back.hasAttribute('data-bound')) {
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', () => {
+        aside.classList.remove('aberto');
+        back.hidden = true;
+      });
+    }
+
+    if (!btn.hasAttribute('data-bound')) {
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        const opened = aside.classList.toggle('aberto');
+        back.hidden = !opened;
+      });
+    }
+  })();
+</script>
+
+
+</body>
+</html>
+

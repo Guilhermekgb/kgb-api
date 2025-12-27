@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Formulário do Cliente – Buffet KGB</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- REMOVIDO: <link rel="stylesheet" ...> (era JS e causava o erro) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    *,*::before,*::after{ box-sizing:border-box; }
+
+    body {
+      font-family: 'Playfair Display', serif;
+      background-color: #f8f1e8;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 30px auto;
+      background-color: white;
+      padding: 30px 40px;
+      border-radius: 16px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    }
+
+    .container img.logo {
+      max-width: 200px;
+      display: block;
+      margin: 0 auto 30px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #5a3e2b;
+      margin-bottom: 30px;
+    }
+
+    fieldset{ border:1px solid #e6dfd6; border-radius:12px; padding:18px; margin:0 0 18px; }
+    legend{ padding:0 8px; color:#5a3e2b; font-weight:700; }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: bold;
+      color: #5a3e2b;
+    }
+
+    .input-icon { position: relative; }
+    .input-icon i {
+      position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%); color: #c29a5d;
+    }
+    .input-icon input,
+    .input-icon select,
+    .input-icon textarea { padding-left: 36px; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      background:#fff;
+      transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+    input:focus, select:focus, textarea:focus{
+      outline:none; border-color:#c29a5d; box-shadow:0 0 0 3px #f2e3cf; background:#fffdfb;
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    button {
+      background-color: #c29a5d;
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 10px;
+      width: 100%;
+      transition: filter 0.2s ease;
+    }
+    button:hover { filter: brightness(.95); }
+
+    .sucesso {
+      text-align: center;
+      font-weight: bold;
+      color: green;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="logo.png" alt="Logo do Buffet" class="logo" />
+    <h1>Formulário do Cliente</h1>
+
+    <form id="formCliente">
+      <fieldset>
+        <legend>Dados Pessoais</legend>
+        <label for="nome">Nome completo</label>
+        <input id="nome" required type="text" placeholder="Nome completo">
+
+        <label for="rg">RG (opcional)</label>
+        <input id="rg" type="text" placeholder="RG (opcional)">
+
+        <label for="cpf">CPF (opcional)</label>
+        <input id="cpf" type="text" placeholder="CPF (opcional)">
+
+        <label for="cep">Digite seu CEP</label>
+        <input id="cep" type="text" placeholder="Digite seu CEP">
+
+        <label for="endereco">Rua, Bairro, Cidade - UF</label>
+        <input id="endereco" type="text">
+
+        <label for="numero">Número da casa</label>
+        <input id="numero" type="text">
+
+        <label for="email">E-mail para contato</label>
+        <input id="email" type="email">
+
+        <label for="whatsapp">WhatsApp</label>
+        <input id="whatsapp" type="tel" placeholder="WhatsApp">
+      </fieldset>
+
+      <fieldset>
+        <legend>Informações do Evento</legend>
+        <label for="dataEvento">Data do Evento</label>
+        <input id="dataEvento" type="date">
+
+        <label for="localFesta">Local da Festa</label>
+        <input id="localFesta" type="text">
+
+        <label for="convidados">Quantidade de Convidados</label>
+        <input id="convidados" type="number">
+
+        <label for="cerimonia">Cerimônia no Local?</label>
+        <select id="cerimonia">
+          <option value="">Selecione</option>
+          <option>Sim</option>
+          <option>Não</option>
+        </select>
+
+        <label for="horarioCerimonia">Horário</label>
+        <input id="horarioCerimonia" type="time">
+
+        <label for="comoConheceu">Como conheceu o buffet?</label>
+        <select id="comoConheceu" required>
+          <option hidden selected>Como conheceu o buffet?</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Preferências</legend>
+        <label for="cardapio">Cardápio Escolhido</label>
+        <input id="cardapio" type="text" placeholder="Ex: Finger Food, Churrasco...">
+
+        <label for="cerveja">Cerveja?</label>
+        <select id="cerveja">
+          <option value="">Selecione</option>
+          <option>Com cerveja</option>
+          <option>Sem cerveja</option>
+        </select>
+
+        <label for="itensAdicionais">Itens Adicionais</label>
+        <textarea id="itensAdicionais" placeholder="Ilha Japonesa, Costela de Chão, Bar de Drinks, etc."></textarea>
+
+        <label for="redesSociais">Redes Sociais</label>
+        <input id="redesSociais" type="text" placeholder="@instagram ou link do perfil">
+      </fieldset>
+
+      <input type="hidden" id="responsavel" value="administrador">
+
+      <button type="submit">Enviar Formulário</button>
+      <p class="sucesso" id="mensagemSucesso"></p>
+    </form>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      try { lucide.createIcons(); } catch {}
+    });
+
+    // Preenche as opções de "como conheceu"
+    const fontes = JSON.parse(localStorage.getItem("comoConheceu") || "[]");
+    const selectConheceu = document.getElementById("comoConheceu");
+    if (selectConheceu) {
+      fontes.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        selectConheceu.appendChild(opt);
+      });
+    }
+
+    document.getElementById("cep").addEventListener("blur", function () {
+      const cep = this.value.replace(/\D/g, '');
+      if (cep.length === 8) {
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+          .then(res => res.json())
+          .then(d => {
+            if (!d.erro) {
+              document.getElementById("endereco").value =
+                `${d.logradouro}, ${d.bairro} - ${d.localidade}/${d.uf}`;
+            }
+          });
+      }
+    });
+
+    document.getElementById("whatsapp").addEventListener("input", function () {
+      let v = this.value.replace(/\D/g, "");
+      v = v.replace(/^0/, "");
+      if (v.length > 10) {
+        v = v.replace(/(\d{2})(\d{5})(\d{4}).*/, "($1) $2-$3");
+      } else if (v.length > 5) {
+        v = v.replace(/(\d{2})(\d{4})(\d{0,4}).*/, "($1) $2-$3");
+      } else if (v.length > 2) {
+        v = v.replace(/(\d{2})(\d{0,5})/, "($1) $2");
+      } else {
+        v = v.replace(/(\d*)/, "($1");
+      }
+      this.value = v;
+    });
+
+     document.getElementById("formCliente").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const dados = {
+        nome: document.getElementById("nome").value,
+        rg: document.getElementById("rg").value,
+        cpf: document.getElementById("cpf").value,
+        cep: document.getElementById("cep").value,
+        endereco: document.getElementById("endereco").value,
+        numero: document.getElementById("numero").value,
+        email: document.getElementById("email").value,
+        whatsapp: document.getElementById("whatsapp").value,
+        dataEvento: document.getElementById("dataEvento").value,
+        localFesta: document.getElementById("localFesta").value,
+        convidados: document.getElementById("convidados").value,
+        cerimonia: document.getElementById("cerimonia").value,
+        horarioCerimonia: document.getElementById("horarioCerimonia").value,
+        comoConheceu: document.getElementById("comoConheceu").value,
+        cardapio: document.getElementById("cardapio").value,
+        cerveja: document.getElementById("cerveja").value,
+        itensAdicionais: document.getElementById("itensAdicionais").value,
+        redesSociais: document.getElementById("redesSociais").value,
+        responsavel: document.getElementById("responsavel").value,
+        enviadoEm: new Date().toISOString()
+      };
+
+      const getLeadsLocal = () => {
+        try {
+          const v = JSON.parse(localStorage.getItem("leads") || "[]");
+          return Array.isArray(v) ? v : [];
+        } catch {
+          return [];
+        }
+      };
+      const setLeadsLocal = (arr) => {
+        try { localStorage.setItem("leads", JSON.stringify(arr)); } catch {}
+      };
+
+      const qtdNum = parseInt(dados.convidados || "0", 10) || 0;
+
+      let origem = (dados.comoConheceu || "").toString().trim();
+      if (!origem) origem = "Formulário interno";
+
+      const novoLead = {
+        id: (crypto.randomUUID?.() || String(Date.now())),
+        nome: dados.nome,
+        whatsapp: String(dados.whatsapp || "").replace(/\D/g, ""),
+        email: dados.email,
+        dataEvento: dados.dataEvento,
+        local: dados.localFesta,
+        qtd: qtdNum,
+        comoConheceu: dados.comoConheceu,
+        cardapio: dados.cardapio,
+        observacoes:
+          `Itens adicionais: ${dados.itensAdicionais || "-"}\n` +
+          `Redes sociais: ${dados.redesSociais || "-"}`,
+        responsavel: dados.responsavel || "administrador",
+        responsavel_nome: dados.responsavel || "administrador",
+        status: "Novo Lead",
+        dataCriacao: dados.enviadoEm,
+        origem,
+
+        // extras do formulário guardados num bloco separado
+        extrasFormulario: {
+          rg: dados.rg,
+          cpf: dados.cpf,
+          cep: dados.cep,
+          endereco: dados.endereco,
+          numero: dados.numero,
+          cerimonia: dados.cerimonia,
+          horarioCerimonia: dados.horarioCerimonia,
+          cerveja: dados.cerveja
+        }
+      };
+
+      function buildApiHeaders() {
+        const base = { "Content-Type": "application/json" };
+        try {
+          const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+          if (token) return { ...base, Authorization: `Bearer ${token}` };
+        } catch (e) {}
+        return base;
+      }
+
+      const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+      const url = API_BASE ? API_BASE.replace(/\/+$/, "") + "/leads" : "";
+      let criadoNaApi = false;
+
+      if (url) {
+        try {
+          const resp = await fetch(url, {
+            method: "POST",
+            headers: buildApiHeaders(),
+            body: JSON.stringify(novoLead)
+          });
+          if (resp.ok) {
+            const data = await resp.json().catch(() => null);
+            if (data && (data.id || data._id)) {
+              novoLead.id = data.id || data._id;
+            }
+            criadoNaApi = true;
+          } else {
+            console.warn("Erro ao criar lead na API (form interno):", resp.status);
+          }
+        } catch (err) {
+          console.warn("Falha ao chamar API /leads (form interno):", err);
+        }
+      }
+
+      // Fallback: se não gravou na API, salva no navegador
+      if (!criadoNaApi) {
+        const leads = getLeadsLocal();
+        leads.push(novoLead);
+        setLeadsLocal(leads);
+      }
+
+      const msg = document.getElementById("mensagemSucesso");
+      msg.textContent = "✅ Formulário enviado com sucesso!";
+      setTimeout(() => (msg.textContent = ""), 4000);
+
+      document.getElementById("formCliente").reset();
+    });
+
+     </script>
+
+ </body>
+</html>

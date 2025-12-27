@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="page-permission" content="page:login.html">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Desenvolvimento local (quando você rodar na sua máquina)
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Login - Sistema Buffet</title>
+
+  <script>
+    /* Impede bloqueio no login */
+    window.__KGB_GUARD_BYPASS__ = true;
+  </script>
+
+  <style>
+    :root {
+      --marrom: #4a2c18;
+      --dourado: #f8d57e;
+      --dourado-hover: #e0bc66;
+      --branco: #ffffff;
+      --sombra: rgba(0, 0, 0, 0.1);
+      --fonte: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #fdf6ee;
+      font-family: var(--fonte);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .login-box {
+      background-color: var(--branco);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 0 30px var(--sombra);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .login-box img {
+      width: 140px;
+      margin-bottom: 20px;
+    }
+
+    .login-box h2 {
+      margin-bottom: 24px;
+      color: var(--marrom);
+      font-weight: bold;
+    }
+
+    .campo {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+
+    .campo label {
+      display: block;
+      font-size: 12px;
+      color: #705542;
+      margin: 0 0 6px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background: #fff;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--dourado);
+      color: var(--marrom);
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      margin-top: 6px;
+    }
+
+    button:hover {
+      background-color: var(--dourado-hover);
+    }
+
+    .link-esqueci {
+      margin-top: 8px;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .link-esqueci a {
+      color: #a16b1f;
+      text-decoration: none;
+    }
+
+    .link-esqueci a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-box">
+    <img src="logo.png" alt="Logo KGB" />
+    <h2>Entrar no Sistema</h2>
+
+    <form id="formLogin" autocomplete="on" novalidate>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" placeholder="seu@email.com" required />
+      </div>
+
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" placeholder="Sua senha" required />
+      </div>
+
+      <button type="submit">Entrar</button>
+
+      <div class="link-esqueci">
+        <a href="esqueci-senha.html">Esqueci minha senha</a>
+      </div>
+    </form>
+  </div>
+
+<script>
+  // Login simples SOMENTE PARA USO NA SUA MÁQUINA (desenvolvimento)
+  (function () {
+    const form = document.getElementById("formLogin");
+    const emailInput = document.getElementById("email");
+    const senhaInput = document.getElementById("senha");
+
+    if (!form || !emailInput || !senhaInput) return;
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const email = String(emailInput.value || "").trim().toLowerCase();
+      const senha = String(senhaInput.value || "").trim();
+
+      if (!email || !senha) {
+        alert("Informe e-mail e senha.");
+        return;
+      }
+
+      // AQUI você define qual usuário quer usar
+      // Exemplo: admin@buffet.com / 123456
+      const EMAIL_FIXO = "admin@buffet.com";
+      const SENHA_FIXA = "123456";
+
+      if (email !== EMAIL_FIXO || senha !== SENHA_FIXA) {
+        alert("E-mail ou senha inválidos (use admin@buffet.com / 123456).");
+        return;
+      }
+
+      // Gera um token fake só para enganar o sistema
+      const tokenFake = "dev-token-" + Date.now();
+
+      try {
+        // Apaga tokens antigos
+        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
+
+        // Salva o token (como se tivesse vindo da API)
+        localStorage.setItem("token", tokenFake);
+        localStorage.setItem("auth.token", tokenFake);
+
+        // Perfis / roles (damos acesso de Administrador)
+        const perfisLista = ["Administrador"];
+        localStorage.setItem("auth.roles", perfisLista.join(","));
+        localStorage.setItem("perfil", perfisLista[0]);
+
+        // Guarda um usuário simples só para saudação, etc.
+        const sessao = {
+          id: "dev",
+          nome: "Admin Buffet",
+          email: EMAIL_FIXO,
+          perfil: perfisLista[0],
+          perfis: perfisLista
+        };
+        localStorage.setItem("auth:user", JSON.stringify(sessao));
+      } catch (e) {
+        console.error(e);
+        alert("Erro ao salvar sessão no navegador.");
+        return;
+      }
+
+      // Vai para o dashboard
+      window.location.href = "dashboard.html";
+    });
+  })();
+</script>
+
+</body>
+</html>

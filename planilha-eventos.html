@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <!-- Identidade RBAC da página -->
+  <meta name="page-permission" content="page:planilha-eventos.html|Administrador|Vendedor|Maitre|Responsável por Evento">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Eventos Realizados</title>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Seus estilos globais -->
+  <link rel="stylesheet" href="./kgb-common.css"/>
+  <link rel="stylesheet" href="./menu-lateral.css"/>
+
+  <style>
+    :root{
+      --sidebar-w:260px; --bg:#f8f1e8; --card:#fff;
+      --dourado:#c29a5d; --marrom:#532b03; --muted:#6b6b6b;
+      --radius:14px;
+    }
+    html,body{ margin:0; padding:0; background:var(--bg); }
+
+    /* Layout base modelo */
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+    main.conteudo-principal{
+      flex:1; width:100%; max-width:none; margin:0; padding:24px clamp(16px, 3vw, 32px) 40px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    h1,h2,h3{ font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif; color:#5a3e2b; }
+
+    /* Desktop: menu fixo */
+    @media (min-width:769px){
+      #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:999; }
+      .wrapper{ padding-left:var(--sidebar-w); }
+    }
+    /* Mobile: off-canvas */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001;
+      background:var(--dourado); border:none; color:#fff; border-radius:10px; padding:6px 10px; display:none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{ position:fixed; transform:translateX(-100%); transition:.3s; width:var(--sidebar-w); z-index:999; }
+      #menuLateral.aberto{ transform:translateX(0); }
+    }
+
+    /* Cards + grid, tabela, etc... */
+    .card{ background:var(--card); border-radius:var(--radius); box-shadow:0 6px 20px rgba(0,0,0,.07); padding:18px; }
+    .grid{ display:grid; gap:14px; grid-template-columns: repeat(12, 1fr); }
+    .col-12{ grid-column: span 12; } .col-6{ grid-column: span 6; } .col-4{ grid-column: span 4; }
+    .col-3{ grid-column: span 3; }
+    @media (max-width:900px){ .col-3{ grid-column: span 12; } }
+
+    /* ===== FORM ADICIONAR / EDITAR ===== */
+
+    .form-row{
+      display:grid;
+      grid-template-columns:repeat(12, minmax(0, 1fr));
+      gap:14px 18px;
+      margin-top:4px;
+    }
+
+    .form-field{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      grid-column:span 6;
+    }
+
+    .form-field--small{
+      grid-column:span 3;
+    }
+
+    .form-field--full{
+      grid-column:span 12;
+    }
+
+    /* Mobile: tudo em uma coluna */
+    @media (max-width:900px){
+      .form-field,
+      .form-field--small,
+      .form-field--full{
+        grid-column:span 12;
+      }
+    }
+
+    /* Labels mais delicadas */
+    #frm label{
+      font-size:11px;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:var(--muted);
+    }
+
+    /* Inputs padrão do sistema */
+    #frm input[type="text"],
+    #frm input[type="date"],
+    #frm input[type="number"],
+    #frm input[type="search"]{
+      border-radius:10px;
+      border:1px solid #e3d4c2;
+      padding:9px 10px;
+      font-size:14px;
+      background:#fcf7e9;
+      transition:border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .06s ease;
+    }
+
+    /* Hover / foco bonitinho */
+    #frm input:hover{
+      background:#fffaf3;
+    }
+
+    #frm input:focus{
+      outline:none;
+      border-color:var(--dourado);
+      box-shadow:0 0 0 1px rgba(194,154,93,.4);
+      background:#fff;
+      transform:translateY(-1px);
+    }
+
+    /* Linha de ações */
+    .actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:16px;
+    }
+
+    .actions .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border-radius:999px;
+      padding:7px 14px;
+      font-size:13px;
+    }
+
+    /* Campo de filtro combinando com o form */
+    #filtro{
+      border-radius:999px;
+      border:1px solid #e3d4c2;
+      padding:7px 12px;
+      font-size:14px;
+      background:#fcf7e9;
+      transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    #filtro:focus{
+      outline:none;
+      border-color:var(--dourado);
+      box-shadow:0 0 0 1px rgba(194,154,93,.4);
+      background:#fff;
+    }
+
+    /* ... resto do CSS igual estava ... */
+  </style>
+</head>
+<body>
+
+  <!-- Botão hambúrguer (se quiser usar no mobile) -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral" class="no-print"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <h1><i data-lucide="table"></i>&nbsp; Eventos Realizados</h1>
+
+      <div class="grid">
+        <!-- Resumo -->
+        <section class="card col-12">
+          <h3 style="margin:0 0 8px 0;">Resumo</h3>
+          <div class="grid">
+            <div class="col-3">
+              <div class="badge">Eventos cadastrados</div>
+              <div id="kpiEventos" style="font-size:28px; font-weight:700; margin-top:6px;">0</div>
+            </div>
+
+            <div class="col-3">
+              <div class="badge">Total de convidados</div>
+              <div id="kpiConvidados" style="font-size:28px; font-weight:700; margin-top:6px;">0</div>
+            </div>
+
+            <div class="col-3">
+              <div class="badge">Top locais</div>
+              <div id="kpiLocais" class="muted" style="margin-top:8px;">—</div>
+            </div>
+
+            <div class="col-3">
+              <div class="badge">Tipo mais realizado</div>
+              <div id="kpiTipo" class="muted" style="margin-top:8px;">—</div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- Formulário -->
+        <section class="card col-12">
+          <h3 style="margin:0 0 12px 0;">Adicionar / Editar</h3>
+          <form id="frm" class="form-row">
+            <div class="form-field form-field--small">
+              <label for="data">Data do evento</label>
+              <input id="data" type="date" required />
+            </div>
+            <div class="form-field form-field--full">
+              <label for="nome">Nome do evento</label>
+              <input id="nome" type="text" placeholder="Ex.: Aniversário da Nayara" required />
+            </div>
+            <div class="form-field">
+              <label for="tipo">Tipo do evento</label>
+              <input id="tipo" type="text" placeholder="Casamento / Formatura / Corporativo…" />
+            </div>
+            <div class="form-field">
+              <label for="qtde">Quantidade de convidados</label>
+              <input id="qtde" type="number" min="0" step="1" placeholder="Ex.: 250" required />
+            </div>
+            <div class="form-field form-field--full">
+              <label for="local">Local da festa</label>
+              <input id="local" type="text" placeholder="Ex.: Salão KGB / Espaço Garden / Cliente" />
+            </div>
+          </form>
+          <div class="actions">
+            <button class="btn" id="btnSalvar"><i data-lucide="save"></i>&nbsp; Salvar</button>
+            <button class="btn btn-ghost" id="btnNovo"><i data-lucide="plus"></i>&nbsp; Novo</button>
+            <button class="btn btn-ghost" id="btnExport"><i data-lucide="download"></i>&nbsp; Exportar CSV</button>
+            <label class="btn btn-ghost" style="cursor:pointer;">
+              <i data-lucide="upload"></i>&nbsp; Importar CSV
+              <input id="inpImport" type="file" accept=".csv" style="display:none"/>
+            </label>
+            <button class="btn btn-danger" id="btnLimpar"><i data-lucide="trash-2"></i>&nbsp; Limpar tudo</button>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Dica: você pode editar uma linha clicando no lápis. Os dados ficam salvos no servidor do sistema (nuvem).
+          </p>
+
+        </section>
+
+        <!-- Tabela -->
+        <section class="card col-12">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+            <h3 style="margin:0;">Registros</h3>
+            <input id="filtro" type="search" placeholder="Filtrar por nome, tipo ou local…" style="max-width:340px;"/>
+          </div>
+
+          <div style="overflow:auto; border-radius:10px;">
+            <table id="tbl">
+              <thead>
+                <tr>
+                  <th style="min-width:120px;">Data</th>
+                  <th style="min-width:220px;">Nome do evento</th>
+                  <th style="min-width:160px;">Tipo</th>
+                  <th style="min-width:150px;">Convidados</th>
+                  <th style="min-width:200px;">Local</th>
+                  <th style="min-width:120px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Script da planilha -->
+  <!-- Script da planilha – agora usando o servidor /eventos -->
+  <script>
+    // ===== Config da API =====
+    // Se mudar o endereço do servidor no futuro (ex: em produção),
+    // basta trocar essa linha:
+    // se quiser, use direto assim:
+    const API_BASE = 'https://kgb-api.onrender.com';
+
+
+    // ===== Helpers =====
+    const $ = (s, el=document) => el.querySelector(s);
+    const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+    const uid = (p='id_') => (crypto.randomUUID?.() || (p + Math.random().toString(36).slice(2,10)));
+
+    const state = {
+      editId: null,
+      rows: []
+    };
+
+    const form = $('#frm');
+    const inpData  = $('#data');
+    const inpNome  = $('#nome');
+    const inpTipo  = $('#tipo');
+    const inpQtde  = $('#qtde');
+    const inpLocal = $('#local');
+    const tbody  = $('#tbl tbody');
+    const filtro = $('#filtro');
+
+    function toBR(iso){
+      if(!iso) return '';
+      const [y,m,d] = String(iso).split('-').map(Number);
+      if(!y||!m||!d) return iso;
+      return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+    }
+    function fromInputDate(v){
+      // v no formato yyyy-mm-dd
+      return v || '';
+    }
+
+    function resetForm(){
+      form.reset();
+      state.editId = null;
+      $('#btnSalvar').textContent = 'Salvar';
+    }
+
+    function loadRowToForm(id){
+      const row = state.rows.find(r => r.id === id);
+      if(!row) return;
+      state.editId = id;
+      inpData.value  = row.dataISO || '';
+      inpNome.value  = row.nome    || '';
+      inpTipo.value  = row.tipo    || '';
+      inpQtde.value  = row.convidados ?? '';
+      inpLocal.value = row.local   || '';
+      $('#btnSalvar').textContent = 'Atualizar';
+      window.scrollTo({ top:0, behavior:'smooth' });
+    }
+
+    // ========== CHAMADAS AO SERVIDOR ==========
+
+    async function carregarEventos(){
+      try {
+        const resp = await fetch(`${API_BASE}/eventos`);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+        // servidor responde { ok:true, data:[...] }
+        state.rows = Array.isArray(json.data) ? json.data : [];
+        render();
+      } catch (err) {
+        console.error('Erro ao carregar eventos:', err);
+        alert('Erro ao carregar eventos do servidor. Veja o console do navegador.');
+      }
+    }
+
+    async function salvarEventoNoServidor(obj){
+      const isEdit = !!state.editId;
+      const url    = isEdit
+        ? `${API_BASE}/eventos/${state.editId}`
+        : `${API_BASE}/eventos`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const resp = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(obj)
+      });
+
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || json.ok === false){
+        throw new Error(json.error || 'Erro ao salvar evento no servidor.');
+      }
+
+      // devolve o evento salvo (se precisar)
+      return json.data || obj;
+    }
+
+    async function removerEventoNoServidor(id){
+      const resp = await fetch(`${API_BASE}/eventos/${id}`, {
+        method: 'DELETE'
+      });
+
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || json.ok === false){
+        throw new Error(json.error || 'Erro ao remover evento.');
+      }
+    }
+
+    // ========== RENDER DA TABELA / KPIs ==========
+
+    function render(){
+      const escapeHTML = s => String(s||'').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+      const q = filtro.value.trim().toLowerCase();
+      const arr = !q ? state.rows : state.rows.filter(r =>
+        (r.nome || '').toLowerCase().includes(q) ||
+        (r.tipo || '').toLowerCase().includes(q) ||
+        (r.local|| '').toLowerCase().includes(q)
+      );
+
+      tbody.innerHTML = arr.map(r => `
+        <tr>
+          <td>${toBR(r.dataISO)}</td>
+          <td>${escapeHTML(r.nome)}</td>
+          <td>${escapeHTML(r.tipo)}</td>
+          <td>${Number(r.convidados || 0)}</td>
+          <td>${escapeHTML(r.local)}</td>
+          <td>
+            <button class="btn btn-ghost" data-editar="${r.id}"><i data-lucide="pencil"></i></button>
+            <button class="btn btn-danger" data-excluir="${r.id}"><i data-lucide="trash-2"></i></button>
+          </td>
+        </tr>
+      `).join('');
+
+      // ações nas linhas
+      $$('button[data-editar]').forEach(b => b.onclick  = () => loadRowToForm(b.dataset.editar));
+      $$('button[data-excluir]').forEach(b => b.onclick = async () => {
+        if(!confirm('Remover este registro?')) return;
+        try {
+          await removerEventoNoServidor(b.dataset.excluir);
+          await carregarEventos();
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao remover evento no servidor.');
+        }
+      });
+
+      // KPIs
+      const totalEventos    = state.rows.length;
+      const totalConvidados = state.rows.reduce((acc,r)=> acc + Number(r.convidados||0), 0);
+
+      const locais = new Map();
+      state.rows.forEach(r => {
+        const k = (r.local||'').trim() || 'Sem local';
+        locais.set(k, (locais.get(k)||0) + 1);
+      });
+      const topLocais = Array.from(locais.entries())
+        .sort((a,b) => b[1]-a[1])
+        .slice(0,5)
+        .map(([k,v]) => `${k} (${v})`)
+        .join(' · ');
+
+      const tipos = new Map();
+      state.rows.forEach(r => {
+        const k = (r.tipo||'').trim() || 'Sem tipo';
+        tipos.set(k, (tipos.get(k)||0) + 1);
+      });
+      let tipoMais = '—';
+      if (tipos.size){
+        const [nomeTop, qtdTop] = Array.from(tipos.entries()).sort((a,b)=>b[1]-a[1])[0];
+        tipoMais = `${nomeTop} (${qtdTop})`;
+      }
+
+      const elEventos    = document.getElementById('kpiEventos');
+      const elConvidados = document.getElementById('kpiConvidados');
+      const elLocais     = document.getElementById('kpiLocais');
+      const elTipo       = document.getElementById('kpiTipo');
+
+      if (elEventos)    elEventos.textContent    = totalEventos;
+      if (elConvidados) elConvidados.textContent = totalConvidados;
+      if (elLocais)     elLocais.textContent     = topLocais || '—';
+      if (elTipo)       elTipo.textContent       = tipoMais;
+
+      if (window.lucide?.createIcons) lucide.createIcons();
+    }
+
+    // ========== BOTÕES / AÇÕES DA TELA ==========
+
+    // salvar / atualizar
+    $('#btnSalvar').onclick = async (e) => {
+      e.preventDefault();
+      const obj = {
+        id: state.editId || uid('e_'),
+        dataISO: fromInputDate(inpData.value),
+        nome: inpNome.value.trim(),
+        tipo: inpTipo.value.trim(),
+        convidados: Number(inpQtde.value || 0),
+        local: inpLocal.value.trim()
+      };
+      if (!obj.dataISO || !obj.nome || isNaN(obj.convidados)) {
+        alert('Preencha Data, Nome e Convidados.');
+        return;
+      }
+
+      try {
+        await salvarEventoNoServidor(obj);
+        resetForm();
+        await carregarEventos();
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao salvar evento no servidor.');
+      }
+    };
+
+    // novo
+    $('#btnNovo').onclick = (e) => { e.preventDefault(); resetForm(); };
+
+    // filtro
+    filtro.oninput = () => render();
+
+    // export CSV (usa os dados que já vieram do servidor)
+    $('#btnExport').onclick = () => {
+      const sep = ';';
+      const header = ['data','nome','tipo','convidados','local'].join(sep);
+      const lines = state.rows.map(r=>[
+        toBR(r.dataISO),
+        (r.nome||'').replace(/;/g,','),
+        (r.tipo||'').replace(/;/g,','),
+        Number(r.convidados||0),
+        (r.local||'').replace(/;/g,',')
+      ].join(sep));
+      const csv = [header, ...lines].join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'planilha-eventos.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    // import CSV → envia cada linha para o servidor
+    $('#inpImport').onchange = async (e) => {
+      const f = e.target.files?.[0]; if(!f) return;
+      const txt = await f.text();
+      const lines = txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+      if(!lines.length) return;
+      const body = (lines[0].includes(';') ? lines.slice(1) : lines); // ignora cabeçalho se houver
+
+      try {
+        for (const l of body){
+          const [dataBR, nome, tipo, convidados, local] = l.split(';');
+          const [d,m,y] = (dataBR||'').split('/').map(Number);
+          const iso = (y && m && d)
+            ? `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+            : '';
+          const obj = {
+            id: uid('e_'),
+            dataISO: iso,
+            nome: (nome||'').trim(),
+            tipo: (tipo||'').trim(),
+            convidados: Number(convidados||0),
+            local: (local||'').trim()
+          };
+          await salvarEventoNoServidor(obj);
+        }
+        await carregarEventos();
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao importar CSV para o servidor.');
+      } finally {
+        e.target.value = '';
+      }
+    };
+
+    // limpar tudo → apaga todos no servidor
+    $('#btnLimpar').onclick = async () => {
+      if(!confirm('Tem certeza que deseja apagar TODOS os registros desta planilha?')) return;
+      try {
+        // usamos a lista atual carregada
+        const atual = [...state.rows];
+        for (const ev of atual){
+          try {
+            await removerEventoNoServidor(ev.id);
+          } catch (err) {
+            console.warn('Erro ao remover evento', ev.id, err);
+          }
+        }
+        resetForm();
+        await carregarEventos();
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao limpar eventos no servidor.');
+      }
+    };
+
+    // init → agora carrega do servidor
+    carregarEventos();
+  </script>
+
+  <!-- Guard/Permissões (opcional) -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+    // reaplica depois que o menu for injetado
+    const alvo = document.getElementById('menuLateral');
+    if (alvo){
+      const obs = new MutationObserver((m,o)=>{ if(alvo.firstElementChild){ aplicarPermissoesNaTela(); o.disconnect(); } });
+      obs.observe(alvo, { childList:true });
+    }
+  </script>
+
+  <!-- Menu (modelo-base estável) -->
+  <script type="module" src="./menu-lateral.js"></script>
+</body>
+</html>

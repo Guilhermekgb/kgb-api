@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Formulário Público - Buffet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      background-color: #fdf6ec;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 520px;
+      margin: 30px auto;
+      background-color: white;
+      padding: 30px 25px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .container img.logo { max-width: 180px; margin-bottom: 15px; }
+    h2 { color: #5a360d; margin-bottom: 25px; }
+    .input-group {
+      display: flex; align-items: center; margin-bottom: 15px;
+      background-color: #fffaf2; border: 1px solid #e5d4b6; border-radius: 8px; padding: 10px;
+    }
+    .input-group i, .input-group svg { margin-right: 10px; color: #b88a2d; width: 18px; height: 18px; }
+    .input-group input, .input-group select, .input-group textarea {
+      flex: 1; border: none; outline: none; font-size: 15px; background: transparent; font-family: inherit;
+    }
+    .input-group textarea { resize: vertical; }
+    button {
+      width: 100%; padding: 12px; background-color: #b88a2d; color: white; border: none; border-radius: 8px;
+      font-size: 16px; font-family: inherit; cursor: pointer; transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    button:hover { background-color: #a67c1e; box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <img src="logo.png" alt="Logo do Buffet" class="logo">
+    <h2>Solicite seu orçamento</h2>
+
+    <form id="orcamentoForm">
+      <div class="input-group">
+        <i data-lucide="user"></i>
+        <input type="text" placeholder="Nome *" name="nome" required>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="phone"></i>
+        <input type="tel" placeholder="WhatsApp *" name="whatsapp" required>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="calendar"></i>
+        <!-- name ajustado para data_evento -->
+        <input type="date" name="data_evento" required>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="map-pin"></i>
+        <input type="text" placeholder="Local do Evento *" name="local" required>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="users"></i>
+        <input type="number" placeholder="Número de Convidados (mínimo 50)" name="convidados" required>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="search"></i>
+        <!-- agora tem name (FormData pega) -->
+        <select id="comoConheceu" name="como_conheceu" required>
+          <option hidden selected>Como conheceu o buffet?</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="message-square"></i>
+        <textarea id="obsConheceu" name="como_conheceu_obs" placeholder="Detalhes importantes (Ex: Indicação, Feira)"></textarea>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="calendar-check"></i>
+        <!-- agora tem name (FormData pega) -->
+        <select id="tipoEvento" name="tipo_evento" required>
+          <option hidden selected>Selecione o tipo de evento</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="utensils"></i>
+        <input type="text" placeholder="Já sabe o que deseja servir?" name="menu">
+      </div>
+
+      <div class="input-group">
+        <i data-lucide="sticky-note"></i>
+        <textarea name="observacoes" placeholder="Observações adicionais (opcional)"></textarea>
+      </div>
+
+      <button type="submit">
+        <i data-lucide="send" style="vertical-align: middle; margin-right: 6px;"></i> Enviar
+      </button>
+    </form>
+  </div>
+
+  <!-- Preencher opções de "como conheceu" -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const fontes = JSON.parse(localStorage.getItem("comoConheceu") || "[]");
+      const select = document.getElementById("comoConheceu");
+      fontes.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f; opt.textContent = f;
+        select.appendChild(opt);
+      });
+
+      // Preencher "Tipo de Evento" com dados salvos no localStorage
+      const tipos = JSON.parse(localStorage.getItem("tiposEvento") || "[]");
+      const selectTipo = document.getElementById("tipoEvento");
+      tipos.forEach(tipo => {
+        const opt = document.createElement("option");
+        opt.value = tipo; opt.textContent = tipo;
+        selectTipo.appendChild(opt);
+      });
+
+      window.lucide?.createIcons?.();
+    });
+  </script>
+
+   <!-- Envio do formulário → cria lead via API /leads (com UTM/origem) -->
+  <script>
+  (() => {
+    const form = document.getElementById('orcamentoForm');
+
+    // Captura UTM da URL (se existir)
+    const params = new URLSearchParams(location.search);
+    const utm = {
+      utm_source:   params.get('utm_source')   || '',
+      utm_medium:   params.get('utm_medium')   || '',
+      utm_campaign: params.get('utm_campaign') || '',
+      utm_content:  params.get('utm_content')  || '',
+      utm_term:     params.get('utm_term')     || '',
+      referrer:     document.referrer || ''
+    };
+
+    if (!form) return;
+
+    // utils para fallback local
+    const getArr = (k) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k) || '[]');
+        return Array.isArray(v) ? v : [];
+      } catch {
+        return [];
+      }
+    };
+    const setArr = (k, v) => {
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+    };
+
+    function buildApiHeaders() {
+      const base = { 'Content-Type': 'application/json' };
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) return { ...base, Authorization: `Bearer ${token}` };
+      } catch (e) {}
+      return base;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+
+      const convidados = parseInt(fd.get('convidados') || '0', 10);
+      if (convidados < 50) {
+        alert('O número mínimo de convidados é 50.');
+        return;
+      }
+
+      // Origem para o funil (campo lead.origem)
+      let origem = (fd.get('como_conheceu') || '').toString().trim();
+      if (!origem) {
+        if (utm.utm_source) {
+          origem = utm.utm_source;
+        } else if (utm.referrer) {
+          try {
+            const u = new URL(utm.referrer);
+            origem = u.hostname.replace(/^www\./, '');
+          } catch {}
+        }
+        if (!origem) origem = 'Formulário site';
+      }
+
+      const novoLead = {
+        id: (crypto.randomUUID?.() || String(Date.now())),
+        nome: (fd.get('nome') || '').toString().trim(),
+        telefone: '',
+        whatsapp: (fd.get('whatsapp') || '').toString().trim(),
+        email: (fd.get('email') || '').toString().trim(),
+        dataEvento: fd.get('data_evento') || '',
+        tipoEvento: fd.get('tipo_evento') || '',
+        local: fd.get('local') || '',
+        qtd: convidados || 0,
+        comoConheceu: fd.get('como_conheceu') || '',
+        comoConheceuObs: fd.get('como_conheceu_obs') || '',
+        menu: fd.get('menu') || '',
+        observacoes: (fd.get('observacoes') || '').toString().trim(),
+        responsavel: 'administrador',
+        responsavel_nome: 'administrador',
+        dataCriacao: new Date().toISOString(),
+        status: 'Novo Lead',
+        visualizacoes: 0,
+
+        // Origem usada no filtro do funil
+        origem,
+
+        // UTM / origem avançada
+        utm_source: utm.utm_source,
+        utm_medium: utm.utm_medium,
+        utm_campaign: utm.utm_campaign,
+        utm_content: utm.utm_content,
+        utm_term: utm.utm_term,
+        origem_referrer: utm.referrer
+      };
+
+      const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || '';
+      const url = API_BASE ? API_BASE.replace(/\/+$/, '') + '/leads' : '';
+      let criadoNaApi = false;
+
+      if (url) {
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: buildApiHeaders(),
+            body: JSON.stringify(novoLead)
+          });
+          if (resp.ok) {
+            const data = await resp.json().catch(() => null);
+            if (data && (data.id || data._id || data.leadId)) {
+              novoLead.id = data.id || data._id || data.leadId;
+            }
+            criadoNaApi = true;
+          } else {
+            console.warn('Erro ao criar lead na API:', resp.status);
+          }
+        } catch (err) {
+          console.warn('Falha ao chamar API /leads:', err);
+        }
+      }
+
+      // Fallback: se não conseguiu enviar pra API, guarda local
+      if (!criadoNaApi) {
+        const leads = getArr('leads');
+        leads.push(novoLead);
+        setArr('leads', leads);
+      }
+
+      // Notificação externa local (igual antes)
+      const notifs = getArr('notificacoes');
+      notifs.push({
+        id: (crypto.randomUUID?.() || String(Date.now())),
+        tipo: 'externa',
+        leadId: novoLead.id,
+        titulo: 'Novo Lead (formulário)',
+        descricao: `Lead ${novoLead.nome} • ${novoLead.tipoEvento || ''} • ${novoLead.dataEvento || ''}`,
+        data: new Date().toLocaleString('pt-BR'),
+        lido: false
+      });
+      setArr('notificacoes', notifs);
+
+      // Redireciona para a página de confirmação
+      window.location.href = 'obrigado.html';
+    });
+  })();
+  </script>
+
+</body>
+</html>

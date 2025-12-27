@@ -1,0 +1,97 @@
+:root{
+  --bg: #f8f1e8;
+  --brown: #5a3e2b;
+  --gold: #c29a5d;
+  --line: #e7dfd6;
+  --chip: #f3e8da;
+}
+
+html, body { background: var(--bg); margin:0; padding:0; }
+
+.wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+/* Tipografia SOMENTE na área principal (não mexe no menu) */
+main.conteudo-principal,
+.conteudo-principal input,
+.conteudo-principal select,
+.conteudo-principal textarea,
+.conteudo-principal button {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+}
+.conteudo-principal h1, .conteudo-principal h2, .conteudo-principal h3 {
+  font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+main.conteudo-principal { flex-grow:1; padding:40px; height:100vh; overflow-y:auto; }
+.conteudo-central { max-width:1000px; margin:0 auto; }
+
+h1{
+  font-size:28px; color:var(--brown);
+  display:flex; align-items:center; gap:10px;
+}
+
+#hamburguer{
+  position:fixed; top:12px; left:12px;
+  background:var(--gold); border:none; color:#fff;
+  font-size:24px; padding:6px 12px; border-radius:8px;
+  z-index:1001; display:none;
+}
+@media (max-width: 768px){
+  #hamburguer{ display:block; }
+  main.conteudo-principal{ padding:20px; }
+}
+
+/* Filtros */
+.card{
+  background:#fff; border:1px solid var(--line);
+  border-radius:14px; padding:14px; margin:16px 0;
+  box-shadow:0 8px 24px rgba(0,0,0,.04);
+}
+.filtros .campo-busca{
+  display:flex; align-items:center; gap:8px;
+  background:#fff; border:1px solid #e6ded2; border-radius:10px; padding:10px 12px;
+}
+.filtros .campo-busca input{ border:none; outline:none; flex:1; }
+.filtros .linha-filtros{
+  display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; align-items:center;
+}
+.filtros select{
+  padding:8px 10px; border:1px solid #e6ded2; border-radius:10px; background:#fff;
+}
+
+/* Lista de cards */
+.lista{ display:flex; flex-direction:column; gap:12px; }
+.card-evento{
+  display:flex; justify-content:space-between; gap:16px;
+  background:#fff; border:1px solid var(--line);
+  border-radius:14px; padding:14px;
+  box-shadow:0 4px 14px rgba(0,0,0,.06);
+}
+.ev-titulo{
+  display:flex; align-items:center; gap:10px; color:var(--brown); font-weight:700;
+}
+.ev-sub{ color:#6b5a4a; margin-top:2px; }
+.ev-metas{ display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; color:#6b5a4a; }
+.ev-metas .meta{ display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #e6ded2; border-radius:999px; padding:4px 10px; font-size:12px; }
+
+.tag{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px;
+  background:var(--chip); border:1px solid #e7d7bf; color:#5a3e2b;
+}
+.tag.cancelado{ background:#fff5f5; border-color:#f0cccc; color:#9b2c2c; }
+.tag.em_pausa{ background:#fff8e1; border-color:#f2dfb4; color:#8a6d1e; }
+.tag.adiado{ background:#eaf6ff; border-color:#cde8ff; color:#1c5d99; }
+
+.acoes{ display:flex; align-items:center; gap:8px; }
+.btn, .btn-ghost{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  padding:8px 12px; border-radius:10px; text-decoration:none; border:1px solid #e6ded2;
+}
+.btn{ background:var(--chip); border-color:#e7d7bf; color:#5a3e2b; }
+.btn:hover{ background:#fff5e8; }
+.btn-ghost{ background:#fff; color:#5a3e2b; }
+.btn-ghost:hover{ background:#fffaf4; }
+
+.vazio .icone{ font-size:40px; color:#8a6d1e; }
+.muted{ color:#7b5e46; }

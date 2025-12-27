@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:financeiro-analises.html">
+
+<meta charset="UTF-8"/>
+<title>Análises Financeiras</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (analises) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script type="module" src="./financeiro-shared.js"></script>
+
+
+<!-- Guard / RBAC (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH COMMON + GUARD (analises) === -->
+
+
+<!-- Ícones e gráficos -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- Estilos base do sistema -->
+<link rel="stylesheet" href="menu-lateral.css"/>
+<link rel="stylesheet" href="kgb-common.css"/>
+
+<style>
+/* === Paleta KGB + refinamentos === */
+:root{
+  --dourado:#c29a5d; --dourado-esc:#a67c37; --marrom:#5a3e2b;
+  --bg:#f8f1e8; --paper:#fbf6ef; --card:#ffffff; --line:#e8dcc9; --muted:#6b7280;
+  --radius:14px; --shadow:0 10px 18px rgba(0,0,0,.06);
+}
+html,body{margin:0;padding:0;background:var(--bg);height:100%;overflow-x:hidden}
+*{box-sizing:border-box}
+main.conteudo-principal,input,select,textarea,button{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+h1{font-family:"Playfair Display",ui-serif,Georgia,"Times New Roman",serif;font-size:28px;color:var(--marrom);display:flex;gap:10px;align-items:center;margin:0 0 16px}
+.wrapper{display:flex;min-height:100vh;overflow:hidden}
+#menuLateral{flex-shrink:0;background:var(--marrom);height:100vh;overflow-y:auto}
+main.conteudo-principal{flex-grow:1;padding:20px;height:100vh;overflow-y:auto;overflow-x:hidden}
+.conteudo-central{max-width:1150px;margin:0 auto;width:100%}
+
+/* Filtros */
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--marrom)}
+.row select,.row input[type=month]{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:38px;max-width:240px}
+.row .inline{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+
+/* Cards & grids */
+.grid{display:grid;grid-template-columns:1fr;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);width:100%}
+.card h3{margin:0 0 8px;color:var(--marrom);font-size:16px;display:flex;align-items:center;gap:8px}
+.card h3 .badge{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff2e0;border:1px solid #ecd1a3;color:#6b513f}
+.split{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;min-width:0}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+.tip{color:#6b513f;font-size:12px}
+
+/* Canvas alturas */
+canvas{width:100%!important;height:auto!important}
+#trend{max-height:240px}
+#bar{max-height:300px}
+#pie{max-height:480px}
+
+/* Tabela lateral */
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{background:var(--paper);color:var(--marrom);font-weight:800;font-size:13px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+tbody td{padding:8px 10px;border-bottom:1px solid #f0e6d6;font-size:13px;color:#2e261a;word-break:break-word}
+
+/* Botões */
+.btn{border:1px solid #d9c7aa;background:#fff;color:var(--marrom);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700;transition:.15s ease;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+.btn:hover{background:#fff6e9;transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.btn-ghost{border:none;background:transparent;padding:6px;border-radius:8px;cursor:pointer}
+.btn-ghost:hover{background:#f5efe6}
+
+/* Drilldown */
+#drill{display:none}
+#drill.active{display:block}
+#drill .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+#drill .title{font-weight:800;color:var(--marrom)}
+.hd .actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Badge da pizza */
+.rel{position:relative}
+#pieBadge{display:none;position:absolute;z-index:10;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;box-shadow:0 6px 24px rgba(0,0,0,.12);font-size:12px;color:#2e261a;transform:translate(-50%,-100%);white-space:nowrap}
+    /* Botão hamburguer (mobile) – mesmo padrão das degustações */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:1001;
+      display:none;
+      background:#c29a5d;
+      color:#fff;
+      border:none;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+      cursor:pointer;
+    }
+    #hamburguer i{
+      width:20px;
+      height:20px;
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+    }
+        /* ===== Menu mobile: overlay + trava de scroll ===== */
+    body.no-scroll{
+      overflow: hidden;
+    }
+
+    @media (max-width:768px){
+      #menuLateral{
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 260px;
+        background: var(--marrom);
+        transform: translateX(-100%);
+        transition: transform .3s ease;
+        z-index: 1000;
+      }
+
+      #menuLateral.aberto{
+        transform: translateX(0);
+      }
+
+      #menuBackdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.38);
+        z-index: 999;
+      }
+    }
+
+</style>
+</head>
+<body>
+  <!-- Botão mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+   <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+    <div class="conteudo-central">
+      <h1><i data-lucide="chart-column-decreasing"></i> Análises Financeiras</h1>
+
+      <!-- Filtros -->
+      <div class="row">
+        <label>Mês
+          <input id="mes" type="month">
+        </label>
+
+        <label>Origem
+          <select id="origem">
+            <option value="ambas">Ambas</option>
+            <option value="empresa">Empresa</option>
+            <option value="pessoal">Pessoal</option>
+          </select>
+        </label>
+
+        <label>Base de cálculo
+          <select id="base">
+            <option value="pagamento">Pagamento (Realizado)</option>
+            <option value="competencia">Competência (Planejado)</option>
+          </select>
+        </label>
+
+        <label>Tipo (pizza)
+          <!-- Removidos Receita/Despesa para não duplicar com Entrada/Saída -->
+          <select id="tipoPie">
+            <option value="">Todos</option>
+            <option value="entrada">Entrada</option>
+            <option value="saida">Saída</option>
+          </select>
+        </label>
+
+        <div class="inline">
+          <input id="stackOrigem" type="checkbox">
+          <label for="stackOrigem" style="margin:0">Empilhar por origem (Empresa/Pessoal)</label>
+        </div>
+      </div>
+
+      <!-- Tendência -->
+      <div class="card">
+        <h3><i data-lucide="activity"></i> Tendência (últimos 12 meses) <span class="badge" id="badgeTrend"></span></h3>
+        <div class="tip">Somatório mensal de Entradas × Saídas (conforme Origem e Base de cálculo).</div>
+        <canvas id="trend"></canvas>
+      </div>
+
+      <div class="grid">
+        <!-- Barras -->
+        <div class="card">
+          <h3><i data-lucide="bar-chart-3"></i> Barras — Realizado/Competência (conforme base) <span class="badge" id="badgeBar"></span></h3>
+          <div class="tip">Entradas × Saídas, com opção de empilhar por origem.</div>
+          <canvas id="bar"></canvas>
+        </div>
+
+        <!-- Pizza + Tabela + Drill -->
+        <div class="card">
+          <h3><i data-lucide="pie-chart"></i> Pizza — Por categoria (conforme base) <span class="badge" id="badgePie"></span></h3>
+          <div class="tip" style="margin-bottom:8px">
+            Use a base acima: <b>Pagamento</b> considera apenas parcelas quitadas no mês; <b>Competência</b> considera o valor planejado do lançamento no mês.
+          </div>
+
+          <div class="split">
+            <div class="rel">
+              <canvas id="pie"></canvas>
+              <div id="pieBadge"></div>
+            </div>
+
+            <div>
+              <table>
+                <thead><tr><th>Categoria</th><th>Valor</th><th>%</th></tr></thead>
+                <tbody id="tbcat"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="drill" class="card" style="margin-top:12px">
+            <div class="hd">
+              <div class="title" id="drillTitle">Detalhes</div>
+              <div class="actions">
+                <button id="drillCsv" class="btn"><i data-lucide="download"></i> Exportar CSV</button>
+                <button id="drillGo" class="btn"><i data-lucide="list"></i> Ver na tela de lançamentos</button>
+                <button id="drillClose" class="btn-ghost" title="Fechar"><i data-lucide="x"></i></button>
+              </div>
+            </div>
+            <table>
+              <thead id="drillHead"></thead>
+              <tbody id="drillBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- carrega menu lateral -->
+<script type="module" src="menu-lateral.js"></script>
+
+<script type="module">
+/* ===== Helpers & estado ===== */
+// ===== Datas (local) =====
+function ymdLocal(dt){
+  const d = (dt instanceof Date) ? dt : new Date(String(dt||''));
+  if (isNaN(d)) return '';
+  d.setHours(0,0,0,0);
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayYM(){
+  const d = new Date(); d.setHours(0,0,0,0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+const FG_KEY='financeiroGlobal', CFG_KEY='configFinanceiro';
+const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
+const yyyymm=iso=>(iso||'').slice(0,7), sameMonth=(iso,ym)=>(iso&&ym)?yyyymm(iso)===ym:false;
+const normTipo=t=>{const s=String(t||'').toLowerCase(); if(s==='receita')return 'entrada'; if(s==='despesa'||s==='saida'||s==='saída')return 'saida'; return (s==='entrada'||s==='saida')?s:'entrada'};
+const normOrigem=o=>{const s=String(o||'ambas').toLowerCase(); return (s==='empresa'||s==='pessoal')?s:'ambas'};
+const readLS=(k,fb=null)=>{try{const v=JSON.parse(localStorage.getItem(k));return(v==null?fb:v)}catch{return fb}};
+const readFG=()=>{const g=readLS(FG_KEY,{})||{};return{lancamentos:[],parcelas:[],...g}};
+const getCategoriasMap=()=>{
+  const cfg=readLS(CFG_KEY,{categorias:[]})||{categorias:[]};
+  const map=new Map();
+  (cfg.categorias||[]).forEach(c=>{
+    const id=c.id??c.value, n=c.descricao||c.nome||'(Sem categoria)';
+    if(id!=null) map.set(String(id), n);
+  });
+  return map;
+};
+
+const el={
+  mes:document.getElementById('mes'),
+  origem:document.getElementById('origem'),
+  base:document.getElementById('base'),
+  tipoPie:document.getElementById('tipoPie'),
+  stack:document.getElementById('stackOrigem'),
+  tbcat:document.getElementById('tbcat'),
+  drill:document.getElementById('drill'),
+  drillTitle:document.getElementById('drillTitle'),
+  drillHead:document.getElementById('drillHead'),
+  drillBody:document.getElementById('drillBody'),
+  drillClose:document.getElementById('drillClose'),
+  drillCsv:document.getElementById('drillCsv'),
+  drillGo:document.getElementById('drillGo'),
+  pieBadge:document.getElementById('pieBadge'),
+  badgeTrend:document.getElementById('badgeTrend'),
+  badgeBar:document.getElementById('badgeBar'),
+  badgePie:document.getElementById('badgePie'),
+};
+const state={mes:todayYM(),origem:'ambas',base:'pagamento',tipoPie:'',stack:false};
+
+el.mes.value=state.mes; el.origem.value=state.origem; el.base.value=state.base;
+
+let barChart=null, pieChart=null, trendChart=null;
+
+/* Ignora ajustes de saldo nas análises */
+const isAjusteSaldo=l => !!l && (l.isSaldoAjuste===true || String(l.categoriaId)==='_ajuste_saldo_' || String(l.origem||'')==='ajuste_saldo');
+
+/* ===== Fonte de dados (sem duplicar) =====
+   - base 'pagamento' -> percorre PARCELAS quitadas do mês
+   - base 'competencia' -> percorre LANCAMENTOS do mês
+*/
+// shim opcional: se um dia existir window.onFinStoreChanged, usamos;
+// se não existir, seguimos com os listeners já definidos.
+const onFinStoreChanged =
+  (typeof window !== 'undefined' && typeof window.onFinStoreChanged === 'function')
+    ? window.onFinStoreChanged
+    : null;
+
+// se existir, registra renderAll como handler de mudanças na store compartilhada
+try { onFinStoreChanged && onFinStoreChanged(renderAll); } catch {}
+
+function isQuitadoStatus(st){
+  st = String(st||'').toLowerCase();
+  return ['pago','recebido','baixado','quitado','liquidado','parcial'].includes(st);
+}
+
+function filtrarFonteMes(ym,origem,base){
+  const fg=readFG(); origem=origem||state.origem; base=base||state.base;
+
+  if(base==='pagamento'){
+    const out=[];
+    for(const p of (fg.parcelas||[])){
+      const l=(fg.lancamentos||[]).find(x=>String(x.id)===String(p.lancamentoId));
+      if(!l) continue;
+      if(isAjusteSaldo(l)) continue;
+
+      // mês pela data de pagamento
+      if(!p.dataPagamentoISO || !sameMonth(p.dataPagamentoISO, ym)) continue;
+
+      const tipo=normTipo(l.tipo);
+   const st = String(p.status||'').toLowerCase();
+if (!isQuitadoStatus(st)) continue;
+
+
+      const org=normOrigem(l.escopo||l.origem||'ambas');
+      if(origem!=='ambas' && org!==origem) continue;
+
+      out.push({
+        origem:org,
+        tipo,
+        categoriaId:l.categoriaId??null,
+        categoriaNome:null,
+        descricao:l.descricao||'',
+        valor:Number(p.totalPago||p.valor||0),
+        dataRef:p.dataPagamentoISO,
+        lanc:l,
+        parc:p
+      });
+    }
+    return {kind:'pagamento',rows:out};
+  } else {
+    const out=[];
+    for(const l of (fg.lancamentos||[])){
+      if(isAjusteSaldo(l)) continue;
+      const dataRef=l.dataCompetencia||l.vencimentoISO||l.dataISO||l.data||'';
+      if(!sameMonth(dataRef,ym)) continue;
+
+      const org=normOrigem(l.escopo||l.origem||'ambas');
+      if(origem!=='ambas' && org!==origem) continue;
+
+      const tipo=normTipo(l.tipo);
+      const v=Number(l.valorTotal||l.valor||0);
+
+      out.push({
+        origem:org,
+        tipo,
+        categoriaId:l.categoriaId??null,
+        categoriaNome:null,
+        descricao:l.descricao||'',
+        valor:v,
+        dataRef,
+        lanc:l
+      });
+    }
+    return {kind:'competencia',rows:out};
+  }
+}
+const filtrarFonte=()=>filtrarFonteMes(state.mes,state.origem,state.base);
+function aplicarCategorias(rows){
+  const map=getCategoriasMap();
+  rows.forEach(r=>{
+    r.categoriaNome = r.categoriaId!=null
+      ? (map.get(String(r.categoriaId)) || '(Sem categoria)')
+      : '(Sem categoria)';
+  });
+  return rows;
+}
+
+/* ===== UI badges ===== */
+function setBadges(){
+  const baseTxt = state.base==='pagamento' ? 'Pagamento' : 'Competência';
+  el.badgeTrend.textContent = baseTxt;
+  el.badgeBar.textContent   = baseTxt + (state.stack ? ' • Empilhado' : '');
+  const pieTp = state.tipoPie ? (state.tipoPie==='entrada'?'Entrada':'Saída') : 'Todos';
+  el.badgePie.textContent   = `${baseTxt} • ${pieTp}`;
+}
+
+/* ===== Charts ===== */
+function last12YM(refYM){
+  const [Y,M]=refYM.split('-').map(n=>+n);
+  const base=new Date(Y,(M||1)-1,1);
+  const out=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(base.getFullYear(),base.getMonth()-i,1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+
+  }
+  return out;
+}
+
+function renderTrend(){
+  const yms=last12YM(state.mes),ent=[],sai=[];
+  for(const ym of yms){
+    const rows=aplicarCategorias(filtrarFonteMes(ym,state.origem,state.base).rows);
+    let e=0,s=0;
+    rows.forEach(r=> r.tipo==='entrada' ? (e+=Number(r.valor||0)) : (s+=Number(r.valor||0)));
+    ent.push(e); sai.push(s);
+  }
+  const ctx=document.getElementById('trend');
+  const labels=yms.map(ym=>{const [y,m]=ym.split('-');return `${m}/${y.slice(2)}`});
+
+  if(!trendChart){
+    trendChart=new Chart(ctx,{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Entradas',data:ent,tension:.25},
+        {label:'Saídas',data:sai,tension:.25}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}
+    });
+  }else{
+    trendChart.data.labels=labels;
+    trendChart.data.datasets[0].data=ent;
+    trendChart.data.datasets[1].data=sai;
+    trendChart.update();
+  }
+}
+
+function renderBarras(){
+  const base=aplicarCategorias(filtrarFonte().rows);
+  const soma={entrada:0,saida:0};
+  const somaStack={entrada:{empresa:0,pessoal:0},saida:{empresa:0,pessoal:0}};
+
+  for(const r of base){
+    const v=Number(r.valor||0);
+    soma[r.tipo]+=v;
+    const org=(r.origem==='pessoal')?'pessoal':'empresa';
+    somaStack[r.tipo][org]+=v;
+  }
+
+  const ctx=document.getElementById('bar');
+  const stacked=!!state.stack;
+
+  if(!barChart){
+    const data = stacked
+      ? {labels:['Entradas','Saídas'],
+         datasets:[
+          {label:'Empresa',data:[somaStack.entrada.empresa,somaStack.saida.empresa]},
+          {label:'Pessoal',data:[somaStack.entrada.pessoal,somaStack.saida.pessoal]}
+         ]}
+      : {labels:['Entradas','Saídas'],
+         datasets:[{label:'Valor',data:[soma.entrada,soma.saida]}]};
+
+    barChart=new Chart(ctx,{
+      type:'bar',
+      data,
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:stacked}},
+        scales: stacked
+          ? {x:{stacked:true},y:{stacked:true,beginAtZero:true}}
+          : {y:{beginAtZero:true}}
+      }
+    });
+  }else{
+    if(stacked){
+      barChart.options.scales={x:{stacked:true},y:{stacked:true,beginAtZero:true}};
+      barChart.options.plugins.legend.display=true;
+      barChart.data.labels=['Entradas','Saídas'];
+      barChart.data.datasets=[
+        {label:'Empresa',data:[somaStack.entrada.empresa,somaStack.saida.empresa]},
+        {label:'Pessoal',data:[somaStack.entrada.pessoal,somaStack.saida.pessoal]}
+      ];
+    }else{
+      barChart.options.scales={y:{beginAtZero:true}};
+      barChart.options.plugins.legend.display=false;
+      barChart.data.labels=['Entradas','Saídas'];
+      barChart.data.datasets=[{label:'Valor',data:[soma.entrada,soma.saida]}];
+    }
+    barChart.update();
+  }
+}
+
+let lastPiePairs=[], lastDrill={cat:null,rows:[],ym:null,base:null,tipoFiltro:null,origem:null};
+
+function renderPizza(){
+  const base=aplicarCategorias(filtrarFonte().rows);
+  const tp=String(state.tipoPie||'').toLowerCase();
+  const filtrado = tp ? base.filter(r=>r.tipo===tp) : base;
+
+  const map=new Map(), rowsPorCat=new Map();
+  for(const r of filtrado){
+    const key=r.categoriaNome||'(Sem categoria)';
+    map.set(key,(map.get(key)||0)+Number(r.valor||0));
+    if(!rowsPorCat.has(key)) rowsPorCat.set(key,[]);
+    rowsPorCat.get(key).push(r);
+  }
+
+  const pares=[...map.entries()].sort((a,b)=>b[1]-a[1]);
+  lastPiePairs=pares.map(([k,v])=>[k,v,rowsPorCat.get(k)||[]]);
+
+  const labels=pares.map(p=>p[0]);
+  const data=pares.map(p=>p[1]);
+  const total=data.reduce((a,b)=>a+b,0)||1;
+
+  // Tabela lateral
+  el.tbcat.innerHTML='';
+  for(const [cat,val] of pares){
+    const tr=document.createElement('tr');
+    const pct=Math.round((val/total)*100);
+    tr.innerHTML=`<td>${cat}</td><td>${money(val)}</td><td>${pct}%</td>`;
+    el.tbcat.appendChild(tr);
+  }
+
+  const ctx=document.getElementById('pie');
+  const onClick=(evt,activeEls)=>{
+    const a=activeEls?.[0];
+    if(!a){ el.pieBadge.style.display='none'; return; }
+    const idx=a.index, cat=labels[idx], rows=rowsPorCat.get(cat)||[], val=data[idx]||0, pct=Math.round((val/total)*100);
+    const pt=pieChart.getDatasetMeta(0).data[idx].getCenterPoint();
+   const box = ctx.parentElement.getBoundingClientRect();
+const canvasRect = ctx.getBoundingClientRect();
+el.pieBadge.innerHTML = `<b>${cat}</b><br>${money(val)} • ${pct}%`;
+// posição relativa ao container .rel
+el.pieBadge.style.left = (pt.x - (canvasRect.left - box.left)) + 'px';
+el.pieBadge.style.top  = (pt.y - (canvasRect.top  - box.top )) + 'px';
+
+    el.pieBadge.style.display='block';
+    abrirDrilldown(cat,rows);
+  };
+
+  if(!pieChart){
+    pieChart=new Chart(ctx,{type:'pie',data:{labels,datasets:[{data}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},onClick}});
+  }else{
+    pieChart.options.onClick=onClick;
+    pieChart.data.labels=labels;
+    pieChart.data.datasets[0].data=data;
+    pieChart.update();
+  }
+}
+// Esconde o badge da pizza ao clicar fora do canvas
+document.addEventListener('click', (e)=>{
+  const rel = document.querySelector('.rel');
+  if (!rel) return;
+  if (!rel.contains(e.target)) {
+    el.pieBadge.style.display = 'none';
+  }
+});
+
+/* ===== Drilldown ===== */
+function abrirDrilldown(cat,rows){
+  lastDrill={cat,rows,ym:state.mes,base:state.base,tipoFiltro:state.tipoPie||'',origem:state.origem};
+  el.drillTitle.textContent=`Detalhes: ${cat}`;
+  el.drill.classList.add('active');
+  el.drillHead.innerHTML=''; el.drillBody.innerHTML='';
+
+  if(state.base==='pagamento'){
+    el.drillHead.innerHTML=`<tr>
+      <th style="width:92px">Data pgto</th>
+      <th style="width:88px">Tipo</th>
+      <th style="width:96px">Origem</th>
+      <th>Descrição</th>
+      <th style="width:120px">Valor</th></tr>`;
+    rows.sort((a,b)=>String(a.dataRef||'').localeCompare(String(b.dataRef||'')))
+      .forEach(r=>{
+        const d=(r.dataRef||'').split('-');
+        const dt=d.length===3?`${d[2]}/${d[1]}/${d[0]}`:(r.dataRef||'');
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${dt}</td><td>${r.tipo==='entrada'?'Entrada':'Saída'}</td><td>${r.origem}</td><td>${r.descricao||'-'}</td><td>${money(r.valor)}</td>`;
+        el.drillBody.appendChild(tr);
+      });
+  }else{
+    el.drillHead.innerHTML=`<tr>
+      <th style="width:92px">Competência</th>
+      <th style="width:88px">Tipo</th>
+      <th style="width:96px">Origem</th>
+      <th>Descrição</th>
+      <th style="width:120px">Valor</th></tr>`;
+    rows.sort((a,b)=>String(a.dataRef||'').localeCompare(String(b.dataRef||'')))
+      .forEach(r=>{
+        const d=(r.dataRef||'').split('-');
+        const dt=d.length===3?`${d[2]}/${d[1]}/${d[0]}`:(r.dataRef||'');
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${dt}</td><td>${r.tipo==='entrada'?'Entrada':'Saída'}</td><td>${r.origem}</td><td>${r.descricao||'-'}</td><td>${money(r.valor)}</td>`;
+        el.drillBody.appendChild(tr);
+      });
+  }
+  try{window.lucide?.createIcons?.()}catch{}
+}
+
+function exportDrillCSV(){
+  const rows=lastDrill.rows||[]; if(!rows.length) return;
+  const cols=(state.base==='pagamento')?['data_pgto','tipo','origem','descricao','valor']:['competencia','tipo','origem','descricao','valor'];
+  const header=cols.join(';');
+  const lines=rows.map(r=>{
+    const d=(r.dataRef||'').split('-');
+    const dt=d.length===3?`${d[2]}/${d[1]}/${d[0]}`:(r.dataRef||'');
+    const tipo=r.tipo==='entrada'?'Entrada':'Saída';
+    const arr=[dt,tipo,r.origem,(r.descricao||'').replace(/[\r\n;]+/g,' ').trim(),String(r.valor).replace('.',',')];
+    return arr.join(';');
+  });
+  const csv=[header,...lines].join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`drilldown_${(lastDrill.cat||'categoria')}_${state.mes}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function abrirLancamentosFiltrados(){
+  const q=new URLSearchParams({
+    mes:state.mes, origem:state.origem, base:state.base,
+    tipo:(state.tipoPie||''), categoria:(lastDrill.cat||'')
+  });
+  window.open(`financeiro-lancamentos.html?${q.toString()}`,'_blank');
+}
+
+/* ===== Render all ===== */
+function renderAll(){
+  setBadges();
+  renderTrend();
+  renderBarras();
+  renderPizza();
+  el.pieBadge.style.display='none';
+  el.drill.classList.remove('active');
+  try{window.lucide?.createIcons?.()}catch{}
+}
+
+/* ===== Eventos ===== */
+el.mes.onchange=()=>{state.mes=el.mes.value;renderAll()};
+el.origem.onchange=()=>{state.origem=el.origem.value;renderAll()};
+el.base.onchange=()=>{state.base=el.base.value;renderAll()};
+el.tipoPie.onchange=()=>{state.tipoPie=el.tipoPie.value;renderAll()};
+el.stack.onchange=()=>{state.stack=!!el.stack.checked;renderAll()};
+el.drillClose.addEventListener('click',()=>el.drill.classList.remove('active'));
+el.drillCsv.addEventListener('click',exportDrillCSV);
+el.drillGo.addEventListener('click',abrirLancamentosFiltrados);
+
+/* Reagir a alterações globais (PDV, etc.) sem recarregar a página */
+window.addEventListener('storage', (e)=>{
+  if(e && e.key && (e.key==='financeiroGlobal' || e.key==='financeiroGlobal:ping')) renderAll();
+});
+window.addEventListener('fin-store-changed', renderAll);
+
+/* Init (com sync online) */
+(function init(){
+  state.mes = todayYM();
+  el.mes.value = state.mes;
+
+  // Se a função de sync online existir, usamos ela primeiro
+  if (window.finSyncFromApi) {
+    window.finSyncFromApi()
+      .then(() => {
+        // depois que sincronizar com a API, renderiza as análises
+        renderAll();
+      })
+      .catch((err) => {
+        console.warn('[analises] finSyncFromApi falhou, usando dados locais', err);
+        renderAll(); // mesmo com erro, ainda tenta mostrar o que tiver no localStorage
+      });
+  } else {
+    // fallback: se não tiver finSyncFromApi, mantém comportamento antigo
+    renderAll();
+  }
+})();
+
+
+(function wireAnalisesLiveReload(){
+ function onPing(){ try{ renderAll?.(); }catch(e){ console.warn('Análises: render falhou', e); } }
+
+
+  window.addEventListener('fin-store-changed', onPing);
+  window.addEventListener('storage', (ev)=> {
+    if (!ev || !ev.key) return;
+    if (ev.key==='financeiroGlobal' || ev.key==='financeiroGlobal:ping') onPing();
+  });
+  try {
+    const bc = new BroadcastChannel('mrubuffet');
+    bc.onmessage = (e)=>{ if (e?.data?.type === 'fin-store-changed') onPing(); };
+  } catch {}
+})();
+
+</script>
+<script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) {
+          fechar();
+        } else {
+          abrir();
+        }
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+  })();
+
+  // Garante os ícones da Lucide
+  document.addEventListener("DOMContentLoaded", () => {
+    try { window.lucide?.createIcons?.(); } catch {}
+  });
+</script>
+</body>
+</html>
+

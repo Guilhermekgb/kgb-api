@@ -1,0 +1,298 @@
+/* =========================
+   BASE / LAYOUT GERAL
+   ========================= */
+html, body{
+  margin:0;
+  padding:0;
+  min-height:100vh;
+  background:#f8f1e8;
+  overflow-y:auto;
+}
+
+.wrapper{
+  display:flex;
+  min-height:100vh;
+  overflow:hidden;
+}
+
+/* Conteúdo principal – reserva para menu fixo no desktop */
+main.conteudo,
+main.conteudo-principal{
+  flex:1;
+  background:#f8f1e8;
+  padding:40px;
+  box-sizing:border-box;
+  overflow-y:auto;
+  margin-left:260px; /* reserva do menu fixo (desktop) */
+}
+
+.conteudo-central{
+  background:#fff7ed;
+  padding:40px 60px;
+  border-radius:12px;
+  max-width:960px;
+  margin:0 auto;
+  box-shadow:0 0 10px rgba(92,64,51,.1);
+}
+
+/* =========================
+   MENU LATERAL – CONTAINER
+   (sem cor fixa aqui; tema aplica no fim)
+   ========================= */
+#menuLateral{
+  width:260px;
+  color:#fff;
+  height:100vh;
+  overflow-y:auto;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  position:fixed;
+  top:0;
+  left:0;
+  z-index:999;
+}
+@supports (height:100dvh){ #menuLateral{ height:100dvh; } }
+
+/* Tipografia do menu (igual modelo-base) */
+#menuLateral,
+#menuLateral .menu-lateral,
+#menuLateral .menu-lateral *,
+#menuLateral *{
+  font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif !important;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+.menu-scroll{
+  flex:1;
+  overflow-y:auto;
+  padding:20px;
+}
+
+/* Links/títulos do menu (cores vêm no tema) */
+#menuLateral a,
+#menuLateral .menu-title{
+  display:block;
+  padding:10px;
+  text-decoration:none;
+  margin-bottom:6px;
+  border-radius:6px;
+}
+
+/* Submenu (fechado por padrão; cores vêm no tema) */
+#menuLateral .submenu{
+  display:none;
+  padding-left:18px;
+  margin:4px 0 10px;
+  border-left:2px solid transparent; /* cor no tema */
+}
+#menuLateral .submenu a{
+  display:block;
+  padding:6px 12px;
+  font-size:14px;
+  border-radius:6px;
+  text-decoration:none;
+  transition:background .2s;
+}
+
+/* Estado ativo (cores no tema) */
+#menuLateral a.ativo,
+#menuLateral .submenu a.ativo{
+  border-radius:6px;
+  font-weight:bold;
+}
+
+/* Rolagem independente do menu, inclusive iOS */
+#menuLateral{
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+
+/* Botão SAIR (rodapé do menu; cor no tema) */
+.sair{
+  color:#fff;
+  font-weight:bold;
+  text-align:center;
+  padding:20px;
+  cursor:pointer;
+  border-top:1px solid rgba(0,0,0,.15);
+}
+
+/* Logo */
+.logo{
+  width:180px;
+  margin:30px auto;
+  display:block;
+}
+
+/* Hamburguer */
+#hamburguer{
+  position:fixed;
+  top:15px;
+  left:15px;
+  background:none;
+  border:none;
+  font-size:24px;
+  color:#5C4033;
+  display:none;
+  z-index:1000;
+}
+
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:transparent;        /* não escurece mais o fundo */
+  backdrop-filter:none;          /* sem blur */
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+  z-index:998;
+}
+
+#menuBackdrop.mostrar,
+#menuBackdrop.visivel{ opacity:1; pointer-events:auto; }
+
+/* Travar scroll quando o menu estiver aberto no mobile */
+body.no-scroll{ overflow:hidden; }
+
+/* ===== Responsivo (mobile) ===== */
+@media (max-width:768px){
+  #menuLateral{
+    transform:translateX(-100%);
+    transition:transform .3s ease;
+    z-index:1001; /* acima do backdrop */
+  }
+  #menuLateral.aberto{ transform:translateX(0); }
+
+  main.conteudo,
+  main.conteudo-principal{ margin-left:0; }
+
+  #hamburguer{ display:block; }
+}
+
+/* Estados visuais auxiliares (cores afinadas no tema) */
+#menuLateral a.ativo{ background:#f5eee7; font-weight:bold; border-radius:8px; color:#5C4033; }
+.grupo.aberto > span{ font-weight:bold; color:#5C4033; }
+.grupo.aberto .submenu{ display:block; }
+#menuLateral a.ativo i{ color:#C89D63 !important; }
+.seta-submenu{ margin-left:auto; transition:transform .3s ease; }
+.has-submenu.aberto > a .seta-submenu{ transform:rotate(180deg); }
+.badge{
+  display:inline-block;
+  background:#C89D63;
+  color:#fff;
+  font-weight:700;
+  font-size:12px;
+  line-height:1;
+  padding:3px 8px;
+  border-radius:999px;
+  margin-left:8px;
+}
+
+/* =========================
+   TEMA — Espresso #532b03
+   ========================= */
+:root{
+  --menu-bg:    #532b03; /* marrom principal */
+  --menu-deep:  #3e1f00; /* marrom profundo p/ rodapé/ativo */
+  --menu-text:  #f5e9d6; /* texto principal */
+  --menu-text-2:#e8d5bd; /* texto submenu */
+  --menu-chip:  #f3e8da; /* fundo do ativo */
+  --menu-icon:  #f0dfc8; /* ícones */
+}
+
+/* Cores principais do menu */
+#menuLateral .menu-title,
+#menuLateral a{ color:var(--menu-text); }
+#menuLateral .menu-title:hover,
+#menuLateral a:hover{ background:rgba(255,255,255,.06); }
+
+/* Submenu (cores) */
+#menuLateral .submenu{ border-left:1px solid rgba(255,255,255,.12); }
+#menuLateral .submenu a{ color:var(--menu-text-2); }
+#menuLateral .submenu a:hover{ background:rgba(255,255,255,.08); }
+
+/* Ativo (chip claro) */
+#menuLateral a.ativo,
+#menuLateral .submenu a.ativo{
+  background:var(--menu-chip);
+  color:var(--menu-deep);
+  font-weight:700;
+  border-radius:8px;
+}
+
+/* Ícones */
+#menuLateral a i,
+#menuLateral .menu-title i{ color:var(--menu-icon); }
+#menuLateral a.ativo i{ color:var(--menu-deep) !important; }
+
+/* Rodapé/SAIR com o marrom profundo */
+#menuLateral .sair{
+  background:var(--menu-deep);
+  border-top:1px solid rgba(255,255,255,.08);
+}
+#menuLateral .sair:hover{ background:#2e1600; }
+
+/* Acessibilidade: focus visível */
+#menuLateral a:focus-visible{
+  outline:2px solid #e2c7a6;
+  outline-offset:2px;
+  border-radius:8px;
+}
+
+/* =========================
+   OVERRIDE FINAL (infalível)
+   ========================= */
+/* Cor sólida #532b03 no ASIDE e nada “cobrindo” por cima */
+html body aside#menuLateral{
+  background-color:#532b03 !important;
+  background-image:none !important;      /* elimina gradientes antigos */
+  box-shadow:2px 0 14px rgba(0,0,0,.18);
+}
+#menuLateral .menu-lateral,
+#menuLateral .submenu{
+  background:transparent !important;
+  background-color:transparent !important;
+}
+/* === INÍCIO PATCH: Badge de alerta em Logs Técnicos === */
+.menu-lateral a.alerta-ativo {
+  position: relative;
+}
+.menu-lateral a.alerta-ativo::after {
+  content: "";
+  position: absolute;
+  top: 8px;              /* ajuste fino se precisar */
+  right: 10px;           /* ajuste fino se precisar */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c23b2d;   /* vermelho elegante */
+  box-shadow: 0 0 0 2px #fff8f0; /* borda para contraste no tema claro */
+}
+/* === FIM PATCH === */
+/* === INÍCIO PATCH H — skeleton simples (global) === */
+.is-loading .tabela tbody::before,
+.is-loading table tbody::before{
+  content:"";
+  display:block;
+  height:120px; /* ajuste se quiser um skeleton mais alto */
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.03) 37%, rgba(0,0,0,0.06) 63%);
+  background-size:400% 100%;
+  animation:kgb-shimmer 1.2s infinite;
+  border-radius:8px;
+}
+
+/* Evita “piscar” do conteúdo por baixo quando o skeleton aparece */
+.is-loading .tabela tbody > tr,
+.is-loading table tbody > tr{
+  visibility:hidden;
+}
+
+@keyframes kgb-shimmer {
+  0%{background-position:100% 0}
+  100%{background-position:0 0}
+}
+/* === FIM PATCH H === */

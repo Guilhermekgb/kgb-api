@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+ <meta name="page-permission" content="page:cliente-detalhado.html">
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<!-- HOMOLOG: garante sessão ANTES do guard (remover em produção) -->
+<script>
+  (function ensureDevAuth(){
+    const devUser = {
+      id: 'dev',
+      nome: 'Admin (Homolog)',
+      email: 'admin@homolog.local',
+      perfil: 'Administrador',
+      perfis: ['Administrador']
+    };
+    const token = 'dev-token';
+    const exp = Date.now() + 7*24*60*60*1000;
+
+    if (!localStorage.getItem('auth.token')) {
+      localStorage.setItem('auth.token', token);
+      localStorage.setItem('auth.user', JSON.stringify(devUser));
+      localStorage.setItem('auth.exp', String(exp));
+    }
+    if (!sessionStorage.getItem('auth.token')) {
+      sessionStorage.setItem('auth.token', token);
+      sessionStorage.setItem('auth.user', JSON.stringify(devUser));
+      sessionStorage.setItem('auth.exp', String(exp));
+    }
+    // compat com guard
+    if (!localStorage.getItem('usuarioLogado'))  localStorage.setItem('usuarioLogado', JSON.stringify(devUser));
+    if (!sessionStorage.getItem('usuarioLogado')) sessionStorage.setItem('usuarioLogado', JSON.stringify(devUser));
+    if (!localStorage.getItem('usuarioAtual'))   localStorage.setItem('usuarioAtual', JSON.stringify(devUser));
+  })();
+</script>
+<!-- === INÍCIO PATCH kgb-common (deve vir antes do guard) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- Storage adapter + shim for fotosClientes -->
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM PATCH kgb-common === -->
+
+
+  <title>Cliente — Detalhes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- Paleta + componentes visuais (NÃO mexe em IDs/JS) -->
+  <style>
+    :root{
+      --bg: #f8f1e8;
+      --card: #fff;
+      --brand:#5a3e2b;      /* marrom */
+      --brand2:#c29a5d;     /* dourado */
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --input:#f9fafb;
+      --shadow: 0 2px 12px rgba(0,0,0,.06);
+      --radius: 14px;
+    }
+    html, body{ margin:0; padding:0; background:var(--bg); }
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Tipografia da área principal */
+    main.conteudo-principal,
+    input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 { font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif; color:var(--brand); }
+
+    /* Layout principal */
+    main{ flex-grow:1; padding:32px; height:100vh; overflow-y:auto; transition:margin-left .2s ease; }
+    .conteudo-central{ max-width: 1040px; margin: 0 auto 80px; }
+    h1{ font-size: 30px; display:flex; align-items:center; gap:10px; margin:0 0 6px; }
+    .page-sub{ color:var(--muted); margin: 0 0 18px; }
+
+    /* Botão hambúrguer no mobile */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; background:var(--brand2);
+      border:none; color:#fff; font-size:24px; padding:6px 12px;
+      border-radius:8px; z-index:1001; display:none;
+    }
+    @media (max-width:768px){ #hamburguer{ display:block; } main{ padding:22px; } }
+
+    /* realce de item ativo no menu */
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:700;
+    }
+
+    /* Cards / Seções */
+    section{ margin-bottom: 18px; }
+    .card{
+      background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+      padding:18px; box-shadow:var(--shadow);
+    }
+    .section-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-bottom:12px; padding-bottom:8px; border-bottom:1px dashed #eadfd4;
+    }
+    .section-head h3{ margin:0; display:flex; align-items:center; gap:10px; }
+    .section-help{ color:var(--muted); font-size:.92rem; }
+
+    /* Form grid + inputs */
+    .form-grid{ display:grid; gap:12px; grid-template-columns: repeat(12, minmax(0,1fr)); }
+    .form-item{ display:flex; flex-direction:column; gap:6px; }
+    label{ font-weight:600; color:#5C4033; }
+    input, select, textarea{
+      appearance:none; border:1px solid var(--line); background:var(--input);
+      border-radius:10px; padding:10px 12px; font:inherit;
+      transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+    }
+    input:disabled, select:disabled, textarea:disabled{ opacity:.9; }
+    input:focus, select:focus, textarea:focus{
+      outline:none; border-color:var(--brand2); background:#fff;
+      box-shadow:0 0 0 3px rgb(194 154 93 / .18);
+    }
+
+    /* Spans rápidas */
+    .span-12{grid-column:span 12} .span-8{grid-column:span 8}
+    .span-6{grid-column:span 6} .span-4{grid-column:span 4}
+    .span-3{grid-column:span 3} .span-2{grid-column:span 2}
+
+    /* Em telas menores, a grade vira 6 colunas */
+    @media (max-width: 900px){
+      .form-grid{ grid-template-columns: repeat(6, minmax(0,1fr)); }
+      .span-8{grid-column:span 6} .span-6{grid-column:span 6}
+      .span-4{grid-column:span 6} .span-3{grid-column:span 3} .span-2{grid-column:span 3}
+    }
+
+    /* Botões / ações */
+    .btn{
+      border:1px solid var(--line); background:#fff; border-radius:10px;
+      padding:9px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{ background:#f3f4f6; }
+    .btn-outline{ background:transparent; }
+    .btn-danger{ border-color:#fecaca; background:#fff; }
+    .botao-dourado{
+      background:var(--brand2); color:#fff; border:1px solid var(--brand2);
+      border-radius:12px; padding:10px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-weight:600;
+    }
+    .botao-dourado:hover{ filter:brightness(.95); }
+    .form-rodape{
+      display:flex; align-items:center; gap:8px; background:#fff8;
+      padding:10px; border:1px solid #eadfd4; border-radius:12px; box-shadow:var(--shadow);
+      backdrop-filter: blur(2px);
+    }
+
+    /* Input com botão (telefone + Whats) */
+    .input-with-button{ display:flex; gap:8px; }
+    .input-with-button input{ flex:1; }
+    .input-with-button .btn{ white-space:nowrap; }
+
+    /* Contato Secundário: grade confortável */
+    .form-grid--contato2{
+      display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    @media (min-width:1100px){
+      .form-grid--contato2{ grid-template-columns: 1fr 1.2fr .9fr; }
+    }
+
+    /* Documentos */
+    .documento-box{
+      background:#fff7ed; border:1px solid #fde7c7; padding:10px 12px;
+      border-radius:10px; margin:8px 0; display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .botoes-doc a, .botoes-doc button{ border:1px solid var(--line); background:#fff; border-radius:10px; padding:6px 10px; font-size:.92rem; cursor:pointer; }
+    .botoes-doc a:hover, .botoes-doc button:hover{ background:#f3f4f6; }
+    .info-secundaria{ color:var(--muted); }
+
+    /* Modal de visualização */
+    .preview-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:center; justify-content:center; z-index:10000; padding:16px; box-sizing:border-box;
+    }
+    .preview-backdrop.aberto{display:flex}
+    .preview-card{position:relative;width:min(92vw,900px);height:min(88vh,700px);background:#111;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;border:1px solid #333}
+    .preview-body{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#111}
+    .preview-body img{max-width:100%;max-height:100%;display:block}
+    .preview-body iframe{width:100%;height:100%;border:0;background:#111}
+    .preview-top{position:absolute;top:8px;right:8px;display:flex;gap:8px}
+    .preview-btn{background:var(--brand2);color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+    .preview-btn[href]{text-decoration:none}
+  </style>
+</head>
+
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="user"></i> Cliente — Detalhes</h1>
+        <p class="page-sub">Visualize e edite os dados do cliente. Documentos podem ser visualizados em modal.</p>
+
+        <!-- Ações topo -->
+        <div class="form-rodape" style="justify-content:flex-end; gap:8px; margin-top:-6px;">
+          <button id="btnNovoEvento" class="btn"><i data-lucide="calendar-plus"></i> Novo Evento</button>
+          <button id="btnEditar" class="btn"><i data-lucide="pencil"></i> Editar</button>
+          <button id="btnCancelar" class="btn btn-outline" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
+          <button id="btnSalvar" class="botao-dourado" style="display:none;"><i data-lucide="save"></i> Salvar</button>
+        </div>
+
+        <form id="formCliente">
+          <!-- DADOS PESSOAIS -->
+          <section class="card">
+            <div class="section-head">
+              <h3><i data-lucide="id-card"></i> Dados Pessoais</h3>
+              <span class="section-help">Informações de contato e identificação</span>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-item span-8">
+                <label>Nome completo</label>
+                <input type="text" id="nome" required disabled>
+              </div>
+              <div class="form-item span-4">
+                <label>CPF</label>
+                <input type="text" id="cpf" disabled>
+              </div>
+
+              <div class="form-item span-4">
+                <label>RG</label>
+                <input type="text" id="rg" disabled>
+              </div>
+              <div class="form-item span-4">
+                <label>Data de Nascimento</label>
+                <input type="date" id="nascimento" disabled>
+              </div>
+
+              <div class="form-item span-6">
+                <label>E-mail</label>
+                <input type="email" id="email" required disabled>
+              </div>
+              <div class="form-item span-6">
+                <label>WhatsApp / Telefone</label>
+                <div class="input-with-button">
+                  <input type="text" id="telefone" placeholder="(11) 98765-4321" disabled>
+                  <button id="btnWhats" type="button" class="btn btn-outline">
+                    <i data-lucide="message-circle"></i> WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-item span-6">
+                <label>Relação com o evento</label>
+                <select id="relacao1" disabled>
+                  <option value="">Selecione</option>
+                  <option>Noiva</option><option>Noivo</option><option>Pai</option>
+                  <option>Mãe</option><option>Formando</option><option>Empresa</option>
+                </select>
+              </div>
+              <div class="form-item span-6">
+                <label>Observações</label>
+                <input type="text" id="obsRelacao1" disabled>
+              </div>
+            </div>
+          </section>
+
+          <!-- ENDEREÇO -->
+          <section class="card">
+            <div class="section-head">
+              <h3><i data-lucide="map-pin"></i> Endereço</h3>
+              <span class="section-help">Preencha o CEP para buscar automaticamente</span>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-item span-3">
+                <label>CEP</label>
+                <input type="text" id="cep" onblur="buscarCep()" disabled>
+              </div>
+              <div class="form-item span-3">
+                <label>Número</label>
+                <input type="text" id="numero" disabled>
+              </div>
+              <div class="form-item span-6">
+                <label>Rua</label>
+                <input type="text" id="rua" disabled>
+              </div>
+
+              <div class="form-item span-4">
+                <label>Bairro</label>
+                <input type="text" id="bairro" disabled>
+              </div>
+              <div class="form-item span-6">
+                <label>Cidade</label>
+                <input type="text" id="cidade" disabled>
+              </div>
+              <div class="form-item span-2">
+                <label>Estado</label>
+                <input type="text" id="estado" disabled>
+              </div>
+            </div>
+          </section>
+
+          <!-- STATUS -->
+          <section class="card">
+            <div class="section-head">
+              <h3><i data-lucide="settings-2"></i> Status do Cliente</h3>
+              <span class="section-help">Controle de ativação</span>
+            </div>
+            <div class="form-grid">
+              <div class="form-item span-4">
+                <label>Status</label>
+                <select id="status" disabled>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <!-- CONTATO SECUNDÁRIO -->
+          <section class="card">
+            <div class="section-head">
+              <h3><i data-lucide="phone"></i> Contato Secundário</h3>
+              <span class="section-help">Opcional — outra pessoa relacionada</span>
+            </div>
+
+            <div class="form-grid--contato2">
+              <div class="form-item">
+                <label>Relação</label>
+                <select id="relacao2" disabled>
+                  <option value="">Selecione</option>
+                  <option>Noiva</option><option>Noivo</option><option>Pai</option>
+                  <option>Mãe</option><option>Formando</option><option>Empresa</option>
+                </select>
+              </div>
+              <div class="form-item">
+                <label>Observações</label>
+                <input type="text" id="obsRelacao2" disabled>
+              </div>
+              <div class="form-item">
+                <label>WhatsApp / Telefone</label>
+                <input type="text" id="whatsRelacao2" placeholder="(11) 91234-5678" disabled>
+              </div>
+            </div>
+          </section>
+
+          <!-- DOCUMENTOS -->
+          <section class="card">
+            <div class="section-head">
+              <h3><i data-lucide="paperclip"></i> Documentos</h3>
+              <span class="section-help">PNG, JPG ou PDF</span>
+            </div>
+
+            <div id="anexosNovoWrap" class="form-grid" style="display:none;">
+              <div class="form-item span-12">
+                <label>Anexar arquivo(s)</label>
+                <input type="file" id="documentoAnexo" accept="image/*,application/pdf" multiple disabled>
+              </div>
+            </div>
+            <small id="arquivoSelecionado" style="display:none; margin-top:5px;" class="info-secundaria"></small>
+            <button type="button" id="removerArquivo" style="display:none; margin-top:6px;" class="btn btn-outline">
+              <i data-lucide="x"></i> Limpar seleção
+            </button>
+
+            <div class="bloco-dados" id="docsAtuaisBloco" style="margin-top:10px;">
+              <h3 style="font-size:1.05rem; margin:0 0 8px;">📄 Documentos atuais</h3>
+              <div id="listaDocsAtuais"></div>
+            </div>
+          </section>
+
+          <!-- Ações fundo -->
+          <div class="form-rodape" style="justify-content:flex-end; gap:8px;">
+            <button id="btnEditar2" class="btn"><i data-lucide="pencil"></i> Editar</button>
+            <button id="btnCancelar2" class="btn btn-outline" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
+            <button id="btnSalvar2" class="botao-dourado" style="display:none;"><i data-lucide="save"></i> Salvar</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de preview -->
+  <div id="previewModal" class="preview-backdrop" aria-hidden="true">
+    <div class="preview-card">
+      <div class="preview-body" id="previewBody"></div>
+      <div class="preview-top">
+        <a id="previewBaixar" class="preview-btn" download><i data-lucide="download"></i> Baixar</a>
+        <button type="button" id="previewFechar" class="preview-btn"><i data-lucide="x"></i> Fechar</button>
+      </div>
+    </div>
+  </div>
+
+<!-- INCLUA APENAS EM HOMOLOG/PROD -->
+<script src="./config.env.js"></script>
+
+<!-- Adapter de API -->
+<script type="module" src="./api/remote-adapter.js"></script>
+
+<!-- O que já existia -->
+<script type="module" src="menu-lateral.js"></script>
+
+
+  <!-- ==== JS ORIGINAL DA PÁGINA (sem mudanças funcionais) ==== -->
+  <script type="module">
+   import guard from './api/proteger-pagina.js';
+
+    import { handleRequest }   from './api/routes.js';
+
+    const api = (endpoint, method = 'GET', body = {}) =>
+      new Promise(resolve => handleRequest(endpoint, { method, body }, resolve));
+
+    const $  = s => document.querySelector(s);
+    const val = s => (document.querySelector(s)?.value || '').trim();
+    const set = (s, v) => { const el = $(s); if (el) el.value = v || ''; };
+
+    let clienteSelecionado = null;
+    let docsAtuais = [];
+    const removerDocs = new Set();
+    let editando = false;
+    let _ultimoBlob = '';
+
+    // Espaço para o menu no DESKTOP
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // Preview
+    function abrirModalPreview(url, tipo = '', nome = 'documento'){
+      const m = $('#previewModal'), body = $('#previewBody'), a = $('#previewBaixar');
+      if (!m || !body || !a) return;
+      body.innerHTML = '';
+      if (/pdf/i.test(tipo) || /^data:application\/pdf/i.test(url)) {
+        const f = document.createElement('iframe');
+        f.src = url;
+        body.appendChild(f);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        body.appendChild(img);
+      }
+      a.href = url;
+      a.download = (nome || 'documento').replace(/[\\/:*?"<>|]+/g,'-');
+      m.classList.add('aberto');
+      try{ lucide.createIcons(); }catch{}
+    }
+    function fecharModalPreview(){
+      const m = $('#previewModal'); const body = $('#previewBody');
+      if (m) m.classList.remove('aberto');
+      if (body) body.innerHTML = '';
+      if (_ultimoBlob && _ultimoBlob.startsWith('blob:')) { URL.revokeObjectURL(_ultimoBlob); _ultimoBlob = ''; }
+    }
+    $('#previewFechar')?.addEventListener('click', fecharModalPreview);
+    $('#previewModal')?.addEventListener('click', e => { if (e.target.id === 'previewModal') fecharModalPreview(); });
+
+    function resolveDocHref(doc){
+      if (typeof doc?.conteudo === 'string' && doc.conteudo) return doc.conteudo;
+      if (typeof doc?.url      === 'string' && doc.url)      return doc.url;
+      if (typeof doc?.href     === 'string' && doc.href)     return doc.href;
+
+      const c = doc?.conteudo;
+      if (c && typeof c === 'object') {
+        if (typeof c.data    === 'string' && c.data.startsWith('data:')) return c.data;
+        if (typeof c.dataURL === 'string') return c.dataURL;
+        if (typeof c.url     === 'string') return c.url;
+        if (typeof c.href    === 'string') return c.href;
+
+        if (typeof c.base64 === 'string') {
+          let tipo = doc?.tipo || '';
+          const nome = (doc?.nome || '').toLowerCase();
+          if (!tipo) {
+            if (/\.(png)$/.test(nome))  tipo = 'image/png';
+            else if (/\.(jpe?g)$/.test(nome)) tipo = 'image/jpeg';
+            else if (/\.(pdf)$/.test(nome))   tipo = 'application/pdf';
+          }
+          if (tipo) return `data:${tipo};base64,${c.base64}`;
+        }
+      }
+
+      try {
+        const bytes = doc?.conteudo?.bytes || doc?.bytes || doc?.arquivo?.bytes;
+        let tipo = doc?.tipo || '';
+        if (!tipo) {
+          const nome = (doc?.nome || '').toLowerCase();
+          if (/\.(png)$/.test(nome))  tipo = 'image/png';
+          else if (/\.(jpe?g)$/.test(nome)) tipo = 'image/jpeg';
+          else if (/\.(pdf)$/.test(nome))   tipo = 'application/pdf';
+        }
+        if (bytes) {
+          const blob = new Blob([new Uint8Array(bytes)], { type: tipo || 'application/octet-stream' });
+          return URL.createObjectURL(blob);
+        }
+      } catch {}
+
+      return '';
+    }
+
+    async function visualizarDoc(doc){
+      const href = resolveDocHref(doc);
+      if (!href) { alert('Não foi possível abrir o arquivo.'); return; }
+      const url = href;
+      _ultimoBlob = url.startsWith('blob:') ? url : '';
+      abrirModalPreview(url, doc.tipo || '', doc.nome || 'documento');
+    }
+
+    function renderDocsAtuais() {
+      const lista = $('#listaDocsAtuais');
+      if (!lista) return;
+      lista.innerHTML = '';
+
+      if (!Array.isArray(docsAtuais) || docsAtuais.length === 0) {
+        lista.innerHTML = '<p class="info-secundaria">Nenhum documento anexado.</p>';
+        return;
+      }
+
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+      ));
+
+      docsAtuais.forEach((doc, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'documento-box';
+
+        const marcado = removerDocs.has(i);
+        const href    = resolveDocHref(doc);
+        const podeVer = !!href;
+        const nome    = esc(doc?.nome || 'documento');
+        const tipoTxt = doc?.tipo ? ` (${esc(doc.tipo)})` : '';
+
+        wrap.innerHTML = `
+          <p style="${marcado ? 'text-decoration: line-through; opacity:.6;' : ''}">${nome}${tipoTxt}</p>
+          <div class="botoes-doc">
+            ${podeVer ? `<button type="button" class="btn btn-outline" data-view-doc="${i}">
+              <i data-lucide="eye"></i> Visualizar</button>` : ''}
+            ${podeVer ? `<a class="btn" href="${href}" download="${nome}" rel="noopener">
+              <i data-lucide="download"></i> Baixar</a>` : ''}
+            ${editando ? `<button type="button" class="btn btn-danger btn-sm" data-remove-doc="${i}">
+              <i data-lucide="trash"></i> ${marcado ? 'Desfazer' : 'Remover'}</button>` : ''}
+          </div>
+        `;
+        lista.appendChild(wrap);
+      });
+
+      lista.querySelectorAll('[data-view-doc]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const idx = Number(e.currentTarget.getAttribute('data-view-doc'));
+          const doc = docsAtuais[idx];
+          if (!doc) return;
+          await visualizarDoc(doc);
+        });
+      });
+
+      lista.querySelectorAll('[data-remove-doc]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const idx = Number(e.currentTarget.getAttribute('data-remove-doc'));
+          if (removerDocs.has(idx)) removerDocs.delete(idx); else removerDocs.add(idx);
+          renderDocsAtuais();
+        });
+      });
+
+      try { window.lucide?.createIcons?.(); } catch {}
+    }
+
+    function buscarCep() {
+      const cep = ($('#cep')?.value || '').replace(/\D/g, '');
+      if (cep.length !== 8) return;
+      fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.erro) return;
+          set('#rua', d.logradouro || '');
+          set('#bairro', d.bairro || '');
+          set('#cidade', d.localidade || '');
+          set('#estado', d.uf || '');
+        });
+    }
+    window.buscarCep = buscarCep;
+
+    function abrirWhats() {
+      const raw = $('#telefone')?.value || (clienteSelecionado?.whatsapp) || '';
+      const phone = String(raw).replace(/\D/g, '');
+      if (!phone) { alert('Sem número de WhatsApp/telefone.'); return; }
+      window.open(`https://wa.me/${phone}`, '_blank', 'noopener');
+    }
+
+    function setEditing(flag){
+      editando = !!flag;
+      document.querySelectorAll('#formCliente input, #formCliente select, #formCliente textarea')
+        .forEach(el => { el.disabled = !editando; });
+
+      $('#anexosNovoWrap').style.display = editando ? 'block' : 'none';
+
+      ['#btnEditar','#btnEditar2'].forEach(s => { const b=$(s); if(b) b.style.display = editando ? 'none' : 'inline-flex'; });
+      ['#btnSalvar','#btnSalvar2','#btnCancelar','#btnCancelar2']
+        .forEach(s => { const b=$(s); if(b) b.style.display = editando ? 'inline-flex' : 'none'; });
+
+      renderDocsAtuais();
+      try { lucide.createIcons(); } catch {}
+    }
+
+    function cancelarEdicao(){
+      removerDocs.clear();
+      const inputArquivo = $('#documentoAnexo');
+      const infoArquivo  = $('#arquivoSelecionado');
+      const btnRemover   = $('#removerArquivo');
+      if (inputArquivo) inputArquivo.value = '';
+      if (infoArquivo)  { infoArquivo.textContent = ''; infoArquivo.style.display = 'none'; }
+      if (btnRemover)   btnRemover.style.display = 'none';
+
+      preencherForm(clienteSelecionado);
+      docsAtuais = Array.isArray(clienteSelecionado.documentos) ? clienteSelecionado.documentos : [];
+      renderDocsAtuais();
+      setEditing(false);
+    }
+
+    async function salvar(){
+      const files = Array.from($('#documentoAnexo')?.files || []);
+      const ler = (f) => new Promise(resolve => {
+        const fr = new FileReader();
+        fr.onload = () => resolve({ nome: f.name, tipo: f.type, conteudo: fr.result, url: fr.result });
+        fr.readAsDataURL(f);
+      });
+      const docsNovos = await Promise.all(files.map(ler));
+      const base = (docsAtuais || []).filter((_, i) => !removerDocs.has(i));
+      const documentos = base.concat(docsNovos);
+
+      const payload = {
+        id: clienteSelecionado.id,
+        nome: val('#nome'),
+        cpf: val('#cpf'),
+        rg: val('#rg'),
+        nascimento: val('#nascimento'),
+        status: val('#status'),
+        email: val('#email'),
+        whatsapp: val('#telefone'),
+        relacao1: val('#relacao1'),
+        obsRelacao1: val('#obsRelacao1'),
+        cep: val('#cep'),
+        numero: val('#numero'),
+        rua: val('#rua'),
+        bairro: val('#bairro'),
+        cidade: val('#cidade'),
+        estado: val('#estado'),
+        relacao2: val('#relacao2'),
+        obsRelacao2: val('#obsRelacao2'),
+        whatsRelacao2: val('#whatsRelacao2'),
+        documentos
+      };
+
+      const res = await api('/clientes', 'PUT', payload);
+      if (res.status !== 200) { alert(res.error || 'Erro ao salvar alterações'); return; }
+
+      clienteSelecionado = res.data;
+      docsAtuais = Array.isArray(clienteSelecionado.documentos) ? clienteSelecionado.documentos : [];
+      if ($('#documentoAnexo')) $('#documentoAnexo').value = '';
+      if ($('#arquivoSelecionado')) { $('#arquivoSelecionado').textContent = ''; $('#arquivoSelecionado').style.display = 'none'; }
+      if ($('#removerArquivo')) $('#removerArquivo').style.display = 'none';
+      renderDocsAtuais();
+      setEditing(false);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // --- SIMULA LOGIN EM HOMOLOG (remova em produção) ---
+    if (!localStorage.getItem('auth.token')) {
+      localStorage.setItem('auth.token', 'dev-token');
+      localStorage.setItem('auth.user', JSON.stringify({
+        id: 'dev',
+        nome: 'Admin (Homolog)',
+        perfis: ['Administrador'] // ajuste se quiser outro perfil
+      }));
+    }
+
+    // Lê a permissão da meta e passa para o guard
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) {
+      guard({ permissao });
+    }
+
+
+      document.getElementById("hamburguer").addEventListener("click", () => {
+        document.getElementById("menuLateral").classList.toggle("aberto");
+      });
+
+      $('#btnWhats')?.addEventListener('click', (e) => { e.preventDefault(); abrirWhats(); });
+
+      $('#btnNovoEvento')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!clienteSelecionado) { alert('Cliente não carregado.'); return; }
+        localStorage.setItem('clienteSelecionado', clienteSelecionado.id);
+        localStorage.setItem('voltarParaEvento', 'true');
+        const leadId = new URLSearchParams(location.search).get('leadId');
+        const qs = new URLSearchParams(); if (leadId) qs.set('leadId', leadId);
+        location.href = `cadastro-evento.html?${qs.toString()}`;
+      });
+
+      const id = new URLSearchParams(location.search).get('id');
+      if (!id) {
+        alert('Cliente não informado.');
+        location.href = 'clientes-lista.html';
+        return;
+      }
+
+      // 1) Tenta buscar na API principal (modo online)
+      clienteSelecionado = null;
+      try {
+        const r = await api('/clientes', 'GET', {});
+        if (r.status === 200 && Array.isArray(r.data)) {
+          clienteSelecionado = r.data.find(c =>
+            String(c.id) === String(id) ||
+            String(c._id || '') === String(id)
+          );
+        }
+      } catch (e) {
+        console.warn('[Cliente Detalhado] Falha ao buscar na API, tentando localStorage:', e);
+      }
+
+      // 2) Se não achou na API, tenta no localStorage (modo offline) ou no adapter
+      if (!clienteSelecionado) {
+        try {
+          let lista = [];
+          try { lista = JSON.parse(localStorage.getItem('clientes') || '[]'); } catch {}
+          if (!Array.isArray(lista) || !lista.length) {
+            try { lista = (window.firebaseClientes && typeof window.firebaseClientes.list === 'function') ? await window.firebaseClientes.list() : [] } catch {}
+          }
+          clienteSelecionado = (lista || []).find(c => String(c.id) === String(id));
+        } catch (e) {
+          console.warn('[Cliente Detalhado] Erro ao ler clientes do localStorage/adapter:', e);
+        }
+      }
+
+      if (!clienteSelecionado) {
+        alert('Cliente não encontrado.');
+        location.href = 'clientes-lista.html';
+        return;
+      }
+
+      preencherForm(clienteSelecionado);
+      docsAtuais = Array.isArray(clienteSelecionado.documentos)
+        ? clienteSelecionado.documentos
+        : [];
+      renderDocsAtuais();
+
+
+      const inputArquivo = $('#documentoAnexo');
+      const infoArquivo  = $('#arquivoSelecionado');
+      const btnRemover   = $('#removerArquivo');
+
+      inputArquivo?.addEventListener('change', () => {
+        const files = Array.from(inputArquivo.files || []);
+        if (files.length) {
+          const nomes = files.map(f => f.name).join(', ');
+          infoArquivo.textContent = `${files.length} arquivo(s): ${nomes}`;
+          infoArquivo.style.display = 'block';
+          btnRemover.style.display  = 'inline-block';
+        } else {
+          infoArquivo.textContent = '';
+          infoArquivo.style.display = 'none';
+          btnRemover.style.display  = 'none';
+        }
+      });
+      btnRemover?.addEventListener('click', () => {
+        inputArquivo.value = '';
+        infoArquivo.textContent = '';
+        infoArquivo.style.display = 'none';
+        btnRemover.style.display  = 'none';
+      });
+
+      ['#btnEditar','#btnEditar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); setEditing(true); }));
+      ['#btnCancelar','#btnCancelar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); cancelarEdicao(); }));
+      ['#btnSalvar','#btnSalvar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); salvar(); }));
+
+      try { lucide.createIcons(); } catch {}
+      setEditing(false);
+    });
+
+    function preencherForm(c) {
+      set('#nome', c.nome);
+      set('#cpf', c.cpfCnpj || c.cpf || '');
+      set('#rg', c.rg || '');
+      set('#nascimento', c.nascimento || '');
+      set('#status', c.status || (c.inativo ? 'inativo' : 'ativo'));
+      set('#email', c.email || '');
+      set('#telefone', c.whatsapp || c.telefone || '');
+
+      const end = c.endereco || {};
+      set('#cep', end.cep || ''); set('#numero', end.numero || '');
+      set('#rua', end.rua || ''); set('#bairro', end.bairro || '');
+      set('#cidade', end.cidade || ''); set('#estado', end.uf || end.estado || '');
+
+      const r1 = (c.relacoes || [])[0] || {};
+      const r2 = (c.relacoes || [])[1] || {};
+      set('#relacao1', r1.tipo || ''); set('#obsRelacao1', r1.obs || '');
+      set('#relacao2', r2.tipo || ''); set('#obsRelacao2', r2.obs || '');
+      set('#whatsRelacao2', r2.whatsapp || '');
+    }
+  </script>
+
+  <!-- Recria ícones quando o menu terminar de injetar -->
+  <script>
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver(() => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); obs.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+</body>
+</html>

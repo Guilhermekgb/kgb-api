@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:checkin.html">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Check-in de Evento</title>
+  <link rel="stylesheet" href="kgb-common.css"/>
+  <style>
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 12px; }
+    .topbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .topbar .btn { height: 36px; }
+    .cards { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; margin:16px 0; }
+    .card { background:#fff; border-radius:14px; padding:14px 16px; box-shadow: var(--shadow-1); }
+    .card h4 { margin:0 0 6px 0; font-weight:600; }
+    .kpi { font-size: 28px; font-weight:700; }
+    .muted { color:#666; font-size: 12px; }
+    .grid { background:#fff; border-radius:14px; box-shadow: var(--shadow-1); padding:12px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
+    th { background:#faf7f0; position: sticky; top: 0; z-index: 1;}
+    .ok { color:#0a7a36; font-weight:600; }
+    .warn { color:#a55b00; font-weight:600; }
+    .bad { color:#b30021; font-weight:600; }
+    .pill { display:inline-block; padding:2px 8px; border-radius: 999px; font-size:12px; background:#eee; }
+    .pill.ok { background:#e6f7ec; color:#0a7a36; }
+    .pill.bad{ background:#ffe7ea; color:#b30021; }
+    .row-tools { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .scanner { display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; margin: 16px 0; }
+    #reader { width: 340px; min-height: 280px; background:#fff; border-radius:14px; overflow:hidden; box-shadow: var(--shadow-1); }
+    .inset { background:#fff; border-radius:14px; box-shadow: var(--shadow-1); padding:12px; }
+    .progress { width:100%; height:10px; background:#eee; border-radius:999px; overflow:hidden; }
+    .progress > i { display:block; height:100%; background:linear-gradient(90deg, #efb44b, #d98b00); }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f6f6f6; border:1px solid #e6e6e6; padding:2px 6px; border-radius:6px; }
+    .hint { font-size:12px; color:#555; }
+    @media (max-width: 920px) { .cards{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 520px) { .cards{ grid-template-columns: 1fr; } #reader{ width:100%; } }
+    .cards-tipos { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .kpi-sm{ font-size:22px; font-weight:700; }
+    .mini{ font-size:12px; color:#666; margin-top:4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h2 style="margin-right:auto;">Check-in de Evento</h2>
+      <select id="selEvento"></select>
+      <button class="btn" id="btnGerConv">Gerenciar convites</button>
+      <button class="btn" id="btnExportCsv">Exportar presentes (CSV)</button>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h4>Total de convites</h4>
+        <div class="kpi" id="kTotal">0</div>
+        <div class="muted" id="kTipos">—</div>
+      </div>
+      <div class="card">
+        <h4>Já chegaram (check-in)</h4>
+        <div class="kpi ok" id="kChegaram">0</div>
+        <div class="muted" id="kUltimo"></div>
+      </div>
+      <div class="card">
+        <h4>Faltam chegar</h4>
+        <div class="kpi warn" id="kFaltam">0</div>
+        <div class="muted">Ainda pendentes</div>
+      </div>
+      <div class="card">
+        <h4>Progresso</h4>
+        <div class="progress"><i id="kProg" style="width:0%"></i></div>
+        <div class="muted" id="kProgTxt">0%</div>
+      </div>
+    </div>
+
+    <div class="scanner">
+      <div id="reader"></div>
+      <div class="inset" style="flex:1; min-width:280px;">
+        <div class="row-tools">
+          <button class="btn" id="btnStart">Iniciar câmera</button>
+          <button class="btn bad" id="btnStop" disabled>Parar</button>
+          <div class="hint">Dica: você também pode digitar o número ou ID abaixo</div>
+        </div>
+        <!-- Filtros de auditoria -->
+<div class="audit-bar" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+  <label>De <input id="auditDe" type="time"></label>
+  <label>Até <input id="auditAte" type="time"></label>
+  <input id="auditPortaria" placeholder="Portaria/leitor (ex.: A, B...)" style="width:180px">
+  <button id="btnAuditCsv" class="btn">Exportar Auditoria (CSV)</button>
+  <div class="card" style="margin-top:10px">
+  <div class="h h2">Relatório por intervalo / portaria</div>
+  <div class="grid" style="grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px;">
+    <label>Início
+      <input type="time" id="repIni" />
+    </label>
+    <label>Fim
+      <input type="time" id="repFim" />
+    </label>
+    <label>Portaria/Leitor
+      <select id="repPortaria">
+        <option value="">(todas)</option>
+      </select>
+    </label>
+    <div style="display:flex;align-items:end;gap:8px">
+      <button id="btnAplicaRep" class="btn">Aplicar filtro</button>
+      <button id="btnCsvRep" class="btn ghost">Exportar CSV (intervalo)</button>
+    </div>
+  </div>
+  <div id="repResumo" class="small" style="margin-top:8px;color:#444"></div>
+</div>
+
+</div>
+
+        <div class="row-tools" style="margin-top:8px;">
+          <input id="inpBusca" class="input" placeholder="Nº do convite (ex.: 0007) ou ID" style="flex:1; min-width:200px;">
+          <button class="btn" id="btnCheckinManual">Fazer check-in</button>
+          <button class="btn" id="btnLimpar">Limpar</button>
+        </div>
+        <div id="msg" class="hint" style="margin-top:6px;"></div>
+
+        <div class="grid" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Últimos check-ins</h4>
+          <table id="tabLog">
+            <thead>
+              <tr><th>Quando</th><th>Número</th><th>Tipo</th><th>Status</th><th>Operações</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px;">Totais por tipo</h3>
+    <div id="cardsTipos" class="cards cards-tipos"></div>
+
+    <div class="grid">
+      <h3 style="margin-top:0;">Tipos de convite — visão geral</h3>
+      <table id="tabTipos">
+        <thead>
+          <tr><th>Tipo</th><th>Total</th><th>Check-in</th><th>Pendentes</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="grid" style="margin-top:12px;">
+      <h3 style="margin-top:0;">Quem já entrou (check-in)</h3>
+      <table id="tabEntraram">
+        <thead>
+          <tr><th>Quando</th><th>Número</th><th>Tipo</th><th>ID</th><th>Operações</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- Config de ambiente (define window.__API_BASE__) -->
+<script src="config.env.js"></script>
+
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script type="module">
+
+  (() => {
+    'use strict';
+
+    /* ===== CHAVES & LEITURA COMPATÍVEL ===== */
+    const K = {
+      EVENTOS:        (window.K_KEYS && window.K_KEYS.EVENTOS)        || 'm30.eventos',
+      INGRESSO_TIPOS: (window.K_KEYS && window.K_KEYS.INGRESSO_TIPOS) || 'm30.ingTipos',
+      INGRESSOS:      (window.K_KEYS && window.K_KEYS.INGRESSOS)      || 'm30.tickets'
+    };
+
+    const readLS = (k) => { try{ return JSON.parse(localStorage.getItem(k)||'[]')||[]; }catch{ return []; } };
+    const writeLS= (k,v) => localStorage.setItem(k, JSON.stringify(v));
+
+    // eventos: nova (m30.eventos) + legado (eventos)
+    function eventos(){
+      const a = readLS(K.EVENTOS);
+      const b = readLS('eventos');
+      const byId = new Map();
+      [...a, ...b].forEach(e => {
+        if(!e) return;
+        const id = String(e.id||'');
+        if(!id) return;
+        // prioriza o que tiver modulo 'eventos-pagos' (quando existir)
+        const cur = byId.get(id);
+        if(!cur || (String(e.modulo)==='eventos-pagos' && String(cur.modulo)!=='eventos-pagos')){
+          byId.set(id, e);
+        }
+      });
+      return [...byId.values()];
+    }
+
+    // tipos por evento (m30.ingTipos + ingresso_tipos)
+    function tipos(evId){
+      const a = readLS(K.INGRESSO_TIPOS);
+      const b = readLS('ingresso_tipos');
+      return [...a, ...b].filter(t => String(t.eventoId)===String(evId));
+    }
+
+    // ingressos/tickets por evento (MERGE: m30.tickets + ingressos)
+    function tickets(evId){
+      const a = readLS(K.INGRESSOS);     // m30.tickets (novo)
+      const b = readLS('ingressos');     // legado
+      // dedupe por id; se não tiver id, dedupe por (eventoId+tipoId+seqStr)
+      const seenId  = new Set();
+      const seenKey = new Set();
+      const out = [];
+      for(const t of [...a, ...b]){
+        if(!t) continue;
+        if(evId && String(t.eventoId)!==String(evId)) continue;
+        const id = t.id ? String(t.id) : '';
+        const key = `${t.eventoId||''}|${t.tipoId||''}|${t.seqStr||t.numero||''}`;
+        if(id){
+          if(seenId.has(id)) continue;
+          seenId.add(id);
+        }else{
+          if(seenKey.has(key)) continue;
+          seenKey.add(key);
+        }
+        out.push(t);
+      }
+      return out;
+    }
+
+    // encontra onde salvar (para desfazer check-in com compatibilidade)
+    function findTicketStorage(ticketId){
+      const keys = [K.INGRESSOS, 'm30.tickets', 'ingressos'];
+      for(const k of keys){
+        const arr = readLS(k);
+        const i = Array.isArray(arr) ? arr.findIndex(x => String(x.id)===String(ticketId)) : -1;
+        if(i>=0) return { key:k, arr, index:i };
+      }
+      return null;
+    }
+ const __PORTARIA_ID = (new URL(location.href).hash.match(/(?:portaria|leitor)=([^&]+)/)?.[1]) || 'default';
+    /* ===== HELPERS ===== */
+    if(!window.fmtBRL) window.fmtBRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+    const BRL = window.fmtBRL;
+    const typeKey = (t) => (t?.tipoId ?? t?.tipo ?? t?.tipoNome ?? '-');
+    const nowISO = () => new Date().toISOString();
+    const fmtDate = (s)=> { try{ return new Date(s).toLocaleString(); }catch{return s||'-';} };
+    const toDateLabel = (d)=>{
+      if (!d) return '';
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d;
+      const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+    };
+
+    // cache de nomes dos tipos
+    const __tipoIndex = new Map();
+    function tipoIndex(evId){
+      const k = String(evId);
+      if (__tipoIndex.has(k)) return __tipoIndex.get(k);
+      const idx = {};
+      (tipos(evId)||[]).forEach(t=>{
+        const cands = [t.id, t.nome, t.descricao, t.label].filter(Boolean).map(String);
+        cands.forEach(s=>{
+          if (!idx[s]) idx[s]=t;
+          const n = Number(s); if (Number.isFinite(n) && !idx[String(n)]) idx[String(n)] = t;
+          const up=s.toUpperCase(); if (!idx[up]) idx[up]=t;
+          const lo=s.toLowerCase(); if (!idx[lo]) idx[lo]=t;
+        });
+      });
+      __tipoIndex.set(k, idx);
+      return idx;
+    }
+    function tipoNome(evId, k){
+      if (k===null || k===undefined) return '—';
+      const s = String(k);
+      const idx = tipoIndex(evId);
+      const hit = idx[s] || idx[String(Number(s))] || idx[s.toUpperCase()] || idx[s.toLowerCase()];
+      return hit ? (hit.nome || hit.descricao || hit.label || '—') : '—';
+    }
+  // ====== INÍCIO: helper para logar check-in na API ======
+    async function apiLogCheckin(ticket, { undo = false } = {}) {
+      try {
+        const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();
+        if (!base) return; // se não tiver API, só segue local
+
+        const urlBase = base.replace(/\/+$/, '');
+        const endpoint = undo
+          ? `/convites/${encodeURIComponent(ticket.id)}/uncheckin`
+          : `/convites/${encodeURIComponent(ticket.id)}/checkin`;
+
+        const body = {
+          eventoId: ticket.eventoId || currentEventoId || '',
+          numero: ticket.seqStr || ticket.numero || '',
+          tipo: ticket.tipoNome || ticket.tipo || '',
+          portaria: __PORTARIA_ID || '',
+          extra: {
+            source: 'checkin.html',
+            modulo: 'eventos-pagos'
+          }
+        };
+
+        await fetch(urlBase + endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        console.warn('Falha ao enviar log de check-in para a API. Mantendo apenas local.', e);
+      }
+    }
+    // ====== FIM: helper para logar check-in na API ======
+
+       // ====== INÍCIO: helper para logar check-in na API ======
+    async function apiLogCheckin(ticket, { undo = false } = {}) {
+      try {
+        const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();
+        if (!base) return; // se não tiver API, segue só local
+
+        const urlBase = base.replace(/\/+$/, '');
+        const endpoint = undo
+          ? `/convites/${encodeURIComponent(ticket.id)}/uncheckin`
+          : `/convites/${encodeURIComponent(ticket.id)}/checkin`;
+
+        const body = {
+          eventoId: ticket.eventoId || currentEventoId || '',
+          numero: ticket.seqStr || ticket.numero || '',
+          tipo: ticket.tipoNome || ticket.tipo || '',
+          portaria: __PORTARIA_ID || '',
+          extra: {
+            source: 'checkin.html',
+            modulo: 'eventos-pagos'
+          }
+        };
+
+        await fetch(urlBase + endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        console.warn('Falha ao enviar log de check-in para a API. Mantendo apenas local.', e);
+      }
+    }
+    // ====== FIM: helper para logar check-in na API ======
+
+    /* ===== CHECK-IN PERSISTÊNCIA ===== */
+    function marcarCheckin(t){
+      if (!t) return {ok:false, msg:'Convite não encontrado'};
+      if (t.checkinAt) return {ok:false, msg:'Convite já estava com check-in'};
+      const slot = findTicketStorage(t.id);
+      if (!slot) return {ok:false, msg:'Convite não encontrado (armazenamento)'};
+
+      const updated = {
+        ...slot.arr[slot.index],
+        checkinAt: nowISO(),
+        status: 'checkin',
+        checkinBy: __PORTARIA_ID
+      };
+
+      slot.arr[slot.index] = updated;
+      writeLS(slot.key, slot.arr);
+      localStorage.setItem('checkin:ping', String(Date.now()));
+
+      // log na API (não trava a tela se der erro)
+      try { apiLogCheckin(updated, { undo: false }); } catch (e) { console.warn(e); }
+
+      return {ok:true, msg:'Check-in registrado'};
+    }
+
+    function desfazerCheckin(id){
+      const slot = findTicketStorage(id);
+      if (!slot) return false;
+      const cur = { ...slot.arr[slot.index] };
+      if (!cur.checkinAt) return false;
+
+      const before = { ...cur }; // estado ANTES de desfazer, para enviar no log
+
+      delete cur.checkinAt;
+      if (cur.status === 'checkin') {
+        cur.status = cur.vendaId ? 'vendido' : 'pendente';
+      }
+
+      slot.arr[slot.index] = cur;
+      writeLS(slot.key, slot.arr);
+      localStorage.setItem('checkin:ping', String(Date.now()));
+
+      // loga "uncheckin" na API
+      try { apiLogCheckin(before, { undo: true }); } catch (e) { console.warn(e); }
+
+      return true;
+    }
+
+
+    /* ===== UI ===== */
+    let currentEventoId = null;
+    let lastScans = [];
+
+    function buildEventoList(){
+      const evs = eventos();
+      const tks = [...readLS(K.INGRESSOS), ...readLS('ingressos')]; // rápido p/ contar
+      const byId = new Map();
+
+      evs.forEach(e => {
+        const id = String(e.id||''); if(!id) return;
+        byId.set(id, { id, nome:(e.nome||e.titulo||'Evento'), data:toDateLabel(e.data||''), modulo:e.modulo||'' });
+      });
+
+      tks.forEach(t => {
+        const id = String(t.eventoId||''); if(!id) return;
+        if (!byId.has(id)){
+          byId.set(id, { id, nome:(t.eventoNome||'Evento'), data:toDateLabel(t.data||''), modulo:'inferido-por-ticket' });
+        }
+      });
+
+      const toKey = s => s && s.includes('/') ? s.split('/').reverse().join('-') : (s||'');
+      return [...byId.values()]
+        .filter(e => String(e.modulo)==='eventos-pagos' || e.modulo==='inferido-por-ticket') // só pagos no seletor
+        .sort((a,b)=> String(toKey(a.data)).localeCompare(String(toKey(b.data))) || String(a.nome||'').localeCompare(String(b.nome||'')));
+    }
+
+  function hydrateEventos(){
+  const sel = document.getElementById('selEvento');
+  const evs = buildEventoList();             // eventos “oficiais” + inferidos pelos tickets
+  const allTks = tickets();                  // TODOS os convites (todas as chaves)
+  const countById = allTks.reduce((m,t)=>{
+    const id = String(t.eventoId||''); if(!id) return m;
+    m[id] = (m[id]||0)+1; return m;
+  }, {});
+
+  // monta opções com contador
+  sel.innerHTML = evs.map(e => {
+    const qtd = countById[String(e.id)] || 0;
+    const label = `${(e.nome||'Evento')} — ${qtd} convites`;
+    return `<option value="${e.id}">${label}</option>`;
+  }).join('');
+
+  if (!evs.length){
+    currentEventoId = null;
+    hydratePortarias(currentEventoId);
+renderResumo(currentEventoId);
+
+    renderAll();
+    return;
+  }
+
+  // tenta usar o hash
+  const want = new URL(location.href).hash.match(/evento=([^&]+)/)?.[1];
+  const hasWant = want && evs.some(x => String(x.id)===String(want));
+  let chosen = hasWant ? want : evs[0].id;
+
+  // se o escolhido tiver 0 convites, tenta achar OUTRO com mesmo nome+data que tenha convites
+  const chosenMeta = evs.find(e => String(e.id)===String(chosen)) || {};
+  if ((countById[String(chosen)]||0) === 0) {
+    const sameND = evs.find(e =>
+      (e.nome||'')===(chosenMeta.nome||'') &&
+      (e.data||'')===(chosenMeta.data||'') &&
+      (countById[String(e.id)]||0) > 0
+    );
+    if (sameND) chosen = sameND.id;
+  }
+
+  sel.value = chosen;
+  currentEventoId = chosen;
+  __tipoIndex?.clear?.();
+  renderAll();
+}
+
+
+    function renderKpis(){
+      const evId = currentEventoId;
+      const arr = evId ? tickets(evId) : [];
+      const total = arr.length;
+      const lidos = arr.filter(t=> !!t.checkinAt).length;
+      const faltam = Math.max(0, total - lidos);
+      const prog = total? Math.round((lidos/total)*100) : 0;
+
+      document.getElementById('kTotal').textContent = total;
+      document.getElementById('kChegaram').textContent = lidos;
+      document.getElementById('kFaltam').textContent = faltam;
+      document.getElementById('kProg').style.width = prog+'%';
+      document.getElementById('kProgTxt').textContent = prog+'%';
+
+      const map = {};
+      arr.forEach(t=>{ const k=typeKey(t); map[k]=(map[k]||0)+1; });
+      const tiposStr = Object.keys(map).map(k=>{
+        let nm = tipoNome(evId, k);
+        if (nm==='—'){ const any = arr.find(x=> String(typeKey(x))===String(k)); nm = any?.tipoNome || any?.tipo || '—'; }
+        return `${nm}: ${map[k]}`;
+      }).join(' · ');
+      document.getElementById('kTipos').textContent = tiposStr || '—';
+
+      const ultimo = arr.filter(t=>t.checkinAt).sort((a,b)=> String(b.checkinAt).localeCompare(String(a.checkinAt)))[0];
+      document.getElementById('kUltimo').textContent = ultimo ? `Último: ${ultimo.seqStr||ultimo.numero||''} • ${fmtDate(ultimo.checkinAt)}` : '—';
+    }
+
+    function renderTipos(){
+      const evId = currentEventoId;
+      const arr = evId ? tickets(evId) : [];
+      const tbody = document.querySelector('#tabTipos tbody');
+      const g = {};
+      arr.forEach(t=>{ const k=typeKey(t); (g[k] ||= {tot:0,in:0}); g[k].tot++; if(t.checkinAt) g[k].in++; });
+      const rows = Object.keys(g).map(k=>{
+        const tot=g[k].tot, ci=g[k].in, pend=tot-ci;
+        let nome = tipoNome(evId, k);
+        if (nome==='—'){ const any = arr.find(x=> String(typeKey(x))===String(k)); nome = any?.tipoNome || any?.tipo || '—'; }
+        return `<tr>
+          <td>${nome}</td>
+          <td>${tot}</td>
+          <td><span class="pill ok">${ci}</span></td>
+          <td><span class="pill">${pend}</span></td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="4">Sem convites para este evento.</td></tr>`;
+      tbody.innerHTML = rows;
+    }
+
+    function computeTypeStats(){
+      const evId = currentEventoId;
+      const arr = evId ? tickets(evId) : [];
+      const map = {};
+      arr.forEach(t=>{ const k=typeKey(t); (map[k] ||= {tot:0,in:0}); map[k].tot++; if(t.checkinAt) map[k].in++; });
+      return Object.entries(map).map(([k,v])=>{
+        let nome = tipoNome(evId, k);
+        if (nome==='—'){ const any = arr.find(x=> String(typeKey(x))===String(k)); nome = any?.tipoNome || any?.tipo || '—'; }
+        const tot=v.tot, ci=v.in, pend=tot-ci, prog = tot? Math.round((ci/tot)*100) : 0;
+        return { tipoId:k, nome, tot, in:ci, pend, prog };
+      }).sort((a,b)=> String(a.nome||'').localeCompare(String(b.nome||'')));
+    }
+
+    function renderTipoCards(){
+      const wrap = document.getElementById('cardsTipos');
+      const stats = computeTypeStats().filter(s=> s.tot>0);
+      wrap.innerHTML = stats.length? stats.map(s=>`
+        <div class="card">
+          <h4 style="margin:0 0 4px 0;">${s.nome}</h4>
+          <div class="kpi-sm">${s.in} / ${s.tot}</div>
+          <div class="mini">check-in • total</div>
+          <div class="progress" style="margin-top:8px;"><i style="width:${s.prog}%"></i></div>
+          <div class="mini">Pendentes: <b>${s.pend}</b></div>
+        </div>`).join('') : '<div class="muted">Sem convites para este evento.</div>';
+    }
+
+    function renderLog(){
+      const tb = document.querySelector('#tabLog tbody');
+      const tpl = lastScans.map(x=>`
+        <tr>
+          <td>${fmtDate(x.at)}</td>
+          <td><span class="kbd">${x.num}</span></td>
+          <td>${x.tipo}</td>
+          <td><span class="pill ok">check-in</span></td>
+          <td><button class="btn" data-undo="${x.id}">Desfazer</button></td>
+        </tr>`).join('') || `<tr><td colspan="5">Sem check-ins nesta sessão.</td></tr>`;
+      tb.innerHTML = tpl;
+    }
+
+    function renderEntraram(){
+      const tb = document.querySelector('#tabEntraram tbody');
+      const arr = (currentEventoId ? tickets(currentEventoId) : [])
+                  .filter(t=>t.checkinAt)
+                  .sort((a,b)=> String(b.checkinAt).localeCompare(String(a.checkinAt)));
+      const tpl = arr.map(t=>{
+        const k = typeKey(t);
+        let nm = tipoNome(currentEventoId, k);
+        if (nm==='—') nm = t.tipoNome || t.tipo || '—';
+        return `<tr>
+          <td>${fmtDate(t.checkinAt)}</td>
+          <td><span class="kbd">${t.seqStr||t.numero||''}</span></td>
+          <td>${nm}</td>
+          <td class="muted">${t.id}</td>
+          <td><button class="btn" data-undo="${t.id}">Desfazer</button></td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="5">Ninguém fez check-in ainda.</td></tr>`;
+      tb.innerHTML = tpl;
+    }
+
+    function renderAll(){ renderKpis(); renderTipos(); renderTipoCards(); renderLog(); renderEntraram(); }
+
+    /* ===== SCANNER ===== */
+    let qrcode = null;
+    async function startCam(){
+      if (qrcode) return;
+      try{
+        qrcode = new Html5Qrcode("reader");
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+        await qrcode.start({ facingMode: "environment" }, { fps: 10, qrbox: 220 }, onScan, onScanFail);
+      }catch{
+        (window.showToast||console.warn)?.("Não consegui abrir a câmera. Use a busca manual.", "bad");
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+      }
+    }
+    async function stopCam(){
+      if (!qrcode) return;
+      await qrcode.stop(); qrcode.clear(); qrcode=null;
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+    }
+    function onScanFail(){}
+    function onScan(txt){ processPayload(txt); }
+
+    function processPayload(txt){
+      let payload=null; try{ payload=JSON.parse(txt); }catch{ payload={ ticketId:txt }; }
+      const evOk = !payload.eventoId || String(payload.eventoId)===String(currentEventoId);
+      if (!evOk){ setMsg("QR de outro evento.", true); return; }
+      const arr = tickets(currentEventoId);
+      const t = arr.find(x=> x.id===payload.ticketId || x.ticketId===payload.ticketId || x.seqStr===payload.seqStr || x.numero===payload.ticketNumber);
+      if (!t){ setMsg("Convite não encontrado.", true); return; }
+
+      const r = marcarCheckin(t);
+      if (r.ok){
+        const k=typeKey(t); let nm=tipoNome(currentEventoId,k); if(nm==='—') nm=t.tipoNome||t.tipo||'—';
+        lastScans.unshift({ id:t.id, num: t.seqStr||t.numero||'', tipo: nm, at: nowISO() });
+        lastScans = lastScans.slice(0,20);
+        renderAll();
+        setMsg(`✅ Check-in: ${t.seqStr||t.numero||''}`);
+      }else{ setMsg("⚠️ "+r.msg, true); }
+    }
+
+    function setMsg(s, err){ const el=document.getElementById('msg'); el.textContent=s||''; el.style.color = err? '#b30021' : '#333'; }
+
+    function doManual(){
+      const q = (document.getElementById('inpBusca').value||'').trim();
+      if (!q){ setMsg("Digite o número (ex.: 0007) ou o ID do convite.", true); return; }
+      const arr = tickets(currentEventoId);
+      const t = arr.find(x=> String(x.id)===q || String(x.numero)===q || String(x.seqStr)===q);
+      if (!t){ setMsg("Convite não encontrado.", true); return; }
+      const r = marcarCheckin(t);
+      if (r.ok){
+        const k=typeKey(t); let nm=tipoNome(currentEventoId,k); if(nm==='—') nm=t.tipoNome||t.tipo||'—';
+        lastScans.unshift({ id:t.id, num: t.seqStr||t.numero||'', tipo: nm, at: nowISO() });
+        lastScans = lastScans.slice(0,20);
+        renderAll();
+        setMsg(`✅ Check-in: ${t.seqStr||t.numero||''}`);
+      }else{ setMsg("⚠️ "+r.msg, true); }
+    }
+
+    function exportCsvPresentes(){
+      const evId = currentEventoId;
+      if (!evId) { alert('Selecione um evento.'); return; }
+      const ts = tickets(evId).filter(t => !!t.checkinAt);
+      if (!ts.length) { alert('Nenhum check-in registrado para exportar.'); return; }
+      const tiposArr = tipos(evId) || [];
+      const header = ['numero','tipo','preco_centavos','preco_brl','checkinAt','ticketId'];
+      const rows = [header.join(';')];
+      ts.forEach(t => {
+        const tipo = tiposArr.find(x => String(x.id) === String(t.tipoId));
+        const nome = (tipo?.nome || t.tipoNome || t.tipo || '').toString().replace(/;/g, ',');
+        const preco = Number(t.precoUnit || 0);
+        const numero = (t.seqStr || t.numero || '').toString();
+        rows.push([numero, nome, String(preco), BRL.format((preco||0)/100), String(t.checkinAt||''), String(t.id||'')].join(';'));
+      });
+      const csv = rows.join('\r\n');
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `presentes_${evId}_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    function presentTickets(evId){
+  // todos com checkinAt
+  return tickets(evId).filter(t => !!t.checkinAt);
+}
+
+// tenta extrair “portaria”/“readerId” do ticket; se não existir, rotula “(sem)”
+function ticketPortaria(t){
+  return String(t.readerId || t.portaria || '(sem)').trim();
+}
+
+// popula o select de portaria a partir dos presentes
+function hydratePortarias(evId){
+  const sel = document.getElementById('repPortaria');
+  if(!sel) return;
+  const set = new Set(presentTickets(evId).map(ticketPortaria));
+  const items = Array.from(set.values()).sort();
+  sel.innerHTML = '<option value="">(todas)</option>' + items.map(v=>`<option value="${v}">${v}</option>`).join('');
+}
+
+function parseHHMM(hhmm){
+  if(!hhmm) return null;
+  const m = String(hhmm).match(/^(\d{2}):(\d{2})$/);
+  if(!m) return null;
+  const d = new Date(); d.setHours(+m[1], +m[2], 0, 0);
+  return d;
+}
+
+// aplica filtro por horário e portaria e retorna agregados
+function filtrarRelatorio(evId){
+  const ini = parseHHMM(document.getElementById('repIni')?.value || '');
+  const fim = parseHHMM(document.getElementById('repFim')?.value || '');
+  const porta = (document.getElementById('repPortaria')?.value || '').trim();
+
+  const arr = presentTickets(evId).filter(t=>{
+    // horário
+    const ts = new Date(t.checkinAt || t.checkin_at || t.checkedAt || '').getTime();
+    if(isFinite(ini?.getTime?.()) && ts < ini.getTime()) return false;
+    if(isFinite(fim?.getTime?.()) && ts > fim.getTime()) return false;
+    // portaria
+    if(porta && ticketPortaria(t) !== porta) return false;
+    return true;
+  });
+
+  // agrega por “faixas de hora”
+  const byHour = new Map(); // '19:00' => count
+  arr.forEach(t=>{
+    const d = new Date(t.checkinAt || t.checkin_at || t.checkedAt || '');
+    const key = String(d.getHours()).padStart(2,'0')+':00';
+    byHour.set(key, (byHour.get(key)||0)+1);
+  });
+
+  // resumo
+  const total = arr.length;
+  const horas = Array.from(byHour.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
+  return { total, horas, arr };
+}
+
+function renderResumo(evId){
+  const box = document.getElementById('repResumo');
+  if(!box) return;
+  const { total, horas } = filtrarRelatorio(evId);
+  const itens = horas.map(([h,c]) => `${h} → <b>${c}</b>`).join(' • ');
+  box.innerHTML = total
+    ? `Presentes no intervalo: <b>${total}</b> &nbsp;|&nbsp; Por hora: ${itens}`
+    : `Nenhum presente no intervalo/portaria selecionados.`;
+}
+
+function exportCsvIntervalo(evId){
+  const { arr } = filtrarRelatorio(evId);
+  if(!arr.length){ alert('Nenhum check-in no intervalo/portaria.'); return; }
+  const header = ['numero','tipo','preco_centavos','preco_brl','checkinAt','ticketId','portaria'];
+  const rows = [header.join(';')];
+  const tiposArr = tipos(evId) || [];
+  arr.forEach(t=>{
+    const tipo = tiposArr.find(x => String(x.id) === String(t.tipoId));
+    const nome = (tipo?.nome || t.tipoNome || t.tipo || '').toString().replace(/;/g, ',');
+    const preco = Number(t.precoUnit || 0);
+    const numero = (t.seqStr || t.numero || '').toString();
+    rows.push([numero, nome, String(preco), BRL.format((preco||0)/100), String(t.checkinAt||''), String(t.id||''), ticketPortaria(t)].join(';'));
+  });
+  const csv = rows.join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `presentes_intervalo_${evId}_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// ===== Relatório/Auditoria por faixa de horário/portaria =====
+function parseHHMM(s){
+  const m = String(s||'').match(/^(\d{2}):(\d{2})$/);
+  if(!m) return null;
+  return { h: +m[1], m: +m[2] };
+}
+
+// Retorna true se o ISO estiver dentro do [de, ate)
+function isWithin(iso, deHHMM, ateHHMM){
+  if(!iso) return false;
+  const d = new Date(iso);
+  const hh = d.getHours(), mm = d.getMinutes();
+  if (deHHMM){
+    if (hh < deHHMM.h || (hh===deHHMM.h && mm < deHHMM.m)) return false;
+  }
+  if (ateHHMM){
+    if (hh > ateHHMM.h || (hh===ateHHMM.h && mm >= ateHHMM.m)) return false;
+  }
+  return true;
+}
+
+function exportCsvAuditoria(){
+  const evId = currentEventoId;
+  if (!evId){ alert('Selecione um evento.'); return; }
+
+  const de   = parseHHMM(document.getElementById('auditDe')?.value || '');
+  const ate  = parseHHMM(document.getElementById('auditAte')?.value || '');
+  const port = String(document.getElementById('auditPortaria')?.value || '').trim();
+
+  const arr = (tickets(evId)||[]).filter(t => !!t.checkinAt);
+  if (!arr.length){ alert('Nenhum check-in para auditoria.'); return; }
+
+  // Filtra por horário e portaria (se informada)
+  const base = arr.filter(t => {
+    const okHora = isWithin(t.checkinAt, de, ate);
+    const okPort = port ? (String(t.checkinBy||'').toLowerCase() === port.toLowerCase()) : true;
+    return okHora && okPort;
+  });
+
+  if (!base.length){ alert('Nenhum check-in dentro do filtro.'); return; }
+
+  // Agregações por intervalo de 60 min (pode ajustar) e totais
+  // Bucket por HH:00 (label) — simples e útil pra taxa de chegada
+  const bucket = {};
+  base.forEach(t => {
+    const d = new Date(t.checkinAt);
+    const key = String(d.getHours()).padStart(2,'0') + ':00';
+    bucket[key] = (bucket[key]||0) + 1;
+  });
+
+  const tiposArr = tipos(evId) || [];
+  const tipoNomeById = (id)=>{
+    const item = tiposArr.find(x=> String(x.id)===String(id));
+    return (item?.nome || '—').replace(/;/g, ',');
+  };
+
+  // CSV: linhas “detalhe” + linhas “métrica”
+  const lines = [];
+  // cabeçalho detalhe
+  lines.push(['numero','tipo','preco_centavos','preco_brl','checkinAt','portaria','ticketId'].join(';'));
+  base.forEach(t=>{
+    const nome = (t.tipoNome || t.tipo || tipoNomeById(t.tipoId)).replace(/;/g, ',');
+    const preco = Number(t.precoUnit||0);
+    const numero = (t.seqStr || t.numero || '').toString();
+    lines.push([numero, nome, String(preco), BRL.format((preco||0)/100), String(t.checkinAt||''), String(t.checkinBy||''), String(t.id||'')].join(';'));
+  });
+
+  // separador
+  lines.push('');
+  lines.push('--- METRICAS (CHEGADA POR HORA) ---');
+  lines.push('hora;presentes');
+  Object.keys(bucket).sort().forEach(h => lines.push([h, String(bucket[h])].join(';')));
+
+  const csv = lines.join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `auditoria_${evId}_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Bind do botão
+(function bindAudit(){
+  const el = document.getElementById('btnAuditCsv');
+  if (el) el.addEventListener('click', exportCsvAuditoria);
+})();
+
+    const getEl = (id) => document.getElementById(id);
+    const on    = (id, ev, fn) => { const el = getEl(id); if (el) el.addEventListener(ev, fn); };
+
+    on('selEvento', 'change', (e) => { currentEventoId = e.target.value; __tipoIndex.clear?.(); location.hash = '#evento=' + currentEventoId; renderAll(); });
+    on('btnGerConv', 'click', () => { if (!currentEventoId) return; window.open('gerenciar-convites.html#evento=' + currentEventoId, '_blank'); });
+    on('btnStart', 'click', startCam);
+    on('btnStop', 'click', stopCam);
+    on('btnCheckinManual', 'click', doManual);
+    on('btnLimpar', 'click', () => { const input = getEl('inpBusca'); if (input) input.value = ''; setMsg(''); });
+    on('btnExportCsv', 'click', exportCsvPresentes);
+on('btnAplicaRep','click', ()=> { if(!currentEventoId) return; renderResumo(currentEventoId); });
+on('btnCsvRep','click',     ()=> { if(!currentEventoId) return; exportCsvIntervalo(currentEventoId); });
+
+    document.addEventListener('click', (e) => {
+      const id = e.target?.dataset?.undo;
+      if (!id) return;
+      if (desfazerCheckin(id)) {
+        lastScans = lastScans.filter(x => x.id !== id);
+        renderAll();
+        setMsg('Check-in desfeito.');
+      }
+    });
+
+    // init
+    hydrateEventos();
+
+    // Reagir a mudanças em outras abas/telas
+    window.addEventListener('storage', (ev) => {
+      const keys = new Set([
+        K.EVENTOS, 'eventos',
+        K.INGRESSOS, 'm30.tickets', 'ingressos',
+        K.INGRESSO_TIPOS, 'ingresso_tipos',
+        'checkin:ping'
+      ]);
+      if (keys.has(ev.key)) { hydrateEventos(); renderAll(); }
+    });
+  })();
+  </script>
+</body>
+</html>

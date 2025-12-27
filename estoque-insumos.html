@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:estoque-insumos.html">
+  <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- (opcional) ativar ENFORCE do guard p/ testes -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard de permissões (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <title>Estoque de Insumos</title>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    html,body{background:#f8f1e8;margin:0}
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    main.conteudo-principal{flex-grow:1;padding:40px;min-height:100vh}
+    .conteudo-central{max-width:1100px;margin:0 auto}
+    h1{display:flex;align-items:center;gap:8px;color:#5a3e2b}
+
+    .card{background:#fff;border:1px solid #eadfcd;border-radius:14px;box-shadow:0 2px 6px rgba(0,0,0,.04);padding:14px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{border:1px solid #c29a5d;background:#fff;color:#5a3e2b;padding:8px 12px;border-radius:10px;cursor:pointer}
+    .btn.primary{background:#c29a5d;color:#fff}
+    .btn-mini{padding:6px 8px;border-radius:8px}
+    .sec-title{font-weight:700;color:#5a3e2b}
+    .muted{color:#7a6a5c;font-size:12px}
+
+    table{width:100%;border-collapse:collapse;background:#fff}
+    th,td{border-bottom:1px solid #eee;padding:10px;text-align:left;vertical-align:middle}
+    th{background:#faf6ef;color:#5a3e2b;font-weight:600}
+    td.num{text-align:right}
+
+    input,select,textarea{width:100%;padding:8px;border:1px solid #e0d6c4;border-radius:8px;box-sizing:border-box}
+
+    @media (max-width: 720px){
+      main.conteudo-principal{padding:20px}
+      .card{padding:12px}
+      th,td{padding:8px}
+    }
+      /* Botão hamburguer (mobile) */
+    #hamburguer{
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      color: #fff;
+      border: none;
+      font-size: 22px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+      z-index: 1001;
+      display: none; /* some no desktop */
+      cursor: pointer;
+    }
+
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 260px;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform .3s ease;
+        z-index: 999;
+      }
+      #menuLateral.aberto{
+        transform: translateX(0);
+      }
+
+      main.conteudo-principal{
+        padding: 20px;
+      }
+    }
+    #menuBackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.38);
+  z-index: 998;
+}
+body.no-scroll{ overflow:hidden; }
+
+</style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+  <div class="wrapper">
+   <aside id="menuLateral"></aside>
+<div id="menuBackdrop" hidden></div>
+<main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="package"></i> Estoque de Insumos</h1>
+
+        <section class="card">
+          <div class="actions" style="justify-content:space-between">
+            <div>
+              <div class="sec-title">Entradas</div>
+              <div class="muted">Use “Incluir” para registrar manualmente; as sobras vindas do Checklist também aparecem aqui.</div>
+            </div>
+            <div class="actions">
+              <button class="btn" id="btnIncluir">Incluir</button>
+              <button class="btn" id="btnExportar">Exportar JSON</button>
+            </div>
+          </div>
+
+          <div style="margin-top:10px; overflow:auto">
+            <table id="tbEstoque">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Evento</th>
+                  <th>Insumo</th>
+                  <th>Quantidade</th>
+                  <th>Un</th>
+                  <th>Tipo</th>
+                  <th>Observações</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal CRUD -->
+  <dialog id="dlgCrud">
+    <form method="dialog" style="min-width:560px;max-width:90vw">
+      <div class="sec-title" id="crudTitle">Cadastro</div>
+      <div class="grid cols-3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:8px">
+        <div style="grid-column:1 / -1">
+          <label>Insumo</label>
+          <input id="fNome" type="text" required>
+        </div>
+        <div>
+          <label>Quantidade</label>
+          <input id="fQtd" type="number" min="0" step="0.01" required>
+        </div>
+        <div>
+          <label>Unidade</label>
+          <input id="fUn" type="text" placeholder="kg / g / l / ml / un" required>
+        </div>
+        <div>
+          <label>Tipo</label>
+          <select id="fTipo">
+            <option value="cru">Cru</option>
+            <option value="preparado">Preparado</option>
+          </select>
+        </div>
+        <div>
+          <label>Evento (opcional)</label>
+          <input id="fEvt" type="text" placeholder="id do evento">
+        </div>
+        <div style="grid-column:1 / -1">
+          <label>Observações</label>
+          <textarea id="fObs" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-end; margin-top:12px">
+        <button class="btn" value="cancel">Cancelar</button>
+        <button class="btn primary" id="btnCrudSalvar" value="default">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script>
+       // ======= Storage (mesma chave usada no checklist) =======
+    const KEY_ESTOQUE_INSUMOS = 'insumos:estoque';
+
+    function loadEstoqueInsumos(){
+      try {
+        return JSON.parse(localStorage.getItem(KEY_ESTOQUE_INSUMOS) || '[]');
+      } catch {
+        return [];
+      }
+    }
+    function saveEstoqueInsumos(arr){
+      try {
+        localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(arr));
+      } catch {}
+    }
+
+    // ======= API (opcional, para rodar na nuvem) =======
+    const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+
+    async function apiCreateInsumo(item){
+      if (!HAS_API) return;
+      try{
+        await window.callApi("/estoque/insumos", "POST", item);
+      }catch(e){
+        console.error("Falha ao criar insumo na API", e);
+      }
+    }
+
+    async function apiUpdateInsumo(id, item){
+      if (!HAS_API) return;
+      try{
+        await window.callApi(`/estoque/insumos/${encodeURIComponent(id)}`, "PUT", item);
+      }catch(e){
+        console.error("Falha ao atualizar insumo na API", e);
+      }
+    }
+
+    async function apiDeleteInsumo(id){
+      if (!HAS_API) return;
+      try{
+        await window.callApi(`/estoque/insumos/${encodeURIComponent(id)}`, "DELETE", {});
+      }catch(e){
+        console.error("Falha ao excluir insumo na API", e);
+      }
+    }
+
+    // ======= Eventos (para mostrar nome do evento) =======
+    const KEY_EVENTOS = 'eventos';
+
+    const getObj = (k)=> JSON.parse(localStorage.getItem(k)||'null');
+    function loadEventos(){ return getObj(KEY_EVENTOS) || []; }
+
+    function nomeVisivelEvento(ev){
+      return ev?.nomeEvento || ev?.titulo || ev?.nome || ev?.cliente || ev?.evento || ('Evento '+(ev?.id||'')); 
+    }
+    function getEventoNomeById(evtId){
+      const ev = (loadEventos()||[]).find(e => String(e.id) === String(evtId));
+      return ev ? nomeVisivelEvento(ev) : (evtId || '—');
+    }
+
+    // ======= Utils =======
+    function formatDateBR(iso){
+      const v = String(iso||'').trim();
+      if (!v) return '—';
+      const d = new Date(v);
+      if (!isFinite(d)) return v;
+      const dd = String(d.getDate()).padStart(2,'0');
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const yy = d.getFullYear();
+      return `${dd}/${mm}/${yy}`;
+    }
+    function esc(s){ 
+      return String(s ?? '').replace(/[&<>"']/g, m => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]
+      )); 
+    }
+
+    // ======= Render =======
+    function renderTabelaEstoque(){
+      const tb = document.querySelector('#tbEstoque tbody');
+      if (!tb) return;
+      tb.innerHTML = '';
+
+      const dados = loadEstoqueInsumos();
+      // mais novo primeiro
+      dados.sort((a,b)=> String(b.dataISO||'').localeCompare(String(a.dataISO||'')));
+
+      for (const it of dados){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${formatDateBR(it.dataISO)}</td>
+          <td>${esc(getEventoNomeById(it.eventoId))}</td>
+          <td>${esc(it.nome)}</td>
+          <td class="num">${Number(it.qtd ?? 0)}</td>
+          <td>${esc(it.un)}</td>
+          <td>${esc(it.tipo || '')}</td>
+          <td>${esc(it.obs || '')}</td>
+          <td>
+            <button class="btn btn-mini" data-id="${esc(it.id)}" data-act="edit">Editar</button>
+            <button class="btn btn-mini" data-id="${esc(it.id)}" data-act="del">Excluir</button>
+          </td>
+        `;
+        tb.appendChild(tr);
+      }
+
+      // Excluir
+          // Excluir
+      tb.querySelectorAll('button[data-act="del"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.id;
+          if (!confirm('Excluir este registro de insumo?')) return;
+
+          const arr = loadEstoqueInsumos().filter(x => x.id !== id);
+          saveEstoqueInsumos(arr);
+
+          // Se a API existir, também exclui na nuvem
+          if (HAS_API) {
+            apiDeleteInsumo(id);
+          }
+
+          renderTabelaEstoque();
+        });
+      });
+
+
+      // Editar
+      tb.querySelectorAll('button[data-act="edit"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.id;
+          const arr = loadEstoqueInsumos();
+          const found = arr.find(x => x.id === id);
+          if (!found) return;
+          openCrud('Editar registro', found);
+        });
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', renderTabelaEstoque);
+
+    // ======= CRUD =======
+    const dlg = document.getElementById('dlgCrud');
+    function openCrud(titulo, data){
+      document.getElementById('crudTitle').textContent = titulo;
+      document.getElementById('fNome').value = data?.nome || '';
+      document.getElementById('fQtd').value  = data?.qtd  ?? '';
+      document.getElementById('fUn').value   = data?.un   || 'kg';
+      document.getElementById('fTipo').value = data?.tipo || 'cru';
+      document.getElementById('fEvt').value  = data?.eventoId || '';
+      document.getElementById('fObs').value  = data?.obs  || '';
+      dlg.dataset.id = data?.id || '';
+      if (dlg?.showModal) dlg.showModal();
+    }
+
+    document.getElementById('btnIncluir').addEventListener('click', ()=> openCrud('Incluir registro', null));
+
+        document.getElementById('btnCrudSalvar').addEventListener('click', async ()=>{
+      const id = dlg.dataset.id || ('st_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+      const novo = {
+        id,
+        dataISO: new Date().toISOString(),
+        eventoId: document.getElementById('fEvt').value.trim(),
+        nome: document.getElementById('fNome').value.trim(),
+        qtd: Number(document.getElementById('fQtd').value || 0),
+        un: document.getElementById('fUn').value.trim(),
+        tipo: document.getElementById('fTipo').value,
+        obs: document.getElementById('fObs').value || ''
+      };
+
+      if (!novo.nome || !novo.qtd || !novo.un){
+        alert('Preencha nome, quantidade e unidade.');
+        return;
+      }
+
+      const arr = loadEstoqueInsumos();
+      const i = arr.findIndex(x => x.id === id);
+      const isEdicao = i >= 0;
+
+      if (isEdicao){
+        // mantém a data original ao editar (se você preferir atualizar, troque a linha abaixo)
+        novo.dataISO = arr[i].dataISO || novo.dataISO;
+        arr[i] = { ...arr[i], ...novo };
+      } else {
+        arr.push(novo);
+      }
+
+      saveEstoqueInsumos(arr);
+
+      // Se a API existir, também sincroniza na nuvem
+      if (HAS_API) {
+        if (isEdicao) {
+          await apiUpdateInsumo(id, novo);
+        } else {
+          await apiCreateInsumo(novo);
+        }
+      }
+
+      renderTabelaEstoque();
+      // o <form method="dialog"> fecha sozinho ao clicar no botão com value="default"
+    });
+
+        // ======= Exportar =======
+    document.getElementById('btnExportar').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(loadEstoqueInsumos(), null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'estoque-insumos.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+  // Ícones + menu mobile (padrão)
+document.addEventListener('DOMContentLoaded', () => {
+  try{ lucide.createIcons(); }catch{}
+
+  const btn   = document.getElementById('hamburguer');
+  const aside = document.getElementById('menuLateral');
+  const back  = document.getElementById('menuBackdrop');
+
+  if (!btn || !aside || !back) return;
+
+  function abrir(){
+    aside.classList.add('aberto');
+    back.hidden = false;
+    document.body.classList.add('no-scroll');
+    btn.setAttribute('aria-expanded','true');
+  }
+  function fechar(){
+    aside.classList.remove('aberto');
+    back.hidden = true;
+    document.body.classList.remove('no-scroll');
+    btn.setAttribute('aria-expanded','false');
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (aside.classList.contains('aberto')) fechar();
+    else abrir();
+  });
+
+  back.addEventListener('click', fechar);
+
+  document.addEventListener('click', (e) => {
+    if (!aside.classList.contains('aberto')) return;
+    if (!aside.contains(e.target) && !btn.contains(e.target)) fechar();
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) fechar();
+  });
+});
+
+      if (!btn || !menu) return;
+
+      // abre/fecha
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        document.body.style.overflow = aberto ? 'hidden' : '';
+      });
+
+      // clicar fora fecha
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        const clicouMenu  = menu.contains(e.target);
+        const clicouBotao = btn.contains(e.target);
+        if (!clicouMenu && !clicouBotao) {
+          menu.classList.remove('aberto');
+          document.body.style.overflow = '';
+        }
+      });
+
+      // se voltar pro desktop, garante fechado
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && menu.classList.contains('aberto')) {
+          menu.classList.remove('aberto');
+          document.body.style.overflow = '';
+        }
+      });
+  
+  </script>
+</body>
+</html>
+
+

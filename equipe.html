@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:equipe.html">
+  <meta charset="UTF-8" />
+  <title>Equipe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- (opcional) ativar ENFORCE do guard p/ testes -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard de permissões (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    html,body{margin:0;padding:0;background:#f8f1e8;font-family:'Playfair Display',serif}
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    #menuLateral{flex-shrink:0;background:#5a3e2b;height:100vh;overflow-y:auto}
+    main{flex:1;padding:40px;height:100vh;overflow-y:auto}
+    .conteudo-central{max-width:1100px;margin:0 auto}
+    /* Botão hamburguer (padrão do sistema) */
+    #hamburguer {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1001;
+      display: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+
+    /* Backdrop do menu (mobile) */
+    #menuBackdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 998;
+    }
+
+    /* Quando o menu está aberto, trava o scroll do fundo */
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+    @media (max-width: 768px){
+      #hamburguer{
+        display:block;
+      }
+
+      #menuLateral{
+        position:fixed;
+        left:0;
+        top:0;
+        height:100vh;
+        width:260px;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999;
+      }
+
+      #menuLateral.aberto{
+        transform:translateX(0);
+      }
+
+      main{
+        padding:20px;
+        height:auto;
+      }
+    }
+
+    h1{color:#5a3e2b;display:flex;gap:10px;align-items:center}
+
+    .card{background:#fff;border-radius:14px;padding:18px;margin:10px 0;border:1px solid #efe3d6;box-shadow:0 8px 18px rgba(0,0,0,.05)}
+    .card h3{margin:0 0 6px;color:#5a3e2b}
+    .muted{color:#6b7280}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{background:#5a3e2b;color:#fff;border:0;padding:9px 14px;border-radius:10px;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .btn:hover{background:#4c3426}
+    .btn-ghost{background:#fff;border:1px solid #efe3d6;color:#4b3a2d;padding:8px 12px;border-radius:10px;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .chip{background:#f4e9db;border-radius:999px;padding:2px 8px;color:#4b3a2d}
+
+    :root{ --sidebar-w: 260px; }
+    @media (min-width: 769px) {
+      #menuLateral{ position: fixed; inset:0 auto 0 0; width: var(--sidebar-w); height:100vh; z-index:999; }
+      .wrapper{ padding-left: var(--sidebar-w); }
+      .wrapper > main{ margin-left: 0 !important; }
+    }
+    @media (max-width: 768px) {
+      #menuLateral{ position: fixed; transform: translateX(-100%); transition: transform .25s ease; width: var(--sidebar-w); z-index: 999; }
+      #menuLateral.aberto{ transform: translateX(0); }
+      .wrapper{ padding-left: 0; }
+    }
+
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal{background:#fffdf9;border:1px solid #efe3d6;border-radius:16px;width:min(960px,96%);max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);padding:18px}
+    .modal header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .modal h3{margin:0;color:#5a3e2b}
+    .close{background:none;border:0;font-size:22px;cursor:pointer}
+    .line{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .input{border:1px solid #eadbcc;border-radius:10px;background:#fff;padding:8px 10px}
+
+    .table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;border:1px solid #efe3d6}
+    .table th,.table td{padding:10px 12px;border-bottom:1px solid #eee;text-align:left}
+    .table th{background:#f4e9db;color:#4b3a2d}
+    .nowrap{white-space:nowrap}
+
+    /* ===== AJUSTES DE LAYOUT: CENTRAL + GRID ===== */
+    * { box-sizing: border-box; }
+    :root { --sidebar-w: 260px; }
+
+    .wrapper { min-height: 100vh; }
+    .wrapper > main {
+      flex: 1;
+      min-height: 100vh;
+      padding: 24px clamp(16px, 3vw, 32px);
+    }
+    .wrapper > main > .conteudo-central{
+      width: min(1200px, 100%);
+      margin: 0 auto;
+      display: block;
+    }
+    #listaCards{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+    @media (min-width: 769px){
+      #menuLateral{ position: fixed; inset: 0 auto 0 0; width: var(--sidebar-w); height: 100vh; z-index: 999; }
+      .wrapper{ padding-left: var(--sidebar-w); }
+      .wrapper > main{ margin-left: 0 !important; }
+    }
+    @media (max-width: 768px){
+      .wrapper{ padding-left: 0; }
+      #menuLateral{ position: fixed; transform: translateX(-100%); transition: transform .25s ease; width: var(--sidebar-w); z-index: 999; }
+      #menuLateral.aberto{ transform: translateX(0); }
+    }
+
+    /* ===== Forçar a faixa central a usar toda a largura útil ===== */
+    :root { --sidebar-w: 260px; }
+    .wrapper { min-height: 100vh; }
+    .wrapper > main{
+      flex: 1;
+      min-height: 100vh;
+      padding: 24px clamp(16px, 3vw, 32px) 40px;
+    }
+    main > .conteudo-central{
+      max-width: none !important;
+      width: 100% !important;
+      margin: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    main > div:first-child{
+      max-width: none !important;
+      width: 100% !important;
+    }
+    #listaCards{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    @media (min-width: 1200px){
+      #listaCards{ grid-template-columns: 1fr 1fr; }
+    }
+    @media (min-width: 769px){
+      #menuLateral{ position: fixed; inset: 0 auto 0 0; width: var(--sidebar-w); height: 100vh; z-index: 999; }
+      .wrapper{ padding-left: var(--sidebar-w); }
+    }
+    @media (max-width: 768px){
+      .wrapper{ padding-left: 0; }
+      #menuLateral{ position: fixed; transform: translateX(-100%); transition: transform .25s ease; width: var(--sidebar-w); z-index: 999; }
+      #menuLateral.aberto{ transform: translateX(0); }
+    }
+      /* Mostra o hambúrguer só no mobile */
+    @media (max-width: 768px){
+      #hamburguer{
+        display: block !important;
+      }
+    }
+</style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+    <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+
+        <h1><i data-lucide="users"></i> Equipes</h1>
+
+
+        <div id="gate"></div>
+
+        <div id="conteudo" style="display:none">
+          <div class="row" style="justify-content:space-between;margin-bottom:8px">
+            <div class="hint">Eventos ativos ordenados por data</div>
+            <input id="buscaEvento" class="input" placeholder="Buscar por nome do evento..." style="min-width:260px">
+          </div>
+
+          <div id="listaCards"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Gerenciar Equipe -->
+  <div class="overlay" id="ov">
+    <div class="modal">
+      <header>
+        <h3 id="tituloModal">Gerenciar equipe</h3>
+        <button class="close" onclick="fecharModal()">✕</button>
+      </header>
+
+      <div id="infoEvento" class="muted" style="margin-bottom:10px"></div>
+
+      <div class="line" style="justify-content:flex-end;margin-top:-2px">
+        <a class="btn-ghost" id="btnOpenColabs" href="colaboradores.html" target="_blank" rel="noopener">
+          <i data-lucide="user-plus"></i> Cadastrar colaborador
+        </a>
+      </div>
+
+      <div class="card" style="padding:12px">
+        <div class="line">
+          <input id="filtroColab" class="input" placeholder="Buscar colaborador" style="flex:1">
+          <select id="selColab" class="input" style="min-width:280px"></select>
+          <select id="funcaoSelect" class="input" style="min-width:200px"></select>
+          <input id="inpHora" class="input" placeholder="HH:MM" maxlength="5" style="width:90px">
+          <input id="inpObs" class="input" placeholder="Observação (opcional)" style="flex:1;min-width:200px">
+          <button class="btn" id="btnAdd"><i data-lucide="plus"></i> Adicionar</button>
+        </div>
+        <div class="muted">Evita duplicados; horário com máscara HH:MM. Se precisar cadastrar alguém, use o botão “Cadastrar colaborador” acima.</div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Função</th>
+            <th>Nome</th>
+            <th>WhatsApp</th>
+            <th>Tam. Camiseta</th>
+            <th>Horário</th>
+            <th>Observação</th>
+            <th class="nowrap">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbEquipe"></tbody>
+      </table>
+
+      <div class="line" style="justify-content:flex-end;margin-top:12px">
+        <button class="btn-ghost" onclick="fecharModal()">Fechar</button>
+        <button class="btn" id="btnNotificarTodos"><i data-lucide="send"></i> Notificar todos</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+     document.addEventListener("DOMContentLoaded",()=>{ if(window.lucide) lucide.createIcons(); });
+
+    // ===== Helper de usuário (token -> usuarioAtual -> usuarioLogado) =====
+    (function(){
+      if(!window.getUsuarioAtual){
+        window.getUsuarioAtual = function(){
+          let t = null;
+          try { t = (window.obterUsuarioDoToken && window.obterUsuarioDoToken()) || null; } catch {}
+          let uStore = null; try { uStore = JSON.parse(localStorage.getItem('usuarioAtual') || 'null'); } catch {}
+          let legacy = null; try {
+            legacy = JSON.parse(localStorage.getItem('usuarioLogado') || 'null')
+                  || JSON.parse(sessionStorage.getItem('usuarioLogado') || 'null');
+          } catch {}
+          return t || uStore || legacy || null;
+        };
+      }
+    })();
+
+    const q  = (s)=>document.querySelector(s);
+    const S_EVT="eventos", S_USR="usuarios", S_COLABS="colaboradoresBase", S_NOTIF="notificacoes";
+    const get = (k,def="[]")=>{ try{return JSON.parse(localStorage.getItem(k)||def);}catch{return JSON.parse(def);} };
+    const set = (k,v)=>localStorage.setItem(k, JSON.stringify(v));
+    const norm = (s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
+    // Helpers de JSON para cache leve
+    const getJSON = (k, fb) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(k) || 'null');
+        return v ?? fb;
+      } catch {
+        return fb;
+      }
+    };
+    const setJSON = (k, v) => {
+      try {
+        localStorage.setItem(k, JSON.stringify(v));
+      } catch {}
+    };
+
+    // Cache em memória para esta tela
+    let eventosMem = [];
+
+    // Carrega lista de eventos da API e mantém espelho no localStorage
+    async function syncEventosComBackend() {
+      if (typeof IS_REMOTE === "undefined" || !IS_REMOTE || typeof callApi !== "function") {
+        // sem backend configurado: usa só o que tiver no navegador
+        eventosMem = getJSON(S_EVT, []);
+        return eventosMem;
+      }
+
+      try {
+        const resp = await callApi("/eventos", "GET", {});
+        const lista = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
+        eventosMem = lista;
+        setJSON(S_EVT, lista);
+        return lista;
+      } catch (e) {
+        console.warn("[equipe] Não foi possível carregar eventos da API, usando cache local", e);
+        eventosMem = getJSON(S_EVT, []);
+        return eventosMem;
+      }
+    }
+
+    // Unificação: use o helper global
+    const getUser = window.getUsuarioAtual;
+    const isAdmin  = (u)=> norm(u?.perfil)==="administrador";
+    const isMaitre = (u)=> ["maitre","maître"].includes(norm(u?.perfil));
+    const isResponsavel = (u)=>{
+      const p = norm(u?.perfil);
+      return p==="responsavel por evento" || p==="responsável por evento" || p==="responsavel" || p==="responsável";
+    };
+
+    const digits = (s)=>String(s||"").replace(/\D/g,"");
+    const brPhone = (p)=>{ const d=digits(p); if(d.startsWith("55")&&d.length===13) return d; if(d.length===11) return "55"+d; return d; };
+
+    function parseData(ev){
+      const raw = ev?.data || ev?.dataEvento || ev?.dataDoEvento || "";
+      const v = String(raw).trim();
+      if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ const [Y,M,D]=v.split("-"); return new Date(+Y, +M-1, +D); }
+      const m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+      return new Date("2100-01-01");
+    }
+    const fmtDataBR = (ev)=> {
+      const d=parseData(ev);
+      return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    };
+
+    let usuario = null;
+    let eventoFocus = null;
+
+    // Gate: Admin, Maître OU Responsável
+    function gate(){
+      usuario = getUser();
+      if(!usuario || (!isAdmin(usuario) && !isMaitre(usuario) && !isResponsavel(usuario))){
+        q("#gate").innerHTML = "<div class='card'>Acesso negado. Área exclusiva para Administrador, Maître ou Responsável.</div>";
+        q("#conteudo").style.display="none";
+        return false;
+      }
+      q("#gate").innerHTML = "";
+      q("#conteudo").style.display="";
+      return true;
+    }
+
+    function eventosAtivos(){
+      const base = (eventosMem && eventosMem.length) ? eventosMem : getJSON(S_EVT, []);
+      return (base || []).filter(ev => norm(ev.status) !== "arquivado");
+    }
+
+    // Base por perfil:
+    function baseEventos(){
+      const todos = eventosAtivos();
+      if(isAdmin(usuario) || isMaitre(usuario)) return todos;
+      const hoje = new Date(); hoje.setHours(0,0,0,0);
+      return todos.filter(ev => norm(ev.responsavelEquipe) === norm(usuario?.nome) && parseData(ev) >= hoje);
+    }
+
+    function sortPorDataAsc(arr){ return arr.sort((a,b)=> parseData(a) - parseData(b)); }
+    function aplicarBusca(arr){
+      const termo = norm(q("#buscaEvento")?.value);
+      if(!termo) return arr;
+      return arr.filter(e => norm(e.nomeEvento||e.titulo||e.nome).includes(termo));
+    }
+
+    function renderCards(){
+      const cont = q("#listaCards");
+      cont.innerHTML = "";
+
+      const lista = aplicarBusca(sortPorDataAsc(baseEventos()));
+
+      if(!lista.length){
+        cont.innerHTML = "<div class='card muted'>Nenhum evento.</div>";
+        return;
+      }
+
+      lista.forEach(ev=>{
+        const qtd = Array.isArray(ev.equipe) ? ev.equipe.length : 0;
+        const resp = ev.responsavelEquipe || "—";
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="row" style="justify-content:space-between;align-items:flex-start">
+            <div>
+              <h3>${ev.nomeEvento || ev.titulo || ev.nome || "Evento"}</h3>
+              <div class="muted">Data: <strong>${fmtDataBR(ev)}</strong></div>
+              <div class="muted">Equipe: <strong>${qtd}</strong> pessoa(s)</div>
+              <div class="row" style="margin-top:6px"><span class="chip">Responsável: ${resp}</span></div>
+            </div>
+            <div class="row" style="gap:8px">
+              <a class="btn-ghost" href="escala-evento.html?id=${encodeURIComponent(ev.id)}"><i data-lucide="users"></i> Abrir escala</a>
+              ${ (isAdmin(usuario) || isMaitre(usuario) || norm(resp)===norm(usuario?.nome))
+                ? `<button class="btn" data-gest="${ev.id}"><i data-lucide="pencil-line"></i> Gerenciar</button>`
+                : "" }
+            </div>
+          </div>
+        `;
+        cont.appendChild(card);
+      });
+
+      if(window.lucide) lucide.createIcons();
+    }
+
+    // ====== Colaboradores (com fallback de chave) ======
+    function getColabs(){
+      const a = get(S_COLABS,"[]");              // chave atual
+      const b = get("colaboradores","[]");       // fallback legado, se existir
+      if(!Array.isArray(b) || !b.length) return a;
+      // mescla e deduplica por id ou nome
+      const map = new Map();
+      [...a, ...b].forEach(c=>{
+        const key = String(c.id || c.nome || Math.random()).toLowerCase();
+        if(!map.has(key)) map.set(key, c);
+      });
+      return Array.from(map.values());
+    }
+
+    function abrirModal(evId){
+      const ev = eventosAtivos().find(e => String(e.id)===String(evId));
+      if(!ev) return;
+
+      if(!(isAdmin(usuario) || isMaitre(usuario) || norm(ev.responsavelEquipe)===norm(usuario?.nome))){
+        alert("Apenas o Administrador, o Maître ou o Responsável do evento pode gerenciar a equipe.");
+        return;
+      }
+      eventoFocus = ev;
+      q("#tituloModal").textContent = "Gerenciar equipe";
+      q("#infoEvento").textContent = `${ev.nomeEvento || ev.titulo || ev.nome || "Evento"} • ${fmtDataBR(ev)}`;
+      popularSelectFuncoes();
+      popularSelColab();
+      q("#inpHora").value = "";
+      q("#inpObs").value  = "";
+      renderTabelaEquipe();
+      q("#ov").style.display = "flex";
+    }
+    function fecharModal(){ q("#ov").style.display = "none"; eventoFocus = null; }
+
+    function popularSelColab(){
+      const base = getColabs();
+      const sel  = q("#selColab");
+      const filtro = q("#filtroColab").value || "";
+      const lista = base
+        .filter(c => norm(c.nome).includes(norm(filtro)))
+        .sort((a,b)=>norm(a.nome).localeCompare(norm(b.nome)));
+      sel.innerHTML = "";
+      sel.appendChild(new Option("Selecione um colaborador",""));
+      lista.forEach(c => sel.appendChild(new Option(c.nome, c.id || c.nome)));
+    }
+    q("#filtroColab").addEventListener("input", popularSelColab);
+
+    window.addEventListener("focus", ()=>{ if(q("#ov").style.display==="flex") popularSelColab(); });
+    window.addEventListener("storage", (e)=>{
+      if(e.key===S_COLABS || e.key==="colaboradores"){
+        if(q("#ov").style.display==="flex") popularSelColab();
+      }
+    });
+
+    function maskHHMM(el){
+      let v=el.value.replace(/\D/g,"").slice(0,4);
+      if(v.length>=3) v = v.slice(0,2)+":"+v.slice(2);
+      el.value=v;
+    }
+    q("#inpHora").addEventListener("input", (e)=>maskHHMM(e.target));
+
+    q("#btnAdd").addEventListener("click", ()=>{
+      if(!eventoFocus) return;
+      const selVal = q("#selColab").value.trim();
+      const func = q("#funcaoSelect").value.trim();
+      const hora = q("#inpHora").value.trim();
+      const obs  = q("#inpObs").value.trim();
+      if(!selVal || !func){ alert("Selecione um colaborador e uma função."); return; }
+
+      const base = getColabs();
+      const col  = base.find(c => String(c.id||c.nome)===String(selVal));
+      const nome = col?.nome || selVal;
+
+      const arr = Array.isArray(eventoFocus.equipe) ? eventoFocus.equipe : (eventoFocus.equipe=[]);
+      if(arr.some(p => norm(p.nome)===norm(nome))){
+        alert("Este colaborador já está na equipe.");
+        return;
+      }
+
+      const whatsapp = col?.whatsapp || "";
+      const tamanhoCamiseta = col?.tamanhoCamiseta || col?.camiseta || "";
+      arr.push({ idColab: col?.id, nome, funcao:func, whatsapp, tamanhoCamiseta, hora, obs });
+      persistEvento(eventoFocus);
+      renderTabelaEquipe();
+      renderCards();
+    });
+
+    function renderTabelaEquipe(){
+      const tb = q("#tbEquipe");
+      tb.innerHTML = "";
+      const base = Array.isArray(eventoFocus?.equipe) ? eventoFocus.equipe : [];
+      if(!base.length){
+        tb.innerHTML = `<tr><td colspan="7" class="muted">Nenhum colaborador adicionado.</td></tr>`;
+        return;
+      }
+      base.forEach((p,i)=>{
+        const wa = p.whatsapp ? `https://wa.me/${brPhone(p.whatsapp)}` : "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${p.funcao||"—"}</td>
+          <td>${p.nome||"—"}</td>
+          <td>${wa?`<a href="${wa}" target="_blank" rel="noopener">${p.whatsapp}</a>`:"—"}</td>
+          <td>${p.tamanhoCamiseta||"—"}</td>
+          <td>${p.hora||"—"}</td>
+          <td>${p.obs||"—"}</td>
+          <td class="nowrap">
+            <button class="btn-ghost" data-rem="${i}"><i data-lucide="trash-2"></i> Remover</button>
+          </td>
+        `;
+        tb.appendChild(tr);
+      });
+      if(window.lucide) lucide.createIcons();
+      tb.querySelectorAll("[data-rem]").forEach(btn=>{
+        btn.addEventListener("click",()=>{
+          const i = +btn.getAttribute("data-rem");
+          if(!confirm("Remover este colaborador da escala?")) return;
+          eventoFocus.equipe.splice(i,1);
+          persistEvento(eventoFocus);
+          renderTabelaEquipe();
+          renderCards();
+        });
+      });
+    }
+
+    q("#btnNotificarTodos").addEventListener("click", ()=>{
+      if(!eventoFocus) return;
+      const arr = Array.isArray(eventoFocus.equipe) ? eventoFocus.equipe : [];
+      if(!arr.length){ alert("Sem colaboradores na equipe."); return; }
+      const notifs = get(S_NOTIF);
+      const link = `escala-evento.html?id=${encodeURIComponent(eventoFocus.id)}`;
+      arr.forEach(p=>{
+        notifs.push({
+          id:"ntf_"+Math.random().toString(36).slice(2,10),
+          paraNome: p.nome,
+          titulo: "Escala atualizada",
+          msg: `Você foi incluído/atualizado na equipe do evento: ${(eventoFocus.nomeEvento||"Evento")}.`,
+          link, lida:false, criadoEm:new Date().toISOString()
+        });
+      });
+      set(S_NOTIF, notifs);
+      alert("Notificações registradas para os colaboradores.");
+    });
+
+    async function persistEvento(ev){
+      // 1) atualiza cache local "eventos"
+      const all = getJSON(S_EVT, []);
+      const i = all.findIndex(e => String(e.id)===String(ev.id));
+      if (i >= 0) { all[i] = ev; }
+      else { all.push(ev); }
+      setJSON(S_EVT, all);
+
+      // sincroniza cache em memória também
+      eventosMem = all;
+
+      // dispara evento para outras abas/janelas
+      window.dispatchEvent(new StorageEvent("storage",{ key:S_EVT, newValue: JSON.stringify(all) }));
+
+      // 2) tenta salvar na API (fonte da verdade)
+      if (typeof IS_REMOTE !== "undefined" && IS_REMOTE && typeof callApi === "function") {
+        try {
+          await callApi(`/eventos/${encodeURIComponent(String(ev.id))}`, "PUT", ev);
+        } catch (e) {
+          console.warn("[equipe] Falha ao salvar equipe do evento na API", e);
+          // não mostramos alert pra não irritar o usuário; fica só no console
+        }
+      }
+    }
+
+
+    function popularSelectFuncoes(){
+      const funcoes = ["Garçom","Cozinheiro","Auxiliar de Cozinha","Barman","Churrasqueiro","Recepção","Maitre"];
+      const sel = q("#funcaoSelect");
+      sel.innerHTML = "";
+      funcoes.forEach(f => sel.appendChild(new Option(f,f)));
+    }
+
+    document.addEventListener("click",(e)=>{
+      const b = e.target.closest("[data-gest]");
+      if(b){ abrirModal(b.getAttribute("data-gest")); }
+    });
+
+    document.getElementById("buscaEvento").addEventListener("input", renderCards);
+    window.addEventListener("storage",(e)=>{
+      if(e.key===S_EVT){
+        renderCards();
+        if(q("#ov").style.display==="flex" && eventoFocus){
+          const all=get(S_EVT);
+          eventoFocus = all.find(x=> String(x.id)===String(eventoFocus.id))||eventoFocus;
+          renderTabelaEquipe();
+        }
+      }
+    });
+
+      document.addEventListener("DOMContentLoaded", async ()=>{
+      if (!gate()) return;
+      await syncEventosComBackend();   // busca na API e preenche eventosMem
+      renderCards();                   // monta os cards com essa lista
+    });
+
+
+    // Autoabrir o modal da equipe se vier ?id= na URL (respeita o gate)
+    document.addEventListener("DOMContentLoaded", ()=>{
+      const urlId = new URLSearchParams(location.search).get("id");
+      if(!urlId) return;
+      setTimeout(()=>{
+        const all = (localStorage.getItem("eventos") ? JSON.parse(localStorage.getItem("eventos")) : []);
+        const ev = all.find(e => String(e.id)===String(urlId));
+        if(ev){
+          const usuario = getUser();
+          const n = (s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
+          const isAdm  = n(usuario?.perfil)==="administrador";
+          const isMai  = ["maitre","maître"].includes(n(usuario?.perfil));
+          const isResp = n(ev?.responsavelEquipe)===n(usuario?.nome);
+          if(isAdm || isMai || isResp){
+            const btn = document.querySelector(`[data-gest="${ev.id}"]`);
+            if(btn) btn.click(); else window.alert("Abra o evento na lista para gerenciar a equipe.");
+          }
+        }
+      }, 50);
+    });
+  </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn      = document.getElementById('hamburguer');
+      const menu     = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) {
+        console.warn('[menu-mobile] Botão ou menu não encontrados');
+        return;
+      }
+
+      function fecharMenu(){
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded','false');
+        if (backdrop) backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+
+      function toggleMenu(ev){
+        if (ev) ev.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        if (backdrop) backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      }
+
+      // Clicar no hambúrguer abre/fecha
+      btn.addEventListener('click', toggleMenu);
+
+      // Clicar no fundo escuro fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Clicar fora do menu fecha (no mobile)
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+          fecharMenu();
+        }
+      });
+
+      // Se trocar pra tela grande, garante que o menu volte ao normal
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
+
+

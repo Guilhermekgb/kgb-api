@@ -1,0 +1,8 @@
+export async function enviarContrato(dadosContrato) {
+  console.log("Simulando envio de contrato para assinatura:", dadosContrato);
+  return {
+    status: "sucesso",
+    linkAssinatura: "https://zapsign-simulado.com/assinatura123",
+    signatario: dadosContrato.nomeCliente
+  };
+}

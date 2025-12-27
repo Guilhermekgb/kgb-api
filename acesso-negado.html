@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <!-- Redefinir senha usa o backend M36 e não deve ser bloqueada pelo guard -->
+  <script>
+    window.__KGB_GUARD_BYPASS__ = true;
+  </script>
+  <script type="module" src="./remote-adapter.js"></script>
+
+  <title>Acesso Negado</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #fff8f5;
+      color: #8B0000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .caixa {
+      background: #fff0f0;
+      border: 2px solid #cc0000;
+      padding: 40px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+    p {
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+    a {
+      text-decoration: none;
+      color: #fff;
+      background-color: #8B4513;
+      padding: 10px 20px;
+      border-radius: 6px;
+    }
+    a:hover {
+      background-color: #A0522D;
+    }
+  </style>
+</head>
+<body>
+  <div class="caixa">
+    <h1>🚫 Acesso Negado</h1>
+    <p>Você não tem permissão para acessar esta página.</p>
+    <a href="dashboard.html">Voltar para o início</a>
+  </div>
+</body>
+</html>

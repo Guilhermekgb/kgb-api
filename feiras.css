@@ -1,0 +1,776 @@
+/* ===== FEIRAS – Visual premium em harmonia com o Funil ===== */
+:root{
+  --bg:        #f6f3ec;
+  --bg-2:      #f1ebe1;
+  --surface:   #ffffff;
+  --surface-2: #fffaf4;
+  --border:    #e8dcc9;
+  --text:      #2e261a;
+  --muted:     #7b6a57;
+  --accent:    #b6916a; /* dourado queimado */
+  --accent-2:  #c7ac85;
+  --shadow-1:  0 2px 10px rgba(0,0,0,.06);
+  --shadow-2:  0 16px 40px rgba(0,0,0,.10);
+  --ring:      0 0 0 3px rgba(182,145,106,.25);
+}
+
+html, body { height:100%; background:var(--bg); }
+.hidden{ display:none !important; }
+
+/* ===== Layout base ===== */
+main.conteudo-principal{
+  height:100vh; overflow:auto; position:relative;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(199,172,133,.20), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(182,145,106,.18), transparent 60%),
+    linear-gradient(180deg, var(--bg), var(--bg-2));
+}
+.conteudo-central{ padding: 12px 16px 40px; }
+
+/* Topbar (não fixa) */
+.fr-topbar{
+  position: static;
+  z-index: 1;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 16px; border-bottom:1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.70));
+}
+.fr-title{ display:flex; align-items:center; gap:10px; color:var(--text); }
+.fr-title h1{ font-size:20px; font-weight:900; letter-spacing:.3px; margin:0; }
+.fr-actions{ display:flex; gap:10px; align-items:center; }
+
+.input{
+  padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:#fff;
+  box-shadow: var(--shadow-1); color:var(--text);
+}
+.input:focus{ outline:none; box-shadow: var(--ring), var(--shadow-1); border-color:transparent; }
+
+.btn{
+  display:inline-flex; align-items:center; gap:8px; border-radius:12px; padding:10px 14px;
+  font-weight:800; cursor:pointer; border:1px solid rgba(0,0,0,.04); box-shadow: var(--shadow-1);
+}
+.btn.primario{ background: linear-gradient(180deg, var(--accent-2), var(--accent)); color:#2a1f14; }
+.btn.sec{ background:#f6efe4; color:#5a3e2b; }
+.btn.btn-sm{ padding:8px 10px; border-radius:10px; }
+
+/* ===== Filtros ===== */
+.fr-filtros{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 16px 6px;
+}
+#busca{
+  width: clamp(240px, 46vw, 640px);
+  padding:12px 14px; border-radius:14px; border:1px solid var(--border);
+  background: linear-gradient(#fff,#fff) padding-box,
+              linear-gradient(135deg, rgba(182,145,106,.6), rgba(231,222,206,.6)) border-box;
+  box-shadow: var(--shadow-1); color:var(--text);
+}
+#busca::placeholder{ color: var(--muted); }
+.filtros-dir{ display:flex; align-items:center; gap:10px; }
+.lbl{ font-size:12px; color:#7a5633; font-weight:800; margin-right:6px; }
+
+/* ===== Indicadores ===== */
+.fr-indicadores{
+  display:grid; grid-template-columns: repeat(4, minmax(220px,1fr));
+  gap:14px; margin:12px 16px 2px;
+}
+.ind{
+  background: linear-gradient(var(--surface), var(--surface)) padding-box,
+              linear-gradient(135deg, rgba(231,222,206,.8), rgba(199,172,133,.55)) border-box;
+  border:1px solid transparent; border-radius:16px; padding:16px 16px 14px; box-shadow: var(--shadow-1);
+}
+.ind .k{ font-size:12px; color:#7a5633; letter-spacing:.2px; }
+.ind .v{ font-size:22px; font-weight:900; color:var(--text); margin-top:6px; }
+
+/* ===== Cards ===== */
+.fr-card{
+  background: linear-gradient(var(--surface), var(--surface)) padding-box,
+              linear-gradient(135deg, rgba(199,172,133,.6), rgba(255,255,255,0)) border-box;
+  border:1px solid transparent; border-radius:18px; box-shadow: var(--shadow-1);
+  margin:14px 16px; padding:16px;
+}
+.fr-card-header{ display:flex; align-items:end; justify-content:space-between; gap:10px; }
+.fr-card-header h2{ display:flex; gap:8px; align-items:center; margin:0; color:#5a3e2b; font-size:16px; font-weight:900; }
+.fr-card .hint{ color:#7b6a57; font-size:12px; }
+
+/* ===== Tabela (base) ===== */
+.tabela{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:auto;
+  margin-top:12px;
+  position:relative;
+  background:#fff;
+}
+.tabela::-webkit-scrollbar{ height:10px; }
+.tabela::-webkit-scrollbar-track{ background:#f2eadf; border-radius:10px; }
+.tabela::-webkit-scrollbar-thumb{ background:#d7c5ab; border-radius:10px; }
+
+/* ===== Modal / Dialog genéricos ===== */
+.dlg{ border:none; border-radius:18px; padding:0; box-shadow: var(--shadow-2); width:min(680px, 96vw); }
+.dlg::backdrop{ background: rgba(0,0,0,.35); }
+.dlg-content{ padding:16px; }
+.dlg-content h3{ margin:0 0 12px; display:flex; gap:8px; align-items:center; color:#5a3e2b; }
+.dlg-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+
+/* ===== Modal “O que já temos nesta data” — tabela elegante ===== */
+.gridData{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.lista-data{ border:1px dashed var(--border); border-radius:12px; padding:10px; background:#fff; min-height:60px; }
+.lista-data.empty{ color:#9a866f; font-style:italic; }
+.resumo-data{ margin-bottom:8px; color:#7b6a57; }
+.item-data{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px dashed var(--border); }
+.item-data:last-child{ border-bottom:none; }
+.item-titulo{ font-weight:800; color:#3c2e22; }
+.item-meta{ display:flex; gap:8px; flex-wrap:wrap; }
+.chip{ display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; background:#fff8ee; border:1px solid #eadac4; color:#6b4a2f; }
+.item-acao a{ font-weight:800; text-decoration:underline; color:#5a3e2b; }
+
+.preview-data{
+  margin-top:8px; background:#fff; border:1px solid var(--border);
+  border-radius:12px; box-shadow: var(--shadow-1); padding:10px;
+}
+.preview-head{ display:flex; gap:10px; align-items:center; color:#7b6a57; font-size:12px; margin-bottom:8px; }
+.preview-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.preview-col h5{ margin:0 0 6px; color:#5a3e2b; font-size:12px; font-weight:900; }
+.preview-item{ padding:8px; border:1px dashed var(--border); border-radius:10px; }
+.preview-title{ font-weight:900; color:#3c2e22; margin-bottom:4px; }
+.preview-chips{ display:flex; gap:8px; flex-wrap:wrap; font-size:12px; }
+.preview-chip{ background:#fff8ee; border:1px solid #eadac4; color:#6b4a2f; padding:3px 8px; border-radius:999px; font-weight:700; }
+.preview-empty{ color:#9a866f; font-style:italic; }
+.preview-actions{ display:flex; justify-content:flex-end; margin-top:8px; }
+.preview-actions .link{ color:#5a3e2b; font-weight:800; text-decoration:underline; cursor:pointer; }
+@media (max-width: 880px){
+  .preview-grid{ grid-template-columns: 1fr; }
+}
+
+/* ===== Campos (captação e afins) ===== */
+.field{ display:flex; flex-direction:column; gap:8px; }
+.field > label{ font-size:12px; font-weight:800; letter-spacing:.2px; color:#77573c; opacity:.95; }
+.ctrl{
+  position:relative; display:flex; align-items:center;
+  border:1px solid var(--border); border-radius:14px;
+  background:#fff; box-shadow: var(--shadow-1);
+  padding-left:44px; min-height:56px;
+}
+.ctrl i{ position:absolute; left:14px; width:20px; height:20px; color:#7a5633; opacity:.55; }
+.ctrl input, .ctrl textarea{
+  width:100%; border:none; outline:none; background:transparent; color:var(--text);
+  padding:12px 14px; border-radius:14px; font-size:15px; line-height:1.35;
+}
+.ctrl textarea{ min-height:100px; resize:vertical; }
+.ctrl input::placeholder, .ctrl textarea::placeholder{ color:#9e8a73; }
+
+/* Mesma altura visual nos controles */
+.fr-captacao .ctrl{ min-height:56px; }
+.fr-captacao .ctrl.textarea textarea{ min-height:56px; }
+
+/* Evita qualquer scroll lateral dentro do card de captação */
+.fr-card.fr-captacao{ overflow: visible; }
+
+/* ===== Modal: Data (grade) ===== */
+.dlg-data .dlg-content { padding: 16px 16px 18px; }
+.dlg-data .dlg-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;
+}
+.resumo-data{ margin:2px 0 10px; color:#7b6a57; }
+
+.data-grid{
+  border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#fff;
+  box-shadow: var(--shadow-1);
+}
+.data-grid__head,
+.data-grid__body .row{
+  display:grid;
+  grid-template-columns: 120px 1.2fr 120px 1.2fr 90px;
+  align-items:center;
+}
+.data-grid__head{
+  background:linear-gradient(180deg,#f4ede1,#efe6d7);
+  color:#5a3e2b; font-weight:900; border-bottom:1px solid var(--border);
+}
+.data-grid__head > div,
+.data-grid__body .cell{ padding:10px 12px; border-right:1px solid var(--border); }
+.data-grid__head > div:last-child,
+.data-grid__body .cell:last-child{ border-right:none; }
+.data-grid__body .row{ border-top:1px solid var(--border); }
+.data-grid__body .row:nth-child(odd){ background:#fffaf4; }
+.data-grid__body .row:hover{ background:#fff5e9; }
+.data-grid .c{ text-align:center; }
+
+@media (max-width: 720px){
+  .data-grid__head, .data-grid__body .row{
+    grid-template-columns: 90px 1fr 90px 1fr 76px;
+  }
+}
+#listaEventos .item-data { padding:10px; border-bottom:1px dashed var(--border); }
+#listaEventos .item-data:last-child { border-bottom:none; }
+#btnFecharData { font-weight:800; }
+
+/* ===== Modal "O que já temos nesta data" — ajustes p/ nomes longos ===== */
+#dlgData { width: min(980px, 96vw); }
+#dlgData .data-grid__head,
+#dlgData .data-grid__row{
+  display: grid;
+  grid-template-columns: 120px minmax(360px, 2fr) 120px minmax(260px, 1.4fr) 90px;
+  gap: 10px;
+}
+#dlgData .item-titulo{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#dlgData .data-grid{ max-height: 60vh; overflow: auto; }
+@media (max-width: 900px){
+  #dlgData .data-grid__head,
+  #dlgData .data-grid__row{
+    grid-template-columns: 110px minmax(260px, 1.8fr) 110px minmax(200px, 1.2fr) 80px;
+  }
+}
+
+/* ===== Versão “cartões” da grade de data ===== */
+.dlg-data .data-grid { display: grid; gap: 8px; }
+.dlg-data .data-grid__head,
+.dlg-data .data-grid__row {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1.4fr 110px;
+  align-items: center;
+  gap: 8px;
+}
+.dlg-data .data-grid__head {
+  font-weight: 800; color: #5a3e2b; padding: 6px 8px;
+  background: #f6efe4; border: 1px solid var(--border); border-radius: 10px;
+}
+.dlg-data .data-grid__row {
+  padding: 8px; background: #fff; border: 1px solid var(--border); border-radius: 10px;
+}
+.dlg-data .data-grid__row .chip {
+  display: inline-block; padding: 4px 8px; border: 1px solid #eadac4;
+  border-radius: 999px; font-weight: 700; background: #fff8ee; white-space: nowrap;
+}
+.dlg-data .data-grid__row .item-titulo {
+  white-space: normal; overflow: visible; word-break: break-word;
+  font-weight: 800; color: #3c2e22;
+}
+.dlg-data .data-grid__row .item-acao a {
+  font-weight: 800; text-decoration: underline; color: #5a3e2b;
+}
+
+/* ====================================================================== */
+/* ===================  CORREÇÕES ESPECÍFICAS  ========================== */
+/* ====================================================================== */
+
+/* === Captação Rápida: inputs não cortam texto e grid ajustado === */
+.fr-card.fr-captacao{ padding:22px 22px 24px; overflow: visible; }
+
+/* 1) Evita corte de placeholder/texto dentro do grid */
+.fr-captacao .ctrl input,
+.fr-captacao .ctrl textarea { min-width: 0; line-height: 1.35; }
+
+/* 2) Grid base e distribuição */
+.fr-captacao .grid-captacao{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: 14px;
+  row-gap: 18px;
+  align-items: start;
+  max-width: 100%;
+}
+
+/* Linha 1: nome / telefone / data / qtd  */
+.fr-captacao .area-nome { grid-column: 1 / span 4; }
+.fr-captacao .area-tel  { grid-column: 5 / span 3; }
+.fr-captacao .area-data { grid-column: 8 / span 3; }
+.fr-captacao .area-qtd  { grid-column: 11 / span 2; }
+
+/* Linha 2 (nova distribuição dando mais espaço) */
+.fr-captacao .area-tipo     { grid-column: 1 / span 3; }
+.fr-captacao .area-local    { grid-column: 4 / span 3; }
+.fr-captacao .area-cardapio { grid-column: 7 / span 3; }
+.fr-captacao .area-vend     { grid-column: 10 / span 3; }
+
+/* Linha 3: observações e ação */
+.fr-captacao .area-obs  { grid-column: 1 / span 10; }
+.fr-captacao .area-acao { grid-column: 11 / span 2; display:flex; align-items:end; justify-content:flex-end; }
+
+/* Responsivo — empilha no mobile */
+@media (max-width: 780px){
+  .fr-captacao .grid-captacao{
+    grid-template-columns: 1fr;
+    column-gap: 12px;
+    row-gap: 14px;
+  }
+  .fr-captacao .area-nome,
+  .fr-captacao .area-tel,
+  .fr-captacao .area-data,
+  .fr-captacao .area-qtd,
+  .fr-captacao .area-tipo,
+  .fr-captacao .area-local,
+  .fr-captacao .area-cardapio,
+  .fr-captacao .area-vend,
+  .fr-captacao .area-obs,
+  .fr-captacao .area-acao{ grid-column: 1 / -1; }
+}
+
+/* === Leads desta feira: duas linhas por item, sem scroll lateral === */
+.tabela{ overflow: visible; border-radius:16px; }
+.tabela::-webkit-scrollbar{ height:0; }   /* esconde se sobrar */
+.thead{ display:none !important; }        /* rótulos vêm do data-label */
+
+.tbody > .row{
+  display:grid !important;
+  grid-template-columns: 1.2fr 1fr 0.9fr 1fr 0.6fr 1fr; /* 6 colunas */
+  grid-auto-rows: auto;
+  gap: 10px 12px;
+  padding: 12px 12px 14px;
+  border-top:1px solid var(--border);
+  background:#fff;
+}
+.tbody .row:nth-child(odd){ background:#fffaf4; }
+.tbody .row:hover{ background:#fff5e9; }
+
+.tbody .cell{
+  border-right:none !important;
+  white-space:normal;
+  overflow:visible;
+  display:block;
+  line-height:1.35;
+  font-size:14px;
+  padding:0;
+}
+.tbody .cell::before{
+  content: attr(data-label);
+  display:block;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.2px;
+  color:#7b6a57;
+  margin-bottom:3px;
+  opacity:.95;
+}
+
+/* Mapeamento de posições (conforme ordem gerada no JS)
+   1 Nome | 2 Telefone | 3 Data | 4 Tipo | 5 Convid. | 6 Local |
+   7 Tipo cardápio | 8 Observações | 9 Vendedor | 10 Cardápio | 11 Ações
+*/
+/* Linha 1 */
+.tbody .row > .cell:nth-child(1){ grid-column:1; grid-row:1; } /* Nome */
+.tbody .row > .cell:nth-child(2){ grid-column:2; grid-row:1; } /* Telefone */
+.tbody .row > .cell:nth-child(3){ grid-column:3; grid-row:1; } /* Data */
+.tbody .row > .cell:nth-child(4){ grid-column:4; grid-row:1; } /* Tipo */
+.tbody .row > .cell:nth-child(5){ grid-column:5; grid-row:1; } /* Convid. */
+.tbody .row > .cell:nth-child(9){ grid-column:6; grid-row:1; } /* Vendedor */
+/* Linha 2 */
+.tbody .row > .cell:nth-child(6){ grid-column:1; grid-row:2; } /* Local */
+.tbody .row > .cell:nth-child(7){ grid-column:2; grid-row:2; } /* Tipo cardápio */
+.tbody .row > .cell:nth-child(8){ grid-column:3 / span 2; grid-row:2; } /* Observações */
+.tbody .row > .cell:nth-child(10){ grid-column:5; grid-row:2; } /* Cardápio */
+.tbody .row > .cell:nth-child(11){ grid-column:6; grid-row:2; } /* Ações */
+
+.tbody .cell .badge{ transform: translateY(1px); }
+.tbody .cell.c{ text-align:right; }
+
+@media (max-width: 900px){
+  .tbody > .row{
+    grid-template-columns: 1.2fr 1fr 0.9fr 1fr 0.6fr 0.9fr;
+    gap: 8px 10px;
+  }
+}
+@media (max-width: 720px){
+  .tbody > .row{ grid-template-columns: 1fr 1fr; }
+  .tbody .row > .cell:nth-child(1){ grid-column:1 / -1; grid-row:auto; }
+  .tbody .row > .cell:nth-child(2),
+  .tbody .row > .cell:nth-child(3),
+  .tbody .row > .cell:nth-child(4),
+  .tbody .row > .cell:nth-child(5),
+  .tbody .row > .cell:nth-child(6),
+  .tbody .row > .cell:nth-child(7),
+  .tbody .row > .cell:nth-child(8),
+  .tbody .row > .cell:nth-child(9),
+  .tbody .row > .cell:nth-child(10),
+  .tbody .row > .cell:nth-child(11){ grid-column:auto; grid-row:auto; }
+}
+
+/* ===== Acabamento do final da lista ===== */
+.tabela{ position:relative; background:#fff; }
+.tabela::after{
+  content:"";
+  position: sticky; bottom: 0; left: 0; right: 0;
+  display:block; height:20px;
+  background: linear-gradient(180deg, #ffffff00 0%, #fff6e8 45%, #f7efe3 100%);
+  border-top:1px solid var(--border); z-index: 1;
+}
+.tbody .row:last-child .cell:first-child{ border-bottom-left-radius:16px; }
+.tbody .row:last-child .cell:last-child{ border-bottom-right-radius:16px; }
+.tbody{ min-height:120px; background: linear-gradient(#fff, #fff) padding-box; }
+.tabela::-webkit-scrollbar-corner{ background:#f7efe3; }
+
+/* Fundo por linha inteira */
+.thead, .tbody > .row{ width:100%; }
+.tbody .row{ position:relative; }
+.tbody .row::before{
+  content:""; position:absolute; inset:0; background:#fff; z-index:0; pointer-events:none;
+}
+.tbody .row:nth-child(odd)::before{ background:#fffaf4; }
+.tbody .row:hover::before{ background:#fff5e9; }
+.tbody .row .cell{ position:relative; background:transparent !important; z-index:1; }
+/* ===== Ajuste fino – Captação Rápida (mais espaço, nada cortado) ===== */
+
+/* ícone ocupa menos, libera pixels pro texto */
+.fr-captacao .ctrl{ padding-left:40px; }
+
+/* afina um pouco o gap pra ganhar área útil */
+.fr-captacao .grid-captacao{ column-gap:12px; }
+
+/* garante que o conteúdo nunca “empurre” o grid */
+.fr-captacao .ctrl input,
+.fr-captacao .ctrl textarea{
+  min-width:0;
+  width:100%;
+  line-height:1.35;
+  font-size:15px;
+}
+
+/* >>> NOVA DISTRIBUIÇÃO DA LINHA 2 (cabem textos maiores) <<<
+   totaliza 12 colunas: 4 + 4 + 2 + 2
+*/
+.fr-captacao .area-tipo     { grid-column: 1 / span 4; }  /* + espaço */
+.fr-captacao .area-local    { grid-column: 5 / span 4; }  /* + espaço */
+.fr-captacao .area-cardapio { grid-column: 9 / span 2; }
+.fr-captacao .area-vend     { grid-column: 11 / span 2; }
+
+/* Linha 3: Observações ganha mais ar; botão ocupa 3 colunas */
+.fr-captacao .area-obs  { grid-column: 1 / span 9; }
+.fr-captacao .area-acao { grid-column: 10 / span 3; display:flex; align-items:end; justify-content:flex-end; }
+
+/* Em telas entre 780–980px damos um respiro extra pras labels */
+@media (max-width: 980px) and (min-width: 781px){
+  .fr-captacao .grid-captacao{ column-gap:10px; }
+  .fr-captacao .area-tipo     { grid-column: 1 / span 5; }
+  .fr-captacao .area-local    { grid-column: 6 / span 4; }
+  .fr-captacao .area-cardapio { grid-column: 10 / span 2; }
+  .fr-captacao .area-vend     { grid-column: 12 / span 1; } /* fica ao lado, compactinho */
+  .fr-captacao .area-obs      { grid-column: 1 / span 8; }
+  .fr-captacao .area-acao     { grid-column: 9 / span 4; }
+}
+
+/* Se algum tema antigo limitar largura interna, força o input a usar 100% */
+.fr-captacao .ctrl > *{ max-width:100%; }
+/* ===== Captação Rápida — versão alinhada & moderna ===== */
+
+/* Card mais “limpo” e com respiro */
+.fr-card.fr-captacao{
+  padding: 22px 22px 24px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(199,172,133,.35), rgba(255,255,255,0)) border-box;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-1);
+  overflow: visible;
+}
+
+/* Grid 12 colunas, gaps suaves e alturas consistentes */
+.fr-captacao .grid-captacao{
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: 14px;
+  row-gap: 18px;
+  align-items: start;
+}
+
+/* Linha 1 */
+.fr-captacao .area-nome { grid-column: 1 / span 4; }
+.fr-captacao .area-tel  { grid-column: 5 / span 4; }
+.fr-captacao .area-data { grid-column: 9 / span 2; }
+.fr-captacao .area-qtd  { grid-column: 11 / span 2; }
+
+/* Linha 2 (campos longos com mais largura real) */
+.fr-captacao .area-tipo     { grid-column: 1 / span 4; }
+.fr-captacao .area-local    { grid-column: 5 / span 4; }
+.fr-captacao .area-cardapio { grid-column: 9 / span 2; }
+.fr-captacao .area-vend     { grid-column: 11 / span 2; }
+
+/* Linha 3 (Obs + Botão alto e alinhado) */
+.fr-captacao .area-obs  { grid-column: 1 / span 9; }
+.fr-captacao .area-acao {
+  grid-column: 10 / span 3;
+  display: flex; align-items: stretch; justify-content: flex-end;
+}
+
+/* Botão ocupa a altura do bloco para equilibrar o layout */
+.fr-captacao .area-acao .btn{
+  width: 100%;
+  min-height: 56px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+}
+
+/* Tipografia & labels mais equilibradas */
+.fr-captacao .field{ gap: 6px; }
+.fr-captacao .field > label{
+  font-size: 12px; font-weight: 800; letter-spacing: .2px;
+  color: #6c4f34;
+}
+
+/* Controles com ícone mais delicado e área útil maior para texto */
+.fr-captacao .ctrl{ padding-left: 40px; min-height: 56px; }
+.fr-captacao .ctrl i{
+  left: 12px; width: 18px; height: 18px; opacity: .50;
+  background: #fbf6ee; border-radius: 8px; padding: 3px;
+}
+.fr-captacao .ctrl input,
+.fr-captacao .ctrl textarea{
+  min-width: 0; width: 100%;
+  line-height: 1.35; font-size: 15px;
+  /* evita “pular” texto e dá mais espaço interno */
+}
+
+/* Feedback sutil de foco/hover para aspecto premium */
+.fr-captacao .ctrl:hover{
+  box-shadow: 0 1px 0 rgba(0,0,0,.02), var(--shadow-1);
+}
+.fr-captacao .ctrl:focus-within{
+  border-color: transparent;
+  box-shadow: var(--ring), var(--shadow-1);
+}
+
+/* Separador visual entre linhas (sutil, sem poluir) */
+.fr-captacao .area-tipo::before{
+  content:""; display:block;
+  height: 1px; margin: 6px 0 8px 0;
+  background: linear-gradient(90deg, rgba(231,222,206,0), rgba(231,222,206,.9), rgba(231,222,206,0));
+}
+
+/* Ajustes de responsividade médios (cabine perfeita entre 781–1100px) */
+@media (max-width: 1100px) and (min-width: 781px){
+  .fr-captacao .grid-captacao{ column-gap: 12px; }
+  .fr-captacao .area-tipo     { grid-column: 1 / span 5; }
+  .fr-captacao .area-local    { grid-column: 6 / span 4; }
+  .fr-captacao .area-cardapio { grid-column: 10 / span 2; }
+  .fr-captacao .area-vend     { grid-column: 12 / span 1; }
+  .fr-captacao .area-obs      { grid-column: 1 / span 8; }
+  .fr-captacao .area-acao     { grid-column: 9 / span 4; }
+}
+
+/* Mobile: empilha em 1 coluna, com botão 100% largura */
+@media (max-width: 780px){
+  .fr-captacao .grid-captacao{
+    grid-template-columns: 1fr;
+    column-gap: 12px; row-gap: 14px;
+  }
+  .fr-captacao .area-nome,
+  .fr-captacao .area-tel,
+  .fr-captacao .area-data,
+  .fr-captacao .area-qtd,
+  .fr-captacao .area-tipo,
+  .fr-captacao .area-local,
+  .fr-captacao .area-cardapio,
+  .fr-captacao .area-vend,
+  .fr-captacao .area-obs,
+  .fr-captacao .area-acao{ grid-column: 1 / -1; }
+  .fr-captacao .area-acao .btn{ width: 100%; }
+}
+/* ===== Reordenação solicitada (Captação Rápida) ===== */
+
+/* Linha A (topo): Nome | Telefone | Data */
+.fr-captacao .area-nome { grid-column: 1 / span 5; }   /* 1–5  */
+.fr-captacao .area-tel  { grid-column: 6 / span 4; }   /* 6–9  */
+.fr-captacao .area-data { grid-column: 10 / span 3; }  /* 10–12 */
+
+/* Linha B: Tipo do evento | Local | Qtd. convidados (ao lado de Local) */
+.fr-captacao .area-tipo { grid-column: 1 / span 5; }   /* 1–5  */
+.fr-captacao .area-local{ grid-column: 6 / span 5; }   /* 6–10 */
+.fr-captacao .area-qtd  { grid-column: 11 / span 2; }  /* 11–12 */
+
+/* Linha C: Tipo de cardápio (maior) | Vendedor responsável (ao lado) */
+.fr-captacao .area-cardapio { grid-column: 1 / span 7; }  /* 1–7  (MAIOR) */
+.fr-captacao .area-vend     { grid-column: 8 / span 5; }  /* 8–12 */
+
+/* Linha D: Observações + botão (mantém) */
+.fr-captacao .area-obs  { grid-column: 1 / span 9; }
+.fr-captacao .area-acao { grid-column: 10 / span 3; display:flex; align-items:end; justify-content:flex-end; }
+
+/* Segurança: nada corta texto por causa do grid */
+.fr-captacao .ctrl input,
+.fr-captacao .ctrl textarea { min-width: 0; width: 100%; }
+
+/* Responsivo médio — distribuições proporcionais */
+@media (max-width: 1100px) and (min-width: 781px){
+  .fr-captacao .area-nome { grid-column: 1 / span 6; }
+  .fr-captacao .area-tel  { grid-column: 7 / span 3; }
+  .fr-captacao .area-data { grid-column: 10 / span 3; }
+
+  .fr-captacao .area-tipo  { grid-column: 1 / span 5; }
+  .fr-captacao .area-local { grid-column: 6 / span 5; }
+  .fr-captacao .area-qtd   { grid-column: 11 / span 2; }
+
+  .fr-captacao .area-cardapio { grid-column: 1 / span 7; }
+  .fr-captacao .area-vend     { grid-column: 8 / span 5; }
+
+  .fr-captacao .area-obs  { grid-column: 1 / span 8; }
+  .fr-captacao .area-acao { grid-column: 9 / span 4; }
+}
+
+/* Mobile segue empilhando 1 coluna (já definido antes) */
+/* ===== Captação Rápida — layout na ordem que você pediu =====
+   Linhas:
+   A) Nome | Telefone | Data
+   B) Tipo do evento | Local | Qtd.
+   C) Tipo de cardápio (MAIOR) | Vendedor
+   D) Observações | Botão
+*/
+
+/* grade base (garantia) */
+.fr-captacao .grid-captacao{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: 14px;
+  row-gap: 18px;
+  align-items: start;
+}
+
+/* linha A */
+.fr-captacao .area-nome { grid-row: 1; grid-column: 1 / span 5; }   /* 1–5  */
+.fr-captacao .area-tel  { grid-row: 1; grid-column: 6 / span 4; }   /* 6–9  */
+.fr-captacao .area-data { grid-row: 1; grid-column: 10 / span 3; }  /* 10–12 */
+
+/* linha B (Local ao lado de Tipo, Qtd. ao lado de Local) */
+.fr-captacao .area-tipo  { grid-row: 2; grid-column: 1 / span 4; }  /* 1–4  */
+.fr-captacao .area-local { grid-row: 2; grid-column: 5 / span 5; }  /* 5–9  */
+.fr-captacao .area-qtd   { grid-row: 2; grid-column: 10 / span 3; } /* 10–12 */
+
+/* linha C (Cardápio MAIOR abaixo de Tipo; Vendedor ao lado) */
+.fr-captacao .area-cardapio { grid-row: 3; grid-column: 1 / span 8; } /* 1–8  */
+.fr-captacao .area-vend     { grid-row: 3; grid-column: 9 / span 4; } /* 9–12 */
+
+/* linha D (Obs + Botão) */
+.fr-captacao .area-obs  { grid-row: 4; grid-column: 1 / span 9; }
+.fr-captacao .area-acao { grid-row: 4; grid-column: 10 / span 3; display:flex; align-items:end; justify-content:flex-end; }
+
+/* refinamentos pra não cortar texto e ficar mais “clean” */
+.fr-captacao .ctrl{ padding-left:40px; min-height:56px; }
+.fr-captacao .ctrl input,
+.fr-captacao .ctrl textarea{ min-width:0; width:100%; line-height:1.35; font-size:15px; }
+
+/* responsivo médio: conserva a ordem e respira */
+@media (max-width: 1100px) and (min-width: 781px){
+  .fr-captacao .grid-captacao{ column-gap:12px; }
+  .fr-captacao .area-cardapio{ grid-column: 1 / span 7; } /* um pouco menor no médio */
+  .fr-captacao .area-vend    { grid-column: 8 / span 5; }
+  .fr-captacao .area-obs     { grid-column: 1 / span 8; }
+  .fr-captacao .area-acao    { grid-column: 9 / span 4; }
+}
+
+/* mobile já empilha 1 coluna nas regras existentes */
+/* ===== Indicadores - grid flexível p/ 7 cards ===== */
+.fr-indicadores{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap:14px;
+  margin:12px 16px 2px;
+}
+
+/* Valores monetários ficam com largura certa e não quebram estranho */
+#indTicket{
+  white-space: nowrap;
+}
+/* === MINI-PAINEL: Analytics por Feira === */
+.fr-analytics h2{
+  margin:0; color:#5a3e2b; font-size:16px; font-weight:900; letter-spacing:.2px;
+}
+.fr-analytics.hidden{ display:none !important; }
+.fr-analytics .fa-head{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;
+}
+.fr-analytics .fa-grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(220px,1fr));
+  gap:14px;
+}
+.fr-analytics .fa-box{
+  border:1px solid var(--border);
+  border-radius:14px; padding:14px; background:#fff; box-shadow: var(--shadow-1);
+}
+.fr-analytics .fa-box.fa-wide{ grid-column: 1 / -1; }
+.fr-analytics .fa-k{ font-size:12px; color:#7a5633; font-weight:800; letter-spacing:.2px; margin-bottom:4px; }
+.fr-analytics .fa-v{ font-size:24px; font-weight:900; color:var(--text); }
+.fr-analytics .fa-hint{ font-size:12px; color:#7b6a57; margin-top:6px; }
+
+.fa-progress{ margin-top:10px; }
+.fa-progress-bar{
+  height:10px; border-radius:999px; background:#f2eadf; overflow:hidden; border:1px solid #eadac4;
+}
+.fa-progress-bar > span{
+  display:block; height:100%;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  width:0%;
+}
+.fa-progress-meta{
+  display:flex; justify-content:space-between; margin-top:6px; color:#7b6a57; font-size:12px;
+}
+
+.fa-chart{
+  height:140px; border:1px dashed var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; background:#fffaf4;
+}
+.fa-legend{ margin-top:8px; color:#7b6a57; font-size:12px; display:flex; align-items:center; gap:8px; }
+.fa-legend .dot{
+  width:10px; height:10px; border-radius:999px; background:#b6916a; border:1px solid #8d6f49; display:inline-block;
+}
+
+@media (max-width: 980px){
+  .fr-analytics .fa-grid{ grid-template-columns: 1fr; }
+}
+/* === DASHBOARD DE RETORNO POR FEIRA === */
+.fr-retorno.hidden{ display:none !important; }
+.fr-retorno-head{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;
+}
+.fr-retorno-head h2{ margin:0; color:#5a3e2b; font-size:16px; font-weight:900; }
+.fr-retorno-actions{ display:flex; gap:10px; align-items:center; }
+
+.fr-retorno-grid{
+  display:grid; grid-template-columns: repeat(5, minmax(200px,1fr)); gap:14px;
+}
+.fr-retorno-grid .box{
+  border:1px solid var(--border); border-radius:14px; padding:14px; background:#fff; box-shadow: var(--shadow-1);
+}
+.fr-retorno-grid .k{ font-size:12px; color:#7a5633; font-weight:800; letter-spacing:.2px; margin-bottom:4px; }
+.fr-retorno-grid .v{ font-size:22px; font-weight:900; color:var(--text); }
+.fr-retorno-grid .hint{ margin-top:6px; font-size:12px; color:#7b6a57; }
+
+.roi-bar{ margin-top:16px; }
+.roi-legend{ display:flex; justify-content:space-between; font-size:12px; color:#7b6a57; margin-bottom:6px; }
+.roi-track{
+  height:12px; border-radius:999px; border:1px solid #eadac4; background:#f2eadf; overflow:hidden;
+}
+.roi-track > span{
+  display:block; height:100%; background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  width:0%;
+}
+.roi-meta{ margin-top:6px; color:#7b6a57; font-size:12px; }
+
+@media (max-width: 1080px){
+  .fr-retorno-grid{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px){
+  .fr-retorno-grid{ grid-template-columns: 1fr; }
+}
+/* ===== MENU MOBILE – BACKDROP + TRAVAR SCROLL ===== */
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:900;
+}
+
+/* Travar scroll quando o menu estiver aberto */
+body.no-scroll{
+  overflow:hidden;
+}
+
+/* Esconde o botão hambúrguer no desktop (já fica com menu fixo) */
+@media (min-width: 769px){
+  #hamburguer{
+    display:none;
+  }
+}

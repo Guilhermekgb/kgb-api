@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:eventos-arquivados.html">
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH HEAD (common + guard) === -->
+<meta name="page-permission" content="page:eventos-arquivados.html">
+
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- (Opcional) ativar enforcement do guard uma vez -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard (usa helpers do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH HEAD (common + guard) === -->
+
+  <title>Eventos Arquivados</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- CSS específico desta página -->
+  <link rel="stylesheet" href="eventos-arquivados.css" />
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado via JS do projeto) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="archive"></i> Eventos Arquivados</h1>
+
+        <!-- Filtros -->
+        <section class="filtros card">
+          <div class="campo-busca">
+            <i data-lucide="search"></i>
+            <input id="busca" type="text" placeholder="Buscar por evento, cliente, data ou local..." />
+          </div>
+
+          <div class="linha-filtros">
+            <select id="filtroClass" title="Filtrar por classificação">
+              <option value="">Todas as classificações</option>
+              <option value="realizado">Evento realizado</option>
+              <option value="cancelado">Evento cancelado</option>
+              <option value="em_pausa">Evento em pausa</option>
+              <option value="adiado">Evento adiado/remarcado</option>
+            </select>
+
+            <select id="ordenarPor" title="Ordenar por">
+              <option value="data_arquivamento_desc">Mais recentemente arquivados</option>
+              <option value="data_evento_desc">Data do evento (mais recentes)</option>
+              <option value="data_evento_asc">Data do evento (mais antigos)</option>
+              <option value="nome_asc">Nome do evento (A–Z)</option>
+            </select>
+
+            <span class="muted" id="contador">0 evento(s)</span>
+          </div>
+        </section>
+
+        <!-- Lista -->
+        <section id="listaArquivados" class="lista"></section>
+
+        <!-- Estado vazio -->
+        <section id="vazio" class="vazio card" style="display:none">
+          <div class="icone"><i data-lucide="inbox"></i></div>
+          <h3>Nenhum evento arquivado</h3>
+          <p>Quando você arquivar eventos, eles aparecerão aqui em modo apenas leitura.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="eventos-arquivados.js" defer></script>
+
+  <script>
+    // Ícones
+    document.addEventListener('DOMContentLoaded', () => { window.lucide?.createIcons?.(); });
+
+    // Ajuste de margem no desktop para o conteúdo não ficar sob o menu
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // Recria ícones quando o menu terminar de injetar
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((m, o) => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+  <!-- Botão de fechar dentro do menu lateral (mobile) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menu = document.getElementById('menuLateral');
+      const btnHamb = document.getElementById('hamburguer');
+      if (!menu || !btnHamb) return;
+
+      function criarBotaoFechar() {
+        if (menu.querySelector('#fecharMenuMobile')) return;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.id = 'fecharMenuMobile';
+        closeBtn.type = 'button';
+        closeBtn.setAttribute('aria-label', 'Fechar menu');
+        closeBtn.innerHTML = '<i data-lucide="x"></i>';
+        closeBtn.style.cssText = `
+          display:none;
+          position:absolute;
+          top:12px;
+          right:12px;
+          border:none;
+          border-radius:8px;
+          padding:6px 10px;
+          font-size:20px;
+          background:#c29a5d;
+          color:#fff;
+          z-index:1200;
+        `;
+
+        menu.prepend(closeBtn);
+
+        // Só aparece em celular/tablet
+        const atualizarVisibilidade = () => {
+          closeBtn.style.display = (window.innerWidth <= 768) ? 'block' : 'none';
+        };
+        atualizarVisibilidade();
+        window.addEventListener('resize', atualizarVisibilidade);
+
+        // Clicar no X faz o mesmo que clicar no hambúrguer
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          btnHamb.click();
+        });
+
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+
+      // Espera o menu ser injetado pelo menu-lateral.js
+      if (menu.firstElementChild) {
+        criarBotaoFechar();
+      } else {
+        try {
+          const obs = new MutationObserver((m, o) => {
+            if (menu.firstElementChild) {
+              criarBotaoFechar();
+              o.disconnect();
+            }
+          });
+          obs.observe(menu, { childList: true });
+        } catch(e){}
+      }
+    });
+  </script>
+</body>
+</html>
+

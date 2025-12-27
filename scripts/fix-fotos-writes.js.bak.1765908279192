@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const IGNORES = ['node_modules', '.git', 'backups', 'reports'];
+
+function walk(dir){
+  const out = [];
+  for (const it of fs.readdirSync(dir, { withFileTypes: true })){
+    const fp = path.join(dir, it.name);
+    if (IGNORES.includes(it.name)) continue;
+    if (it.isDirectory()) out.push(...walk(fp));
+    else if (it.isFile() && /\.(js|html)$/i.test(it.name)) out.push(fp);
+  }
+  return out;
+}
+
+const writePattern = /localStorage\.setItem\(\s*['"]fotosClientes['"]\s*,\s*JSON\.stringify\(([^)]+)\)\s*\)\s*;?/g;
+
+function backup(file){
+  const bak = file + '.bak.' + Date.now();
+  fs.copyFileSync(file, bak);
+}
+
+function makeReplacement(varName){
+  return `(() => { try{ if(window.storageAdapter && typeof window.storageAdapter.setJSON === 'function'){ window.storageAdapter.setJSON('fotosClientes', ${varName}); } else if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ try{ window.storageAdapter.setRaw('fotosClientes', JSON.stringify(${varName})); }catch(e){} } else { try{ localStorage.setItem('fotosClientes', JSON.stringify(${varName})); }catch(e){} } }catch(e){} })()`;
+}
+
+function processFile(file){
+  let src = fs.readFileSync(file, 'utf8');
+  let m;
+  let changed = false;
+  const replacements = [];
+  while((m = writePattern.exec(src)) !== null){
+    const varName = m[1].trim();
+    const repl = makeReplacement(varName);
+    replacements.push({ from: m[0], to: repl });
+  }
+  if (replacements.length){
+    backup(file);
+    for (const r of replacements) src = src.split(r.from).join(r.to);
+    fs.writeFileSync(file, src, 'utf8');
+    changed = true;
+    console.log('[fix-writes] updated', file);
+  }
+  return changed;
+}
+
+function main(){
+  const files = walk(ROOT);
+  let total = 0;
+  for (const f of files) if (processFile(f)) total++;
+  console.log('[fix-writes] done. files updated:', total);
+}
+
+main();
