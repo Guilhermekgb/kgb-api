@@ -392,6 +392,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Parser JSON global: deve ser declarado ANTES das rotas que esperam `req.body`.
+// Mantemos rotas webhook que usam `rawJson` especificando `express.raw()` localmente.
+app.use(express.json({ limit: '50mb' }));
+
 // ========================= PATCH F.0 — bases, storage utils, journal =========================
 const DATA_DIR = path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
@@ -488,7 +492,8 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
   }
 });
 // === POST /leads — cria ou atualiza um lead (Módulo 7) ===
-app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.post('/leads', express.json({ limit: '50mb' }), verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const body     = req.body || {};
@@ -538,14 +543,12 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 
     saveJSON(LEADS_FILE, leads);
 
-    // devolve id e token pro front
-    return res.json({
-      ok: true,
-      data: {
-        id: leadBase.id,
-        token: leadBase.token
-      }
-    });
+    // Log e retorno do lead completo (para o front receber os campos enviados)
+    const savedLead = (idx >= 0) ? leads[idx] : leadBase;
+    console.log('[POST /leads] body:', body);
+    console.log('[POST /leads] saved:', savedLead && (typeof savedLead === 'object' ? JSON.stringify(savedLead) : savedLead));
+
+    return res.json({ ok: true, data: savedLead });
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
@@ -1077,8 +1080,7 @@ app.post('/webhooks/assinaturas', rawJson, (req, res) => {
   return res.json({ ok: true });
 });
 
-// Depois dos webhooks em raw:
-app.use(express.json({ limit: '50mb' }));
+// Depois dos webhooks em raw: (parse global já declarado antes das rotas)
 
 // ========================= M6 – Funil de Leads: API básica =========================
 
@@ -1244,6 +1246,47 @@ app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res)
 // ======================================================
 //  ORÇAMENTOS – /orcamentos  (Módulo 7)
 // ======================================================
+
+// GET /orcamentos → lista orçamentos (filtra por tenant e opcional ?ids=1,2)
+app.get('/orcamentos', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const all = loadJSON(ORCAMENTOS_FILE, []);
+    let orcs = Array.isArray(all) ? all.filter(o => String(o.tenantId || 'default') === tenantId) : [];
+
+    const idsStr = String(req.query.ids || '').trim();
+    if (idsStr) {
+      const idSet = new Set(idsStr.split(',').map(s => s.trim()).filter(Boolean));
+      orcs = orcs.filter(o => idSet.has(String(o.id)));
+    }
+
+    return res.json(orcs);
+  } catch (e) {
+    console.error('[GET /orcamentos] erro:', e);
+    return res.status(500).json({ error: 'Erro ao listar orçamentos' });
+  }
+});
+
+// GET /orcamentos/:id → retorna um orçamento específico
+app.get('/orcamentos/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+
+    if (!id) return res.status(400).json({ error: 'id obrigatório' });
+
+    const all = loadJSON(ORCAMENTOS_FILE, []);
+    const orcs = Array.isArray(all) ? all : [];
+
+    const orc = orcs.find(o => String(o.id) === id && String(o.tenantId || 'default') === tenantId);
+    if (!orc) return res.status(404).json({ error: 'Orçamento não encontrado' });
+
+    return res.json({ ok: true, data: orc });
+  } catch (e) {
+    console.error('[GET /orcamentos/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar orçamento' });
+  }
+});
 
 // POST /orcamentos → cria ou atualiza um orçamento
 // A ideia é funcionar como "upsert": se vier id, atualiza; se não vier, cria um novo.
