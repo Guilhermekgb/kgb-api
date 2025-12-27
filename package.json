@@ -10,6 +10,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "test:orcamentos": "node ./tests/test-orcamentos.js",
+    "test:orcamentos:clean": "node ./tests/test-orcamentos-clean.js || true",
     "contracts": "node contracts.js"
   },
   "dependencies": {

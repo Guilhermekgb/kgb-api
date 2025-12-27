@@ -1,18 +1,8 @@
-# NPM
+﻿reports/
 node_modules/
-
-# Env (segredos)
 .env
 .env.*
-*.env
-
-# Banco/arquivos locais
-*.db
-*.db-shm
-*.db-wal
+data.db*
 data/
 uploads/
-
-# Logs e CSVs locais
 *.log
-*.csv

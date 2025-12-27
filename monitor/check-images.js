@@ -44,7 +44,7 @@ async function checkFile(pathOrUrl, cloudName) {
     html = fs.readFileSync(pathOrUrl, 'utf8');
   }
   const urls = extractCloudinaryUrls(html, cloudName);
-  if (!urls.length) return { path, ok: true, checked: 0 };
+  if (!urls.length) return { path: pathOrUrl, ok: true, checked: 0 };
   const results = [];
   for (const u of urls) {
     try {
@@ -55,7 +55,7 @@ async function checkFile(pathOrUrl, cloudName) {
     }
   }
   const failed = results.filter(r => r.statusCode !== 200);
-  return { path, ok: failed.length === 0, checked: results.length, results };
+  return { path: pathOrUrl, ok: failed.length === 0, checked: results.length, results };
 }
 
 async function main() {
