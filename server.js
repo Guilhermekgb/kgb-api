@@ -957,6 +957,9 @@ async function verifyFirebaseToken(req, res, next) {
 
 function ensureAllowed(area /* 'audit' | 'finance' | 'contracts' | 'sync' | 'admin' */) {
   return (req, res, next) => {
+    // Permite tudo em modo de desenvolvimento quando DISABLE_AUTH=1
+    if (String(process.env.DISABLE_AUTH||'0') === '1') return next();
+
     const rolesOk = ROLES[area]||[];
     const userRoles = req.user?.roles||[];
     const allowed = userRoles.some(r => rolesOk.includes(r));
