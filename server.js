@@ -1298,6 +1298,41 @@ app.get('/orcamentos/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res
   }
 });
 
+// PUT /orcamentos/:id → atualiza parcialmente um orçamento existente
+app.put('/orcamentos/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const orcId = String(req.params.id || '').trim();
+    if (!orcId) return res.status(400).json({ error: 'id obrigatório' });
+
+    const body = req.body || {};
+    const all = loadJSON(ORCAMENTOS_FILE, []);
+    const orcs = Array.isArray(all) ? all : [];
+
+    const idx = orcs.findIndex(o => String(o.id) === orcId && String(o.tenantId || 'default') === tenantId);
+    if (idx < 0) return res.status(404).json({ error: 'Orçamento não encontrado' });
+
+    const antigo = orcs[idx];
+    const agora = new Date().toISOString();
+
+    // Atualiza apenas os campos permitidos (dados e leadId por enquanto)
+    const atualizado = {
+      ...antigo,
+      leadId: body.leadId !== undefined ? body.leadId : antigo.leadId,
+      dados: body.dados !== undefined ? body.dados : antigo.dados,
+      updatedAt: agora
+    };
+
+    orcs[idx] = atualizado;
+    saveJSON(ORCAMENTOS_FILE, orcs);
+
+    return res.json({ ok: true, orcamento: atualizado });
+  } catch (e) {
+    console.error('[PUT /orcamentos/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao atualizar orçamento' });
+  }
+});
+
 // POST /orcamentos → cria ou atualiza um orçamento
 // A ideia é funcionar como "upsert": se vier id, atualiza; se não vier, cria um novo.
 app.post('/orcamentos', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
