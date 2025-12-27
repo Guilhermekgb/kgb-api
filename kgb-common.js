@@ -94,13 +94,18 @@ const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } ca
       });
     }
 
-    // Tenta carregar adapter primeiro; quando pronto, chama preload.
-    // Nota: removida a injeção automática do shim `fotos-shim.js` — o projeto
-    // agora usa `storage-adapter` e `data/fotos-clientes-cloud-ready.json`.
+    // Injeta o shim síncrono primeiro para garantir que páginas que dependem
+    // de leituras síncronas (`getFotosClientesSync` / `localStorage.fotosClientes`)
+    // tenham acesso imediato ao mapa, minimizando flash-of-empty-state.
+    insertScript(shimUrl, { async: false, timeout: 3000 }).then(()=>{
+      // shim carregado (ou timeout) — prossegue para tentar carregar o adapter
+    }).catch(()=>{});
+
+    // Tenta carregar adapter em seguida; quando pronto, chama preload.
     insertScript(adapterUrl, { async: false, timeout: 8000 }).then((ok)=>{
       try{ if (window.storageAdapter && typeof window.storageAdapter.preload === 'function') window.storageAdapter.preload().catch(()=>{}); }catch(e){}
     }).catch(()=>{
-      // não tenta injetar o shim como fallback
+      // adapter não disponível — shim ainda oferece fallback local
     });
   }catch(e){ /* ignore */ }
 })();
