@@ -36,31 +36,8 @@ const toNum = v => (typeof v === 'number') ? v
 const readLS = (k, fb=null) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
 const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-// Shim: quando `window.storageAdapter.patchFotos` existir, espelha chamadas
-// que escrevem a key `fotosClientes` para o backend via `patchFotos`.
-// Isso permite migrar incrementalmente sem alterar centenas de arquivos.
-(function(){
-  try{
-    if (typeof window === 'undefined') return;
-    const sa = window.storageAdapter;
-    if (!sa || typeof sa.patchFotos !== 'function') return;
-    const nativeSet = window.localStorage.setItem.bind(window.localStorage);
-    window.localStorage.setItem = function(k, v){
-      try{
-        if (String(k) === 'fotosClientes'){
-          try{
-            const obj = JSON.parse(String(v || '{}')) || {};
-            // envia cada chave individualmente (patch) — não bloqueante
-            for (const kk of Object.keys(obj)){
-              try{ sa.patchFotos(kk, obj[kk]); } catch(e){ /* ignore */ }
-            }
-          } catch(e){ /* ignore malformed payload */ }
-        }
-      } catch(e){ /* ignore shim errors */ }
-      return nativeSet(k, v);
-    };
-  } catch(e){ /* gagal silently */ }
-})();
+// Nota: shim legado removido — usamos `storage-adapter` assíncrono e testes
+// runtime (headless) garantem que não haja flash-of-empty após migração.
 
 // === Loader dinâmico para `storage-adapter` + `fotos-shim` ===
 // Carrega os scripts no bootstrap para evitar editar muitos HTML.
@@ -76,7 +53,6 @@ const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 
     const origin = (location && location.origin && location.origin !== 'null') ? location.origin : '';
     const adapterUrl = origin ? `${origin}/kgb-api/public/api/storage-adapter.js` : './kgb-api/public/api/storage-adapter.js';
-    const shimUrl    = origin ? `${origin}/kgb-api/public/js/fotos-shim.js` : './kgb-api/public/js/fotos-shim.js';
 
     function insertScript(src, opts={async:false, timeout:8000}){
       return new Promise((resolve)=>{
@@ -95,8 +71,8 @@ const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } ca
     }
 
     // Tenta carregar adapter primeiro; quando pronto, chama preload.
-    // Nota: removida a injeção automática do shim `fotos-shim.js` — o projeto
-    // agora usa `storage-adapter` e `data/fotos-clientes-cloud-ready.json`.
+    // Observação: o shim legado foi removido; preferimos o adapter e o
+    // arquivo `data/fotos-clientes-cloud-ready.json` para fallback offline.
     insertScript(adapterUrl, { async: false, timeout: 8000 }).then((ok)=>{
       try{ if (window.storageAdapter && typeof window.storageAdapter.preload === 'function') window.storageAdapter.preload().catch(()=>{}); }catch(e){}
     }).catch(()=>{
