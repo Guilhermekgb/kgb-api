@@ -24,14 +24,16 @@ jobs:
         working-directory: kgb-api
         run: |
           nohup node dev-server.js --port 3333 > dev-server.log 2>&1 &
-          sleep 3
+          # wait a bit more for the server to be ready
+          sleep 6
 
       - name: Run headless orçamentos smoke test
         working-directory: kgb-api
         env:
           BASE_URL: http://localhost:3333
         run: |
-          node tests/headless-orcamentos.js || true
+          # capture stdout to a file so we can upload as artifact
+          node tests/headless-orcamentos.js > headless-output.json || true
 
       - name: Upload dev-server log
         if: always()
@@ -40,9 +42,16 @@ jobs:
           name: dev-server-log
           path: kgb-api/dev-server.log
 
-      - name: Upload test reports
+      - name: Upload headless test output
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: headless-orcamentos-output
-          path: kgb-api/reports || kgb-api/tests || .
+          path: kgb-api/headless-output.json
+
+      - name: Upload test reports (fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-orcamentos-reports
+          path: kgb-api/reports
