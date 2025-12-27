@@ -298,14 +298,14 @@ function migrateLeadsStorage(){
   if (!Array.isArray(leads) || leads.length === 0) return [];
 
   const compacted = leads.map(compactLead);
-  try { localStorage.setItem("leads", JSON.stringify(compacted)); } catch {}
+  try { await storageSetRaw("leads", compacted); } catch { try { localStorage.setItem("leads", JSON.stringify(compacted)); } catch {} }
   return compacted;
 }
 
 function safeSaveLeads(leadsArr){
   const compactArr = leadsArr.map(compactLead);
   try {
-    localStorage.setItem("leads", JSON.stringify(compactArr));
+    try { await storageSetRaw("leads", compactArr); } catch { try { localStorage.setItem("leads", JSON.stringify(compactArr)); } catch {} }
     return;
   } catch (e1) {
     // tenta compactar os existentes
@@ -313,12 +313,12 @@ function safeSaveLeads(leadsArr){
     try {
       const map = new Map(existing.map(l => [String(l.id), l]));
       for (const l of compactArr) map.set(String(l.id), l);
-      localStorage.setItem("leads", JSON.stringify(Array.from(map.values())));
+      try { await storageSetRaw("leads", Array.from(map.values())); } catch { try { localStorage.setItem("leads", JSON.stringify(Array.from(map.values()))); } catch {} }
       return;
     } catch (e2) {
       // último recurso: guarda só o mais novo localmente e joga o resto na sessão
       const last = compactLead(compactArr[compactArr.length - 1]);
-      try { localStorage.setItem("leads", JSON.stringify([last])); } catch {}
+      try { await storageSetRaw("leads", [last]); } catch { try { localStorage.setItem("leads", JSON.stringify([last])); } catch {} }
       try {
         const idx = JSON.parse(sessionStorage.getItem("leadsOverflowIndex") || "[]");
         idx.push(last.id);
@@ -352,7 +352,7 @@ function notificarResponsavel(destinatarioNomeOuEmail, titulo, leadId){
     leadId,
     destinatarioNome: destinatarioNomeOuEmail
   });
-  localStorage.setItem("notificacoes", JSON.stringify(notificacoes));
+  try { await storageSetRaw("notificacoes", notificacoes); } catch { try { localStorage.setItem("notificacoes", JSON.stringify(notificacoes)); } catch {} }
 
   const quem = (usuarioLogado?.nome || usuarioLogado?.email || "").trim();
   if(quem && destinatarioNomeOuEmail && quem === destinatarioNomeOuEmail){
@@ -939,7 +939,7 @@ async function salvarLeadFunil(nextAction) {
     const ix = arr.findIndex(l => String(l.id) === String(novoLead.id));
     if (ix >= 0) arr[ix] = { ...arr[ix], ...novoLead };
     else arr.unshift(novoLead);
-    localStorage.setItem(k, JSON.stringify(arr));
+    try { await storageSetRaw(k, arr); } catch { try { localStorage.setItem(k, JSON.stringify(arr)); } catch {} }
   } catch(e){ console.warn("fallback write leads:", e); }
   // >>> NOVO: salvar orçamento na API quando for "Gerar Proposta"
   if (String(nextAction || '').toLowerCase() === 'proposta') {
@@ -1013,7 +1013,7 @@ async function salvarLeadFunil(nextAction) {
       const i = idx.findIndex(p => String(p.id) === String(novoLead.id));
       if (i >= 0) idx[i] = { ...idx[i], ...item };
     }
-    localStorage.setItem(k, JSON.stringify(idx.slice(0,800)));
+    try { await storageSetRaw(k, idx.slice(0,800)); } catch { try { localStorage.setItem(k, JSON.stringify(idx.slice(0,800))); } catch {} }
   } catch(e){ console.warn("fallback propostasIndex:", e); }
 
   // ===== notificações locais =====
@@ -1040,7 +1040,7 @@ async function salvarLeadFunil(nextAction) {
       leadId: novoLead.id,
       destinatarioNome: novoLead.responsavel
     });
-    localStorage.setItem("notificacoes", JSON.stringify(notificacoes));
+    try { await storageSetRaw("notificacoes", notificacoes); } catch { try { localStorage.setItem("notificacoes", JSON.stringify(notificacoes)); } catch {} }
   } catch {}
 
   if ((usuarioLogado?.nome || usuarioLogado?.email) === novoLead.responsavel) {
@@ -1049,8 +1049,8 @@ async function salvarLeadFunil(nextAction) {
 
   // ===== preparar o Funil (reset + foco) =====
   try {
-    localStorage.setItem("funil_reset_filters", "1");
-    localStorage.setItem("funil_focus_lead", String(novoLead.id));
+    try { await storageSetRaw("funil_reset_filters", "1"); } catch { try { localStorage.setItem("funil_reset_filters", "1"); } catch {} }
+    try { await storageSetRaw("funil_focus_lead", String(novoLead.id)); } catch { try { localStorage.setItem("funil_focus_lead", String(novoLead.id)); } catch {} }
   } catch {}
 
   // ===== redirecionamento conforme ação =====
@@ -1101,7 +1101,7 @@ async function salvarLeadFunil(nextAction) {
         const ix = arr.findIndex(l => String(l.id) === String(lead.id));
         if (ix >= 0) arr[ix] = { ...arr[ix], ...lead };
         else arr.unshift(lead);
-        localStorage.setItem("leads", JSON.stringify(arr));
+        try { await storageSetRaw("leads", arr); } catch { try { localStorage.setItem("leads", JSON.stringify(arr)); } catch {} }
       } catch (e) { console.warn("fallback saveLead:", e); }
     };
   }
@@ -1176,7 +1176,7 @@ function adicionarPacotesSelecionados() {
 (function(){
   function $(id){ return document.getElementById(id); }
   function getLS(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } }
-  function setLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  async function setLS(k, v){ try { await storageSetRaw(k, v); } catch { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } }
 
   function toBR(iso){
     var m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1223,7 +1223,7 @@ function adicionarPacotesSelecionados() {
 
 function confirmarDegustacao(){
   const getJSON = (k, fb=[]) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fb; } catch { return fb; } };
-  const setJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const setJSON = async (k, v) => { try { await storageSetRaw(k, v); } catch { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
   const pad = n => String(n).padStart(2,'0');
   const toISO = (s) => {
     // aceita "YYYY-MM-DD" ou "DD/MM/YYYY"
