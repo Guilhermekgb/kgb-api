@@ -21,6 +21,75 @@ const getJSON = (k, def = []) => {
     return def;
   }
 };
+// ===== Storage adapter wrappers (Cloud-ready, safe fallback) =====
+const ALLOW_CLOUD_UPLOAD = (typeof window !== 'undefined') && window.__ALLOW_CLOUD_UPLOAD__ === true;
+
+async function storageGetRaw(key, fb) {
+  try {
+    if (typeof window !== 'undefined' && window.storageAdapter && typeof window.storageAdapter.getRaw === 'function') {
+      const raw = await window.storageAdapter.getRaw(key);
+      return raw == null ? fb : JSON.parse(raw);
+    }
+  } catch (e) { console.warn('storageGetRaw failed', e); }
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fb)); } catch { return fb; }
+}
+
+async function storageSetRaw(key, value) {
+  try {
+    const txt = JSON.stringify(value);
+    if (typeof window !== 'undefined' && window.storageAdapter && typeof window.storageAdapter.setRaw === 'function') {
+      await window.storageAdapter.setRaw(key, txt);
+      return;
+    }
+    localStorage.setItem(key, txt);
+  } catch (e) { console.warn('storageSetRaw failed', e); }
+}
+
+async function uploadIfNeededFile(obj) {
+  // obj: { nome, tipo, conteudo }
+  if (!obj || !obj.conteudo) return obj;
+  const isDataUrl = String(obj.conteudo || '').startsWith('data:');
+  if (!isDataUrl) return obj; // already a URL or key
+
+  // if cloud uploads are disabled, keep original content but mark as not-uploaded
+  if (!ALLOW_CLOUD_UPLOAD) {
+    return { ...obj, uploaded: false };
+  }
+
+  // try to use adapter upload methods (upload or uploadBase64)
+  try {
+    if (window.storageAdapter && typeof window.storageAdapter.upload === 'function') {
+      const res = await window.storageAdapter.upload(obj.conteudo, { filename: obj.nome, contentType: obj.tipo });
+      // adapter may return { key, url } or a url string
+      if (res && typeof res === 'object') return { ...obj, uploaded: true, url: res.url || res.key || null, key: res.key || null };
+      return { ...obj, uploaded: true, url: String(res) };
+    }
+    if (window.storageAdapter && typeof window.storageAdapter.uploadBase64 === 'function') {
+      const res = await window.storageAdapter.uploadBase64(obj.conteudo, obj.nome);
+      return { ...obj, uploaded: true, url: res?.url || res?.key || String(res) };
+    }
+  } catch (e) { console.warn('uploadIfNeededFile failed', e); }
+
+  return { ...obj, uploaded: false };
+}
+
+async function prepareOrcamentoSnapshot(snap) {
+  if (!snap || typeof snap !== 'object') return snap;
+  const copy = { ...snap };
+  // documentos: convert data-URIs to uploaded URLs when allowed
+  if (Array.isArray(copy.documentos)) {
+    const out = [];
+    for (const d of copy.documentos) {
+      try { out.push(await uploadIfNeededFile(d)); } catch { out.push(d); }
+    }
+    copy.documentos = out;
+  }
+  // fotoClienteKey may be a data-uri inside object; normalize if needed
+  if (copy.fotoCliente && copy.fotoCliente.conteudo) {
+    try { copy.fotoCliente = await uploadIfNeededFile(copy.fotoCliente); } catch {}
+  }
+  return copy;
+}
 // === API – salvar lead no backend ===
 const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
 
@@ -892,11 +961,13 @@ async function salvarLeadFunil(nextAction) {
         observacoes: novoLead.observacoes
       };
 
-      const salvoOrc = await salvarOrcamentoNaApi(novoLead.id, snap);
+      const preppedSnap = await prepareOrcamentoSnapshot(snap);
+      const salvoOrc = await salvarOrcamentoNaApi(novoLead.id, preppedSnap);
       if (salvoOrc && salvoOrc.id) {
         // guarda o id do orçamento junto ao lead (localmente)
         novoLead.orcamentoId = salvoOrc.id;
       }
+
     } catch (e) {
       console.warn("[ORÇAMENTO] Erro ao salvar orçamento na API:", e);
     }
