@@ -21,22 +21,24 @@ jobs:
         run: npm ci
 
       - name: Start dev-server
+        working-directory: kgb-api
         run: |
-          nohup node kgb-api/dev-server.js --port 3333 > dev-server.log 2>&1 &
+          nohup node dev-server.js --port 3333 > dev-server.log 2>&1 &
           sleep 3
 
       - name: Run headless orçamentos smoke test
+        working-directory: kgb-api
         env:
           BASE_URL: http://localhost:3333
         run: |
-          node kgb-api/tests/headless-orcamentos.js || true
+          node tests/headless-orcamentos.js || true
 
       - name: Upload dev-server log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dev-server-log
-          path: dev-server.log
+          path: kgb-api/dev-server.log
 
       - name: Upload test reports
         if: always()
