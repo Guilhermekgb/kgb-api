@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:estoque-setores.html">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <title>Estoque – Setores</title>
+
+  <!-- Ícones (necessário para o menu mostrar os ícones) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do projeto -->
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="menu-lateral.css"/>
+
+  <style>
+    :root{
+      --bg:#f8f1e8; --marrom:#5a3e2b; --dourado:#c29a5d; --borda:#eadfcd;
+      --ink:#2a1e16; --muted:#7a6a5c; --white:#fff;
+      --sidebar-w:260px; /* mesmo do modelo-base */
+    }
+
+    html,body{ margin:0; background:var(--bg); color:var(--ink); height:100%; }
+
+    /* === preset de fontes igual ao modelo-base === */
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    /* ===== layout base idêntico ao modelo-base ===== */
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+
+    main.conteudo-principal{
+      flex:1; min-height:100vh; height:auto; overflow-y:auto;
+      width:100% !important; max-width:none !important; margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+      background:var(--bg);
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    /* Botão hambúrguer (mobile) */
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+    }
+
+    /* Desktop: menu fixo e wrapper com padding-left */
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    /* Mobile: off-canvas */
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed; transform:translateX(-100%); transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* Força o fundo sólido do aside (como no modelo-base) */
+    aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+    }
+
+    /* ===== topo local da página ===== */
+    header.topbar{
+      position:static !important; background:var(--white); padding:14px 18px;
+      display:flex; gap:12px; align-items:center; border:1px solid #efe7d9;
+      border-radius:12px; box-shadow:0 4px 18px rgba(0,0,0,.04);
+    }
+    header.topbar h1{ margin:0; font-size:20px; color:var(--marrom); font-weight:800; }
+    header.topbar .hint{ margin-left:auto; color:var(--muted); font-size:12px }
+
+    /* ===== cartões e tabela ===== */
+    .card{
+      background:var(--white); border:1px solid var(--borda); border-radius:16px;
+      box-shadow:0 4px 18px rgba(0,0,0,.04); padding:16px 16px 18px;
+    }
+    .card + .card{ margin-top:14px; }
+    .card-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .title-chip{
+      display:inline-flex; align-items:center; gap:10px; padding:8px 12px; border-radius:999px;
+      background:linear-gradient(90deg, #fffdfa, #faf6ef); border:1px solid var(--borda);
+      font-weight:800; color:var(--marrom);
+    }
+    .title-chip svg{ width:18px; height:18px; }
+    .toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    label{ font-size:12px; color:var(--marrom); margin-bottom:6px; display:block; }
+    input[type="text"]{
+      width:100%; padding:12px 12px; border-radius:12px; border:1px solid #e0d6c4; background:#fff;
+      outline:none; transition:border .15s, box-shadow .15s;
+    }
+    input[type="text"]:focus{ border-color:var(--dourado); box-shadow:0 0 0 3px rgba(194,154,93,.22) }
+
+    .pill{ padding:6px 10px; border-radius:999px; border:1px solid var(--borda); font-size:12px; display:inline-flex; gap:8px; align-items:center; }
+
+    .btn{
+      border:1px solid var(--dourado); background:#fff; color:var(--marrom);
+      padding:9px 12px; border-radius:12px; cursor:pointer; transition:all .15s;
+    }
+    .btn:hover{ transform:translateY(-1px); box-shadow:0 6px 14px rgba(194,154,93,.18) }
+    .btn.primary{ background:var(--dourado); color:#fff; border-color:var(--dourado); }
+    .btn.sm{ padding:6px 10px; border-radius:10px; }
+
+    .grid{ display:grid; gap:12px; }
+    .grid.cols-2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    @media (max-width: 700px){ .grid.cols-2{ grid-template-columns:1fr;} }
+
+    table{ width:100%; border-collapse:separate; border-spacing:0; background:#fff; border:1px solid var(--borda); border-radius:14px; overflow:hidden; }
+    th,td{ padding:12px 12px; text-align:left; border-bottom:1px solid #efe7d9; }
+    th{ background:#faf6ef; color:var(--marrom); font-weight:700; }
+    tbody tr:nth-child(even){ background:#fffdfa; }
+    tbody tr:hover{ background:#fff8ee; }
+    td.actions{ white-space:nowrap; display:flex; gap:8px; }
+
+    .badge{
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+      font-size:12px; border:1px solid #e6e0d4; background:#fffcf6; color:#5d4a39;
+    }
+    .badge .dot{ width:8px; height:8px; border-radius:50%; }
+
+    .empty{ text-align:center; color:var(--muted); padding:18px; font-size:14px; }
+
+    .toast{
+      position:fixed; right:18px; bottom:18px; background:#1f2937; color:#fff; padding:10px 14px;
+      border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.22); opacity:0; transform:translateY(8px);
+      pointer-events:none; transition:opacity .2s, transform .2s;
+    }
+    .toast.show{ opacity:1; transform:translateY(0); }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile (mesmo comportamento do modelo-base) -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado por menu-lateral.js) -->
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <header class="topbar" role="banner">
+          <h1>Estoque – Setores</h1>
+          <div class="hint" aria-hidden="true">Cadastre os setores usados no buffet</div>
+        </header>
+
+        <!-- Formulário -->
+        <section class="card" aria-labelledby="titulo-form">
+          <div class="card-title">
+            <span id="titulo-form" class="title-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-width="2" d="M12 20l9-5-9-5-9 5 9 5Z"/><path stroke-width="2" d="M12 12l9-5-9-5-9 5 9 5Z"/></svg>
+              Estoque — Setores
+            </span>
+            <span class="hint" aria-hidden="true">Cadastre os setores usados no buffet</span>
+          </div>
+
+          <div class="grid cols-2">
+            <div>
+              <label for="setorNome">Nome do setor</label>
+              <input id="setorNome" placeholder="ex.: Salão" autocomplete="off" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label class="pill"><input type="checkbox" id="setorAtivo" checked> Ativo</label>
+            </div>
+          </div>
+
+          <div class="toolbar" style="margin-top:12px">
+            <button class="btn primary" id="btnAddSetor">Adicionar setor</button>
+            <button class="btn" id="btnExport">Exportar</button>
+            <input type="file" id="fileImport" accept=".json" style="display:none" aria-label="Selecionar arquivo JSON para importação">
+            <button class="btn" id="btnImport">Importar</button>
+          </div>
+        </section>
+
+        <!-- Lista -->
+        <section class="card" aria-labelledby="titulo-lista">
+          <div class="card-title">
+            <span id="titulo-lista" class="title-chip">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-width="2" d="M3 5h18M3 12h18M3 19h18"/></svg>
+              Setores cadastrados
+            </span>
+          </div>
+
+          <table id="tSetores">
+            <thead>
+              <tr><th>Nome</th><th>Ativo</th><th class="no-print">Ações</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="emptyState" class="empty" style="display:none;">Nenhum setor cadastrado ainda.</div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+<script>
+  // ==========================================================
+  //  ESTOQUE – SETORES
+  //  Versão "híbrida": usa API se existir, e localStorage como cópia
+  // ==========================================================
+
+  /* ===== Helpers de texto ===== */
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[m]));
+  const trimOne = (s) => esc(String(s || "").trim()).replace(/\s+/g, " ");
+
+  /* ===== Storage compatível com 'estoque.setores' e 'estoque:setores' ===== */
+  const KEYS = ["estoque.setores", "estoque:setores"];
+
+  function readLocal(k) {
+    try {
+      return JSON.parse(localStorage.getItem(k) || "[]");
+    } catch (e) {
+      console.warn("Erro lendo localStorage setores", e);
+      return [];
+    }
+  }
+
+  function saveLocalBoth(arr) {
+    const j = JSON.stringify(arr || []);
+    try {
+      KEYS.forEach((k) => localStorage.setItem(k, j));
+    } catch (e) {
+      console.warn("Erro salvando setores no localStorage", e);
+    }
+  }
+
+  const uid = () => "set_" + Math.random().toString(36).slice(2, 9);
+
+  function normalizarSetor(raw) {
+    if (!raw) return null;
+    const nome = trimOne(raw.nome || raw.name || "");
+    if (!nome) return null;
+    const id = raw.id || uid();
+    const ativo = raw.ativo !== false; // se não vier nada, considera ativo
+    return { id, nome, ativo };
+  }
+
+  /* ===== Carregar e salvar lista local (navegador) ===== */
+  function loadLocalMerge() {
+    const a = readLocal(KEYS[0]);
+    const b = readLocal(KEYS[1]);
+
+    const byId = new Map();
+    [...a, ...b].forEach((s) => {
+      const n = normalizarSetor(s);
+      if (!n) return;
+      byId.set(String(n.id), n);
+    });
+
+    return Array.from(byId.values());
+  }
+
+  function saveLocalOrdenado(list) {
+    const arr = (list || [])
+      .slice()
+      .map(normalizarSetor)
+      .filter(Boolean)
+      .sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
+    saveLocalBoth(arr);
+    return arr;
+  }
+
+  /* ===== Detectar se a API está disponível ===== */
+  const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+
+  async function apiListSetores() {
+    if (!HAS_API) return [];
+    const resp = await window.callApi("/estoque/setores", "GET", {});
+    // algumas APIs retornam {data:[...]} outras direto [...]
+    const lista = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
+    return (lista || []).map(normalizarSetor).filter(Boolean);
+  }
+
+  async function apiCreateSetor(setor) {
+    if (!HAS_API) return;
+    try {
+      await window.callApi("/estoque/setores", "POST", setor);
+    } catch (e) {
+      console.error("Erro ao criar setor na API:", e);
+    }
+  }
+
+  async function apiUpdateSetor(id, setor) {
+    if (!HAS_API) return;
+    try {
+      const url = `/estoque/setores/${encodeURIComponent(id)}`;
+      await window.callApi(url, "PUT", setor);
+    } catch (e) {
+      console.error("Erro ao atualizar setor na API:", e);
+    }
+  }
+
+  async function apiDeleteSetor(id) {
+    if (!HAS_API) return;
+    try {
+      const url = `/estoque/setores/${encodeURIComponent(id)}`;
+      await window.callApi(url, "DELETE", {});
+    } catch (e) {
+      console.error("Erro ao excluir setor na API:", e);
+    }
+  }
+
+  /* ===== Sincronizar com o backend (traz da nuvem para o navegador) ===== */
+  async function syncFromBackend() {
+    // 1) começa com o que já tem no localStorage
+    const locais = loadLocalMerge();
+
+    if (!HAS_API) {
+      // se não tiver API (desenvolvimento offline), fica só com o local
+      gState.setores = saveLocalOrdenado(locais);
+      render();
+      return;
+    }
+
+    try {
+      const remotos = await apiListSetores();
+
+      // Se o backend ainda não tem nada, subimos o que está local depois,
+      // ao salvar/editar/deletar. Aqui só vamos mesclar.
+      const byKey = new Map();
+
+      // chave pode ser id; se não tiver, usa nome
+      locais.forEach((s) => {
+        if (!s) return;
+        const key = String(s.id || s.nome).toLowerCase();
+        byKey.set(key, normalizarSetor(s));
+      });
+
+      remotos.forEach((s) => {
+        if (!s) return;
+        const key = String(s.id || s.nome).toLowerCase();
+        byKey.set(key, normalizarSetor(s));
+      });
+
+      const merged = Array.from(byKey.values());
+      gState.setores = saveLocalOrdenado(merged);
+    } catch (e) {
+      console.error("Erro ao sincronizar setores com a API:", e);
+      // se der erro, continua com o que tem local
+      gState.setores = saveLocalOrdenado(locais);
+    }
+
+    render();
+  }
+
+  /* ===== Toast (mensagem rapidinha no canto) ===== */
+  function toast(msg) {
+    let t = document.querySelector(".toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.className = "toast";
+      t.setAttribute("role", "status");
+      t.setAttribute("aria-live", "polite");
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  /* ===== Estado em memória ===== */
+  const gState = {
+    setores: [], // sempre trabalhamos em cima desta lista
+  };
+
+  function getListaSetores() {
+    if (gState.setores && gState.setores.length) return gState.setores;
+    gState.setores = loadLocalMerge();
+    return gState.setores;
+  }
+
+  function setListaSetores(newList) {
+    gState.setores = saveLocalOrdenado(newList);
+    return gState.setores;
+  }
+
+  /* ===== Renderizar tabela ===== */
+  function render() {
+    const tb = document.querySelector("#tSetores tbody");
+    const empty = document.getElementById("emptyState");
+    if (!tb) return;
+
+    tb.innerHTML = "";
+
+    const lista = getListaSetores();
+
+    if (!lista.length) {
+      empty.style.display = "block";
+      return;
+    }
+
+    empty.style.display = "none";
+
+    for (const s of lista) {
+      const tr = document.createElement("tr");
+
+      const tdNome = document.createElement("td");
+      tdNome.textContent = s.nome;
+
+      const tdAtivo = document.createElement("td");
+      const badge = document.createElement("span");
+      badge.className = "badge " + (s.ativo ? "badge-success" : "badge-muted");
+      badge.textContent = s.ativo ? "Ativo" : "Inativo";
+      tdAtivo.appendChild(badge);
+
+      const tdAcoes = document.createElement("td");
+      tdAcoes.className = "actions no-print";
+
+      const btnEdit = document.createElement("button");
+      btnEdit.className = "btn sm";
+      btnEdit.type = "button";
+      btnEdit.textContent = "Editar";
+      btnEdit.addEventListener("click", () => editSetor(s.id));
+
+      const btnDel = document.createElement("button");
+      btnDel.className = "btn sm";
+      btnDel.type = "button";
+      btnDel.textContent = "Excluir";
+      btnDel.addEventListener("click", () => delSetor(s.id));
+
+      tdAcoes.appendChild(btnEdit);
+      tdAcoes.appendChild(btnDel);
+
+      tr.appendChild(tdNome);
+      tr.appendChild(tdAtivo);
+      tr.appendChild(tdAcoes);
+
+      tb.appendChild(tr);
+    }
+  }
+
+  /* ===== Ações (adicionar, editar, excluir, importar, exportar) ===== */
+  const nomeEl = document.getElementById("setorNome");
+  const ativoEl = document.getElementById("setorAtivo");
+
+  document.getElementById("btnAddSetor").addEventListener("click", async () => {
+    const nome = trimOne(nomeEl.value);
+    if (!nome) {
+      alert("Informe o nome do setor");
+      nomeEl.focus();
+      return;
+    }
+
+    const atual = getListaSetores();
+    if (atual.some((s) => s.nome.toLowerCase() === nome.toLowerCase())) {
+      alert("Já existe um setor com esse nome.");
+      nomeEl.focus();
+      return;
+    }
+
+    const novo = { id: uid(), nome, ativo: !!ativoEl.checked };
+
+    // Atualiza local
+    const arr = [...atual, novo];
+    setListaSetores(arr);
+    render();
+    toast("Setor adicionado");
+
+    // Limpa campos
+    nomeEl.value = "";
+    ativoEl.checked = true;
+    nomeEl.focus();
+
+    // Tenta salvar na API também (se existir)
+    if (HAS_API) {
+      await apiCreateSetor(novo);
+    }
+  });
+
+  nomeEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.getElementById("btnAddSetor").click();
+    }
+  });
+
+  async function editSetor(id) {
+    const arr = getListaSetores();
+    const s = arr.find((x) => String(x.id) === String(id));
+    if (!s) return;
+
+    const novoNome = prompt("Nome do setor", s.nome);
+    if (novoNome === null) return;
+
+    const nome = trimOne(novoNome) || s.nome;
+    const manterAtivo = confirm("Marcar como ATIVO? (OK=Sim / Cancelar=Não)");
+
+    s.nome = nome;
+    s.ativo = !!manterAtivo;
+
+    setListaSetores(arr);
+    render();
+    toast("Setor atualizado");
+
+    if (HAS_API) {
+      await apiUpdateSetor(s.id, s);
+    }
+  }
+
+  async function delSetor(id) {
+    if (!confirm("Excluir setor?")) return;
+
+    const arr = getListaSetores().filter((x) => String(x.id) !== String(id));
+    setListaSetores(arr);
+    render();
+    toast("Setor excluído");
+
+    if (HAS_API) {
+      await apiDeleteSetor(id);
+    }
+  }
+
+  window.editSetor = editSetor;
+  window.delSetor = delSetor;
+
+  // Exportar para JSON
+  document.getElementById("btnExport").addEventListener("click", () => {
+    const blob = new Blob(
+      [JSON.stringify(getListaSetores(), null, 2)],
+      { type: "application/json" }
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "setores.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("Exportado com sucesso");
+  });
+
+  // Importar de JSON
+  document
+    .getElementById("btnImport")
+    .addEventListener("click", () =>
+      document.getElementById("fileImport").click()
+    );
+
+  document.getElementById("fileImport").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        const raw = JSON.parse(r.result || "[]");
+        const normal = (Array.isArray(raw) ? raw : [])
+          .map(normalizarSetor)
+          .filter(Boolean);
+
+        const atual = getListaSetores();
+        const byId = new Map(atual.map((x) => [String(x.id), x]));
+        normal.forEach((s) => byId.set(String(s.id), s));
+
+        const merged = Array.from(byId.values());
+        setListaSetores(merged);
+        render();
+        toast("Setores importados");
+
+        if (HAS_API) {
+          // Sincroniza cada setor importado com o backend
+          for (const s of merged) {
+            await apiUpdateSetor(s.id, s);
+          }
+        }
+      } catch {
+        alert("Arquivo inválido.");
+      } finally {
+        e.target.value = "";
+      }
+    };
+    r.readAsText(f);
+  });
+
+  // Inicializa: puxa da API (se tiver) e depois renderiza
+  syncFromBackend();
+
+  // Ativa ícones do Lucide (caso o menu injete elementos depois)
+  try {
+    window.lucide?.createIcons?.();
+  } catch (e) {}
+</script>
+
+
+<!-- Injeta o menu lateral / controla hambúrguer no mobile -->
+<script type="module" src="menu-lateral.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- PERMISSÃO DA PÁGINA (para o guard) -->
+  <meta name="page-permission" content="page:kgb-formaturas-dashboard.html">
+
+  <title>KGB FORMATURAS - Dashboard</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:0 0 4px;
+    }
+    h1 i{
+      width:30px; height:30px;
+      color:#c29a5d;
+    }
+
+    .subtitulo{
+      margin:0 0 8px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- TOPO FORMATURAS + LOGO --------- */
+
+    .topo-formatutas{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:24px;
+      margin-bottom:18px;
+    }
+
+    .topo-formatutas-info p{
+      margin:4px 0 0;
+      color:#7a5a3c;
+      font-size:14px;
+    }
+
+    .logo-card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+      max-width:280px;
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .logo-card-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .logo-card-header h2{
+      font-size:16px;
+      margin:0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      color:#5a3e2b;
+    }
+    .logo-card-header i{
+      width:18px; height:18px;
+    }
+    .logo-preview{
+      border-radius:10px;
+      border:1px dashed #d3b392;
+      background:#fdf7f0;
+      padding:10px;
+      min-height:120px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      color:#b08a63;
+      font-size:13px;
+      overflow:hidden;
+    }
+    .logo-preview img{
+      max-width:100%;
+      max-height:140px;
+      object-fit:contain;
+      display:block;
+    }
+    .logo-card-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .btn-pequeno{
+      border:none;
+      border-radius:999px;
+      padding:6px 14px;
+      font-size:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background:#c29a5d;
+      color:#fff;
+      box-shadow:0 6px 12px rgba(0,0,0,.12);
+    }
+    .btn-pequeno.secundario{
+      background:#eee2d3;
+      color:#7a5a3c;
+    }
+    .btn-pequeno i{
+      width:14px; height:14px;
+    }
+    .logo-card input[type="file"]{
+      display:none;
+    }
+
+    /* --------- ATALHOS RÁPIDOS --------- */
+
+    .atalhos-rapidos{
+      margin:4px 0 10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .atalhos-rapidos-titulo{
+      font-size:12px;
+      color:#8a6a4a;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .atalhos-rapidos-titulo i{
+      width:14px;
+      height:14px;
+    }
+    .atalhos-grid{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .atalho-btn{
+      border:none;
+      border-radius:999px;
+      padding:6px 14px;
+      font-size:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background:#fff;
+      color:#6c4b30;
+      box-shadow:0 6px 12px rgba(0,0,0,.06);
+      transition:transform .08s ease, box-shadow .08s ease, background .08s ease;
+    }
+    .atalho-btn i{
+      width:14px; height:14px;
+    }
+    .atalho-btn:hover{
+      transform:translateY(-1px);
+      box-shadow:0 8px 16px rgba(0,0,0,.10);
+      background:#fdf7f0;
+    }
+
+    /* --------- FILTROS --------- */
+
+    .linha-topo-painel{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:14px;
+      margin-top:8px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo select,
+    .campo input{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+      min-width:140px;
+    }
+    .campo select:focus,
+    .campo input:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .msg-filtros{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:4px;
+    }
+
+    /* --------- MÉTRICAS FINANCEIRAS --------- */
+
+    .metricas-grid{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:12px;
+      margin-bottom:18px;
+    }
+    @media (max-width:1024px){
+      .metricas-grid{
+        grid-template-columns:repeat(2, minmax(0,1fr));
+      }
+    }
+    @media (max-width:640px){
+      .metricas-grid{
+        grid-template-columns:1fr;
+      }
+    }
+    .card-metrica{
+      background:#fff;
+      border-radius:14px;
+      padding:10px 14px;
+      box-shadow:0 6px 16px rgba(0,0,0,.05);
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .card-metrica-titulo{
+      font-size:12px;
+      color:#8a6a4a;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .card-metrica-titulo i{
+      width:14px; height:14px;
+    }
+    .card-metrica-valor{
+      font-size:18px;
+      font-weight:600;
+      color:#4b2d16;
+    }
+    .card-metrica-legenda{
+      font-size:11px;
+      color:#a17e57;
+    }
+
+    /* --------- CARDS RESUMO PRINCIPAIS --------- */
+
+    .painel-grid{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0, 1fr));
+      gap:16px;
+      margin-bottom:20px;
+    }
+    @media (max-width:1100px){
+      .painel-grid{
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width:640px){
+      .painel-grid{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card-resumo{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      position:relative;
+      overflow:hidden;
+    }
+    .card-resumo-titulo{
+      font-size:13px;
+      color:#8a6a4a;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .card-resumo-titulo i{
+      width:16px; height:16px;
+    }
+    .card-resumo-valor{
+      font-size:22px;
+      font-weight:600;
+      color:#4b2d16;
+    }
+    .card-resumo-legenda{
+      font-size:11px;
+      color:#a17e57;
+    }
+    .card-resumo-badge{
+      position:absolute;
+      right:12px;
+      top:12px;
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(194,154,93,0.12);
+      color:#805a2b;
+    }
+
+    /* --------- GRID PRINCIPAL (gráficos + próximos eventos) --------- */
+
+    .grid-painel{
+      display:grid;
+      grid-template-columns:minmax(0, 1.4fr) minmax(0, 1fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:20px;
+    }
+    @media (max-width:1000px){
+      .grid-painel{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+
+    .texto-suporte{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:4px;
+    }
+
+    /* --------- ÁREA “GRÁFICO” --------- */
+
+    .grafico-placeholder{
+      border-radius:12px;
+      background:repeating-linear-gradient(
+        135deg,
+        #f8efe3,
+        #f8efe3 8px,
+        #f3e3d2 8px,
+        #f3e3d2 16px
+      );
+      height:220px;
+      margin-top:6px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      color:#7a5a3c;
+      font-size:12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .grafico-placeholder span{
+      position:relative;
+      z-index:1;
+    }
+    .grafico-placeholder small{
+      font-size:11px;
+      color:#9a7b58;
+    }
+    .grafico-overlay{
+      position:absolute;
+      inset:12px;
+      border-radius:10px;
+      border:1px dashed rgba(121,90,61,.35);
+      pointer-events:none;
+    }
+
+    .grafico-mini{
+      margin-top:12px;
+      height:130px;
+    }
+
+    /* --------- PRÓXIMOS EVENTOS --------- */
+
+    .lista-eventos{
+      list-style:none;
+      padding:0;
+      margin:8px 0 0;
+      font-size:13px;
+      color:#7a5a3c;
+    }
+    .evento-item{
+      padding:8px 0;
+      border-bottom:1px solid #f0dfcf;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .evento-linha-topo{
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      font-size:13px;
+    }
+    .evento-nome{
+      font-weight:600;
+      color:#4b2d16;
+    }
+    .evento-data{
+      font-size:12px;
+      color:#9a7b58;
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .evento-tag{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+    }
+
+    .evento-meta{
+      font-size:11px;
+      color:#9a7b58;
+    }
+
+    .btn-acao-mini{
+      border:none;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:11px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      box-shadow:0 4px 10px rgba(0,0,0,.08);
+    }
+    .btn-acao-mini i{
+      width:13px; height:13px;
+    }
+
+    .linha-botoes-card{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      margin-top:4px;
+      flex-wrap:wrap;
+    }
+
+    /* --------- TABELA RESUMO POR ESCOLA --------- */
+
+    .tabela-simples{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-simples thead{
+      background:#f5e7d8;
+    }
+    .tabela-simples th,
+    .tabela-simples td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-simples th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-simples tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .tag-ano{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <!-- TOPO: TÍTULO + LOGO -->
+        <div class="topo-formatutas">
+          <div class="topo-formatutas-info">
+            <h1>
+              <i data-lucide="graduation-cap"></i>
+              KGB FORMATURAS – Dashboard
+            </h1>
+            <p class="subtitulo">
+              Visão geral das suas formaturas: próximos eventos, alunos ativos, financeiro e inadimplência em um só lugar.
+            </p>
+
+            <!-- ATALHOS RÁPIDOS -->
+            <section class="atalhos-rapidos" aria-label="Atalhos rápidos das telas de formaturas">
+              <div class="atalhos-rapidos-titulo">
+                <i data-lucide="sparkles"></i>
+                Acessos rápidos
+              </div>
+              <div class="atalhos-grid">
+                <button type="button" class="atalho-btn" data-link-formaturas="alunos">
+                  <i data-lucide="user-plus"></i> Cadastro de aluno
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="escolas">
+                  <i data-lucide="school-2"></i> Escolas
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="eventos">
+                  <i data-lucide="calendar-days"></i> Eventos
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="checkin">
+                  <i data-lucide="scan-line"></i> Check-in
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="contratos">
+                  <i data-lucide="file-signature"></i> Contratos
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="formulario">
+                  <i data-lucide="edit-3"></i> Formulário online
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="formularios-recebidos">
+                  <i data-lucide="inbox"></i> Formulários recebidos
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="inadimplentes">
+                  <i data-lucide="alert-triangle"></i> Inadimplentes
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="modelos">
+                  <i data-lucide="ticket"></i> Modelos de convite
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="relatorios">
+                  <i data-lucide="table"></i> Relatórios
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="tipos-evento">
+                  <i data-lucide="party-popper"></i> Tipos de evento
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="financeiro">
+                  <i data-lucide="wallet-cards"></i> Financeiro geral
+                </button>
+                <button type="button" class="atalho-btn" data-link-formaturas="configuracoes">
+                  <i data-lucide="settings-2"></i> Configurações
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <!-- CARD DE LOGO DA FORMATURA -->
+          <section class="logo-card" aria-label="Logo da formatura">
+            <div class="logo-card-header">
+              <h2><i data-lucide="image"></i> Logo da Formatura</h2>
+            </div>
+            <div class="logo-preview" id="logoPreview">
+              <span>Nenhuma imagem selecionada.<br>Escolha um logo para representar suas formaturas.</span>
+            </div>
+            <div class="logo-card-actions">
+              <label class="btn-pequeno" for="logoInput">
+                <i data-lucide="upload-cloud"></i>
+                Selecionar logo
+              </label>
+              <button type="button" class="btn-pequeno secundario" id="limparLogo">
+                <i data-lucide="trash-2"></i>
+                Remover
+              </button>
+            </div>
+            <input type="file" id="logoInput" accept="image/*">
+          </section>
+        </div>
+
+        <!-- FILTROS -->
+        <div class="linha-topo-painel">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="filtroAnoPainel">Ano da formatura</label>
+             <select id="filtroAnoPainel">
+  <option value="">Todos</option>
+</select>
+
+            </div>
+            <div class="campo">
+              <label for="filtroPeriodoPainel">Período</label>
+              <select id="filtroPeriodoPainel">
+                <option value="ano">Ano inteiro</option>
+                <option>Janeiro</option>
+                <option>Fevereiro</option>
+                <option>Março</option>
+                <option>Abril</option>
+                <option>Maio</option>
+                <option>Junho</option>
+                <option>Julho</option>
+                <option>Agosto</option>
+                <option>Setembro</option>
+                <option>Outubro</option>
+                <option>Novembro</option>
+                <option>Dezembro</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroEscolaPainel">Escola</label>
+              <select id="filtroEscolaPainel">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroTipoEventoPainel">Tipo de evento</label>
+            <select id="filtroTipoEventoPainel">
+  <option value="">Todos</option>
+</select>
+
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+            <button type="button" class="btn-secundario" id="btnAplicarFiltros">
+              <i data-lucide="sliders-horizontal"></i>
+              Aplicar filtros
+            </button>
+            <span class="msg-filtros" id="msgFiltros"></span>
+          </div>
+        </div>
+
+        <!-- MÉTRICAS RESUMO -->
+        <section class="metricas-grid" aria-label="Resumo financeiro e operacional">
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="wallet"></i>
+              Faturamento no período
+            </div>
+            <div class="card-metrica-valor" id="metricaFaturamentoPeriodo">R$ 0,00</div>
+            <div class="card-metrica-legenda">Somando todos os eventos filtrados.</div>
+          </article>
+
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="check-circle-2"></i>
+              Valor recebido
+            </div>
+            <div class="card-metrica-valor" id="metricaValorRecebido">R$ 0,00</div>
+            <div class="card-metrica-legenda">Pagamentos já confirmados.</div>
+          </article>
+
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="alert-triangle"></i>
+              Em aberto / atrasado
+            </div>
+            <div class="card-metrica-valor" id="metricaEmAberto">R$ 0,00</div>
+            <div class="card-metrica-legenda">Inclui parcelas em atraso e a vencer.</div>
+          </article>
+
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="calendar-days"></i>
+              Eventos de formatura
+            </div>
+            <div class="card-metrica-valor" id="metricaEventosFormatura">0</div>
+            <div class="card-metrica-legenda">Entre colações, bailes e churrascos.</div>
+          </article>
+
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="graduation-cap"></i>
+              Formandos ativos
+            </div>
+            <div class="card-metrica-valor" id="metricaFormandosAtivos">0</div>
+            <div class="card-metrica-legenda">Com contrato vigente neste ano.</div>
+          </article>
+
+          <article class="card-metrica">
+            <div class="card-metrica-titulo">
+              <i data-lucide="user-x"></i>
+              Alunos inadimplentes
+            </div>
+            <div class="card-metrica-valor" id="metricaAlunosInadimplentes">0</div>
+            <div class="card-metrica-legenda">Com valores em atraso.</div>
+          </article>
+        </section>
+
+        <!-- CARDS RESUMO PRINCIPAIS -->
+        <section class="painel-grid" aria-label="Resumo das formaturas">
+          <article class="card-resumo">
+            <div class="card-resumo-badge">Hoje e próximos 30 dias</div>
+            <div class="card-resumo-titulo">
+              <i data-lucide="calendar-days"></i>
+              Próximos eventos
+            </div>
+            <div class="card-resumo-valor" id="cardProximosEventos">0</div>
+            <div class="card-resumo-legenda">Colações, bailes e churrascos agendados.</div>
+          </article>
+
+          <article class="card-resumo">
+            <div class="card-resumo-badge">Ano atual</div>
+            <div class="card-resumo-titulo">
+              <i data-lucide="users"></i>
+              Alunos ativos
+            </div>
+            <div class="card-resumo-valor" id="cardAlunosAtivos">0</div>
+            <div class="card-resumo-legenda">Somando todas as escolas participantes.</div>
+          </article>
+
+          <article class="card-resumo">
+            <div class="card-resumo-badge">Contratado</div>
+            <div class="card-resumo-titulo">
+              <i data-lucide="wallet"></i>
+              Financeiro total
+            </div>
+            <div class="card-resumo-valor" id="cardTotalReceber">R$ 0,00</div>
+            <div class="card-resumo-legenda">Inclui colação, bailes e churrascos contratados.</div>
+          </article>
+
+          <article class="card-resumo">
+            <div class="card-resumo-badge">Atenção</div>
+            <div class="card-resumo-titulo">
+              <i data-lucide="alert-triangle"></i>
+              Em atraso
+            </div>
+            <div class="card-resumo-valor" id="cardEmAtraso">R$ 0,00</div>
+            <div class="card-resumo-legenda">Alunos com parcelas vencidas nos últimos 15 dias.</div>
+          </article>
+        </section>
+
+        <!-- GRID PRINCIPAL -->
+        <div class="grid-painel">
+
+          <!-- LADO ESQUERDO: “GRÁFICOS” -->
+          <section class="card" aria-label="Faturamento e eventos por mês">
+            <h2><i data-lucide="line-chart"></i> Faturamento por mês</h2>
+            <p class="texto-suporte">
+              Visão resumida do quanto você faturou mês a mês com formaturas, de acordo com os filtros selecionados.
+            </p>
+
+            <div class="grafico-placeholder">
+              <span>Área reservada para gráfico de linhas ou colunas.</span>
+              <small>Depois você pode integrar uma biblioteca de gráficos ou gerar imagem via backend.</small>
+              <div class="grafico-overlay"></div>
+            </div>
+
+            <h2 style="margin-top:16px;"><i data-lucide="bar-chart-3"></i> Eventos por mês / tipo</h2>
+            <p class="texto-suporte">
+              Distribuição de colações, bailes, churrascos e outros eventos ao longo do ano.
+            </p>
+
+            <div class="grafico-placeholder grafico-mini">
+              <span>Área reservada para gráfico de barras empilhadas.</span>
+              <div class="grafico-overlay"></div>
+            </div>
+          </section>
+
+          <!-- LADO DIREITO: PRÓXIMOS EVENTOS (lista) -->
+          <aside class="card" aria-label="Próximos eventos de formatura">
+            <h2><i data-lucide="calendar-days"></i> Próximos eventos de formatura</h2>
+            <p class="texto-suporte">
+              Use essa visão para se organizar com equipe, fornecedores e prazos de emissão de convites.
+            </p>
+
+            <ul class="lista-eventos" id="listaEventosProximos">
+              <!-- preenchido via JS / backend -->
+            </ul>
+
+          </aside>
+
+        </div>
+
+        <!-- RESUMO POR ESCOLA -->
+        <section class="card" aria-label="Resumo por escola">
+          <h2><i data-lucide="school-2"></i> Resumo por escola</h2>
+          <p class="texto-suporte">
+            Comparativo de faturamento, recebimentos, pendências e quantidade de alunos por escola no período selecionado.
+          </p>
+
+          <table class="tabela-simples">
+            <thead>
+              <tr>
+                <th>Escola</th>
+                <th>Anos com formatura</th>
+                <th>Alunos com contrato</th>
+                <th>Faturamento</th>
+                <th>Recebido</th>
+                <th>Em aberto</th>
+                <th>Inadimplentes</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyResumoEscolasPainel">
+              <!-- preenchido via JS / backend -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="resumoEscolasInfo">Nenhuma escola encontrada para os filtros atuais.</span>
+            <button type="button" class="btn-secundario" id="btnIrRelatorios">
+              <i data-lucide="table"></i>
+              Abrir relatórios detalhados
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <!-- Helper pro guard: currentPageFile() usado em proteger-pagina.js -->
+  <script>
+    function currentPageFile(){
+      return (location.pathname || '')
+        .split('/').pop()
+        .split('?')[0]
+        .split('#')[0];
+    }
+  </script>
+
+  <!-- Menu lateral -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Proteção / permissões -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Script específico do Dashboard KGB FORMATURAS -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
+
+    /* ---------- MENU MOBILE ---------- */
+    const menu = document.getElementById('menuLateral');
+    const btnHamb = document.getElementById('hamburguer');
+    const backdrop = document.getElementById('menuBackdrop');
+
+    if (btnHamb && menu && backdrop) {
+      const toggleMenu = () => {
+        const aberto = menu.classList.toggle('aberto');
+        backdrop.hidden = !aberto;
+      };
+      btnHamb.addEventListener('click', toggleMenu);
+      backdrop.addEventListener('click', toggleMenu);
+    }
+
+    /* ---------- ATALHOS RÁPIDOS (links) ---------- */
+    const mapaLinksFormaturas = {
+      'alunos': 'kgb-formaturas-alunos.html',
+      'escolas': 'kgb-formaturas-escolas.html',
+      'eventos': 'kgb-formaturas-eventos.html',
+      'checkin': 'kgb-formaturas-checkin.html',
+      'contratos': 'kgb-formaturas-contratos.html',
+      'formulario': 'kgb-formaturas-formulario-online.html',
+      'formularios-recebidos': 'kgb-formaturas-formularios-recebidos.html',
+      'inadimplentes': 'kgb-formaturas-inadimplentes-arquivo.html',
+      'modelos': 'kgb-formaturas-modelos-convite.html',
+      'relatorios': 'kgb-formaturas-relatorios.html',
+      'tipos-evento': 'kgb-formaturas-tipos-evento.html',
+      'financeiro': 'kgb-formaturas-financeiro.html',
+      'configuracoes': 'kgb-formaturas-configuracoes.html'
+    };
+
+    document.querySelectorAll('[data-link-formaturas]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const slug = btn.getAttribute('data-link-formaturas');
+        const url = mapaLinksFormaturas[slug] || ('kgb-formaturas-' + slug + '.html');
+        window.location.href = url;
+      });
+    });
+
+    const btnIrRelatorios = document.getElementById('btnIrRelatorios');
+    if (btnIrRelatorios) {
+      btnIrRelatorios.addEventListener('click', () => {
+        window.location.href = 'kgb-formaturas-relatorios.html';
+      });
+    }
+
+    /* ---------- LOGO ---------- */
+    const logoInput = document.getElementById('logoInput');
+    const logoPreview = document.getElementById('logoPreview');
+    const limparLogo = document.getElementById('limparLogo');
+    const STORAGE_LOGO_KEY = 'kgb-formaturas-logo';
+
+    function carregarLogoSalvo() {
+      try {
+        const dataUrl = localStorage.getItem(STORAGE_LOGO_KEY);
+        if (dataUrl && logoPreview) {
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          logoPreview.innerHTML = '';
+          logoPreview.appendChild(img);
+        }
+      } catch (e) {
+        console.warn('Não foi possível carregar logo salvo:', e);
+      }
+    }
+
+    function salvarLogo(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          localStorage.setItem(STORAGE_LOGO_KEY, reader.result);
+          carregarLogoSalvo();
+        } catch (e) {
+          console.warn('Não foi possível salvar logo:', e);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    if (logoInput) {
+      logoInput.addEventListener('change', (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        salvarLogo(file);
+      });
+    }
+
+    if (limparLogo && logoPreview) {
+      limparLogo.addEventListener('click', () => {
+        if (!confirm('Remover logo salvo?')) return;
+        try {
+          localStorage.removeItem(STORAGE_LOGO_KEY);
+        } catch {}
+        logoPreview.innerHTML = '<span>Nenhuma imagem selecionada.<br>Escolha um logo para representar suas formaturas.</span>';
+      });
+    }
+
+    carregarLogoSalvo();
+
+    /* ---------- DADOS DO DASHBOARD (somente dados reais) ---------- */
+
+   const LS_KEY_FINANCEIRO   = 'kgb_formaturas_financeiro_alunos';
+const LS_KEY_ARQUIVO      = 'kgb_formaturas_arquivo_alunos';
+const LS_KEY_FORMULARIOS  = 'kgb_formaturas_formularios';
+const LS_KEY_TIPOS_EVENTO = 'kgb_formaturas_tiposEvento';     // mesma chave das outras telas
+const LS_KEY_ESCOLAS      = 'kgb-formaturas-escolas';         // escolas cadastradas
+const LS_KEY_EVENTOS      = 'kgb_formaturas_eventos';
+
+
+
+    let financeiroAlunos = [];
+    let arquivoAlunos    = [];
+    let formularios      = [];
+    let tiposEvento      = [];
+
+    function carregarArrayLocalStorage(chave) {
+      try {
+        const raw = localStorage.getItem(chave);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        console.warn('Erro ao carregar chave', chave, e);
+        return [];
+      }
+    }
+
+    function recarregarDadosDashboard() {
+      financeiroAlunos = carregarArrayLocalStorage(LS_KEY_FINANCEIRO);
+      arquivoAlunos    = carregarArrayLocalStorage(LS_KEY_ARQUIVO);
+      formularios      = carregarArrayLocalStorage(LS_KEY_FORMULARIOS);
+      tiposEvento      = carregarArrayLocalStorage(LS_KEY_TIPOS_EVENTO);
+
+      preencherFiltrosPainel();
+      aplicarFiltrosPainel();
+    }
+
+    function obterTodosRegistrosAlunos() {
+      const ativos = Array.isArray(financeiroAlunos) ? financeiroAlunos : [];
+      const arquiv = Array.isArray(arquivoAlunos) ? arquivoAlunos : [];
+      return ativos.concat(arquiv);
+    }
+
+    function formatarMoeda(num) {
+      const n = Number(num) || 0;
+      return n.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function formatarDataBr(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '-';
+      const dia = String(d.getDate()).padStart(2, '0');
+      const mes = String(d.getMonth() + 1).padStart(2, '0');
+      const ano = d.getFullYear();
+      return `${dia}/${mes}/${ano}`;
+    }
+
+    const mesPorNome = {
+      'Janeiro': 1, 'Fevereiro': 2, 'Março': 3, 'Marco': 3, 'Abril': 4,
+      'Maio': 5, 'Junho': 6, 'Julho': 7, 'Agosto': 8,
+      'Setembro': 9, 'Outubro': 10, 'Novembro': 11, 'Dezembro': 12
+    };
+
+    /* ---------- Filtros dinâmicos (dados reais) ---------- */
+
+    function extrairNomeEvento(ev) {
+      if (!ev) return '';
+      if (typeof ev === 'string') return ev;
+      if (typeof ev === 'object') {
+        return ev.tipo || ev.nome || ev.nomeEvento || ev.titulo || ev.descricao || '';
+      }
+      return '';
+    }
+
+  function preencherFiltrosPainel() {
+  const selAno    = document.getElementById('filtroAnoPainel');
+  const selEscola = document.getElementById('filtroEscolaPainel');
+  const selTipo   = document.getElementById('filtroTipoEventoPainel');
+
+  if (!selAno || !selEscola || !selTipo) return;
+
+  // guardamos o que já estava selecionado, para tentar manter
+  const valorAnoAtual    = selAno.value || '';
+  const valorEscolaAtual = selEscola.value || '';
+  const valorTipoAtual   = selTipo.value || '';
+
+  const anosSet    = new Set();
+  const escolasSet = new Set();
+  const tiposSet   = new Set();
+
+  // 1) ANOS: vêm dos alunos + dos eventos cadastrados
+  const baseAlunos = obterTodosRegistrosAlunos(); // junta financeiro + arquivo :contentReference[oaicite:4]{index=4}
+
+  if (Array.isArray(baseAlunos)) {
+    baseAlunos.forEach(reg => {
+      const ano = (reg.anoFormatura || reg.ano || '').toString().trim();
+      if (ano) anosSet.add(ano);
+    });
+  }
+
+  // anos também da tabela de eventos cadastrados
+  const eventosCadastrados = carregarArrayLocalStorage(LS_KEY_EVENTOS);
+  if (Array.isArray(eventosCadastrados)) {
+    eventosCadastrados.forEach(ev => {
+      const ano = (ev.anoFormatura || ev.ano || '').toString().trim();
+      if (ano) anosSet.add(ano);
+    });
+  }
+
+  // 2) ESCOLAS: usam APENAS o cadastro oficial de escolas
+  const escolasCadastradas = carregarArrayLocalStorage(LS_KEY_ESCOLAS);
+  if (Array.isArray(escolasCadastradas)) {
+    escolasCadastradas.forEach(esc => {
+      const nome = (esc.nome || esc.nomeEscola || esc.titulo || '').toString().trim();
+      if (nome) escolasSet.add(nome);
+    });
+  }
+
+  // 3) TIPOS DE EVENTO: SOMENTE os tipos cadastrados na tela "Tipos de evento"
+  if (Array.isArray(tiposEvento)) {
+    tiposEvento.forEach(t => {
+      const nome =
+        (t && (t.nome || t.nomeTipo || t.tipo || t.tipoEvento || t.titulo)) || '';
+      const limpo = nome.toString().trim();
+      if (limpo) tiposSet.add(limpo);
+    });
+  }
+
+  // Ordena
+  const anosOrdenados = Array.from(anosSet).sort((a, b) => Number(a) - Number(b));
+  const escolasOrdenadas = Array.from(escolasSet).sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+  const tiposOrdenados = Array.from(tiposSet).sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+
+  // Preenche select de Ano
+  let htmlAno = '<option value="">Todos</option>';
+  anosOrdenados.forEach(ano => {
+    htmlAno += `<option value="${ano}">${ano}</option>`;
+  });
+  selAno.innerHTML = htmlAno;
+  if (valorAnoAtual && anosSet.has(valorAnoAtual)) {
+    selAno.value = valorAnoAtual;
+  }
+
+  // Preenche select de Escola
+  let htmlEscola = '<option value="">Todas</option>';
+  escolasOrdenadas.forEach(nome => {
+    htmlEscola += `<option value="${nome}">${nome}</option>`;
+  });
+  selEscola.innerHTML = htmlEscola;
+  if (valorEscolaAtual && escolasSet.has(valorEscolaAtual)) {
+    selEscola.value = valorEscolaAtual;
+  }
+
+  // Preenche select de Tipo de evento
+  let htmlTipo = '<option value="">Todos</option>';
+  tiposOrdenados.forEach(nome => {
+    htmlTipo += `<option value="${nome}">${nome}</option>`;
+  });
+  selTipo.innerHTML = htmlTipo;
+  if (valorTipoAtual && tiposSet.has(valorTipoAtual)) {
+    selTipo.value = valorTipoAtual;
+  }
+}
+
+
+
+    /* ---------- Aplicar filtros e atualizar painel ---------- */
+
+    function aplicarFiltrosPainel() {
+      const selAno    = document.getElementById('filtroAnoPainel');
+      const selPeriodo = document.getElementById('filtroPeriodoPainel');
+      const selEscola  = document.getElementById('filtroEscolaPainel');
+      const selTipo    = document.getElementById('filtroTipoEventoPainel');
+      const msgFiltros = document.getElementById('msgFiltros');
+
+      const anoSel    = selAno ? (selAno.value || '') : '';
+      const periodoSel = selPeriodo ? (selPeriodo.value || 'ano') : 'ano';
+      const escolaSel = selEscola ? (selEscola.value || '') : '';
+      const tipoSel   = selTipo ? (selTipo.value || '') : '';
+
+      const mesFiltro = periodoSel === 'ano' ? null : (mesPorNome[periodoSel] || null);
+
+      const base = Array.isArray(financeiroAlunos) ? financeiroAlunos.slice() : [];
+
+      const filtrados = base.filter(reg => {
+        const anoReg = (reg.anoFormatura || '').toString().trim();
+        if (anoSel && anoReg !== anoSel) return false;
+
+        const escolaReg = (reg.escolaNome || '').toString().trim();
+        if (escolaSel && escolaReg !== escolaSel) return false;
+
+        if (tipoSel) {
+          const eventos = Array.isArray(reg.eventos) ? reg.eventos : [];
+          const temTipo = eventos.some(ev => extrairNomeEvento(ev) === tipoSel);
+          if (!temTipo) return false;
+        }
+
+        if (mesFiltro != null) {
+          const isoData =
+            reg.proximoVencimentoISO ||
+            reg.ultimoVencimentoISO ||
+            reg.criadoEm ||
+            reg.atualizadoEm;
+          if (isoData) {
+            const d = new Date(isoData);
+            if (!isNaN(d.getTime())) {
+              const mes = d.getMonth() + 1;
+              if (mes !== mesFiltro) return false;
+            }
+          }
+        }
+
+        return true;
+      });
+
+      atualizarMetricasFinanceiras(filtrados);
+      atualizarCardsPrincipais(filtrados);
+      atualizarResumoPorEscola(filtrados);
+      atualizarEventosProximos(filtrados);
+
+      if (msgFiltros) {
+        if (!base.length) {
+          msgFiltros.textContent = 'Nenhum aluno com financeiro cadastrado ainda.';
+        } else if (filtrados.length === base.length) {
+          msgFiltros.textContent = `Exibindo ${filtrados.length} aluno(s) com os filtros atuais.`;
+        } else {
+          msgFiltros.textContent =
+            `Filtrando ${filtrados.length} de ${base.length} aluno(s) com financeiro.`;
+        }
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* ---------- Métricas de cima (Faturamento, Recebido, etc.) ---------- */
+
+    function contarEventosUnicos(lista) {
+      const setEv = new Set();
+      (lista || []).forEach(reg => {
+        const eventos = Array.isArray(reg.eventos) ? reg.eventos : [];
+        eventos.forEach(ev => {
+          const nome = extrairNomeEvento(ev);
+          if (nome) setEv.add(nome);
+        });
+      });
+
+      if (!setEv.size && Array.isArray(tiposEvento)) {
+        tiposEvento.forEach(t => {
+          const nome =
+            (t && (t.nome || t.nomeTipo || t.tipo || t.tipoEvento || t.titulo)) || '';
+          if (nome) setEv.add(nome);
+        });
+      }
+
+      return setEv.size;
+    }
+function deduplicarPorAluno(lista) {
+  const mapa = new Map();
+
+  (lista || []).forEach(reg => {
+    const chave = [
+      reg.idAluno || reg.alunoId || reg.id || '',
+      (reg.nomeAluno || reg.nome || '').toString().trim().toLowerCase(),
+      (reg.escolaNome || '').toString().trim().toLowerCase(),
+      (reg.anoFormatura || '').toString().trim()
+    ].join('|');
+
+    if (!mapa.has(chave)) {
+      mapa.set(chave, reg);
+    }
+  });
+
+  return Array.from(mapa.values());
+}
+
+    function atualizarMetricasFinanceiras(filtrados) {
+      const lblFaturamento = document.getElementById('metricaFaturamentoPeriodo');
+      const lblRecebido    = document.getElementById('metricaValorRecebido');
+      const lblAberto      = document.getElementById('metricaEmAberto');
+      const lblEventos     = document.getElementById('metricaEventosFormatura');
+      const lblFormandos   = document.getElementById('metricaFormandosAtivos');
+      const lblInad        = document.getElementById('metricaAlunosInadimplentes');
+
+    const lista = deduplicarPorAluno(filtrados || []);
+
+
+      let totalFaturamento = 0;
+      let totalRecebido    = 0;
+      let totalAberto      = 0;
+
+      let inadimplentes = 0;
+
+      lista.forEach(reg => {
+        const vTot = Number(reg.valorTotal ?? reg.totalContratado ?? 0);
+        const vRec = Number(reg.valorPago ?? reg.totalPago ?? 0);
+        const vAb  = Number(reg.valorAberto ?? reg.totalAberto ?? 0);
+
+        totalFaturamento += isNaN(vTot) ? 0 : vTot;
+        totalRecebido    += isNaN(vRec) ? 0 : vRec;
+        totalAberto      += isNaN(vAb)  ? 0 : vAb;
+
+        const sit = (reg.statusFinanceiro || reg.situacaoFinanceira || '').toLowerCase();
+        if (sit && sit !== 'quitado' && sit !== 'ok' && sit !== 'regular') {
+          inadimplentes++;
+        }
+      });
+
+      if (lblFaturamento) lblFaturamento.textContent = formatarMoeda(totalFaturamento);
+      if (lblRecebido)    lblRecebido.textContent    = formatarMoeda(totalRecebido);
+      if (lblAberto)      lblAberto.textContent      = formatarMoeda(totalAberto);
+
+      if (lblEventos)   lblEventos.textContent   = String(contarEventosUnicos(lista));
+      if (lblFormandos) lblFormandos.textContent = String(lista.length);
+      if (lblInad)      lblInad.textContent      = String(inadimplentes);
+    }
+
+    /* ---------- Cards principais (Resumo grande) ---------- */
+
+    function atualizarCardsPrincipais(filtrados) {
+      const lblProximosEventos = document.getElementById('cardProximosEventos');
+      const lblAlunosAtivos    = document.getElementById('cardAlunosAtivos');
+      const lblTotalReceber    = document.getElementById('cardTotalReceber');
+      const lblEmAtraso        = document.getElementById('cardEmAtraso');
+
+      const lista = filtrados || [];
+
+      const hoje = new Date();
+      const limite30Dias = new Date(hoje.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const limite15DiasAtraso = new Date(hoje.getTime() - 15 * 24 * 60 * 60 * 1000);
+
+      let qtdProximosEventos = 0;
+      let totalContratado    = 0;
+      let totalEmAtraso      = 0;
+
+      lista.forEach(reg => {
+        const vTot = Number(reg.valorTotal ?? reg.totalContratado ?? 0);
+        const vAb  = Number(reg.valorAberto ?? reg.totalAberto ?? 0);
+        totalContratado += isNaN(vTot) ? 0 : vTot;
+
+        const isoProx =
+          reg.proximoVencimentoISO ||
+          reg.ultimoVencimentoISO ||
+          reg.criadoEm;
+
+        if (isoProx) {
+          const d = new Date(isoProx);
+          if (!isNaN(d.getTime())) {
+            if (d >= hoje && d <= limite30Dias && vAb > 0) {
+              qtdProximosEventos++;
+            }
+            if (d <= hoje && d >= limite15DiasAtraso && vAb > 0) {
+              totalEmAtraso += vAb;
+            }
+          }
+        }
+      });
+
+      const todosAlunos = obterTodosRegistrosAlunos();
+      const anoAtual = new Date().getFullYear();
+      const alunosAtivosAno = todosAlunos.filter(a => {
+        const status = (a.status || '').toLowerCase();
+        const ano = Number(a.anoFormatura || anoAtual);
+        return status !== 'arquivado' && ano === anoAtual;
+      });
+
+      if (lblProximosEventos) lblProximosEventos.textContent = String(qtdProximosEventos);
+      if (lblAlunosAtivos)    lblAlunosAtivos.textContent    = String(alunosAtivosAno.length);
+      if (lblTotalReceber)    lblTotalReceber.textContent    = formatarMoeda(totalContratado);
+      if (lblEmAtraso)        lblEmAtraso.textContent        = formatarMoeda(totalEmAtraso);
+    }
+
+    /* ---------- Resumo por escola (tabela) ---------- */
+
+  function atualizarResumoPorEscola(filtrados) {
+  const tbody = document.getElementById('tbodyResumoEscolasPainel');
+  const infoSpan = document.getElementById('resumoEscolasInfo');
+
+  if (!tbody) return;
+
+  const lista = Array.isArray(filtrados) ? filtrados : [];
+  tbody.innerHTML = '';
+
+  // Carrega escolas cadastradas
+  let escolasValidas = null;
+  try {
+    const txt = localStorage.getItem('kgb-formaturas-escolas');
+    if (txt) {
+      const arr = JSON.parse(txt);
+      if (Array.isArray(arr)) {
+        escolasValidas = new Set(
+          arr
+            .map(e => (e.nome || e.nomeEscola || e.titulo || '').toString().trim().toLowerCase())
+            .filter(Boolean)
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao ler kgb-formaturas-escolas no resumo por escola:', e);
+  }
+
+  if (!lista.length) {
+    if (infoSpan) {
+      infoSpan.textContent = 'Nenhuma escola encontrada para os filtros atuais.';
+    }
+    return;
+  }
+
+  const mapa = new Map();
+
+  lista.forEach(reg => {
+    let nome = (reg.escolaNome || '').toString().trim();
+    if (!nome) nome = 'Escola não informada';
+
+    const nomeNormalizado = nome.toLowerCase();
+
+    // Se houver cadastro de escolas, ignora as que não existem mais
+    if (escolasValidas && !escolasValidas.has(nomeNormalizado)) {
+      return;
+    }
+
+    const ano = (reg.anoFormatura || '').toString().trim();
+
+    const vTot = Number(reg.valorTotal ?? reg.totalContratado ?? 0);
+    const vRec = Number(reg.valorPago  ?? reg.totalPago       ?? 0);
+    const vAb  = Number(reg.valorAberto ?? reg.totalAberto    ?? 0);
+
+    const sit = (reg.statusFinanceiro || reg.situacaoFinanceira || '').toLowerCase();
+    const inad = sit && sit !== 'quitado' && sit !== 'ok' && sit !== 'regular';
+
+    if (!mapa.has(nome)) {
+      mapa.set(nome, {
+        escola: nome,
+        anos: new Set(),
+        alunos: 0,
+        faturamento: 0,
+        recebido: 0,
+        aberto: 0,
+        inadimplentes: 0
+      });
+    }
+
+    const agg = mapa.get(nome);
+    if (ano) agg.anos.add(ano);
+    agg.alunos++;
+    agg.faturamento += isNaN(vTot) ? 0 : vTot;
+    agg.recebido    += isNaN(vRec) ? 0 : vRec;
+    agg.aberto      += isNaN(vAb)  ? 0 : vAb;
+    if (inad) agg.inadimplentes++;
+  });
+
+  const linhas = Array.from(mapa.values())
+    .sort((a, b) => a.escola.localeCompare(b.escola, 'pt-BR'))
+    .map(item => {
+      const anosHtml = Array.from(item.anos)
+        .sort()
+        .map(ano => `<span class="tag-ano">${ano}</span>`)
+        .join(' ');
+
+      return `
+        <tr>
+          <td>${item.escola}</td>
+          <td>${anosHtml || '-'}</td>
+          <td>${item.alunos}</td>
+          <td>${formatarMoeda(item.faturamento)}</td>
+          <td>${formatarMoeda(item.recebido)}</td>
+          <td>${formatarMoeda(item.aberto)}</td>
+          <td>${item.inadimplentes}</td>
+        </tr>
+      `;
+    });
+
+  if (!linhas.length) {
+    if (infoSpan) {
+      infoSpan.textContent = 'Nenhuma escola encontrada para os filtros atuais.';
+    }
+    return;
+  }
+
+  tbody.innerHTML = linhas.join('');
+  if (infoSpan) {
+    infoSpan.textContent = `Exibindo ${linhas.length} escola(s) para os filtros atuais.`;
+  }
+}
+
+
+    /* ---------- Próximos eventos (lista lateral) ---------- */
+
+    function atualizarEventosProximos(filtrados) {
+      const ul = document.getElementById('listaEventosProximos');
+      if (!ul) return;
+
+      ul.innerHTML = '';
+
+      const lista = filtrados || [];
+      const hoje = new Date();
+      const limite = new Date(hoje.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      const candidatos = lista
+        .map(reg => {
+          const iso =
+            reg.proximoVencimentoISO ||
+            reg.ultimoVencimentoISO ||
+            reg.criadoEm;
+          const d = iso ? new Date(iso) : null;
+          return { reg, iso, data: d };
+        })
+        .filter(item => item.data && !isNaN(item.data.getTime()) && item.data >= hoje && item.data <= limite)
+        .sort((a, b) => a.data - b.data)
+        .slice(0, 8);
+
+      if (!candidatos.length) {
+        const li = document.createElement('li');
+        li.className = 'evento-item';
+        li.textContent =
+          'Nenhum evento ou vencimento próximo encontrado para os próximos 30 dias com os filtros atuais.';
+        ul.appendChild(li);
+        return;
+      }
+
+      candidatos.forEach(item => {
+        const reg = item.reg;
+        const dataStr = formatarDataBr(item.iso);
+
+        let eventosTxt = '';
+        const eventos = Array.isArray(reg.eventos) ? reg.eventos : [];
+        if (eventos.length) {
+          const nomes = eventos
+            .map(ev => extrairNomeEvento(ev))
+            .filter(Boolean);
+          eventosTxt = nomes.join(', ');
+        }
+        if (!eventosTxt) {
+          eventosTxt = 'Formatura';
+          if (reg.anoFormatura) eventosTxt += ' ' + reg.anoFormatura;
+        }
+
+        const escolaTxt = (reg.escolaNome || 'Escola não informada') +
+          (reg.anoFormatura ? ` • ${reg.anoFormatura}` : '');
+
+        const situacaoTxt =
+          (reg.statusFinanceiro || reg.situacaoFinanceira || 'Situação não informada');
+
+        const li = document.createElement('li');
+        li.className = 'evento-item';
+        li.innerHTML = `
+          <div class="evento-linha-topo">
+            <span class="evento-nome">${eventosTxt}</span>
+            <span class="evento-data"><i data-lucide="calendar"></i> ${dataStr}</span>
+          </div>
+          <div class="evento-meta">
+            <span class="evento-tag">${escolaTxt}</span>
+            <span>${situacaoTxt}</span>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    /* ---------- Eventos dos botões / selects ---------- */
+
+    const btnAplicarFiltros = document.getElementById('btnAplicarFiltros');
+    if (btnAplicarFiltros) {
+      btnAplicarFiltros.addEventListener('click', aplicarFiltrosPainel);
+    }
+
+    ['filtroAnoPainel', 'filtroPeriodoPainel', 'filtroEscolaPainel', 'filtroTipoEventoPainel']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', aplicarFiltrosPainel);
+      });
+
+    /* ---------- Inicialização ---------- */
+    recarregarDadosDashboard();
+  }); // <-- fecha o addEventListener('DOMContentLoaded', () => { ... )
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Itens Evento</title>
+  <!-- Identidade RBAC da página -->
+<meta name="page-permission" content="page:itens-evento.html|Administrador|Vendedor|Maitre|Responsável por Evento">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH: helpers globais (kgb-common) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM PATCH === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg: #f8f1e8;
+      --brown: #5a3e2b;
+      --gold: #c29a5d;
+      --line: #e7dfd6;
+    }
+
+    /* Não afetar o menu: tipografia só na área principal */
+    html, body { margin:0; padding:0; background:var(--bg); }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Conteúdo principal (margem-left é ajustada via JS no desktop) */
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1, .conteudo-principal h2{
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{ font-size:28px; color:var(--brown); display:flex; align-items:center; gap:10px; }
+
+    /* Botão hambúrguer (mobile) */
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:var(--gold); border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+/* ===== MENU LATERAL OFF-CANVAS (mobile) ===== */
+@media (max-width: 768px){
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{
+    transform: translateX(0);
+  }
+}
+
+    /* Destaque local do item ativo no menu */
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    /* Tabela / inputs */
+    table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    thead tr{ background:#f3e8da; }
+    th, td{ padding:10px; text-align:left; border-bottom:1px solid #f1e7d9; }
+    tr:last-child td{ border-bottom:none; }
+
+    .input-num{ width:140px; border-radius:8px; padding:6px 10px; border:1px solid #ddd; text-align:right; }
+    .input-read{ width:140px; border-radius:8px; padding:6px 10px; background:#f5f2ec; border:none; text-align:right; }
+    .subtotal-item{ color:var(--brown); font-weight:600; padding:6px 8px; }
+
+    #resumoValores{
+      margin-top:24px; padding:18px; background:#fff; border:1px solid var(--line); border-radius:12px;
+    }
+
+    #salvarItensSelecionados{
+      margin-top:28px; background:var(--gold); color:#fff; border:none; border-radius:10px;
+      padding:12px 20px; font-size:16px; cursor:pointer;
+      box-shadow:0 2px 6px rgba(0,0,0,.12);
+    }
+    #salvarItensSelecionados:hover{ background:#a87f51; }
+
+    .section-space{ margin-top:36px; }
+
+    /* Backdrop do menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:900;
+    }
+
+    /* Travar scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado pelo JS do projeto) -->
+    <aside id="menuLateral"></aside>
+    <!-- Backdrop para o off-canvas do menu -->
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="utensils"></i> Seleção de Itens do Evento</h1>
+
+        <p>Escolha os itens e personalize valores/descontos para este evento.</p>
+
+        <div style="margin-bottom: 16px;">
+          <label for="quantidadeConvidados" style="font-weight:bold;">Quantidade de Convidados:</label>
+          <input type="number" id="quantidadeConvidados" class="input-num" placeholder="Ex: 100" />
+        </div>
+
+        <div id="blocoCardapios" class="section-space"></div>
+        <div id="blocoAdicionais" class="section-space"></div>
+        <div id="blocoServicos" class="section-space"></div>
+
+        <button id="salvarItensSelecionados">💾 Salvar e Voltar para o Evento</button>
+
+        <div id="resumoValores">
+          <h2 style="color:#5a3e2b; margin:0 0 8px;">💰 Resumo Financeiro</h2>
+          <p><strong>Total Bruto:</strong> <span id="totalBruto">R$ 0,00</span></p>
+          <p><strong>Desconto Total:</strong> <span id="totalDesconto">R$ 0,00</span></p>
+          <p><strong>Total Final:</strong> <span id="totalFinal">R$ 0,00</span></p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu como módulo (necessário pelo seu projeto) -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- LÓGICA DA PÁGINA -->
+  <script>
+    /* ===== Utilidades ===== */
+    const fmtBR = (n) => (Number(n)||0).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+    const slug = (s) => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+                      .toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+    const qs = (sel, root=document) => root.querySelector(sel);
+    const qsa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    function getQtdConvidados() {
+      const el = qs('#qtdConvidados, #quantidadeConvidados, #convidados, [name="qtdConvidados"]');
+      const fromInput = Number((el?.value || '').toString().replace(/\D/g, ''));
+      if (fromInput > 0) return fromInput;
+
+      try {
+        const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+        const fromTemp = Number(evt.qtdConvidados || evt.quantidadeConvidados || 0);
+        if (fromTemp > 0) return fromTemp;
+      } catch {}
+
+      const fromLS = Number(localStorage.getItem('quantidadeConvidadosEvento') || 0);
+      return Number.isFinite(fromLS) ? fromLS : 0;
+    }
+
+    /* ===== Menu Mobile: abre/fecha com backdrop e ESC ===== */
+    (function initMenuMobileUX() {
+      const aside  = document.getElementById('menuLateral');
+      const burger = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+      if (!aside || !burger || !backdrop) return;
+
+      const openMenu  = () => { aside.classList.add('aberto'); backdrop.hidden = false; document.body.classList.add('no-scroll'); };
+      const closeMenu = () => { aside.classList.remove('aberto'); backdrop.hidden = true; document.body.classList.remove('no-scroll'); };
+
+      burger.addEventListener('click', (e) => { e.stopPropagation(); const aberto = aside.classList.contains('aberto'); aberto ? closeMenu() : openMenu(); });
+      backdrop.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+      aside.addEventListener('click', (e)=> e.stopPropagation());
+      window.addEventListener('resize', () => { if (window.innerWidth > 768) closeMenu(); });
+    })();
+
+    /* ===== Ajusta margem do conteúdo conforme largura real do menu (desktop) ===== */
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    /* ===== Ícones ===== */
+    document.addEventListener("DOMContentLoaded", () => { try { window.lucide?.createIcons?.(); } catch {} });
+
+    /* ====== Renderização dos blocos ====== */
+    function linhaTabelaHTML({ tipo, item, convidados }) {
+      // ID estável por item
+      const baseId = item.id || item.codigo || item.slug || item.nome || Math.random().toString(36).slice(2);
+      const key = `${tipo}-${slug(baseId)}`;
+      let tipoCobranca = "valorTotal";
+      let valorOriginal = 0;
+
+      if (tipo === "cardapio" && Array.isArray(item.faixas)) {
+        const faixa = item.faixas.find(f => convidados >= f.min && convidados <= f.max);
+        valorOriginal = faixa ? Number(faixa.valor || 0) : 0;
+        tipoCobranca = "porPessoa";
+      } else {
+        tipoCobranca = (item.cobranca === "pessoa" || item.tipoCobranca === "porPessoa") ? "porPessoa" : "valorTotal";
+        valorOriginal = Number(item.valor || item.preco || 0);
+      }
+
+      return `
+        <tr>
+          <td>
+            <input type="checkbox"
+              data-key="${key}"
+              data-tipo="${tipo}"
+              data-label="${item.nome || item.titulo || 'Item'}"
+              data-cobranca="${tipoCobranca}">
+          </td>
+          <td>${item.nome || item.titulo || "Item"}</td>
+          <td><input class="input-read" type="text" value="${fmtBR(valorOriginal)}" readonly></td>
+          <td><input class="input-num" type="number" min="0" step="0.01" value="${valorOriginal}" data-valor="${key}"></td>
+          <td><input class="input-num" type="text" placeholder="Ex: 10% ou 20" data-desconto="${key}"></td>
+          <td>${tipoCobranca === "porPessoa" ? "por pessoa" : "valor total"}</td>
+        </tr>
+        <tr><td colspan="6"><div id="subtotal-${key}" class="subtotal-item"></div></td></tr>
+      `;
+    }
+
+    function renderizarBloco(titulo, tipo, containerId, lista, convidados) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = `<h2 style="color:#5a3e2b; margin:4px 0 10px;">${titulo}</h2>`;
+
+      if (!Array.isArray(lista) || !lista.length) {
+        container.innerHTML += "<p style='color:#999;'>Nenhum item cadastrado.</p>";
+        return;
+      }
+
+      const head = `
+        <thead>
+          <tr>
+            <th>Selecionar</th>
+            <th>Nome</th>
+            <th>Valor Original</th>
+            <th>Novo Valor</th>
+            <th>Desconto</th>
+            <th>Cobrança</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lista.map(item => linhaTabelaHTML({ tipo, item, convidados })).join("")}
+        </tbody>
+      `;
+
+      const table = document.createElement("table");
+      table.innerHTML = head;
+      container.appendChild(table);
+    }
+
+    function snapshotForm() {
+      const map = {};
+      qsa("input[type='checkbox'][data-key]").forEach(chk => {
+        const key = chk.dataset.key;
+        const val = qs(`input[data-valor='${key}']`)?.value || "0";
+        const des = qs(`input[data-desconto='${key}']`)?.value || "";
+        map[key] = { checked: chk.checked, valor: val, desconto: des };
+      });
+      return map;
+    }
+    function restoreForm(state) {
+      if (!state) return;
+      Object.entries(state).forEach(([key, st]) => {
+        const chk = qs(`input[type='checkbox'][data-key='${key}']`);
+        const v   = qs(`input[data-valor='${key}']`);
+        const d   = qs(`input[data-desconto='${key}']`);
+        if (chk) chk.checked = !!st.checked;
+        if (v && st.valor != null) v.value = st.valor;
+        if (d && st.desconto != null) d.value = st.desconto;
+      });
+    }
+// Pré-seleciona na tabela os itens que já estão salvos no evento
+function preselecionarItensDoEvento(eid){
+  if (!eid) return;
+  let ev = null;
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    ev = eventos.find(e => String(e.id) === String(eid)) || null;
+  } catch {}
+
+  const itens = Array.isArray(ev?.itensSelecionados) ? ev.itensSelecionados : [];
+  if (!itens.length) return;
+
+  // marca checkbox + restaura valor/ desconto
+  itens.forEach(it => {
+    const tipo  = (it.tipo || it.categoria || "").toString().toLowerCase();
+    const nome  = it.nome || it.nomeItem || it.titulo || it.label || "Item";
+    const labelSel = `input[type='checkbox'][data-tipo='${tipo}'][data-label='${nome}']`;
+    const chk = document.querySelector(labelSel);
+    if (!chk) return;
+    chk.checked = true;
+
+    const key = chk.dataset.key;
+    const vEl = document.querySelector(`input[data-valor='${key}']`);
+    const dEl = document.querySelector(`input[data-desconto='${key}']`);
+
+    if (vEl && it.valor != null) vEl.value = String(Number(it.valor) || 0);
+    if (dEl && it.desconto != null) dEl.value = String(it.desconto);
+
+    // mostra subtotal
+    const qtd = Number(document.querySelector("#quantidadeConvidados")?.value || 0);
+    const porPessoa = (chk.dataset.cobranca === "porPessoa");
+    const totalItem = porPessoa ? (Number(vEl?.value || 0) * (qtd || 0)) : Number(vEl?.value || 0);
+    let desc = 0;
+    const raw = (dEl?.value || "").trim();
+    if (/%\s*$/.test(raw)) {
+      const p = parseFloat(raw.replace("%","").replace(",",".")); 
+      if (isFinite(p)) desc = totalItem * (p/100);
+    } else if (raw) {
+      const n = parseFloat(raw.replace(",","."));
+      desc = isFinite(n) ? n : 0;
+    }
+    const final = Math.max(0, totalItem - desc);
+    const sub = document.getElementById(`subtotal-${key}`);
+    if (sub) sub.textContent = `Total: ${fmtBR(final)}`;
+  });
+}
+
+    function renderizarTodosBlocos() {
+      const convidados = Number(qs("#quantidadeConvidados")?.value || 0);
+      const state = snapshotForm();
+
+      renderizarBloco("🥗 Cardápios",  "cardapio",  "blocoCardapios",  (window.produtos || []).filter(p => p.tipo === "cardapio"), convidados);
+      renderizarBloco("🧀 Adicionais", "adicional", "blocoAdicionais", window.adicionais || [], convidados);
+      renderizarBloco("🛎️ Serviços",  "servico",   "blocoServicos",   window.servicos || [], convidados);
+restoreForm(state);
+ try { window.lucide?.createIcons?.(); } catch {}
+ atualizarResumoItens();
+    }
+function _toNumberBR(s){
+  return Number(String(s ?? '')
+    .replace(/[^\d,.-]/g,'')          // tira tudo que não é número, vírgula, ponto, sinal
+    .replace(/\.(?=\d{3,})/g,'')      // remove separadores de milhar
+    .replace(',', '.')) || 0;
+}
+
+function atualizarResumoItens(){
+  const qtd = Number(document.querySelector('#quantidadeConvidados')?.value || 0) || 0;
+
+  let totalBruto = 0;
+  let totalDesc  = 0;
+
+  // percorre SOMENTE os itens marcados
+  document.querySelectorAll('input[type="checkbox"][data-key]:checked').forEach(chk => {
+    const key        = chk.dataset.key;
+    const porPessoa  = (chk.dataset.cobranca === 'porPessoa');
+
+    // valor base digitado no campo "Novo Valor"
+    const vEl   = document.querySelector(`input[data-valor="${key}"]`);
+    const base  = _toNumberBR(vEl?.value);
+
+    // desconto pode ser "10%" ou "100,00"
+    const dEl   = document.querySelector(`input[data-desconto="${key}"]`);
+    const dRaw  = String(dEl?.value || '').trim();
+
+    // bruto do item
+    const brutoItem = porPessoa ? base * qtd : base;
+
+    // desc do item
+    let descItem = 0;
+    if (/%\s*$/.test(dRaw)) {
+      const p = parseFloat(dRaw.replace(/[^\d.,-]/g,'').replace(',', '.')) || 0;
+      descItem = brutoItem * Math.max(0, Math.min(100, p)) / 100;
+    } else if (dRaw) {
+      descItem = Math.min(brutoItem, _toNumberBR(dRaw));
+    }
+
+    totalBruto += brutoItem;
+    totalDesc  += descItem;
+
+    // mostra subtotal embaixo da linha
+    const final = Math.max(0, brutoItem - descItem);
+    const sub  = document.getElementById(`subtotal-${key}`);
+    if (sub) sub.textContent = `Total: ${(final||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
+  });
+
+  const totalFinal = Math.max(0, totalBruto - totalDesc);
+
+  // escreve no resumo (ids desta página)
+  const brl = n => (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const elB = document.getElementById('totalBruto');
+  const elD = document.getElementById('totalDesconto');
+  const elF = document.getElementById('totalFinal');
+
+  if (elB) elB.textContent = brl(totalBruto);
+  if (elD) elD.textContent = brl(totalDesc);
+  if (elF) elF.textContent = brl(totalFinal);
+}
+
+   /* ====== RESUMO FINANCEIRO (Contrato / Recebido / Falta) ====== */
+(function () {
+  const BRL = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const setTxt = (sel, v) => { const el = document.querySelector(sel); if (el) el.textContent = v; };
+  // seta em dois ids possíveis para ser tolerante ao HTML
+  const setContratoBoth = v => { setTxt('#finContrato', BRL(v)); setTxt('#finTotalContrato', BRL(v)); };
+
+  function getIdEventoAtual() {
+    try {
+      return String(
+        (window.evento && window.evento.id) ||
+        new URLSearchParams(location.search).get('id') ||
+        localStorage.getItem('eventoSelecionado') || ''
+      );
+    } catch { return ''; }
+  }
+
+  // Decide se um lançamento/linha está PAGO
+  function isPago(rec) {
+    const s = String(rec?.status || rec?.situacao || '').toLowerCase();
+    return rec?.pago === true || /pago|quitado|baixado/.test(s) || Number(rec?.valorPago) > 0;
+  }
+
+  // Decide se um lançamento é RECEBIMENTO (e não despesa)
+  function ehRecebimento(rec, keyHint = '') {
+    const txt = `${rec?.tipo || ''} ${rec?.categoria || ''} ${rec?.nome || ''} ${rec?.descricao || ''} ${keyHint}`.toLowerCase();
+    if (/despesa|custo|fornecedor|pagamento a/.test(txt)) return false;
+    return /receb|entrada|parcela|pagament|pix|cart|dinheiro|dep[oó]s/.test(txt) || true;
+  }
+
+  // Soma recebidos pagos em um array de registros
+  function somaArr(arr, idAtual, keyHint = '') {
+    let tot = 0;
+    (arr || []).forEach(rec => {
+      const evId = String(rec?.eventoId ?? rec?.evento ?? rec?.idEvento ?? '');
+      if (idAtual && evId && evId !== String(idAtual)) return;
+      if (!isPago(rec)) return;
+      if (!ehRecebimento(rec, keyHint)) return;
+      const v = Number(rec?.valorPago ?? rec?.valorParcela ?? rec?.valor ?? rec?.total ?? 0);
+      if (Number.isFinite(v)) tot += v;
+    });
+    return tot;
+  }
+
+  // Vasculha várias estruturas possíveis e soma o recebido
+  function calcularRecebidoDoEvento(idAtual) {
+    let recebido = 0;
+
+    // 1) Dentro do próprio evento
+    try {
+      const f = window.evento?.financeiro || {};
+      recebido += somaArr(f.lancamentos,  idAtual, 'evento.financeiro.lancamentos');
+      recebido += somaArr(f.parcelas,     idAtual, 'evento.financeiro.parcelas');
+      recebido += somaArr(f.recebimentos, idAtual, 'evento.financeiro.recebimentos');
+      if (Number(f.recebidoTotal) > 0) recebido = Math.max(recebido, Number(f.recebidoTotal));
+    } catch {}
+
+    // 2) Estrutura global agregada (financeiroGlobal)
+    try {
+      const glob = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}');
+      recebido += somaArr(glob.lancamentos,  idAtual, 'financeiroGlobal.lancamentos');
+      recebido += somaArr(glob.parcelas,     idAtual, 'financeiroGlobal.parcelas');
+      recebido += somaArr(glob.recebimentos, idAtual, 'financeiroGlobal.recebimentos');
+    } catch {}
+
+    // 3) Por evento: "financeiroEvento:<id>"
+    try {
+      const chave = 'financeiroEvento:' + idAtual;
+      const fx = JSON.parse(localStorage.getItem(chave) || '{}');
+      recebido += somaArr(fx.lancamentos,  idAtual, chave + '.lancamentos');
+      recebido += somaArr(fx.parcelas,     idAtual, chave + '.parcelas');
+      recebido += somaArr(fx.recebimentos, idAtual, chave + '.recebimentos');
+    } catch {}
+
+    // 4) Ponte de retorno (se alguma tela financeira gravar o total)
+    try {
+      const ponte = JSON.parse(localStorage.getItem('financeiro:return') || '{}');
+      if (String(ponte?.idEvento) === String(idAtual) && Number(ponte?.recebido) > 0) {
+        recebido = Math.max(recebido, Number(ponte.recebido));
+      }
+    } catch {}
+
+    return recebido;
+  }
+
+  // Atualiza o bloco visual
+  function renderFinanceiroResumo() {
+    const id = getIdEventoAtual();
+    const ev = window.evento || {};
+    const totalContrato =
+      Number(ev?.financeiro?.valorContrato) ||
+      Number(ev?.totais?.contrato) ||
+      Number(ev?.resumoFinanceiro?.contratoTotal) || 0;
+
+    const recebido = calcularRecebidoDoEvento(id);
+    const falta = Math.max(0, totalContrato - recebido);
+
+    setContratoBoth(totalContrato);      // atualiza finContrato e/ou finTotalContrato
+    setTxt('#finRecebido', BRL(recebido));
+    setTxt('#finFalta',    BRL(falta));
+  }
+
+  // Recalcula quando voltar de outra tela e ao carregar
+  window.addEventListener('storage', (e) => {
+    if (!e) return;
+    if (['financeiroGlobal', 'financeiro:return'].includes(e.key || '')) renderFinanceiroResumo();
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderFinanceiroResumo);
+  } else {
+    renderFinanceiroResumo();
+  }
+
+  // compat: se o código antigo chamar atualizarResumoFinanceiro(), aponta pra nova
+  window._renderFinanceiroResumo = renderFinanceiroResumo;
+  window.atualizarResumoFinanceiro = renderFinanceiroResumo;
+})();
+
+    /* ===== Boot ===== */
+    document.addEventListener("DOMContentLoaded", () => {
+      try { window.lucide?.createIcons?.(); } catch {}
+
+      // Bases carregadas do localStorage
+      window.produtos   = JSON.parse(localStorage.getItem("produtosBuffet")   || "[]");
+      window.adicionais = JSON.parse(localStorage.getItem("adicionaisBuffet") || "[]");
+      window.servicos   = JSON.parse(localStorage.getItem("servicosBuffet")   || "[]");
+
+      // Preenche quantidade de convidados
+      const qtdIni = getQtdConvidados();
+      const inpQtd = qs("#quantidadeConvidados");
+      if (inpQtd) inpQtd.value = String(qtdIni || "");
+
+      renderizarTodosBlocos();
+const params = new URLSearchParams(location.search);
+const eidDom = params.get("id") || localStorage.getItem("eventoSelecionado") || "";
+preselecionarItensDoEvento(eidDom);   // marca o que já existe
+atualizarResumoItens();               // recalcula o resumo desta tela
+      // Reagir às mudanças
+      document.addEventListener("input", (e) => {
+        const t = e.target;
+        if (!t) return;
+        if (t.id === "quantidadeConvidados") {
+          renderizarTodosBlocos();
+          return;
+        }
+      if (t.matches("input[data-valor], input[data-desconto]")) {
+   atualizarResumoItens();
+        }
+      });
+      document.addEventListener("change", (e) => {
+        const t = e.target;
+       if (t && t.matches("input[type='checkbox'][data-key]")) {
+   atualizarResumoItens();
+        }
+      });
+// Pré-seleciona na tela os itens que já existem no evento
+function preselecionarItensDoEvento(eid){
+  if (!eid) return;
+  let ev = null;
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    ev = eventos.find(e => String(e.id) === String(eid)) || null;
+  } catch {}
+
+  const itens = Array.isArray(ev?.itensSelecionados) ? ev.itensSelecionados : [];
+  if (!itens.length) return;
+
+  itens.forEach(it => {
+    const tipo  = (it.categoria || it.tipo || "").toString().toLowerCase();
+    const nome  = it.nome || it.nomeItem || it.titulo || it.label || "Item";
+
+    // checkbox gerado com data-tipo / data-label / data-key
+    const chk = document.querySelector(
+      `input[type="checkbox"][data-tipo="${tipo}"][data-label="${CSS.escape(nome)}"]`
+    );
+    if (!chk) return;
+    chk.checked = true;
+
+    const key = chk.dataset.key;
+    const vEl = document.querySelector(`input[data-valor="${key}"]`);
+    const dEl = document.querySelector(`input[data-desconto="${key}"]`);
+
+    if (vEl && it.valor != null) vEl.value = String(Number(it.valor) || 0);
+    if (dEl && (it.desconto != null && it.desconto !== "")) dEl.value = String(it.desconto);
+
+    // atualiza subtotal “visual”
+    const qtd = Number(document.querySelector("#quantidadeConvidados")?.value || 0);
+    const porPessoa = (chk.dataset.cobranca === "porPessoa");
+    const base = Number(vEl?.value || 0);
+    const bruto = porPessoa ? base * (qtd || 0) : base;
+
+    let desc = 0, raw = (dEl?.value || "").trim();
+    if (/%\s*$/.test(raw)) {
+      const p = parseFloat(raw.replace("%","").replace(",","."));
+      if (isFinite(p)) desc = bruto * (p/100);
+    } else if (raw) {
+      const n = parseFloat(raw.replace(",","."));
+      if (isFinite(n)) desc = n;
+    }
+    const final = Math.max(0, bruto - desc);
+    const sub = document.getElementById(`subtotal-${key}`);
+    if (sub) sub.textContent = `Total: ${(Number(final)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}`;
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(location.search);
+  const eid = params.get("id") || localStorage.getItem("eventoSelecionado") || "";
+  preselecionarItensDoEvento(eid);
+  // se sua página tiver uma função que recalcula o resumo, chame-a aqui:
+ try { atualizarResumoItens?.(); } catch {}
+});
+      // Salvar e voltar
+// Salvar e voltar (atualiza 'itensSelecionados' dentro do vetor 'eventos')
+qs("#salvarItensSelecionados")?.addEventListener("click", () => {
+  const selecionados = [];
+  document.querySelectorAll('input[type="checkbox"][data-key]:checked').forEach(chk => {
+    const key   = chk.dataset.key;
+    const tipo  = chk.dataset.tipo || "servico";
+    const label = chk.dataset.label || "Item";
+    const cobr  = chk.dataset.cobranca || "valorTotal"; // "porPessoa" | "valorTotal"
+
+    const valorEl = document.querySelector(`input[data-valor="${key}"]`);
+    const descEl  = document.querySelector(`input[data-desconto="${key}"]`);
+    const valor   = Number(valorEl?.value || 0);
+    const desconto = (descEl?.value || "").trim();
+
+    selecionados.push({
+      tipo, nome: label,
+      valor,
+      tipoCobranca: (cobr === "porPessoa") ? "porPessoa" : "valorTotal",
+      desconto
+    });
+  });
+
+  const qtd = Number(document.getElementById("quantidadeConvidados")?.value || 0);
+
+  // ponte (compat)
+  localStorage.setItem("itensSelecionadosEvento", JSON.stringify(selecionados));
+  localStorage.setItem("quantidadeConvidadosEvento", String(qtd));
+
+  // id + origem
+  const usp = new URLSearchParams(location.search);
+  const id  = usp.get("id") || localStorage.getItem("eventoSelecionado") || "";
+  const origem = usp.get("origem") || usp.get("from") || "";
+
+  // >>> grava no vetor 'eventos' (fonte da verdade)
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i = eventos.findIndex(e => String(e.id) === String(id));
+    if (i > -1) {
+      // se usuário não marcou nada, preserva o que já tinha
+      eventos[i].itensSelecionados = selecionados.length ? selecionados : (eventos[i].itensSelecionados || []);
+      if (qtd > 0) {
+        eventos[i].quantidadeConvidados = qtd;
+        eventos[i].qtdConvidados = qtd;
+      }
+      localStorage.setItem("eventos", JSON.stringify(eventos));
+    }
+    localStorage.setItem("evt:lastUpdate:" + id, String(Date.now()));
+  } catch (err) {
+    console.warn("Falha ao persistir itens:", err);
+  }
+
+  // limpa ponte (opcional)
+  try { localStorage.removeItem("itensEvento:returnTo"); } catch {}
+  
+  // volta para a tela correta
+  const back = /detalhado/i.test(origem)
+    ? `evento-detalhado.html?id=${encodeURIComponent(id)}`
+    : `cadastro-evento.html?id=${encodeURIComponent(id)}`;
+  window.location.href = back;
+});
+});
+
+    // Recria ícones quando o menu terminar de injetar (garantia extra)
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((m, o) => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+</body>
+</html>

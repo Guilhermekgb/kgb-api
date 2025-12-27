@@ -1,0 +1,36 @@
+:root{
+  --bg:#f8f1e8; --paper:#fff7ee; --card:#f9efe4; --text:#3a2b23;
+  --gold:#c29a5d; --brown:#5a3e2b; --radius:18px; --shadow:0 10px 18px rgba(0,0,0,.08);
+  --accent:#d9b879; --ok:#2e7d32; --warn:#a56b00; --bad:#b3261e;
+  --brand-font-1:"Playfair Display", serif; --brand-font-2: Inter, ui-sans-serif, system-ui;
+}
+*{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--brand-font-2)}
+a{color:var(--brown);text-decoration:none}
+.container{max-width:1100px;margin:28px auto;padding:0 16px}
+.card{background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+.h{font-family:var(--brand-font-1);letter-spacing:.2px}
+.h1{font-size:28px;margin:6px 0 16px}
+.h2{font-size:20px;margin:14px 0 10px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1 1 280px}
+.input, select, textarea{width:100%;padding:10px 12px;border:1px solid #dccfbf;border-radius:12px;background:white}
+.btn{background:linear-gradient(180deg,var(--gold),#b1843f);border:none;color:white;padding:10px 16px;border-radius:12px;font-weight:600;cursor:pointer}
+.btn.ghost{background:#fff;color:var(--brown);border:1px solid #d6c7b7}
+.btn.warn{background:var(--warn);color:#fff}
+.btn.bad{background:var(--bad);color:#fff}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#efeadf;color:#6a533e;font-size:12px}
+.table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden}
+.table th,.table td{padding:10px 12px;border-bottom:1px solid #e9dccb;text-align:left;background:#fff}
+.k-right{text-align:right}
+.k-center{text-align:center}
+.hr{height:1px;background:#e8dbc9;margin:12px 0}
+.small{font-size:12px;opacity:.85}
+.k-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.k-toolbar .spacer{flex:1}
+.k-pill{background:#f2e7d7;border:1px solid #decdb8;padding:6px 10px;border-radius:999px}
+.print-area{display:none}
+@media print{
+  .no-print{display:none !important}
+  .print-area{display:block !important}
+  body{background:#fff}
+}

@@ -1,0 +1,349 @@
+<!-- BACKUP: original cadastro-evento.html before removing per-page storage preload -->
+<!-- Full original content saved as a safety copy -->
+<!-- Created by automated edit on 2025-12-14 -->
+<![CDATA[
+<?xml version="1.0" encoding="utf-8"?>
+// backup placeholder - full file preserved in Git history as well
+]]>
+<!-- Salve como cadastro-evento.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  
+<meta name="page-permission" content="page:cadastro-evento.html">
+
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Cadastro de Evento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+<!-- 1) Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- Storage adapter (público) e shim para espelhar fotosClientes → storageAdapter -->
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+  <!-- estilos base do seu sistema -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- estilos específicos desta página -->
+  <link rel="stylesheet" href="cadastro-evento.css" />
+  <script src="./agenda-bridge.js"></script>
+
+</head>
+<body>
+
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+ <aside id="menuLateral" class="menu-lateral" role="navigation" aria-label="Menu lateral"></aside>
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+      
+      <h1><i data-lucide="calendar-plus"></i> Cadastro de Evento</h1>
+
+      
+
+     <!-- Header: Foto do cliente no topo -->
+<div class="header-foto-cliente">
+  <div>
+    <div id="fotoClienteBox" class="avatar-uploader" tabindex="0" aria-label="Enviar foto do cliente">
+      <img id="fotoClientePreview" alt="Foto do cliente" loading="lazy" />
+      <div class="avatar-overlay">
+        <i data-lucide="camera"></i>
+        <span>Selecionar</span>
+      </div>
+    </div>
+    <div class="avatar-caption">Foto do Cliente</div>
+    <div id="fotoClienteNome" class="avatar-filename" aria-live="polite"></div>
+  </div>
+
+  <!-- input real (escondido) -->
+  <input
+    type="file"
+    id="fotoCliente"
+    accept="image/png,image/jpeg,image/jpg,image/webp,image/*"
+    class="sr-only-file"
+  />
+
+  <div class="avatar-actions header-actions">
+    <button type="button" id="btnEscolherFoto" class="btn-ghost">Carregar foto</button>
+    <button type="button" id="btnRemoverFoto" class="btn-link">Remover</button>
+  </div>
+</div>
+
+
+
+      <!-- Avisos do cadastro (não bloqueia o salvamento) -->
+      <div id="avisosCadastro" class="alerta" style="display:none;" aria-live="polite"></div>
+
+      <!-- Badge do cliente selecionado (fica oculto até selecionar) -->
+      <div id="clienteBadge"
+           style="display:none; margin:-4px 0 12px 0; padding:8px 12px; background:#fff8ee; border:1px solid #f0e0c8; border-radius:10px; align-items:center; gap:8px;">
+        <i data-lucide="user"></i>
+        <strong id="clienteBadgeNome"></strong>
+        <span id="clienteBadgeHint" style="color:#6b6b6b; font-size:12px;"></span>
+        <!-- alias para compatibilidade com JS antigo que limpa #clienteHint -->
+        <span id="clienteHint" style="display:none;"></span>
+      </div>
+
+      <form id="formEvento" novalidate>
+        <div style="text-align:right; margin-bottom:10px;">
+          <button type="button" id="cadastrarNovoClienteTopo"
+            style="background:none; border:none; color:#7b3e1d; padding:0; font:inherit; text-decoration:underline; cursor:pointer;">
+            + Cadastrar novo cliente
+          </button>
+        </div>
+
+        <label>Nome do Evento</label>
+        <input type="text" id="nomeEvento" placeholder="Ex: Casamento Carol e Guilherme">
+
+        <label>Tipo de Evento</label>
+        <select id="tipoEvento">
+          <option value="">Selecione</option>
+        </select>
+
+        <section>
+          <h3 class="section-title">
+            <span class="section-icon"><i data-lucide="user"></i></span>
+            <span>Dados do Cliente</span>
+          </h3>
+          <div class="duas-colunas">
+            <div>
+              <label for="nomeCliente"><strong>Nome do Cliente</strong></label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="text" id="nomeCliente" placeholder="Buscar cliente..." style="flex:1;">
+                <button type="button" id="abrirPickerClientes"
+                  title="Selecionar da lista"
+                  style="padding:10px 12px; border-radius:10px; border:1px solid #ccc; background:#fffdfb; cursor:pointer;">
+                  Selecionar
+                </button>
+              </div>
+              <input type="hidden" id="clienteId">
+            </div>
+
+            <div>
+              <label>Telefone</label>
+              <input type="text" id="telefoneCliente" readonly>
+            </div>
+            <div>
+              <label>Email</label>
+              <input type="email" id="emailCliente" readonly>
+            </div>
+          </div>
+        </section>
+
+        <div class="duas-colunas">
+          <div>
+            <label>Como nos conheceu</label>
+            <select id="origemCliente"><option value="">Selecione</option></select>
+          </div>
+          <div>
+            <label>Obs. de como conheceu</label>
+            <input type="text" id="origemObs" placeholder="Ex.: Indicação da Maria / Feira X">
+          </div>
+        </div>
+
+        <div class="duas-colunas">
+          <div>
+            <label>Data do Evento</label>
+            <input type="date" id="data">
+          </div>
+          <!-- NOVO: Data de criação (somente leitura) -->
+<div>
+  <label for="eventoCriadoEm">Criado em</label>
+  <input type="date" id="eventoCriadoEm" disabled>
+</div>
+
+          <div>
+            <label>Local do Evento</label>
+            <input type="text" id="local">
+          </div>
+        </div>
+
+        <!-- Resumo por data (pre-save) -->
+<div id="resumoData" style="display:none; margin:10px 0 0; background:#fff8ee; border:1px solid #f0e0c8; border-radius:12px; padding:12px;">
+  <div id="resumoDataInner" style="display:grid; gap:10px;"></div>
+</div>
+
+        <div class="duas-colunas">
+          <div>
+            <label>Quantidade de Convidados</label>
+            <input type="number" id="quantidadeConvidados">
+          </div>
+          <div>
+            <label>Cerimônia no Local?</label>
+            <select id="cerimonia">
+              <option value="Sim">Sim</option>
+              <option value="Não">Não</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Horários do Evento e da Cerimônia -->
+        <div class="duas-colunas">
+          <div>
+            
+            <label for="horarioCerimonia">Horário da Cerimônia</label>
+            <input type="time" id="horarioCerimonia">
+          </div>
+          <div>
+            <label for="horarioEvento">Horário do Evento</label>
+            <input type="time" id="horarioEvento">
+          </div>
+        </div>
+
+        <!-- Cerveja? -->
+        <div class="duas-colunas">
+          <div>
+            <label for="cerveja">Cerveja?</label>
+            <select id="cerveja">
+              <option value="">Selecione</option>
+              <option value="Sim">Sim</option>
+              <option value="Não">Não</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+
+        <section class="bloco-dados">
+  <h3>📝 Observações</h3>
+
+  <div class="form-grid">
+    <div class="form-item">
+      <label for="observacoes">Observações (geral)</label>
+      <textarea id="observacoes" rows="2"
+        placeholder="Observações gerais do evento (ex.: regras, horários, etc.)"></textarea>
+    </div>
+
+    <div class="form-item">
+      <label for="observacao1">Observação 1</label>
+      <textarea id="observacao1" rows="2"
+        placeholder="Vai para o contrato como {{observacao1}} no campo itens contratados"></textarea>
+    </div>
+
+    <div class="form-item">
+      <label for="observacao2">Observação 2</label>
+      <textarea id="observacao2" rows="2"
+        placeholder="Vai para o contrato como {{observacao2}} no campo forma pagamento da entrada"></textarea>
+    </div>
+  </div>
+</section>
+
+
+        <a href="javascript:void(0)" class="btn-itens-evento" onclick="salvarItensEIrParaItensEvento();">
+          <i data-lucide="utensils"></i> Selecionar Itens do Evento
+        </a>
+
+        <h3 class="section-title">
+          <span class="section-icon"><i data-lucide="package"></i></span>
+          <span>Itens Selecionados do Evento</span>
+        </h3>
+
+        <table id="tabelaItensSelecionados" style="width:100%; border-collapse:collapse; margin-top:10px;">
+          <thead>
+            <tr>
+  <th>Item</th>
+  <th>Cobrança</th>
+  <th>Valor Total</th>
+  <th style="text-align:center;">Ações</th>
+</tr>
+
+          </thead>
+          <tbody id="listaItensSelecionados"></tbody>
+        </table>
+      </form>
+
+      <div id="blocoHistoricoLead" style="margin-top:30px;">
+        <h3 class="section-title">
+          <span class="section-icon"><i data-lucide="history"></i></span>
+          <span>Histórico de Anotações do Lead</span>
+        </h3>
+
+        <ul id="listaHistoricoLead" style="padding-left:20px; list-style:disc;"></ul>
+      </div>
+
+      <div id="novaAnotacaoContainer" style="margin-top:20px;">
+        <label for="novaAnotacaoEvento" style="display:block; color:#5a3e2b; font-weight:bold;">Nova Anotação:</label>
+        <textarea id="novaAnotacaoEvento" rows="3" placeholder="Digite sua anotação..." style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;"></textarea>
+        <button type="button" onclick="salvarAnotacaoEvento()" style="margin-top:10px; background:#5a3e2b; color:#fff; padding:8px 16px; border:none; border-radius:6px; cursor:pointer;">
+          Salvar Anotação
+        </button>
+
+        <div class="duas-colunas" style="margin-top:30px;">
+          <div>
+            <label>Vendedor Responsável</label>
+            <select id="vendedor"></select>
+          </div>
+          <div>
+            <!-- Botão final fora do <form> -->
+            <div style="margin-top:24px; display:flex; justify-content:flex-end;">
+              <button type="submit" id="btnSalvarFinal" class="btn-salvar">
+                <i data-lucide="save"></i>
+                <span>Salvar Evento</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script type="module" src="menu-lateral.js"></script>
+<script src="./api/storage-adapter.js"></script>
+<script>
+  try{ if(window.storageAdapter && typeof window.storageAdapter.preload === 'function'){ window.storageAdapter.preload('fotosClientes').catch(()=>{}); } }catch(e){}
+</script>
+<script type="module" src="cadastro-evento.js"></script>
+
+<!-- Modal de clientes -->
+<div id="modalClientes" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:2000; align-items:center; justify-content:center;">
+  <div style="background:#fffdfb; width:min(720px, 92vw); max-height:80vh; overflow:auto; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.2); padding:18px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <input id="buscaClienteModal" placeholder="Pesquisar cliente..." style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid #ccc;">
+      <button type="button" id="fecharModalClientes" class="btn" style="padding:10px 12px; border-radius:10px; border:1px solid #ccc; background:#fff;">Fechar</button>
+    </div>
+    <div id="listaClientesModal" style="display:grid; gap:8px;"></div>
+  </div>
+</div>
+<!-- Guard / RBAC -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim();
+  if (permissao) guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+</body>
+</html>

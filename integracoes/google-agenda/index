@@ -1,0 +1,10 @@
+export async function criarEventoGoogleAgenda(evento) {
+  console.log("Simulando criação de evento no Google Agenda:", evento);
+  return {
+    status: "sucesso",
+    eventoId: "simulado-evento-456",
+    titulo: evento.titulo,
+    data: evento.data,
+    hora: evento.hora
+  };
+}

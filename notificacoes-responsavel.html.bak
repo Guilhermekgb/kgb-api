@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:notificacoes-responsavel.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host==="localhost" || host==="127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try{
+      localStorage.setItem("API_BASE", base);
+    }catch(e){
+      console.warn("[KGB] Falha ao salvar API_BASE:", e);
+    }
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO: Helpers globais (precisam vir antes do guard) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM: Helpers globais === -->
+
+  <title>Notificações - Responsável de Evento</title>
+
+  <!-- Lucide -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos padrão -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#faf7f2; --surface:#fff; --ink:#2f2a25; --muted:#7a7066; --line:#eadfd1;
+      --brand:#c29a5d; --brand-900:#9f7b45; --danger:#d84a4a; --ok:#2e7d32;
+      --pill:#fff7f0;
+      --radius:14px; --shadow:0 4px 18px rgba(0,0,0,.06);
+    }
+    body{ background:var(--bg); color:var(--ink); }
+
+    /* Cabeçalho da página */
+    .page-header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;
+    }
+    .page-title{
+      display:flex; align-items:center; gap:10px;
+    }
+    .page-title h1{
+      margin:0;
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex; align-items:center; gap:10px;
+    }
+    .page-title p{
+      margin:0; margin-top:2px; font-size:13px; color:var(--muted);
+    }
+
+    /* Layout principal */
+    .layout{
+      display:flex; min-height:100vh; overflow:hidden;
+    }
+    main.conteudo-principal{
+      flex:1;
+      padding:18px 22px;
+      overflow:auto;
+    }
+    .conteudo-centro{
+      max-width:1100px;
+      margin:0 auto 32px;
+    }
+
+    /* Hamburguer (mobile) */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001;
+      background:var(--brand); color:#fff; border:none; border-radius:10px; padding:6px 10px;
+      display:none; align-items:center; gap:4px;
+    }
+    #hamburguer i{ width:18px; height:18px; }
+    @media (max-width:768px){
+      #hamburguer{ display:inline-flex; }
+      #menuLateral{
+        position:fixed; top:0; left:0; bottom:0; width:250px;
+        transform:translateX(-100%);
+        transition:transform .25s ease-out;
+        z-index:1000;
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      main.conteudo-principal{ padding:70px 14px 20px; }
+    }
+
+    /* Toolbar */
+    .toolbar{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin:12px 0 10px;
+    }
+    .toolbar-left, .toolbar-right{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .chip{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-size:12px; color:#5a3e2b; }
+    .btn, .btn-ghost{
+      display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer;
+      border-radius:10px; padding:8px 12px; font-size:13px; font-weight:500;
+    }
+    .btn{ background:var(--brand); color:#fff; }
+    .btn:hover{ background:#b3884e; }
+    .btn-ghost{ background:transparent; color:#5a3e2b; }
+    .btn-ghost:hover{ background:rgba(0,0,0,.04); }
+
+    .btn i, .btn-ghost i{
+      width:16px; height:16px;
+    }
+
+    /* Chips (fontes, audiência, status) */
+    .chips{
+      display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; align-items:center;
+    }
+    .chips strong{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+    .chips label{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+    .chips input[type="radio"]{ accent-color:var(--brand); }
+
+    /* Cards de resumo */
+    .resumos{
+      display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; margin:16px 0 14px;
+    }
+    .res-card{
+      background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:10px 12px;
+    }
+    .res-label{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:4px; }
+    .res-value{ font-size:22px; font-weight:600; color:#4a3425; }
+    .res-sub{ font-size:11px; color:var(--muted); }
+    @media (max-width:900px){
+      .resumos{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width:600px){
+      .resumos{ grid-template-columns:1fr; }
+    }
+
+    /* Colunas principais */
+    .grid-main{
+      display:grid; grid-template-columns:2.1fr 1.1fr; gap:18px; align-items:flex-start;
+    }
+    @media (max-width:900px){
+      .grid-main{ grid-template-columns:1fr; }
+    }
+
+    .panel{
+      background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:12px 14px 10px;
+    }
+    .panel-header{
+      display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px;
+    }
+    .panel-header h2{
+      margin:0; font-size:15px; color:#4a3425; display:flex; align-items:center; gap:6px;
+    }
+    .tag-pill{
+      display:inline-flex; align-items:center; justify-content:center;
+      border-radius:999px; padding:3px 8px; background:var(--pill); border:1px solid #e0d4c6;
+      font-size:11px; color:#7a6a5c;
+    }
+
+    /* Lista de cards (agenda principal) */
+    .cards-list{
+      list-style:none; margin:0; padding:0;
+    }
+    .card{
+      background:var(--surface);
+      border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin-bottom:12px;
+    }
+    .card-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;
+    }
+    .card-title{ font-weight:700; color:#5a3e2b; }
+    .card-sub{ color:var(--muted); font-size:12px; }
+
+    /* Lista de tarefas do card (linhas) */
+    .task{
+      display:grid; grid-template-columns: 120px 1fr auto; align-items:center; gap:12px;
+      border-top:1px dashed #eadfd1; padding:10px 0;
+    }
+    .task-date{ color:var(--muted); font-size:12px; }
+    .task-title{ font-size:14px; }
+    .task .btn-ghost{ white-space:nowrap; }
+
+    /* Estado atrasado (leve) */
+    .task.atrasada .task-title{ color:#7a2020; }
+    .task.atrasada .task-date{ color:#a44; }
+
+    /* Vazio */
+    .empty{
+      margin-top:16px; background:#fff; border:1px dashed #e7d9c7; border-radius:14px; padding:18px; text-align:center;
+      color:#705a4a;
+    }
+    .empty strong{ color:#3f3024; }
+
+    /* Skeleton loader */
+    .skeleton{
+      background:linear-gradient(90deg,#f3ede4,#f8f2ea,#f3ede4);
+      background-size:200% 100%;
+      animation:skeleton-loading 1.2s ease-in-out infinite;
+      border-radius:10px;
+      margin-bottom:8px;
+      height:46px;
+    }
+    .sk-card{
+      height:60px; margin-bottom:10px;
+    }
+    @keyframes skeleton-loading{
+      0%{ background-position:200% 0; }
+      100%{ background-position:0 0; }
+    }
+
+    /* Lista de recentes (coluna direita) */
+    .recentes-list{
+      list-style:none; margin:0; padding:0;
+    }
+    .recent{
+      display:flex; flex-direction:column; gap:4px;
+      padding:10px 10px; border-radius:var(--radius);
+      border:1px solid #eadfd1; background:#fff;
+      margin-bottom:8px;
+    }
+    .recent-main{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+    }
+    .recent-title{ font-size:13px; color:#3f3024; font-weight:600; }
+    .recent-meta{ font-size:11px; color:var(--muted); display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .recent-tag{
+      font-size:10px; text-transform:uppercase; letter-spacing:.08em; padding:2px 6px; border-radius:999px; background:#f7efe4; color:#7a6044;
+    }
+
+    .recent-empty{
+      margin-top:10px; font-size:12px; color:var(--muted); font-style:italic;
+    }
+
+    /* Badge sinais */
+    .badge{
+      display:inline-flex; align-items:center; justify-content:center;
+      border-radius:999px; padding:2px 7px; font-size:11px; font-weight:600;
+    }
+    .badge-ok{
+      background:rgba(46,125,50,.1); color:#2e7d32;
+    }
+    .badge-late{
+      background:rgba(216,74,74,.08); color:#b63a3a;
+    }
+    .badge-warn{
+      background:rgba(255,193,7,.1); color:#7a5a00;
+    }
+
+    /* Helpers */
+    .muted{ color:var(--muted); font-size:12px; }
+    .pill-count{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:22px; padding:2px 6px; border-radius:999px;
+      background:#f5ebde; color:#5a3e2b; font-size:11px;
+    }
+
+    /* === Ajustes específicos da página do RESPONSÁVEL DE EVENTO === */
+    /* Mostrar somente a aba "Eventos" nas fontes de notificações internas */
+    body.page-resp-evento #chips-fontes .chip:nth-child(1), /* Checklist */
+    body.page-resp-evento #chips-fontes .chip:nth-child(2), /* Financeiro */
+    body.page-resp-evento #chips-fontes .chip:nth-child(3), /* Leads */
+    body.page-resp-evento #chips-fontes .chip:nth-child(4), /* Funil */
+    body.page-resp-evento #chips-fontes .chip:nth-child(6)  /* Interno */ {
+      display: none !important;
+    }
+  </style>
+</head>
+<body class="page-resp-evento">
+  <!-- Guarda de permissão (protege a página) -->
+  <script type="module">
+    import { protegerPagina } from "./api/proteger-pagina.js";
+    protegerPagina("notificacoes-internas");
+  </script>
+
+  <button id="hamburguer" aria-label="Abrir menu lateral" aria-controls="menuLateral" aria-expanded="false">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="layout">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-centro">
+        <header class="page-header">
+          <div class="page-title">
+            <h1 class="h1"><i data-lucide="calendar-check"></i> Minhas Notificações de Eventos</h1>
+            <p>Veja eventos que estão próximos, vencendo ou atrasados e o que precisa da sua atenção.</p>
+          </div>
+        </header>
+
+        <section aria-label="Filtros e resumo da agenda">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <span class="muted">Filtrar por:</span>
+              <button class="btn-ghost" id="filtroTodos"><i data-lucide="list-checks"></i> Todos</button>
+              <button class="btn-ghost" id="filtroHoje"><i data-lucide="sun"></i> Vencem hoje</button>
+              <button class="btn-ghost" id="filtroAtrasados"><i data-lucide="alert-triangle"></i> Atrasados</button>
+            </div>
+
+            <div class="toolbar-right">
+              <button id="btnMarkAll" class="btn-ghost" title="Marcar tudo como lido">
+                <i data-lucide="check-check"></i> Marcar tudo como lido
+              </button>
+              <button id="btnMarcarHoje" class="btn">
+                <i data-lucide="check-circle-2"></i> Marcar “ok” de hoje
+              </button>
+            </div>
+          </div>
+
+          <!-- Fontes (somente Eventos ficará visível com o CSS desta página) -->
+          <div class="chips" id="chips-fontes">
+            <label class="chip"><input type="radio" name="fonteNI" value="check" checked> Checklist</label>
+            <label class="chip"><input type="radio" name="fonteNI" value="fin"> Financeiro</label>
+            <label class="chip"><input type="radio" name="fonteNI" value="lead"> Leads</label>
+            <label class="chip"><input type="radio" name="fonteNI" value="funil"> Funil</label>
+            <label class="chip"><input type="radio" name="fonteNI" value="evento"> Eventos</label>
+            <label class="chip"><input type="radio" name="fonteNI" value="interno"> Interno</label>
+          </div>
+
+          <!-- Skeleton inicial -->
+          <div id="skeletonBox">
+            <div class="skeleton sk-card"></div>
+            <div class="skeleton sk-card"></div>
+            <div class="skeleton sk-card"></div>
+          </div>
+
+          <!-- Resumo -->
+          <div class="resumos" id="resumosBox" hidden>
+            <article class="res-card">
+              <div class="res-label">Eventos do dia</div>
+              <div class="res-value" id="resHoje">0</div>
+              <div class="res-sub">Com ações previstas para hoje</div>
+            </article>
+            <article class="res-card">
+              <div class="res-label">Atrasados</div>
+              <div class="res-value" id="resAtrasados">0</div>
+              <div class="res-sub">Itens que já deveriam ter sido concluídos</div>
+            </article>
+            <article class="res-card">
+              <div class="res-label">Próximos 7 dias</div>
+              <div class="res-value" id="resProx7">0</div>
+              <div class="res-sub">Eventos e tarefas desta semana</div>
+            </article>
+            <article class="res-card">
+              <div class="res-label">Total na agenda</div>
+              <div class="res-value" id="resTotal">0</div>
+              <div class="res-sub">Itens da sua agenda de eventos</div>
+            </article>
+          </div>
+        </section>
+
+        <section aria-label="Agenda e feed de notificações">
+          <div class="grid-main">
+            <section class="panel" aria-label="Agenda unificada de eventos">
+              <header class="panel-header">
+                <h2><i data-lucide="calendar-range"></i> Agenda de Eventos</h2>
+                <span class="tag-pill">
+                  <span id="countAgenda">0</span> itens
+                </span>
+              </header>
+
+              <!-- Lista padrão (Checklist/Agenda) – usada pelo JS atual -->
+              <ul id="listaChecklist" class="cards-list" aria-live="polite"></ul>
+              <div id="emptyChecklist" class="empty" hidden>
+                <strong>Nenhum item encontrado.</strong><br/>
+                Ajuste os filtros acima para ver outros períodos.
+              </div>
+            </section>
+
+            <aside class="panel" aria-label="Notificações recentes da agenda unified">
+              <header class="panel-header">
+                <h2><i data-lucide="bell-ring"></i> Últimas notificações</h2>
+                <span class="tag-pill">
+                  <span id="countRecentes">0</span> recentes
+                </span>
+              </header>
+
+              <ul id="listaRecentes" class="recentes-list"></ul>
+              <p id="emptyRecentes" class="recent-empty" hidden>Nenhuma notificação recente para seus eventos.</p>
+            </aside>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+    <!-- Ponte Agenda / Notificações internas -->
+  <script src="agenda-bridge.js"></script>
+  <!-- Menu lateral -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Ponte opcional para integrar agendaUnified/notificationsFeed -->
+  <script src="agenda-bridge.js"></script>
+
+  <!-- Script principal da página (reaproveita o mesmo JS das notificações internas) -->
+  <script defer src="notificacoes-internas.js"></script>
+
+  <script>
+  // BOTÃO/FORM de exemplo: publique um aviso interno
+  function publicarAvisoInterno({ idInterno, titulo, dataISO, timeStart, audience }) {
+    // (opcional) se quiser manter uma lista própria de avisos:
+    // const arr = JSON.parse(localStorage.getItem('avisosInternos')||'[]');
+    // arr.unshift({id:idInterno, titulo, dataISO, timeStart, audience});
+    // localStorage.setItem('avisosInternos', JSON.stringify(arr));
+
+    // Para integrar com agendaUnified/notificationsFeed, delegamos à ponte, se existir:
+    try{
+      if (window.__AGENDA_BRIDGE__ && typeof window.__AGENDA_BRIDGE__.upsertUnifiedItem==='function') {
+        window.__AGENDA_BRIDGE__.upsertUnifiedItem({
+          id: idInterno,
+          src: 'interno',
+          title: titulo,
+          dateISO: dataISO,
+          timeStart,
+          audience
+        });
+      }
+      if (window.__AGENDA_BRIDGE__ && typeof window.__AGENDA_BRIDGE__.publishNotificationFeed==='function') {
+        window.__AGENDA_BRIDGE__.publishNotificationFeed({
+          unifiedId: idInterno,
+          title:`Aviso interno: ${titulo}`,
+          level:'info',
+          createdAtISO:new Date().toISOString(),
+          audience
+        });
+      }
+    } catch(e){
+      console.error("Falha ao publicar aviso interno integrado:", e);
+    }
+  }
+
+  // ===== UI: Lucide + Menu Mobile (fallback) =====
+  document.addEventListener('DOMContentLoaded', () => {
+    try { window.lucide?.createIcons?.(); } catch {}
+
+    if (!window.__MENU_LATERAL_INIT__) {
+      const btn  = document.getElementById('hamburguer');
+      const menu = document.getElementById('menuLateral');
+
+      btn?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const opened = menu?.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', opened ? 'true' : 'false');
+        document.body.style.overflow = opened ? 'hidden' : '';
+      });
+
+      // Fecha o menu ao clicar fora
+      document.addEventListener('click', (e) => {
+        if (!menu?.classList.contains('aberto')) return;
+        const clicouNoMenu  = menu.contains(e.target);
+        const clicouNoBotao = btn.contains(e.target);
+        if (!clicouNoMenu && !clicouNoBotao) {
+          menu.classList.remove('aberto');
+          btn.setAttribute('aria-expanded','false');
+          document.body.style.overflow = '';
+        }
+      });
+
+      // Fecha o menu ao redimensionar (evita ficar preso aberto)
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && menu?.classList.contains('aberto')) {
+          menu.classList.remove('aberto');
+          document.body.style.overflow = '';
+          btn?.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  });
+  </script>
+
+ <script>
+  // Ajuste específico desta página:
+  // - força a fonte "evento"
+  // - força filtro "atrasados" (se ainda não estiver setado)
+  // - filtra a agendaUnified só para o responsável logado
+  window.addEventListener('load', function () {
+    try {
+      if (typeof window.STATE !== 'undefined') {
+        // só eventos
+        window.STATE.fonte = 'evento';
+
+        // padrão: mostrar atrasados (pode trocar pra 'todos' se quiser)
+        if (!window.STATE.filtro) {
+          window.STATE.filtro = 'atrasados';
+        }
+
+        // pega usuário logado para filtrar apenas os eventos dele
+        let audience = '';
+        try {
+          // tenta ler de usuarioLogado ou userProfile
+          const u = JSON.parse(
+            localStorage.getItem('usuarioLogado') ||
+            localStorage.getItem('userProfile') ||
+            '{}'
+          );
+          audience = String(u.email || u.nome || '').toLowerCase();
+        } catch {}
+
+        // se tiver dado de usuário, seta STATE.audience
+        if (audience) {
+          window.STATE.audience = audience;
+        }
+
+        // renderiza com esses filtros
+        if (typeof window.render === 'function') {
+          window.render();
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ajustar painel do responsável de evento:', e);
+    }
+  });
+</script>
+<script>
+  // Ajuste específico desta página:
+  // - força a fonte "evento"
+  // - força filtro "atrasados" (se ainda não estiver setado)
+  // - filtra a agendaUnified só para o responsável logado
+  window.addEventListener('load', function () {
+    try {
+      if (typeof window.STATE !== 'undefined') {
+        // só eventos
+        window.STATE.fonte = 'evento';
+
+        // padrão: mostrar atrasados (pode trocar pra 'todos' se quiser)
+        if (!window.STATE.filtro) {
+          window.STATE.filtro = 'atrasados';
+        }
+
+        // pega usuário logado para filtrar apenas os eventos dele
+        let audience = '';
+        try {
+          // tenta ler de usuarioLogado ou userProfile
+          const u = JSON.parse(
+            localStorage.getItem('usuarioLogado') ||
+            localStorage.getItem('userProfile') ||
+            '{}'
+          );
+          audience = String(u.email || u.nome || '').toLowerCase();
+        } catch {}
+
+        // se tiver dado de usuário, seta STATE.audience
+        if (audience) {
+          window.STATE.audience = audience;
+        }
+
+        // renderiza com esses filtros
+        if (typeof window.render === 'function') {
+          window.render();
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ajustar painel do responsável de evento:', e);
+    }
+  });
+</script>
+
+
+</body>
+</html>
+

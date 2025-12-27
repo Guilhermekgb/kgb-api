@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:entradas-saida.html">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<title>Entradas & Saídas — Evento</title>
+
+<!-- Silencia 404 do favicon -->
+<link rel="icon" href="data:,">
+
+<!-- Estilos globais + menu (ordem importa) -->
+<link rel="stylesheet" href="./kgb-common.css"/>
+<link rel="stylesheet" href="./menu-lateral.css"/>
+
+<!-- Lucide + utilitários comuns -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === INÍCIO PATCH GUARD (entradas-saidas) === -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+<script type="module">
+  import guard from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim() || 'page:entradas-saida.html';
+  guard({ permissao });
+</script>
+<!-- === FIM PATCH GUARD (entradas-saidas) === -->
+
+<script src="./agenda-bridge.js"></script>
+
+
+<style>
+  :root{ --sidebar-w:260px; --card-bg:#fff; --muted:#666; }
+
+  /* Layout no padrão do MODELO BASE */
+  html, body{ margin:0; padding:0; background:#f8f1e8; height:100%; }
+  .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+  #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+  main.conteudo-principal{
+    flex:1; min-height:100vh; overflow-y:auto; width:100% !important; max-width:none !important;
+    margin:0 !important; padding:24px clamp(16px, 3vw, 32px) 40px;
+  }
+  .conteudo-central{ display:contents !important; }
+
+  @media (min-width:769px){
+    #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:999; }
+    .wrapper{ padding-left:var(--sidebar-w); }
+    main.conteudo-principal{ margin-left:0 !important; }
+  }
+
+  .container{ max-width:1200px; margin:0 auto; }
+  .card{ background:var(--card-bg); border-radius:16px; box-shadow:var(--shadow-1); padding:12px; }
+  .h.h1{ font-size:26px; font-weight:800; margin:8px 0 16px; color:#5a3e2b; font-family:"Playfair Display", serif; }
+  .h.h2{ font-size:18px; font-weight:700; margin:0 0 8px; }
+  .h.h3{ font-size:16px; font-weight:700; margin:0 0 8px; color:#333; }
+
+  .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .row label{ display:flex; flex-direction:column; gap:4px; font-size:13px; }
+  .spacer{ flex:1; }
+  .small{ font-size:12px; color:var(--muted); }
+
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  @media (max-width: 1000px){ .grid{ grid-template-columns: 1fr; } }
+
+  .kpi-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+  .kpi{ border:1px solid #eee; border-radius:12px; padding:12px; background:#fafafa; }
+  .kpi .label{ font-size:12px; color:#666; }
+  .kpi .value{ font-size:22px; font-weight:800; margin-top:4px; }
+
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ border-bottom:1px solid #eee; text-align:left; padding:8px; font-size:14px; }
+  th.k-right, td.k-right{ text-align:right; }
+
+  .list-cols{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  @media (max-width: 800px){ .list-cols{ grid-template-columns: 1fr; } }
+
+  .btn{ height:36px; }
+  .btn.ghost{ background:#f7f7f7; border:1px solid #e5e5e5; }
+  .tag{ display:inline-block; padding:2px 8px; border-radius:999px; background:#eee; font-size:12px; }
+  .tag.ok{ background:#dcfce7; color:#166534; }
+  .tag.warn{ background:#fee2e2; color:#991b1b; }
+
+  .toast{ position:fixed; right:18px; bottom:18px; background:#2e7d32; color:#fff; padding:10px 14px; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.18); opacity:0; transform:translateY(10px); transition:.25s; z-index:9999; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.warn{ background:#a56b00; }
+  .toast.bad{ background:#b3261e; }
+</style>
+</head>
+<body>
+
+<!-- Botão Mobile (hambúrguer) -->
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+
+<div class="wrapper">
+  <aside id="menuLateral" class="no-print"></aside>
+
+<!-- Backdrop para fechar o menu no mobile -->
+<div id="menuBackdrop" hidden></div>
+
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+      <div class="container">
+        <div class="h h1">Entradas & Saídas — Evento</div>
+
+        <!-- TOP BAR -->
+        <div class="card">
+          <div class="row">
+            <label>Evento
+              <select id="selEvento" class="input" style="min-width:260px"></select>
+            </label>
+            <div class="spacer"></div>
+            <button class="btn" id="btnLancamentos"><i data-lucide="list-plus"></i>&nbsp;Lançamentos</button>
+            <span class="small">* Abre o modal de financeiro apontando para o evento.</span>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- SAÍDAS (esquerda) -->
+          <section>
+            <div class="card">
+              <div class="h h2">Saídas</div>
+              <div class="kpi-grid" id="kpisSaida">
+                <div class="kpi"><div class="label">Total de saídas</div><div class="value" id="kSaidaTot">R$ 0,00</div></div>
+                <div class="kpi"><div class="label">Pagas</div><div class="value" id="kSaidaPagas">R$ 0,00</div></div>
+                <div class="kpi"><div class="label">Pendentes</div><div class="value" id="kSaidaPend">R$ 0,00</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h h3">Lançamentos de saídas</div>
+              <table id="tabSaidas">
+                <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Forma</th><th class="k-right">Valor</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ENTRADAS (direita) -->
+          <section>
+            <div class="card">
+              <div class="h h2">Entradas</div>
+              <div class="kpi-grid">
+                <div class="kpi"><div class="label">Total de entradas (líquido)</div><div class="value" id="kEntTot">R$ 0,00</div></div>
+                <div class="kpi"><div class="label">Ingresso (líquido)</div><div class="value" id="kEntIng">R$ 0,00</div></div>
+                <div class="kpi"><div class="label">Fichas/Itens (líquido)</div><div class="value" id="kEntItem">R$ 0,00</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h h3">Entradas por forma de pagamento</div>
+              <div class="kpi-grid" id="kpisForma"></div>
+            </div>
+
+            <div class="card">
+              <div class="h h3">Quantidades vendidas</div>
+              <div class="list-cols">
+                <div>
+                  <div class="small"><b>Por ingresso</b></div>
+                  <table id="tabQtdIng">
+                    <thead><tr><th>Tipo</th><th class="k-right">Qtd</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div>
+                  <div class="small"><b>Por item/ficha</b></div>
+                  <table id="tabQtdItem">
+                    <thead><tr><th>Item</th><th class="k-right">Qtd</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vendas (detalhe) -->
+            <div class="card">
+              <div class="h h3">Vendas (detalhe)</div>
+              <table id="tabVendas">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Forma</th>
+                    <th>Bruto</th>
+                    <th>Desc.</th>
+                    <th>Líquido</th>
+                    <th>Troco</th>
+                    <th>Ops</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <!-- Cancelamentos -->
+            <div class="card">
+              <div class="h h3">Cancelamentos</div>
+              <table id="tabCanc">
+                <thead>
+                  <tr>
+                    <th>Quando</th>
+                    <th>Forma</th>
+                    <th>Bruto</th>
+                    <th>Desc.</th>
+                    <th>Líquido</th>
+                    <th>Motivo</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast">Pronto!</div>
+<script>
+  // === PATCH ES-0: limpeza de chave antiga gigante ===
+  try { localStorage.removeItem('financeiro.lancamentos'); } catch {}
+</script>
+
+<script>
+/* isola tudo para não colidir com outros scripts globais */
+(function (win, doc) {
+  'use strict';
+
+  /* ===== helpers (sem redeclarar globais) ===== */
+  const rLS  = win.readLS || ((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
+  const wLS  = win.writeLS || ((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
+  win.fmtBRL = win.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+  win.ISO    = win.ISO    || (()=> new Date().toISOString());
+
+  const FMT  = win.fmtBRL;
+  const ISOx = win.ISO;
+  const byId = (id)=> doc.getElementById(id);
+
+  // Aliases locais
+  const readLS  = win.readLS  || rLS;
+  const writeLS = win.writeLS || wLS;
+  const ISO     = ISOx;
+
+  // Helper $ local (não colide com módulos)
+  const $ = (sel, root=doc) => root.querySelector(sel);
+
+  function showToast(text='Pronto!', type='ok'){
+    const t = byId('toast'); if(!t) return;
+    t.textContent = text;
+    t.classList.remove('warn','bad');
+    if(type==='warn') t.classList.add('warn');
+    if(type==='bad') t.classList.add('bad');
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 1600);
+  }
+  function fmtDateBR(s, withTime = true){
+    if (s == null || s === '') return '';
+    if (typeof s === 'number') {
+      const ms = s < 1e12 ? Math.round(s * 1000) : s;
+      const d = new Date(ms);
+      if (!isNaN(d)) return formatBR(d, withTime);
+    }
+    const str = String(s).trim();
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+      const [, y, mo, d, hh='00', mi='00', ss='00'] = m;
+      const dt = new Date(+y, +mo-1, +d, +hh, +mi, +ss);
+      return formatBR(dt, withTime);
+    }
+    const d = new Date(str);
+    if (!isNaN(d)) return formatBR(d, withTime);
+    const [y, mo, dy] = str.slice(0,10).split('-');
+    if (y && mo && dy) {
+      const base = `${dy.padStart(2,'0')}/${mo.padStart(2,'0')}/${y}`;
+      return withTime ? `${base} ${str.slice(11,16)}` : base;
+    }
+    return str;
+  }
+  function formatBR(dateObj, withTime){
+    const dd = String(dateObj.getDate()).padStart(2,'0');
+    const mm = String(dateObj.getMonth()+1).padStart(2,'0');
+    const yyyy = dateObj.getFullYear();
+    if (!withTime) return `${dd}/${mm}/${yyyy}`;
+    const hh = String(dateObj.getHours()).padStart(2,'0');
+    const mi = String(dateObj.getMinutes()).padStart(2,'0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+  }
+  // helper único p/ formatar datas (sempre SEM hora)
+  const _fmtDate = (d) =>
+    (typeof fmtDateBR === 'function')
+      ? fmtDateBR(d, /*withTime=*/false)
+      : String(d || '').slice(0,10);
+
+
+  /* ===== chaves/unificação ===== */
+  const KK = win.K_KEYS || {};
+  const K = {
+    EVENTOS: (KK.EVENTOS || 'm30.eventos'),
+    VENDAS:  (KK.VENDAS  || 'm31.vendas'),
+    ITENS:   (KK.ITENS   || 'm31.itens'),
+    INGTIPOS:(KK.INGRESSO_TIPOS || 'm30.ingTipos')
+  };
+  // ===== helper para pegar a melhor data/hora da venda =====
+  function getVendaDateISO(v){
+    const cand =
+      v?.createdAt || v?.createdAtISO ||
+      v?.pagoEm || v?.paidAt ||
+      v?.updatedAt ||
+      v?.ts || v?.timestamp ||
+      v?.dateTime || v?.dataHora ||
+      v?.dataISO || v?.data ||
+      null;
+
+    if (!cand) return new Date().toISOString();
+
+    if (typeof cand === 'number') {
+      const ms = cand < 1e12 ? Math.round(cand * 1000) : cand;
+      return new Date(ms).toISOString();
+    }
+
+    const s = String(cand).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const h = (v?.hora || v?.horario || '').toString().slice(0,5);
+      const hhmm = /^\d{2}:\d{2}$/.test(h) ? h : new Date().toISOString().slice(11,16);
+      return `${s}T${hhmm}:00`;
+    }
+    return s;
+  }
+
+  /* ===== fontes de dados ===== */
+  function loadEventos(){
+    const xs = (rLS(K.EVENTOS,[])||[]).concat(rLS('eventos',[])||[])
+      .filter(e => String(e.modulo)==='eventos-pagos');
+    const map = new Map();
+    xs.forEach(e => { if (e?.id) map.set(String(e.id), e); });
+    return [...map.values()].sort((a,b)=> String(b.data||'').localeCompare(String(a.data||'')));
+  }
+  function loadVendasByEvento(evtId){
+    const a = rLS(K.VENDAS,[]) || [];
+    const b = rLS('vendas',[]) || [];
+    const map = new Map();
+    [...a, ...b].forEach(v => {
+      if (String(v.eventoId) === String(evtId)) {
+        map.set(String(v.id), v);
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  function loadItens(){
+    const a = rLS(K.ITENS,[]) || [];
+    const b = rLS('itens',[]) || [];
+    return a.concat(b);
+  }
+  function loadIngTipos(){
+    const a = rLS(K.INGTIPOS,[]) || [];
+    const b = rLS('ingresso_tipos',[]) || [];
+    return a.concat(b);
+  }
+
+  /* ===== financeiro global (saídas) ===== */
+  function readFG(){
+    try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch(e){return{};}
+  }
+  function getCfg(){
+    try{ const c = JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; c.tipos = Array.isArray(c.tipos) ? c.tipos : []; return c; }catch(e){return {tipos:[]};}
+  }
+  function formasMap(){
+    const map = new Map();
+    (getCfg().tipos||[]).forEach(t=>{
+      const id = String(t.id ?? t.codigo ?? t.valor ?? (t.descricao||t.nome));
+      const label = String(t.descricao || t.nome || t.label || t.id || id).trim();
+      if (id) map.set(id, label);
+    });
+    return map;
+  }
+  function isDinheiroByForma(id){
+    const label = (formasMap().get(String(id)) || String(id)).toLowerCase();
+    return /\bdinheiro\b|esp[eé]cie/.test(label);
+  }
+
+  /* === helpers para espelhar PDV → financeiroGlobal === */
+  function _fgLoad(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } }
+  function _fgSave(g){
+    try{
+      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    }catch{}
+  }
+  function _fgEnsure(g){
+    if(!Array.isArray(g.lancamentos)) g.lancamentos=[];
+    if(!Array.isArray(g.parcelas))    g.parcelas=[];
+    if(!Array.isArray(g.movimentos))  g.movimentos=[];
+    if(!Array.isArray(g.contas))      g.contas=[];
+    return g;
+  }
+  function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } }
+  function pickContaForForma(formaId){
+    const cfg = _cfgFin();
+    const contas = Array.isArray(cfg.contas)? cfg.contas : [];
+    const nomeLower = (s)=> String(s||'').toLowerCase();
+
+    if (isDinheiroByForma(formaId)){
+      const cx = contas.find(c=> nomeLower(c.nome).includes('caixa')) || contas[0];
+      return cx ? { id:String(cx.id), nome:cx.nome } : { id:'', nome:'' };
+    } else {
+      const el = contas.find(c=>{
+        const n=nomeLower(c.nome);
+        return n.includes('banco') || n.includes('pix') || n.includes('maquin') || n.includes('eletr');
+      }) || contas[0];
+      return el ? { id:String(el.id), nome:el.nome } : { id:'', nome:'' };
+    }
+  }
+
+  /* ===== estado ===== */
+  let currentEventoId = null;
+
+  /* ===== UI ===== */
+  function hydrateEventos(){
+    const sel = byId('selEvento'); sel.innerHTML='';
+    const xs = loadEventos();
+    if (!xs.length){ sel.innerHTML = '<option value="">— Nenhum evento pago —</option>'; return; }
+    xs.forEach(e=>{
+      const o=doc.createElement('option'); o.value=e.id;
+      o.textContent=`${e.nome||'(sem nome)'} — ${e.data||''}`;
+      sel.appendChild(o);
+    });
+    const fromHash = location.hash.match(/evento=([^&]+)/)?.[1] || null;
+    currentEventoId = (fromHash && xs.some(e=>String(e.id)===String(fromHash))) ? fromHash : (currentEventoId || xs[0].id);
+    sel.value = currentEventoId;
+  }
+  function onEventoChange(id){
+    currentEventoId = id;
+    location.hash = '#evento='+id;
+    renderAll();
+  }
+
+  /* ===== Entradas (KPIs, detalhamento) ===== */
+ function computeEntradas(evtId){
+  const vendasAll = Array.isArray(loadVendasByEvento(evtId)) ? loadVendasByEvento(evtId) : [];
+  const vendasAtivas = vendasAll.filter(v => !v.canceladoAt);
+  const vendasCanceladas = vendasAll.filter(v => v.canceladoAt);
+
+  const fMap  = formasMap();
+  const itens = loadItens();
+  const tipos = loadIngTipos();
+
+  let totalLiquido = 0;
+  let liqItem = 0, liqIng = 0;
+  const porForma = new Map();
+  const qtdItem  = new Map();
+  const qtdIng   = new Map();
+
+  const itemNome = (id) => (itens.find(i => String(i.id) === String(id)) || {}).nome || '(item)';
+  const tipoNome = (id) => (tipos.find(t => String(t.id) === String(id)) || {}).nome || '(ingresso)';
+
+  for (const v of vendasAtivas){
+    const bruto = Number(v?.valorBruto || 0);
+    const desc  = Math.max(0, Number(v?.desconto || 0));
+    const liquido = Math.max(0, bruto - desc);
+    totalLiquido += liquido;
+
+    const label     = fMap.get(String(v?.forma)) || String(v?.forma || '');
+    const keyForma  = (label || 'Sem forma').trim() || 'Sem forma';
+    const addForma  = (val) => porForma.set(keyForma, (porForma.get(keyForma) || 0) + val);
+
+    if (isDinheiroByForma(v?.forma)){
+      const recebidoCash = Math.max(0, Number(v?.valorPago || 0) - Number(v?.troco || 0)) || liquido;
+      addForma(recebidoCash);
+    } else {
+      addForma(liquido);
+    }
+
+    const lines = Array.isArray(v?.itens) ? v.itens.slice() : [];
+    const getBrutoLinha = (l) => {
+      const p = Number(l?.precoUnit ?? l?.preco ?? 0);
+      const q = Number(l?.qtd ?? 1);
+      return Math.max(0, p * (Number.isFinite(q) ? q : 1));
+    };
+    const totLinBruto = lines.reduce((s, l) => s + getBrutoLinha(l), 0);
+
+    for (const l of lines){
+      const brutoL   = getBrutoLinha(l);
+      const parcDesc = totLinBruto > 0 ? Math.round(desc * (brutoL / totLinBruto)) : 0;
+      const liqL     = Math.max(0, brutoL - parcDesc);
+
+      const kind = String(l?.kind || '').toLowerCase();
+      if (kind === 'item' || (!kind && l?.itemId)){
+        liqItem += liqL;
+        const nome = itemNome(l.itemId);
+        const q = Number(l?.qtd ?? 1);
+        qtdItem.set(nome, (qtdItem.get(nome) || 0) + (Number.isFinite(q) ? q : 1));
+      } else {
+        liqIng += liqL;
+        const nome = tipoNome(l?.tipoId);
+        qtdIng.set(nome, (qtdIng.get(nome) || 0) + 1);
+      }
+    }
+  }
+
+  return {
+    totalLiquido, liqItem, liqIng, porForma, qtdItem, qtdIng,
+    vendas: vendasAtivas,                // como já era
+    vendasCanceladas,                    // NOVO
+    vendasAll                            // opcional, se quiser usar
+  };
+}
+
+  /* ===== estoque (reposição quando cancela) ===== */
+  function reporEstoque(items){
+    let all = readLS(K.ITENS,[]) || [];
+    let changed = false;
+    items.forEach(l=>{
+      const it = all.find(x=> String(x.id)===String(l.itemId));
+      if(!it) return;
+      const campos = ['estoqueAtual','estoque','saldo'];
+      const k = campos.find(c => typeof it[c] === 'number');
+      if(!k) return;
+      const q = Number(l.qtd||1);
+      if(!Number.isFinite(q) || q<=0) return;
+      it[k] = Number(it[k]||0) + q;
+      changed = true;
+    });
+    if (changed) writeLS(K.ITENS, all);
+  }
+  async function cancelarVenda(vId){
+    const vendas = readLS(K.VENDAS,[]) || [];
+    const i = vendas.findIndex(v => v.id===vId);
+    if (i<0) { showToast('Venda não encontrada','bad'); return; }
+    const v = vendas[i];
+    if (v.canceladoAt){ showToast('Venda já cancelada','warn'); return; }
+
+    let motivo = prompt('Motivo do cancelamento (opcional):') || '';
+
+    const its = Array.isArray(v.itens) ? v.itens : [];
+    const ingIds = its.filter(l=> String(l.kind)==='ingresso').map(l=> l.ticketId);
+    if (ingIds.length){
+      const tks = readLS('m30.tickets',[]) || [];
+      const chk = tks.filter(t=> ingIds.includes(t.id) && t.checkinAt);
+      if (chk.length){ alert('Não é possível cancelar: há ingresso(s) com check-in.'); return; }
+    }
+
+    if (ingIds.length){
+      const tks = readLS('m30.tickets',[]) || [];
+      let changed=false;
+      tks.forEach(t=>{
+        if (ingIds.includes(t.id) && t.vendaId===v.id){
+          t.status='pendente'; delete t.vendaId; changed=true;
+        }
+      });
+      if (changed) writeLS('m30.tickets', tks);
+    }
+
+    const itensVendidos = its.filter(l=> String(l.kind)==='item').map(l=>({itemId:l.itemId, qtd:Number(l.qtd||1)}));
+    if (itensVendidos.length) reporEstoque(itensVendidos);
+
+    const cxKey = 'pdv_caixas';
+    const cxAll = readLS(cxKey,[]) || [];
+    const cxIdx = cxAll.findIndex(c=> String(c.eventoId)===String(v.eventoId));
+    if (cxIdx>=0){
+      const cx = cxAll[cxIdx];
+      const liquido = Math.max(0, Number(v.valorBruto||0) - Number(v.desconto||0));
+      const formaLabel = (formasMap().get(String(v.forma))||String(v.forma||''));
+      const isDin = isDinheiroByForma(v.forma);
+      if (isDin) cx.saldoDinheiro = Math.max(0,(Number(cx.saldoDinheiro||0) - liquido));
+      else cx.saldoEletronico = Math.max(0,(Number(cx.saldoEletronico||0) - liquido));
+      cx.saldo = Number(cx.saldoDinheiro||0) + Number(cx.saldoEletronico||0);
+      if (!Array.isArray(cx.movimentos)) cx.movimentos=[];
+      cx.movimentos.push({ tipo:'estorno', id:v.id, forma: formaLabel, valor: liquido, ts: ISO() });
+      cxAll[cxIdx]=cx; writeLS(cxKey, cxAll);
+    }
+
+    v.canceladoAt = ISO();
+    v.canceladoPor = (doc.getElementById('operadorNome')?.textContent || 'Operador');
+    v.motivoCancel = motivo;
+    vendas[i]=v; writeLS(K.VENDAS, vendas);
+
+    showToast('Venda cancelada.');
+    syncLancamentosDoEvento(currentEventoId);
+    renderAll();
+  }
+  /* ===== cálculo de SAÍDAS ===== */
+  function computeSaidas(evtId){
+    const g = readFG() || {};
+    const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
+    const rows = lancs.filter(l=> String(l.tipo||'').toLowerCase()==='saida' && String(l.eventoId||'')===String(evtId));
+    let tot=0, pagas=0, pend=0;
+
+    const normVal = l => Number(l.valorTotal ?? l.valor ?? 0);
+    const normStatus = l => String(l.status||'pendente').toLowerCase();
+
+    for (const l of rows){
+      const v = normVal(l);
+      tot += v;
+      if (['pago','baixado','quitado','liquidado','recebido'].includes(normStatus(l))) pagas += v;
+      else pend += v;
+    }
+    return { rows, tot, pagas, pend };
+  }
+
+/* ====== Espelho por evento (financeiro.lancamentos:<eventoId>) ====== */
+const LC_PREFIX_LANCS = 'financeiro.lancamentos';
+
+// chave por evento
+const _lanKey = (evtId) => `${LC_PREFIX_LANCS}:${evtId || '__sem_evt__'}`;
+
+// lê somente do evento atual
+function _lanGetAll(evtId){
+  try { return JSON.parse(localStorage.getItem(_lanKey(evtId)) || '[]') || []; }
+  catch { return []; }
+}
+
+// grava com fallback compactado para não estourar cota
+function _lanSetAll(evtId, list){
+  const key = _lanKey(evtId);
+  try {
+    localStorage.setItem(key, JSON.stringify(Array.isArray(list)? list : []));
+  } catch (e) {
+    // compacta: mantém só os últimos 200 e campos essenciais
+    try{
+      const slim = (Array.isArray(list)? list : []).slice(-200).map(m => ({
+        id: m.id,
+        tipo: m.tipo,
+        descricao: String(m.descricao||'').slice(0,120),
+        valor: Number(m.valor||0),
+        status: m.status,
+        data: m.data || m.dataCompetencia,
+        idEvento: m.idEvento,
+        nomeEvento: m.nomeEvento,
+        categoriaId: m.categoriaId,
+        subcategoriaId: m.subcategoriaId,
+        conta: m.conta,
+        contaId: m.contaId,
+        contaNome: m.contaNome
+      }));
+      localStorage.setItem(key, JSON.stringify(slim));
+      alert('Espelho grande: salvei versão compacta (últimos 200 registros).');
+    }catch(_){}
+  }
+}
+
+  function _lanNormBase(l){
+    const hoje = new Date().toISOString().slice(0,10);
+    return {
+      id: l.id,
+      tipo: (l.tipo==='despesa'?'despesa':'receita'),
+      descricao: l.descricao?.trim() || '',
+      categoria: l.categoria || '',
+      categoriaId: l.categoriaId ?? null,
+      subcategoriaId: l.subcategoriaId ?? null,
+
+      origem: (l.origem==='pessoal'?'pessoal':'empresa'),
+      conta: l.conta || l.fornecedor || '',
+      fornecedor: l.fornecedor || '',
+
+      valor: Number(l.valor||0),
+
+      status: (l.status==='baixado'?'baixado':'pendente'),
+      data: (l.data || hoje),
+      dataCompetencia: (l.dataCompetencia || l.data || hoje),
+      dataBaixa: l.status==='baixado' ? (l.dataBaixa || hoje) : null,
+
+      idEvento: l.idEvento || null,
+      nomeEvento: l.nomeEvento || null,
+    };
+  }
+
+  // === Promove lançamentos do espelho local (financeiro.lancamentos) para o financeiroGlobal ===
+  function promoteEspelhoLancsToFG(evtId){
+    try{
+      if (!evtId) return;
+      let G = _fgEnsure(_fgLoad());
+      let list = _lanGetAll() || [];
+      let changed = false;
+
+      const idsFG = new Set((G.lancamentos||[]).map(l => String(l.id)));
+
+      list.forEach(m => {
+        const idStr = String(m.id || '');
+        if (/^(fg_|venda_)/.test(idStr)) return;
+
+        const eventoId = m.idEvento || evtId;
+        if (String(eventoId) !== String(evtId)) return;
+
+        if (idsFG.has(idStr) || idsFG.has(`esp:${idStr}`)) return;
+
+        const tipoFG   = (String(m.tipo||'receita').toLowerCase() === 'despesa') ? 'saida' : 'entrada';
+        const statusFG = (String(m.status||'pendente').toLowerCase() === 'baixado') ? 'baixado' : 'pendente';
+        const dataISO  = String(m.data || m.dataCompetencia || new Date().toISOString()).slice(0,10);
+
+        const newId = `esp:${ idStr || (Date.now().toString(36)+Math.random().toString(36).slice(2,8)) }`;
+        const lanc = {
+          id: newId,
+          tipo: tipoFG,
+          origem: 'empresa',
+          descricao: m.descricao || '',
+          categoriaId: m.categoriaId ?? null,
+          subcategoriaId: m.subcategoriaId ?? null,
+          valorTotal: Number(m.valor || 0),
+          status: statusFG,
+          dataCompetencia: dataISO,
+          dataPagamentoISO: (statusFG === 'baixado' ? dataISO : null),
+          contaId: null,
+          contaNome: m.conta || '',
+          eventoId: eventoId,
+          eventoNome: m.nomeEvento || ''
+        };
+        G.lancamentos.push(lanc);
+        idsFG.add(newId);
+        changed = true;
+      });
+
+      if (changed) _fgSave(G);
+    }catch(e){
+      console.warn('promoteEspelhoLancsToFG falhou', e);
+    }
+  }
+
+  function _descVenda(v, formasMap){
+    const forma = (formasMap.get(String(v.forma))||v.forma||'');
+    return `Venda PDV — ${forma || 'forma não informada'}`;
+  }
+
+  function syncLancamentosDoEvento(evtId){
+  if (!evtId) return;
+
+  // Carrega eventos (de ambas as chaves) e garante um espelho em 'eventos' para outras telas
+  const evs = (function(){
+    try{
+      const xs = (readLS((K?.EVENTOS)||'m30.eventos',[])||[]).concat(readLS('eventos',[])||[]);
+      const m = new Map(); xs.forEach(e=>{ if(e?.id) m.set(String(e.id), e); });
+      const arr = Array.from(m.values());
+      try{ writeLS('eventos', arr); }catch{}
+      return arr;
+    }catch(e){ return []; }
+  })();
+  const ev = evs.find(e => String(e.id)===String(evtId)) || null;
+
+  // Nome do evento + categoria/subcategoria padrão (de Eventos Pagos)
+  const nomeEvento = ev?.titulo || ev?.nome || null;
+  const catId  = ev?.categoriaEntradaId  ?? ev?.categoriaId  ?? ev?.categoria ?? null;
+  const subId  = ev?.subcategoriaEntradaId ?? ev?.subcategoriaId ?? ev?.subcategoria ?? null;
+
+  // ===== 1) Espelho local: 'financeiro.lancamentos' (limpa espelhos antigos do mesmo evento)
+ const base = _lanGetAll(evtId).filter(x=>{
+
+    const sameEvt = String(x.idEvento||'')===String(evtId);
+    const mirrored = /^fg_|^venda_/.test(String(x.id||'')); // só remove o que foi espelhado por aqui
+    return !(sameEvt && mirrored);
+  });
+
+  // 1.1) Trazer também o que já existe no FG para o espelho local (sem mexer em valores)
+  const FGraw = (function(){ try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; } catch { return {}; } })();
+  const lancsFG = Array.isArray(FGraw.lancamentos) ? FGraw.lancamentos : [];
+  lancsFG
+    .filter(l => String(l.eventoId || '') === String(evtId))
+    .forEach(l => {
+      const tipo = (String(l.tipo || 'entrada').toLowerCase() === 'saida') ? 'despesa' : 'receita';
+      const v = Number(l.valorTotal ?? l.valor ?? 0);
+      const data = String(l.dataPagamentoISO || l.dataCompetencia || l.data || '').slice(0,10) || new Date().toISOString().slice(0,10);
+      const status = ['pago','recebido','baixado','quitado','liquidado'].includes(String(l.status || '').toLowerCase()) ? 'baixado' : 'pendente';
+
+      base.push(_lanNormBase({
+        id: `fg_${l.id}`,
+        tipo,
+        descricao: (l.descricao || '').toString(),
+        categoria: (l.subcategoriaNome || l.categoriaNome || ''),
+        categoriaId: l.categoriaId ?? null,
+        subcategoriaId: l.subcategoriaId ?? null,
+        origem: 'empresa',
+        conta: (l.formaNome || l.formaPagamento || ''),
+        fornecedor: (l.fornecedorNome || l.fornecedor || ''),
+        valor: v, // já está em REAIS no FG
+        status,
+        data,
+        idEvento: evtId,
+        nomeEvento
+      }));
+    });
+
+  // 1.2) Espelhar vendas do PDV (não canceladas) → 'financeiro.lancamentos' (em REAIS)
+  const vendas = (function(){
+    try{
+      const a = readLS((K?.VENDAS) || 'm31.vendas', []) || [];
+      const b = readLS('vendas', []) || [];
+      return a.concat(b).filter(v => String(v.eventoId) === String(evtId) && !v.canceladoAt);
+    }catch(e){ return []; }
+  })();
+
+  const formas = (typeof formasMap === 'function') ? (formasMap() || new Map()) : new Map();
+  vendas.forEach(v => {
+    const bruto = Number(v.valorBruto || 0);
+    const desc  = Number(v.desconto || 0);
+    const liquidoCent = Math.max(0, bruto - desc);
+    const liquidoReais = liquidoCent / 100;            // <<< centavos → reais
+    const created = (v.createdAt || new Date().toISOString()).slice(0,10);
+
+    base.push(_lanNormBase({
+      id: `venda_${v.id}`,
+      tipo: 'receita',
+      descricao: _descVenda(v, formas),
+      categoria: 'PDV',
+      categoriaId: catId,            // IDs para a tela mostrar a categoria
+      subcategoriaId: subId,
+      origem: 'empresa',
+      conta: (formas.get(String(v.forma)) || v.forma || ''),
+      fornecedor: '',
+      valor: liquidoReais,           // em REAIS
+      status: 'baixado',
+      data: created,
+      idEvento: evtId,
+      nomeEvento
+    }));
+  });
+
+  _lanSetAll(evtId, base); // publica o espelho local por evento
+
+  try{ window.dispatchEvent(new Event('fin-store-changed')); }catch{}
+
+  // ===== 2) Publica também no financeiroGlobal (RECEITAS PDV), sem apagar o que já existe; dedup pelo id 'pdv:<venda>'
+  try{
+    let G = _fgEnsure(_fgLoad());
+
+    // índice de ids já existentes no FG para este evento
+    const jaNoFG = new Set((G.lancamentos||[])
+      .filter(l => String(l.eventoId||'')===String(evtId))
+      .map(l => String(l.id)));
+
+    const vendasAll = (function(){
+      try{
+        const a = readLS((K?.VENDAS) || 'm31.vendas', []) || [];
+        const b = readLS('vendas', []) || [];
+        return a.concat(b).filter(v => String(v.eventoId) === String(evtId) && !v.canceladoAt);
+      }catch(e){ return []; }
+    })();
+
+    const mapFormas = formasMap() || new Map();
+
+    vendasAll.forEach(v=>{
+      const lancId = `pdv:${v.id}`;
+      if (jaNoFG.has(lancId)) return; // já espelhado no FG (por aqui ou pelo próprio PDV)
+
+      const bruto = Number(v.valorBruto||0);
+      const desc  = Number(v.desconto||0);
+      const liquidoReais = Math.max(0, bruto - desc) / 100; // em REAIS
+      const dataISO = String(getVendaDateISO(v) || new Date().toISOString()).slice(0,10);
+      const conta = pickContaForForma(v.forma) || { id:'', nome:'' };
+
+      (G.lancamentos ||= []).push({
+        id: lancId,
+        origem: 'empresa',
+        tipo: 'entrada',
+        categoriaId: catId,
+        subcategoriaId: subId,
+        categoriaNome: 'PDV',
+        descricao: _descVenda(v, mapFormas),
+        valor: liquidoReais,
+        valorTotal: liquidoReais,
+        status: 'baixado',
+        dataISO,
+        dataPagamentoISO: dataISO,
+        contaId: conta.id,
+        contaNome: conta.nome,
+        eventoId: evtId,
+        eventoNome: nomeEvento
+      });
+
+      const parcId = `pdv:${v.id}:p1`;
+      (G.parcelas ||= []).push({
+        id: parcId,
+        lancamentoId: lancId,
+        status: 'pago',
+        valor: liquidoReais,
+        totalPago: liquidoReais,
+        vencimentoISO: dataISO,
+        dataPagamentoISO: dataISO,
+        contaId: conta.id,
+        contaNome: conta.nome
+      });
+
+      (G.movimentos ||= []).push({
+        id: (Date.now().toString(36) + Math.random().toString(36).slice(2,10)),
+        refKey: `lanc:pdv:${v.id}:parc:${parcId}`,
+        origem: 'lancamento',
+        lancamentoId: lancId,
+        parcelaId: parcId,
+        contaId: conta.id,
+        contaNome: conta.nome,
+        tipo: 'credito',
+        valor: liquidoReais,
+        dataISO
+      });
+
+      jaNoFG.add(lancId);
+    });
+
+    _fgSave(G); // salva + "ping"
+  }catch(e){
+    console.warn('mirror PDV → financeiroGlobal falhou:', e);
+  }
+}
+
+// ==== Movimentos/Saldos locais (mini-versão) ====
+function __fgLoad(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{return{};} }
+function __fgSave(g){ try{ localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+                           localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }catch{} }
+function __fgEnsure(g){
+  if(!Array.isArray(g.lancamentos)) g.lancamentos=[];
+  if(!Array.isArray(g.parcelas))    g.parcelas=[];
+  if(!Array.isArray(g.movimentos))  g.movimentos=[];
+  if(!Array.isArray(g.contas))      g.contas=[];
+  return g;
+}
+function __cfg(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} }
+
+// Recalcula saldoAtual = saldoInicial + (créditos - débitos)
+function recomputeAllAccountBalances(){
+  const g = __fgEnsure(__fgLoad());
+  const cfg = __cfg();
+  const cfgContas = Array.isArray(cfg.contas)? cfg.contas : [];
+
+  // garante contas com nome/saldoInicial do config
+  const byId = new Map((g.contas||[]).map(c=>[String(c.id),c]));
+  for(const ct of cfgContas){
+    const ex = byId.get(String(ct.id));
+    if (ex){ ex.nome = ct.nome||ex.nome; ex.saldoInicial = Number(ct.saldo||0); }
+    else (g.contas||=[]).push({ id:String(ct.id), nome:ct.nome||'', saldoInicial:Number(ct.saldo||0), saldoAtual:Number(ct.saldo||0) });
+  }
+  // remove contas que não existem mais no config
+  g.contas = (g.contas||[]).filter(c => cfgContas.some(ct => String(ct.id)===String(c.id)));
+
+  // zera e aplica movimentos
+  const idx = {}; for(const c of g.contas){ c.saldoAtual = Number(c.saldoInicial||0); idx[String(c.id)]=c; }
+  for(const m of (g.movimentos||[])){
+    const c = idx[String(m.contaId)];
+    if(!c) continue;
+    const v = Number(m.valor||0);
+    if (String(m.tipo)==='credito') c.saldoAtual += v;
+    else if (String(m.tipo)==='debito') c.saldoAtual -= v;
+  }
+
+  // map auxiliar (usado por Resumo/widgets)
+  g.saldoPorConta = {}; for(const c of g.contas){ g.saldoPorConta[c.id] = Number(c.saldoAtual||0); }
+
+  __fgSave(g); // também emite o ping
+}
+
+// Gera/remonta os movimentos de UMA lanç; prefere parcelas quitadas; fallback = “full”
+function syncAccountMovementsForLancamento(lancId){
+  const g = __fgEnsure(__fgLoad());
+  const lanc = (g.lancamentos||[]).find(l => String(l.id)===String(lancId));
+  if(!lanc) return;
+
+  // normaliza tipo -> decide crédito/débito
+  let t = String(lanc.tipo||'entrada').toLowerCase();
+  if (t==='receita') t='entrada';
+  if (t==='despesa') t='saida';
+  const tipoMov = (t==='entrada') ? 'credito' : 'debito';
+
+  // apaga movimentos antigos do lançamento
+  const refPrefix = `lanc:${lancId}:`;
+  g.movimentos = (g.movimentos||[]).filter(m => !String(m.refKey||'').startsWith(refPrefix));
+
+  const parcelas = (g.parcelas||[]).filter(p => String(p.lancamentoId)===String(lancId));
+  let created = 0;
+  const IS_PAID = (s)=>['pago','recebido','baixado','quitado','liquidado','parcial'].includes(String(s||'').toLowerCase());
+
+  for (const p of parcelas){
+    if (!IS_PAID(p.status || lanc.status)) continue;
+
+    // conta da parcela -> fallback: do lançamento
+    const contaId   = (p.contaId ?? lanc.contaId ?? '');
+    const contaNome = (p.contaNome || lanc.contaNome || '');
+
+    const valor = Number((p.totalPago ?? p.valor ?? 0)) || 0;
+    const dataISO = String(p.dataPagamentoISO || p.vencimentoISO || lanc.dataPagamentoISO || lanc.dataCompetencia || lanc.dataISO || new Date().toISOString().slice(0,10)).slice(0,10);
+
+    (g.movimentos||[]).push({
+      id:(Date.now().toString(36)+Math.random().toString(36).slice(2,10)),
+      refKey:`lanc:${lancId}:parc:${p.id}`,
+      origem:'lancamento',
+      lancamentoId:String(lancId),
+      parcelaId:String(p.id),
+      contaId:String(contaId||''),
+      contaNome:contaNome||'',
+      tipo:tipoMov,
+      valor,
+      dataISO
+    });
+    created++;
+  }
+
+  if (created===0){
+    // fallback: lançamento inteiro quitado
+    const ST = String(lanc.status||'').toLowerCase();
+    if (['pago','recebido','baixado','quitado','liquidado'].includes(ST)){
+      const valor = Number(lanc.valor ?? lanc.valorTotal ?? 0) || 0;
+      const dataISO = String(lanc.dataPagamentoISO || lanc.dataCompetencia || lanc.dataISO || new Date().toISOString().slice(0,10)).slice(0,10);
+      (g.movimentos||[]).push({
+        id:(Date.now().toString(36)+Math.random().toString(36).slice(2,10)),
+        refKey:`lanc:${lancId}:full`,
+        origem:'lancamento',
+        lancamentoId:String(lancId),
+        parcelaId:'',
+        contaId:String(lanc.contaId||''),
+        contaNome:lanc.contaNome||'',
+        tipo:tipoMov,
+        valor,
+        dataISO
+      });
+    }
+  }
+
+  __fgSave(g);
+  recomputeAllAccountBalances();
+}
+  /* ===== render ===== */
+  function renderAll(){
+    if (!currentEventoId) return;
+    if (typeof syncLancamentosDoEvento === 'function') {
+      syncLancamentosDoEvento(currentEventoId);
+    }
+
+    // ENTRADAS
+    const E = computeEntradas(currentEventoId);
+    byId('kEntTot').textContent  = FMT.format((E.totalLiquido||0)/100);
+    byId('kEntIng').textContent  = FMT.format((E.liqIng||0)/100);
+    byId('kEntItem').textContent = FMT.format((E.liqItem||0)/100);
+
+    const kpisForma = doc.querySelector('#kpisForma');
+    if (kpisForma) {
+      kpisForma.innerHTML = '';
+      const mapaFormas = (E.porForma instanceof Map) ? E.porForma : new Map();
+      if (mapaFormas.size === 0){
+        kpisForma.innerHTML = '<div class="small">— sem dados —</div>';
+      } else {
+        [...mapaFormas.entries()]
+          .sort((a,b)=> b[1]-a[1])
+          .forEach(([nome, val])=>{
+            const d = doc.createElement('div');
+            d.className = 'kpi';
+            d.innerHTML = `<div class="label">${nome||'Sem forma'}</div>
+                           <div class="value">${FMT.format((val||0)/100)}</div>`;
+            d.setAttribute('title', nome||'');
+            kpisForma.appendChild(d);
+          });
+      }
+    }
+
+    // Quantidades — Ingressos
+    const tbQI = doc.querySelector('#tabQtdIng tbody');
+    if (tbQI){
+      tbQI.innerHTML = '';
+      const mapaIng = (E.qtdIng instanceof Map) ? E.qtdIng : new Map();
+      [...mapaIng.entries()].sort((a,b)=> a[0].localeCompare(b[0], 'pt-BR'))
+        .forEach(([nome,q])=>{
+          const tr=doc.createElement('tr');
+          tr.innerHTML=`<td>${nome}</td><td class="k-right">${q}</td>`;
+          tbQI.appendChild(tr);
+        });
+      if (!mapaIng.size){
+        tbQI.innerHTML = '<tr><td colspan="2" class="small">— sem vendas de ingressos —</td></tr>';
+      }
+    }
+
+    // Quantidades — Itens
+    const tbQF = doc.querySelector('#tabQtdItem tbody');
+    if (tbQF){
+      tbQF.innerHTML = '';
+      const mapaItem = (E.qtdItem instanceof Map) ? E.qtdItem : new Map();
+      [...mapaItem.entries()].sort((a,b)=> a[0].localeCompare(b[0], 'pt-BR'))
+        .forEach(([nome,q])=>{
+          const tr=doc.createElement('tr');
+          tr.innerHTML=`<td>${nome}</td><td class="k-right">${q}</td>`;
+          tbQF.appendChild(tr);
+        });
+      if (!mapaItem.size){
+        tbQF.innerHTML = '<tr><td colspan="2" class="small">— sem vendas de itens —</td></tr>';
+      }
+    }
+
+    // Vendas (detalhe)
+    const tv = doc.querySelector('#tabVendas tbody');
+    if (tv){
+      tv.innerHTML = '';
+      const _fmtBRL = FMT;
+      const _formas = (typeof formasMap === 'function') ? (formasMap() || new Map()) : new Map();
+
+      (E.vendas||[])
+        .slice()
+        .sort((a,b)=> String(getVendaDateISO(a)).localeCompare(String(getVendaDateISO(b))))
+        .forEach(v=>{
+          const bruto = Number(v.valorBruto||0);
+          const desc  = Number(v.desconto||0);
+          const liq   = Math.max(0, bruto - desc);
+          const isCanc = !!v.canceladoAt;
+
+          const tr = doc.createElement('tr');
+          const btnOps = isCanc
+            ? '<span class="tag warn" title="Cancelada">cancelada</span>'
+            : `<button class="btn ghost" data-cancel="${v.id}">Cancelar</button>`;
+
+          tr.innerHTML = `
+            <td>${_fmtDate(getVendaDateISO(v))}</td>
+            <td>${(_formas.get(String(v.forma))||v.forma||'')}</td>
+            <td class="k-right">${_fmtBRL.format(bruto/100)}</td>
+            <td class="k-right">${_fmtBRL.format(desc/100)}</td>
+            <td class="k-right">${_fmtBRL.format(liq/100)}</td>
+            <td class="k-right">${_fmtBRL.format(Number(v.troco||0)/100)}</td>
+            <td>${btnOps}</td>
+          `;
+          tv.appendChild(tr);
+        });
+
+      if (!E.vendas || !E.vendas.length){
+        tv.innerHTML = '<tr><td colspan="7" class="small">— sem vendas —</td></tr>';
+      }
+    }
+
+    // Cancelamentos
+    const tbC = doc.querySelector('#tabCanc tbody');
+    if (tbC){
+      const _fmtBRL = FMT;
+      const _formas = (typeof formasMap === 'function') ? (formasMap() || new Map()) : new Map();
+
+     const canceladas = E.vendasCanceladas || [];
+      if (!canceladas.length){
+        tbC.innerHTML = '<tr><td colspan="6" class="small">— sem cancelamentos —</td></tr>';
+      }else{
+        tbC.innerHTML = canceladas
+          .sort((a,b)=> String(a.canceladoAt||getVendaDateISO(a)).localeCompare(String(b.canceladoAt||getVendaDateISO(b))))
+          .map(v=>{
+            const bruto = Number(v.valorBruto||0), desc=Number(v.desconto||0);
+            const liq   = Math.max(0, bruto - desc);
+            const motivo = (v.motivoCancel||'').toString().replace(/</g,'&lt;');
+            const quando = v.canceladoAt || getVendaDateISO(v);
+            return `<tr>
+              <td>${_fmtDate(quando)}</td>
+              <td>${(_formas.get(String(v.forma))||v.forma||'')}</td>
+              <td class="k-right">${_fmtBRL.format(bruto/100)}</td>
+              <td class="k-right">${_fmtBRL.format(desc/100)}</td>
+              <td class="k-right">${_fmtBRL.format(liq/100)}</td>
+              <td>${motivo||'—'}</td>
+            </tr>`;
+          }).join('');
+      }
+    }
+
+    // SAÍDAS
+    const S = computeSaidas(currentEventoId);
+    byId('kSaidaTot').textContent   = FMT.format(S.tot||0);
+    byId('kSaidaPagas').textContent = FMT.format(S.pagas||0);
+    byId('kSaidaPend').textContent  = FMT.format(S.pend||0);
+
+    const ts = doc.querySelector('#tabSaidas tbody');
+    if (ts){
+      ts.innerHTML = '';
+      (S.rows||[])
+        .slice()
+        .sort((a,b)=> String(a.dataCompetencia||a.data||'').localeCompare(String(b.dataCompetencia||b.data||'')))
+        .forEach(l=>{
+          const v   = Number(l.valorTotal ?? l.valor ?? 0);
+          const st  = String(l.status||'pendente').toLowerCase();
+          const tag = ['pago','baixado','quitado','liquidado','recebido'].includes(st)
+            ? '<span class="tag ok">pago</span>'
+            : '<span class="tag warn">pendente</span>';
+          const cat   = (l.subcategoriaNome || l.categoriaNome || '').toString();
+          const forma = (l.formaNome || l.formaPagamento || '').toString();
+          const dataIso = (l.dataPagamentoISO || l.dataCompetencia || l.data || '').toString();
+          const _fmtDate = (d) => (typeof fmtDateBR === 'function') ? fmtDateBR(d, false) : String(d||'').slice(0,10);
+
+          const tr = doc.createElement('tr');
+          tr.innerHTML = `
+            <td>${_fmtDate(dataIso)}</td>
+            <td>${(l.descricao||'').toString().replace(/</g,'&lt;')}</td>
+            <td>${cat||''}</td>
+            <td>${forma||''}</td>
+            <td class="k-right">${FMT.format(v)}</td>
+            <td>${tag}</td>
+          `;
+          ts.appendChild(tr);
+        });
+
+      if (!S.rows || !S.rows.length){
+        ts.innerHTML = '<tr><td colspan="6" class="small">— sem saídas lançadas para este evento —</td></tr>';
+      }
+    }
+  }
+
+  /* ===== listeners ===== */
+  byId('selEvento')?.addEventListener('change', e=> {
+    onEventoChange(e.target.value);
+    syncLancamentosDoEvento(e.target.value);
+  });
+
+  byId('btnLancamentos')?.addEventListener('click', ()=>{
+    const idAlvo = currentEventoId;
+    let evs = [];
+    try { evs = (typeof listEventos === 'function' ? (listEventos() || []) : evs); } catch {}
+    if (!Array.isArray(evs) || evs.length === 0) {
+      try {
+        const a = JSON.parse(localStorage.getItem(K.EVENTOS) || '[]');
+        const b = JSON.parse(localStorage.getItem('eventos') || '[]');
+        const map = new Map(); [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
+        evs = Array.from(map.values());
+      } catch {}
+    }
+    const ev = (evs || []).find(e => String(e.id) === String(idAlvo)) || {};
+    const preset = { eventoId: idAlvo, eventoNome: ev.nome || ev.titulo || '' };
+
+    if (win.FinModal?.openNovo) { win.FinModal.openNovo(preset); return; }
+    if (typeof win.openFinanceiroModal === 'function') { win.openFinanceiroModal(preset); return; }
+    try { win.dispatchEvent(new CustomEvent('abrir:finmodal', { detail: preset })); } catch(e){}
+    showToast('Inclua o script do modal financeiro nesta página.');
+  });
+
+  win.addEventListener('abrir:finmodal', (e)=>{
+    if (win.FinModal?.openNovo) win.FinModal.openNovo(e.detail || {});
+  });
+
+// quando o modal salvar/confirmar, garante que o lançamento:
+// 1) tenha eventoId/eventoNome
+// 2) esteja também no financeiroGlobal (promove do espelho se precisar)
+// 3) gere MOVIMENTO de conta (entrada = crédito | saída = débito) na conta escolhida no modal
+win.addEventListener('finmodal:confirm', (ev)=>{
+  try{
+    const lancId = ev?.detail?.lancId || ev?.detail?.id || null;
+
+    // carrega FG
+    const g = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {};
+    g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
+    g.parcelas    = Array.isArray(g.parcelas)    ? g.parcelas    : [];
+    g.movimentos  = Array.isArray(g.movimentos)  ? g.movimentos  : [];
+
+    // tenta achar no FG
+    let lanc = lancId ? g.lancamentos.find(l => String(l.id) === String(lancId)) : null;
+    let createdNow = false;
+
+    // se não está no FG, tenta pegar no espelho local e promover para FG
+    if (!lanc) {
+    const lista = _lanGetAll(currentEventoId);
+
+      const m = lancId
+        ? lista.find(x => String(x.id) === String(lancId))
+        : (lista[lista.length - 1] || null); // fallback: último criado
+
+      if (m) {
+        // m.tipo: 'receita' | 'despesa'  —> FG: 'entrada' | 'saida'
+        const tipoFG   = (String(m.tipo||'receita').toLowerCase() === 'despesa') ? 'saida' : 'entrada';
+        const statusFG = (String(m.status||'pendente').toLowerCase() === 'baixado') ? 'baixado' : 'pendente';
+        const dataISO  = (String(m.data||m.dataCompetencia||'').slice(0,10) || new Date().toISOString().slice(0,10));
+
+        // conta selecionada no modal (prioriza id; nome é opcional)
+        const contaId   = (m.contaId ?? m.conta_id ?? null);
+        const contaNome = (m.contaNome || m.conta || '');
+
+        // cria no FG já com a conta do modal
+        lanc = {
+          id: String(m.id || ('fg_prom_'+Date.now().toString(36))),
+          tipo: tipoFG,
+          origem: 'empresa',
+          descricao: m.descricao || '',
+          categoriaId: m.categoriaId ?? null,
+          subcategoriaId: m.subcategoriaId ?? null,
+          valorTotal: Number(m.valor||0),        // << em REAIS
+          status: statusFG,
+          dataCompetencia: dataISO,
+          dataPagamentoISO: (statusFG==='baixado' ? dataISO : null),
+          contaId: (contaId ? String(contaId) : null),
+          contaNome: contaNome || '',
+          // evento será completado abaixo, se faltar
+        };
+        g.lancamentos.push(lanc);
+        createdNow = true;
+
+        // se estiver "baixado/pago", gera MOVIMENTO na conta do modal
+        if (contaId && statusFG === 'baixado') {
+          g.movimentos.push({
+            id: (Date.now().toString(36) + Math.random().toString(36).slice(2,8)),
+            refKey: `lanc:${lanc.id}:auto`,
+            origem: 'lancamento',
+            lancamentoId: lanc.id,
+            contaId: String(contaId),
+            contaNome: contaNome || '',
+            tipo: (tipoFG === 'entrada' ? 'credito' : 'debito'),
+            valor: Number(m.valor||0),           // em REAIS
+            dataISO
+          });
+        }
+      }
+    }
+
+    // completa evento se faltar
+    if (lanc && !lanc.eventoId && currentEventoId){
+      lanc.eventoId = currentEventoId;
+
+      // resolve nome do evento
+      let evs = [];
+      try { evs = (typeof listEventos === 'function') ? (listEventos() || []) : evs; } catch {}
+      if (!Array.isArray(evs) || evs.length === 0){
+        try {
+          const a = JSON.parse(localStorage.getItem((window.K_KEYS?.EVENTOS)||'m30.eventos') || '[]');
+          const b = JSON.parse(localStorage.getItem('eventos') || '[]');
+          const map = new Map(); [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
+          evs = Array.from(map.values());
+        } catch {}
+      }
+      const evObj = (evs || []).find(e => String(e.id) === String(currentEventoId)) || {};
+      lanc.eventoNome = lanc.eventoNome || evObj.nome || evObj.titulo || '';
+    }
+
+    // salva & pinga FG se houve alguma alteração/promoção
+    if (lanc || createdNow) {
+      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    }
+  }catch(e){
+    console.warn('ajuste/promoção de lançamento após finmodal:confirm', e);
+  }
+
+  // reforça: promove espelho → FG se algo ficou para trás e refaz a tela
+  try { promoteEspelhoLancsToFG(currentEventoId); renderAll(); } catch {}
+});
+
+
+  doc.addEventListener('click', (ev)=>{
+    const id = ev.target?.dataset?.cancel;
+    if (!id) return;
+    if (!currentEventoId) { showToast('Selecione um evento','warn'); return; }
+    if (!confirm('Confirmar cancelamento desta venda?')) return;
+    cancelarVenda(id);
+  });
+
+  win.addEventListener('storage', (ev)=>{
+    if (!ev.key) return;
+    const keys = new Set([K.EVENTOS, 'eventos', K.VENDAS, 'vendas', 'financeiroGlobal', 'configFinanceiro']);
+    if (keys.has(ev.key)){
+      const cur = currentEventoId;
+      hydrateEventos();
+      if (cur) { byId('selEvento').value = cur; currentEventoId = cur; }
+      renderAll();
+    }
+  });
+
+  win.addEventListener('hashchange', ()=>{
+    const h = location.hash.match(/evento=([^&]+)/)?.[1] || null;
+    if (h && h !== currentEventoId){
+      currentEventoId = h;
+      const sel = byId('selEvento'); if (sel) sel.value = currentEventoId;
+      renderAll();
+    }
+  });
+
+ let _espelhoCount = (_lanGetAll(currentEventoId) || []).length;
+setInterval(() => {
+  const cur = (_lanGetAll(currentEventoId) || []).length;
+  if (cur !== _espelhoCount){
+    _espelhoCount = cur;
+    promoteEspelhoLancsToFG(currentEventoId);
+    renderAll();
+  }
+}, 1200);
+
+
+  /* ===== init ===== */
+  (function init(){
+    hydrateEventos();
+    if (win.lucide?.createIcons) win.lucide.createIcons();
+    renderAll();
+  })();
+
+})(window, document);
+</script>
+
+<!-- Carrega menu lateral no padrão do modelo base --><!-- Modal Financeiro (carregado como módulo para evitar conflito de $) -->
+<script type="module" src="./financeiro-modal.js"></script>
+
+<script type="module" src="menu-lateral.js"></script>
+
+<script>
+  // 3) Toggle mobile (hamburguer + backdrop) + botão X interno
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside) return;
+
+    // Botão X dentro do menu
+    let close = aside.querySelector('#fecharMenuMobile');
+    if (!close) {
+      close = document.createElement('button');
+      close.id = 'fecharMenuMobile';
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Fechar menu');
+      close.innerHTML = '<i data-lucide="x"></i>';
+      close.style.cssText = `
+        position:absolute;
+        top:12px;
+        right:12px;
+        border:none;
+        border-radius:8px;
+        padding:6px 10px;
+        font-size:20px;
+        background:#c29a5d;
+        color:#fff;
+        z-index:1002;
+        display:none;
+      `;
+      aside.prepend(close);
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display   = mob ? 'block' : 'none';
+      close.style.display = mob ? 'block' : 'none';
+      if (!mob) {
+        setOpened(false);
+      }
+    }
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      if (back) back.hidden = !opened;
+      document.body.style.overflow = opened ? 'hidden' : '';
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon) {
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e) {}
+      }
+    }
+
+    // evita dupla instalação se outro script já amarrou
+    if (!btn.hasAttribute('data-hamb-bound')) {
+      btn.setAttribute('data-hamb-bound','1');
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpened(false);
+    });
+
+    if (back && !back.hasAttribute('data-back-bound')) {
+      back.setAttribute('data-back-bound','1');
+      back.addEventListener('click', () => setOpened(false));
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)) {
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+
+</script>
+
+<!-- === FIM PATCH MENU LATERAL === -->
+<!-- === INÍCIO PATCH PERMISSÕES LEVES (opcional) === -->
+<script type="module">
+  import { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
+  });
+</script>
+<!-- === FIM PATCH PERMISSÕES LEVES (opcional) === -->
+
+</body>
+</html>
+

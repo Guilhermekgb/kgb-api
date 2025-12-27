@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:modelos-checklist.html">
+  <meta charset="UTF-8" />
+  <title>Gerenciamento Modelos Check List</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (modelos-checklist) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  // Usa a mesma permissão declarada no <meta name="page-permission">
+  guard({ permissao: 'page:modelos-checklist.html' });
+  aplicarPermissoesNaTela();
+</script>
+<!-- === FIM PATCH COMMON + GUARD (modelos-checklist) === -->
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos gerais do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#fdf7ef; --brown:#5a3e2b; --gold:#c29a5d; --chip:#f3e8da;
+      --ink:#2b2b2b; --card:#fff; --line:#eadfce;
+    }
+
+    html, body { margin:0; padding:0; background:var(--bg); height:100%; }
+
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    main.conteudo-principal { flex:1; padding:40px; height:100vh; overflow-y:auto; transition:margin-left .2s ease; }
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+
+    main.conteudo-principal,
+    main.conteudo-principal input,
+    main.conteudo-principal select,
+    main.conteudo-principal textarea,
+    main.conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    main.conteudo-principal h1,
+    main.conteudo-principal h2,
+    main.conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{ font-size:28px; color:var(--brown); display:flex; align-items:center; gap:10px; }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px; background:var(--gold);
+      border:none; color:#fff; font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+    }
+    @media (max-width:768px){ #hamburguer{ display:block; } main.conteudo-principal{ padding:20px; } }
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;
+  z-index:900;
+}
+#menuBackdrop.visivel{ display:block; }
+body.no-scroll{ overflow:hidden; }
+
+#menuLateral{
+  transform:translateX(-100%);
+  transition:transform .3s ease;
+}
+#menuLateral.aberto{
+  transform:translateX(0);
+}
+
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:var(--chip); border-radius:6px; font-weight:bold;
+    }
+
+    .conteudo-elegante{
+      background:#fff; padding:32px; border-radius:16px;
+      box-shadow:0 4px 12px rgba(0,0,0,.06); margin:32px 0;
+    }
+
+    .botao-aba{
+      background:#fff8f2; color:var(--brown); border:1px solid var(--gold);
+      border-radius:10px; padding:10px 18px; font-weight:500;
+      display:inline-flex; align-items:center; gap:8px;
+      box-shadow:0 2px 6px rgba(0,0,0,.05); transition:background .2s, transform .2s;
+      cursor:pointer;
+    }
+    .botao-aba:hover{ background:var(--chip); transform:translateY(-1px); }
+    #abasModelos{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
+    #abasModelos .ativo{ background:var(--gold); color:#fff; }
+
+    .item-modelo{
+      background:#fff; border:1px solid var(--line); border-left:5px solid var(--gold);
+      border-radius:12px; padding:16px 20px; margin-bottom:12px;
+      box-shadow:0 2px 4px rgba(0,0,0,.06);
+    }
+    .item-top{ display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .item-nome{ font-size:16px; font-weight:600; color:var(--brown); }
+    .item-meta{ font-size:13px; color:#7b5e46; margin-top:4px; }
+    .acoes-item{ display:flex; gap:8px; }
+    .botao-icone{
+      background:none; border:1px solid var(--line); color:var(--brown);
+      border-radius:8px; padding:6px; cursor:pointer;
+    }
+    .botao-icone:hover{ background:#fffaf4; }
+
+    .grupo-acoes { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:24px 0; }
+    #botoesAbaAtiva{ display:flex; gap:10px; }
+
+    .modal-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.4);
+      display:none; align-items:center; justify-content:center; z-index:1000;
+    }
+    .modal{ background:#fff; width:100%; max-width:560px; border-radius:14px; padding:22px; box-shadow:0 10px 30px rgba(0,0,0,.16); }
+    .modal h3{ margin:0 0 10px 0; color:var(--brown); display:flex; align-items:center; gap:8px; }
+    .modal .row{ display:grid; grid-template-columns:1fr; gap:10px; margin:12px 0; }
+    .modal label{ font-size:13px; color:#694f3f; }
+    .modal input[type="text"], .modal input[type="number"], .modal select{
+      width:100%; padding:10px 12px; border:1px solid #e6ded2; border-radius:10px; outline:none;
+    }
+    .modal .row.grid-3{ grid-template-columns:1fr 1fr 1fr; }
+    .modal .actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+
+    #menuBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); backdrop-filter:saturate(80%) blur(2px); display:none; z-index:900; }
+    #menuBackdrop.visivel{ display:block; }
+  </style>
+</head>
+<body>
+
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <div class="conteudo-elegante">
+          <h1><i data-lucide="check-square"></i> Gerenciar Modelos de Checklist</h1>
+          <p>Crie setores (abas) e defina os itens padrões que serão aplicados nos eventos.</p>
+
+          <div id="toolbar-modelos" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;">
+            <button id="btnExportModelos" class="btn">Exportar modelos (JSON)</button>
+            <label for="inpImportModelos" class="btn ghost" style="cursor:pointer;">Importar modelos (JSON)</label>
+            <input id="inpImportModelos" type="file" accept=".json,application/json" style="display:none">
+            <span style="opacity:.8;">(backup/clone rápido)</span>
+          </div>
+
+          <div class="grupo-acoes">
+            <button onclick="abrirModalNovaAba()" class="botao-aba">
+              <i data-lucide="folder-plus"></i> Nova Aba (Setor)
+            </button>
+
+            <div id="botoesAbaAtiva">
+              <button onclick="abrirModalItem()" class="botao-aba">
+                <i data-lucide="plus"></i> Adicionar Item na Lista
+              </button>
+              <button onclick="editarAba()" class="botao-aba">
+                <i data-lucide="pencil"></i> Editar Nome da Aba
+              </button>
+              <button id="botaoExcluirAba" class="botao-aba">
+                <i data-lucide="trash-2"></i> Excluir Aba
+              </button>
+            </div>
+          </div>
+
+          <div id="abasModelos"></div>
+          <div id="listaItensAba"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: Nova Aba -->
+  <div id="modalNovaAba" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ttlNovaAba">
+    <div class="modal">
+      <h3 id="ttlNovaAba"><i data-lucide="folder-plus"></i> Nova Aba</h3>
+      <div class="row">
+        <label for="nomeNovaAba">Nome da nova aba</label>
+        <input id="nomeNovaAba" type="text" placeholder="Ex.: Pré-Evento" />
+      </div>
+      <div class="actions">
+        <button class="botao-aba" onclick="fecharModalNovaAba()">Cancelar</button>
+        <button class="botao-aba" onclick="confirmarNovaAba()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Adicionar/Editar Item -->
+  <div id="modalItem" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ttlItem">
+    <div class="modal">
+      <h3 id="ttlItem"><i data-lucide="plus"></i> Item do Checklist</h3>
+
+      <div class="row">
+        <label for="modalItemNome">Nome do item</label>
+        <input id="modalItemNome" type="text" placeholder="Ex.: Definir cardápio" />
+      </div>
+
+      <div class="row grid-3">
+        <div>
+          <label for="modalItemDias">Dias</label>
+          <input id="modalItemDias" type="number" min="0" step="1" placeholder="0" />
+        </div>
+        <div>
+          <label for="modalItemTipo">Quando</label>
+          <select id="modalItemTipo">
+            <option value="antes">Antes do evento</option>
+            <option value="depois">Depois do evento</option>
+          </select>
+        </div>
+        <div>
+          <label for="modalItemAgenda">Enviar para agenda?</label>
+          <select id="modalItemAgenda">
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="botao-aba" onclick="fecharModalItem()">Cancelar</button>
+        <button class="botao-aba" onclick="confirmarItem()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+    let checklistModelos = {};
+    let abaAtiva = "";
+    let editIndex = null;
+
+    function salvarModelos(){ localStorage.setItem("checklistModelos", JSON.stringify(checklistModelos)); }
+    function tipoFormatado(tipo){
+      if (tipo === "preEvento") return "Pré-Evento";
+      if (tipo === "diaEvento") return "Dia do Evento";
+      if (tipo === "posEvento") return "Pós-Evento";
+      return tipo.charAt(0).toUpperCase() + tipo.slice(1);
+    }
+    function slugAba(nome){
+      const base = String(nome||"").trim().toLowerCase();
+      if (["pré-evento","pre-evento","pre evento","pré evento"].includes(base))  return "preEvento";
+      if (["dia do evento","dia-evento","dia evento"].includes(base))            return "diaEvento";
+      if (["pós-evento","pos-evento","pos evento","pós evento"].includes(base)) return "posEvento";
+      return base.replace(/\s+/g,"");
+    }
+    function garantirAbasPadrao(){
+      try{ checklistModelos = JSON.parse(localStorage.getItem("checklistModelos") || "{}") || {}; }catch(e){ checklistModelos = {}; }
+      var mudou = false;
+      ["preEvento","diaEvento","posEvento"].forEach(function(k){
+        if (!Array.isArray(checklistModelos[k])) { checklistModelos[k] = []; mudou = true; }
+      });
+      if (mudou) salvarModelos();
+      if (!abaAtiva) abaAtiva = Object.keys(checklistModelos)[0] || "preEvento";
+    }
+    function prazoLabel(p){
+      if (!p || typeof p !== "object") return "—";
+      var d = Number(p.dias||0);
+      var t = (p.tipo||"antes")==="depois" ? "depois" : "antes";
+      var ag = p.agenda ? " • agenda: sim" : " • agenda: não";
+      return d + " dia" + (d===1?"":"s") + " " + t + " do evento" + ag;
+    }
+
+    function renderizarAbas(){
+      var container = document.getElementById("abasModelos");
+      container.innerHTML = "";
+      Object.keys(checklistModelos).forEach(function(tipo){
+        var btn = document.createElement("button");
+        btn.className = "botao-aba" + (tipo===abaAtiva ? " ativo": "");
+        btn.textContent = tipoFormatado(tipo);
+        btn.onclick = function(){ abaAtiva = tipo; renderizarAbas(); renderizarItens(); };
+        container.appendChild(btn);
+      });
+
+      var botaoExcluir = document.getElementById("botaoExcluirAba");
+      if (botaoExcluir) {
+        botaoExcluir.onclick = function(){
+          if (!abaAtiva) return;
+          excluirAba(abaAtiva);
+        };
+      }
+      try{ if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }catch(e){}
+    }
+
+    function renderizarItens(){
+      var box = document.getElementById("listaItensAba");
+      box.innerHTML = "";
+
+      var lista = Array.isArray(checklistModelos[abaAtiva]) ? checklistModelos[abaAtiva] : [];
+      if (!lista.length){
+        box.innerHTML = "<p style='color:#666;'>Nenhum item adicionado ainda.</p>";
+        return;
+      }
+
+      lista.forEach(function(item, i){
+        var card = document.createElement("div");
+        card.className = "item-modelo";
+        var nome = (item && item.nome) ? item.nome : "Item";
+        var prazo = (item && item.prazo) ? item.prazo : null;
+        card.innerHTML =
+          '<div class="item-top">'+
+            '<div>'+
+              '<div class="item-nome">'+nome+'</div>'+
+              '<div class="item-meta">'+(prazoLabel(prazo))+'</div>'+
+            '</div>'+
+            '<div class="acoes-item">'+
+              '<button class="botao-icone" title="Subir"   data-up="'+i+'"><i data-lucide="arrow-up"></i></button>'+
+              '<button class="botao-icone" title="Descer"  data-down="'+i+'"><i data-lucide="arrow-down"></i></button>'+
+              '<button class="botao-icone" title="Duplicar" data-dup="'+i+'"><i data-lucide="copy"></i></button>'+
+              '<button class="botao-icone" title="Editar"  data-editar="'+i+'"><i data-lucide="pencil"></i></button>'+
+              '<button class="botao-icone" title="Excluir" data-remover="'+i+'"><i data-lucide="trash-2"></i></button>'+
+            '</div>'+
+          '</div>';
+        box.appendChild(card);
+      });
+
+      Array.prototype.forEach.call(box.querySelectorAll("[data-editar]"), function(btn){
+        btn.addEventListener("click", function(){
+          var i = Number(btn.getAttribute("data-editar"));
+          abrirModalItem(i);
+        });
+      });
+      Array.prototype.forEach.call(box.querySelectorAll("[data-remover]"), function(btn){
+        btn.addEventListener("click", function(){
+          var i = Number(btn.getAttribute("data-remover"));
+          excluirItem(i);
+        });
+      });
+
+      box.addEventListener("click", function(e){
+        var tgtBtn = e.target.closest("button");
+        if (!tgtBtn) return;
+        var i = Number(
+          tgtBtn.dataset.up ||
+          tgtBtn.dataset.down ||
+          tgtBtn.dataset.dup ||
+          tgtBtn.dataset.editar ||
+          tgtBtn.dataset.remover
+        );
+        var listaLocal = Array.isArray(checklistModelos[abaAtiva]) ? checklistModelos[abaAtiva] : [];
+        if (!Number.isFinite(i) || !listaLocal[i]) return;
+
+        if (tgtBtn.hasAttribute("data-up") && i>0){
+          var movedUp = listaLocal.splice(i,1)[0];
+          listaLocal.splice(i-1,0,movedUp);
+          salvarModelos(); renderizarItens();
+        }
+        if (tgtBtn.hasAttribute("data-down") && i<listaLocal.length-1){
+          var movedDown = listaLocal.splice(i,1)[0];
+          listaLocal.splice(i+1,0,movedDown);
+          salvarModelos(); renderizarItens();
+        }
+        if (tgtBtn.hasAttribute("data-dup")){
+          var clone = JSON.parse(JSON.stringify(listaLocal[i]));
+          listaLocal.splice(i+1,0,clone);
+          salvarModelos(); renderizarItens();
+        }
+      });
+
+      try{ if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }catch(e){}
+    }
+
+    function abrirModalNovaAba(){
+      document.getElementById("nomeNovaAba").value = "";
+      document.getElementById("modalNovaAba").style.display = "flex";
+      try{ if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }catch(e){}
+    }
+    function fecharModalNovaAba(){ document.getElementById("modalNovaAba").style.display = "none"; }
+    function confirmarNovaAba(){
+      var nome = document.getElementById("nomeNovaAba").value.trim();
+      if (!nome) return alert("Digite um nome.");
+      var chave = slugAba(nome);
+      if (checklistModelos[chave]) return alert("Essa aba já existe.");
+      checklistModelos[chave] = [];
+      abaAtiva = chave;
+      salvarModelos();
+      fecharModalNovaAba();
+      renderizarAbas(); renderizarItens();
+    }
+
+    function editarAba(){
+      if (!abaAtiva) return;
+      var nomeAtual = tipoFormatado(abaAtiva);
+      var novoNome = prompt("Editar nome da aba:", nomeAtual);
+      if (!novoNome) return;
+      var novaChave = slugAba(novoNome);
+      if (novaChave === abaAtiva) return;
+      if (checklistModelos[novaChave]) return alert("Já existe uma aba com esse nome.");
+      checklistModelos[novaChave] = checklistModelos[abaAtiva];
+      delete checklistModelos[abaAtiva];
+      abaAtiva = novaChave;
+      salvarModelos();
+      renderizarAbas(); renderizarItens();
+    }
+
+    function excluirAba(tipo){
+      if (!confirm('Excluir a aba "'+tipoFormatado(tipo)+'" e todos os itens?')) return;
+      delete checklistModelos[tipo];
+      salvarModelos();
+      var chaves = Object.keys(checklistModelos);
+      abaAtiva = chaves.length ? chaves[0] : "";
+      renderizarAbas(); renderizarItens();
+    }
+
+    function abrirModalItem(index){
+      if (index==null){ editIndex = null; } else { editIndex = Number(index); }
+      var m = document.getElementById("modalItem");
+      var ttl = document.getElementById("ttlItem");
+      var inpNome = document.getElementById("modalItemNome");
+      var inpDias = document.getElementById("modalItemDias");
+      var selTipo = document.getElementById("modalItemTipo");
+      var selAgenda = document.getElementById("modalItemAgenda");
+
+      if (editIndex==null){
+        ttl.innerHTML = '<i data-lucide="plus"></i> Adicionar Item';
+        inpNome.value = "";
+        inpDias.value = "";
+        selTipo.value = "antes";
+        selAgenda.value = "sim";
+      } else {
+        var it = (checklistModelos[abaAtiva]||[])[editIndex] || {};
+        var prazo = it.prazo || {};
+        ttl.innerHTML = '<i data-lucide="pencil"></i> Editar Item';
+        inpNome.value = it.nome || "";
+        inpDias.value = (typeof prazo.dias === "number" ? prazo.dias : 0);
+        selTipo.value = (prazo.tipo === "depois" ? "depois" : "antes");
+        selAgenda.value = (prazo.agenda === false ? "nao" : "sim");
+      }
+
+      m.style.display = "flex";
+      try{ if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }catch(e){}
+    }
+    function fecharModalItem(){ document.getElementById("modalItem").style.display = "none"; }
+
+    function confirmarItem(){
+      if (!abaAtiva) { alert("Selecione uma aba primeiro."); return; }
+
+      var elNome = document.getElementById("modalItemNome");
+      var elDias = document.getElementById("modalItemDias");
+      var elTipo = document.getElementById("modalItemTipo");
+      var elAgenda = document.getElementById("modalItemAgenda");
+
+      var nome = (elNome && elNome.value ? elNome.value : "").trim();
+      var diasStr = (elDias && typeof elDias.value !== "undefined" ? elDias.value : "").trim();
+      var tipo = (elTipo && elTipo.value === "depois") ? "depois" : "antes";
+      var agenda = (elAgenda && elAgenda.value === "sim");
+
+      var diasNum = parseInt(diasStr, 10);
+      var dias = Number.isFinite(diasNum) ? diasNum : 0;
+      if (dias < 0) dias = Math.abs(dias);
+
+      var msgs = [];
+      if (!nome) msgs.push("• Nome vazio.");
+      if (!Number.isFinite(diasNum)) msgs.push("• 'Dias' não numérico — assumi 0.");
+      if (diasNum < 0) msgs.push("• 'Dias' negativo — convertido para valor absoluto.");
+      if (msgs.length) alert("Atenção (não bloqueia):\n" + msgs.join("\n"));
+
+      var novo = { nome: nome, prazo: { dias: dias, tipo: tipo, agenda: agenda } };
+      var arr = checklistModelos[abaAtiva] || (checklistModelos[abaAtiva] = []);
+
+      if (editIndex == null || editIndex < 0 || editIndex >= arr.length) {
+        arr.push(novo);
+      } else {
+        arr[editIndex] = novo;
+      }
+
+      salvarModelos();
+      fecharModalItem();
+      renderizarItens();
+    }
+
+    function excluirItem(index){
+      if (!confirm("Deseja realmente excluir este item?")) return;
+      var arr = checklistModelos[abaAtiva] || [];
+      arr.splice(index, 1);
+      salvarModelos();
+      renderizarItens();
+    }
+
+       // === Menu mobile / desktop (hambúrguer) ===
+    document.addEventListener('DOMContentLoaded', function () {
+      const aside    = document.getElementById('menuLateral');
+      const burger   = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+      const main     = document.querySelector('main.conteudo-principal');
+
+      if (!aside || !burger || !backdrop) {
+        console.warn('[modelos-checklist] menu/hamburguer/backdrop não encontrados');
+        return;
+      }
+
+      function abrirMenu() {
+        aside.classList.add('aberto');
+        backdrop.classList.add('visivel');
+        backdrop.hidden = false;
+        document.body.classList.add('no-scroll');
+        burger.setAttribute('aria-expanded', 'true');
+      }
+
+      function fecharMenu() {
+        aside.classList.remove('aberto');
+        backdrop.classList.remove('visivel');
+        backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+        burger.setAttribute('aria-expanded', 'false');
+      }
+
+      // Clique no hambúrguer abre/fecha
+      burger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (aside.classList.contains('aberto')) {
+          fecharMenu();
+        } else {
+          abrirMenu();
+        }
+      });
+
+      // Clique no backdrop fecha
+      backdrop.addEventListener('click', fecharMenu);
+
+      // ESC fecha
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') fecharMenu();
+      });
+
+      // Evita clique dentro do menu “subir” para o documento
+      aside.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+
+      // Ajusta margem do <main> no desktop, depois que o menu carregar
+      function aplicarMargin() {
+        if (!main) return;
+        const isDesktop = window.innerWidth >= 1024;
+        const w = aside.getBoundingClientRect().width || 0;
+        main.style.marginLeft = isDesktop ? (w + 'px') : '0px';
+      }
+
+      try {
+        const obs = new MutationObserver(function () {
+          if (aside.firstElementChild) {
+            aplicarMargin();
+            obs.disconnect();
+          }
+        });
+        obs.observe(aside, { childList: true });
+      } catch (e) {}
+
+      window.addEventListener('resize', aplicarMargin);
+      window.addEventListener('orientationchange', aplicarMargin);
+      aplicarMargin();
+    });
+
+
+    document.addEventListener("DOMContentLoaded", function(){
+      garantirAbasPadrao();
+      renderizarAbas();
+      renderizarItens();
+      try{ if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }catch(e){}
+    });
+  </script>
+
+  <!-- Exportar/Importar JSON -->
+  <script>
+    (function(){
+      var KEY = "checklistModelos";
+      function getLS(k, fb){
+        try {
+          var val = JSON.parse(localStorage.getItem(k));
+          return (val==null ? fb : val);
+        } catch(e){ return fb; }
+      }
+      function setLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+      var btnExp = document.getElementById("btnExportModelos");
+      var inpImp = document.getElementById("inpImportModelos");
+
+      if (btnExp){
+        btnExp.addEventListener("click", function(){
+          var modelos = getLS(KEY, {});
+          var blob = new Blob([JSON.stringify(modelos, null, 2)], {type:"application/json"});
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "modelos-checklist.json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+      }
+
+      if (inpImp){
+        inpImp.addEventListener("change", function(e){
+          var f = e.target.files && e.target.files[0];
+          if (!f) return;
+          var reader = new FileReader();
+          reader.onload = function(){
+            try{
+              var data = JSON.parse(reader.result);
+              if (!data || typeof data!=="object") { alert("Arquivo inválido."); return; }
+              if (!confirm("Importar vai SUBSTITUIR os modelos atuais. Confirmar?")) return;
+              setLS(KEY, data);
+              alert("Modelos importados com sucesso! Recarregando…");
+              location.reload();
+            }catch(err){
+              alert("Não consegui ler o JSON. Verifique o arquivo.");
+            }
+          };
+          reader.readAsText(f);
+        });
+      }
+    })();
+  </script>
+
+  <!-- Integração opcional com /api -->
+  <!-- <script>window.__API_BASE__="https://api.seu-dominio.com";</script> -->
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./api/auth.js"></script>
+  <script type="module" src="./api/routes.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const btn=document.getElementById("hamburguer");
+  const menu=document.getElementById("menuLateral");
+  const back=document.getElementById("menuBackdrop");
+
+  if(!btn||!menu) return;
+
+  function abrir(){
+    menu.classList.add("aberto");
+    if(back){ back.classList.add("visivel"); back.hidden=false; }
+    document.body.classList.add("no-scroll");
+  }
+
+  function fechar(){
+    menu.classList.remove("aberto");
+    if(back){ back.classList.remove("visivel"); back.hidden=true; }
+    document.body.classList.remove("no-scroll");
+  }
+
+  btn.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    menu.classList.contains("aberto") ? fechar() : abrir();
+  });
+
+  back?.addEventListener("click",fechar);
+});
+</script>
+
+</body>
+</html>
+

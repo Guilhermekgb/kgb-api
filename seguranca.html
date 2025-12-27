@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<!-- Identidade RBAC da página -->
+<meta name="page-permission" content="page:seguranca.html|Administrador|Vendedor|Maitre|Responsável por Evento">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<title>Segurança</title>
+
+<link rel="stylesheet" href="./kgb-common.css">
+<link rel="stylesheet" href="./menu-lateral.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+  .wrap { max-width: 1000px; margin: 24px auto; padding: 24px; background:#fff7ed; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.08); }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .grid{ grid-template-columns: 1fr; } }
+  .card { background:#fff; border-radius:10px; padding:14px; border:1px solid #eadfd2; }
+  .btn  { padding:8px 10px; border-radius:8px; border:none; background:#5c4033; color:#fff; cursor:pointer; font-weight:600; }
+  .btn.ghost { background:#c89d63; }
+  .muted{ color:#6b5a4f; font-size:14px; }
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  th,td{ padding:6px 8px; border-bottom:1px solid #eadfd2; text-align:left; }
+  .pill{ display:inline-block; padding:2px 8px; border-radius:999px; background:#f3e8da; color:#5c4033; font-weight:700; font-size:12px; }
+  /* Botão hamburguer */
+  #hamburguer{
+    position:fixed;
+    top:12px;
+    left:12px;
+    z-index:1001;
+    background:#c29a5d;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:6px 12px;
+    font-size:22px;
+    box-shadow:0 4px 12px rgba(0,0,0,.18);
+    cursor:pointer;
+    display:none; /* aparece só no mobile */
+  }
+
+  @media (max-width:768px){
+    #hamburguer{ display:block; }
+  }
+
+  #menuBackdrop{
+    position:fixed;
+    inset:0;
+   background:rgba(0,0,0,0.35);
+    z-index:998;
+  }
+
+  #menuLateral.aberto{
+    z-index:999;
+  }
+</style>
+</head>
+<body>
+<button id="hamburguer"><i data-lucide="menu"></i></button>
+<aside id="menuLateral"></aside>
+<div id="menuBackdrop" hidden></div>
+
+<main class="conteudo-principal">
+  <div class="wrap">
+    <h1><i data-lucide="shield-check"></i> Segurança</h1>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Usuário e Sessão</h3>
+        <p id="uinfo" class="muted"></p>
+        <label>Tempo de inatividade (min):
+          <input id="timeoutMin" type="number" min="5" step="5" value="20">
+        </label>
+        <button id="btnSaveSess" class="btn">Salvar</button>
+      </div>
+
+      <div class="card">
+        <h3>Ambiente</h3>
+        <p>Firebase detectado: <span id="fbFlag" class="pill">não</span></p>
+        <p>Allowlist de IP (UI apenas — efeito real vem no backend futuro)</p>
+        <textarea id="allowlist" rows="4" style="width:100%;"></textarea>
+        <div style="margin-top:8px">
+          <button id="btnSaveAllow" class="btn ghost">Salvar lista</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h3>Snapshots locais</h3>
+      <p class="muted">Mantemos apenas os <b>últimos 5</b> snapshots por chave.</p>
+      <div id="snapTable"></div>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    // cria botão X dentro do menu
+    let close = aside.querySelector('#fecharMenuMobile');
+    if (!close){
+      close = document.createElement('button');
+      close.id = 'fecharMenuMobile';
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Fechar menu');
+      close.innerHTML = '<i data-lucide="x"></i>';
+      close.style.cssText = `
+        position:absolute;
+        top:12px;
+        right:12px;
+        border:none;
+        border-radius:8px;
+        padding:6px 10px;
+        font-size:20px;
+        background:#c29a5d;
+        color:#fff;
+        z-index:1002;
+        display:block;
+      `;
+      aside.prepend(close);
+    }
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide','x');
+        try { lucide.createIcons(); } catch(e){}
+      }
+    }
+
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide','menu');
+        try { lucide.createIcons(); } catch(e){}
+      }
+    }
+
+    function toggle(){
+      if (aside.classList.contains('aberto')) fechar();
+      else abrir();
+    }
+
+    if (!btn.hasAttribute('data-bound')) {
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggle();
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')) {
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+
+    // botão X interno fecha
+    close.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      fechar();
+    });
+
+    // clicar fora do menu fecha
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        fechar();
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>

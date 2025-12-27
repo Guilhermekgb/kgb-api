@@ -1,0 +1,19 @@
+export async function gerarBoleto(dados) {
+  console.log("Simulando geração de boleto:", dados);
+  return {
+    status: "sucesso",
+    tipo: "boleto",
+    link: "https://pagamento-simulado.com/boleto123",
+    vencimento: dados.vencimento
+  };
+}
+
+export async function gerarPix(dados) {
+  console.log("Simulando geração de PIX:", dados);
+  return {
+    status: "sucesso",
+    tipo: "pix",
+    qrCode: "00020126360014...",
+    copiaCola: "pix-copia-e-cola-simulado"
+  };
+}

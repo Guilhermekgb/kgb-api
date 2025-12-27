@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="page-permission" content="page:auditoria.html">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Auditoria — Admin</title>
+
+  <!-- CSS base do sistema -->
+  <link rel="stylesheet" href="./kgb-common.css"/>
+  <link rel="stylesheet" href="./menu-lateral.css"/>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root{
+      --sidebar-w:260px; --bg:#f8f1e8; --card:#fff; --line:#e8dcc9;
+      --marrom:#5a3e2b; --muted:#6b7280;
+    }
+    html,body{ margin:0; padding:0; background:var(--bg); }
+  /* Layout base como no modelo */
+.wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+#menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+
+/* Desktop: menu fixo e reserva de espaço */
+@media (min-width:769px){
+  #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); height:100vh; z-index:999; }
+  .wrapper{ padding-left:var(--sidebar-w); }
+  main.conteudo-principal{ margin-left:0 !important; }
+}
+
+/* Mobile: off-canvas */
+@media (max-width:768px){
+  #menuLateral{
+    position:fixed;
+    transform:translateX(-100%);
+    transition:transform .3s ease;
+    z-index:999;
+    width:var(--sidebar-w);
+  }
+
+  /* Abre o menu se tiver a classe .aberto
+     OU se o <body> estiver com a classe .menu-open */
+  #menuLateral.aberto{
+    transform:translateX(0);
+  }
+  body.menu-open #menuLateral{
+    transform:translateX(0);
+  }
+
+  .wrapper{
+    padding-left:0;
+  }
+
+  main.conteudo-principal{
+    padding:20px;
+  }
+}
+
+
+/* Conteúdo principal padrão */
+main.conteudo-principal{
+  flex:1; min-height:100vh; height:auto; overflow-y:auto; width:100% !important; max-width:none !important;
+  margin:0 !important; padding:24px clamp(16px, 3vw, 32px) 40px;
+}
+/* Achata o wrapper para os filhos usarem toda a largura do main */
+.conteudo-central{ display:contents !important; }
+
+
+    /* Container e tipografia */
+    .container{ max-width:1200px; margin:22px auto; padding:0 14px; }
+    .h1{ font-family:"Playfair Display",serif; color:var(--marrom); font-size:30px; font-weight:800; display:flex; gap:10px; align-items:center; margin:0 0 12px; }
+
+    /* Cartões e controles */
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow-1); }
+    .card.pad{ padding:14px; }
+    .filters{ display:grid; grid-template-columns: 1fr 1fr 1.2fr 1.2fr .8fr auto; gap:12px; }
+    @media (max-width:1000px){ .filters{ grid-template-columns: 1fr 1fr; } }
+
+    .muted{ color:var(--muted); font-size:12px; }
+    .btn{ height:36px; padding:0 14px; border-radius:10px; border:none; cursor:pointer; font:inherit; }
+    .btn.primary{ background:var(--marrom); color:#fff; }
+    .btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--marrom); }
+    .input, select, input[type="date"], input[type="text"]{ height:36px; padding:6px 10px; border-radius:10px; border:1px solid var(--line); background:#fff; font:inherit; }
+
+    /* Tabela */
+    .table-wrap{ max-height:62vh; overflow:auto; }
+    table{ width:100%; border-collapse:collapse; font-size:14px; }
+    thead th{ position:sticky; top:0; z-index:1; background:#f3eadc; color:var(--marrom); text-align:left; padding:10px; border-bottom:1px solid var(--line); }
+    tbody td{ padding:10px; border-bottom:1px solid #efe6d7; vertical-align:top; }
+    .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--line); }
+    .pill{ font-size:12px; padding:4px 8px; border-radius:999px; background:#f7efe4; border:1px solid var(--line); color:var(--marrom); }
+    .pagination{ display:flex; gap:8px; align-items:center; justify-content:flex-end; padding:10px 14px; }
+
+    /* Botão hambúrguer (mobile) */
+    #hamburguer{
+      position:fixed; left:12px; top:12px; z-index:1001; width:42px; height:42px;
+      display:none; align-items:center; justify-content:center;
+      border-radius:10px; border:1px solid var(--line); background:#fff;
+    }
+    @media (max-width:1024px){ #hamburguer{ display:flex; } }
+
+    /* Backdrop do menu */
+    #menuBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:998; display:none; }
+    body.menu-open #menuBackdrop{ display:block; }
+  </style>
+
+  <!-- Força usar backend local nesta página ANTES de carregar os módulos -->
+<!-- usa config.env.js; não sobrescrever __API_BASE__ aqui em produção -->
+
+</head>
+<body>
+
+  <!-- Botão Mobile para abrir o menu -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral" class="no-print"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        
+
+        <h1 class="h1"><i data-lucide="history"></i> Auditoria</h1>
+
+        <!-- FILTROS -->
+        <div class="card pad" style="margin-bottom:12px">
+          <div class="filters">
+            <label>
+              <div class="muted">De</div>
+              <input type="date" id="f-from" class="input"/>
+            </label>
+            <label>
+              <div class="muted">Até</div>
+              <input type="date" id="f-to" class="input"/>
+            </label>
+            <label>
+              <div class="muted">Entidade/Alvo (contém)</div>
+              <input type="text" id="f-entity" class="input" placeholder="ex.: contrato, lead, clientes"/>
+            </label>
+            <label>
+              <div class="muted">Ator (contém)</div>
+              <input type="text" id="f-actor" class="input" placeholder="ex.: carol@..."/>
+            </label>
+            <label>
+              <div class="muted">Tenant</div>
+              <input type="text" id="f-tenant" class="input" placeholder="ex.: kgb"/>
+            </label>
+            <div style="display:flex; gap:8px; align-items:end;">
+              <button class="btn primary" id="btnBuscar">Buscar</button>
+              <button class="btn ghost" id="btnLimpar">Limpar</button>
+            </div>
+          </div>
+        </div>
+
+<!-- LISTA -->
+<div class="card" id="auditCard">
+
+
+  <div class="toolbar" role="toolbar" aria-label="Controles da lista de logs" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="pill"><b id="qtdRows">0</b> registros</span>
+
+      <label for="pageSize" class="muted" style="display:flex;align-items:center;gap:6px">
+        <span>Itens por página</span>
+        <select id="pageSize" class="input" aria-controls="tbodyLogs">
+          <option>20</option>
+          <option selected>50</option>
+          <option>100</option>
+          <option>200</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px">
+      <input id="auditSearch" class="input" type="search" placeholder="Filtrar logs…" aria-label="Filtrar logs" />
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="tabela" aria-describedby="qtdRows">
+      <thead>
+        <tr>
+          <th style="width:160px">Data</th>
+          <th style="width:120px">Ação</th>
+          <th>Alvo</th>
+          <th>Detalhe</th>
+          <th style="width:220px">Ator</th>
+          <th style="width:120px">Tenant</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyLogs"></tbody>
+    </table>
+  </div>
+
+  <div class="pagination" role="navigation" aria-label="Paginação">
+    <button class="btn ghost" id="prevPage" type="button">Anterior</button>
+    <span class="muted">Página <b id="curPage">1</b>/<b id="totPage">1</b></span>
+    <button class="btn ghost" id="nextPage" type="button">Próxima</button>
+  </div>
+
+</div>
+<!-- === INÍCIO PATCH FF-2 (Auditoria UI) ================================== -->
+<section class="card" style="padding:18px; background:#fff; border:1px solid #e8dcc9; border-radius:14px; margin-top:16px">
+  <header style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px">
+    <h2 style="margin:0; font-family:'Playfair Display',serif; color:#5a3e2b; font-size:22px">Logs de Auditoria</h2>
+    <div style="display:flex; gap:8px">
+      <button id="btnAuditReload" class="btn">Recarregar</button>
+    <button id="btnExportarCsv" class="btn" type="button">Exportar CSV</button>
+
+    </div>
+  </header>
+  <div id="auditLista" style="font:14px/1.5 Inter,system-ui,Arial"></div>
+</section>
+<!-- === FIM PATCH FF-2 ===================================================== -->
+
+    </main>
+  </div>
+<!-- Config de ambiente (define window.__API_BASE__) -->
+<script src="config.env.js"></script>
+
+  <!-- BOOT comum -->
+  <script type="module" src="./kgb-common.js"></script>
+  <!-- Backend local (rotas sobre LocalStorage) – carrega uma única vez -->
+  <script type="module" src="./api/routes.js"></script>
+
+  <!-- Lógica da página -->
+  <script type="module" src="./auditoria.js"></script>
+
+  <!-- Menu lateral dinâmico -->
+  <script type="module" src="./menu-lateral.js"></script>
+
+    <script>
+    // abre/fecha menu no mobile
+    const btn = document.getElementById('hamburguer');
+    const bd  = document.getElementById('menuBackdrop');
+    btn?.addEventListener('click', ()=> document.body.classList.toggle('menu-open'));
+    bd?.addEventListener('click',  ()=> document.body.classList.remove('menu-open'));
+
+    // Ícones (protege se o CDN falhar)
+    try { if (window.lucide?.createIcons) window.lucide.createIcons(); } catch {}
+  </script>
+
+<script id="patch-auditoria-log">
+/* === INÍCIO PATCH C — Auditoria: /audit/log (paginaçao + busca + prefs) === */
+(function(){
+  'use strict';
+
+  const $ = (s,el=document)=>el.querySelector(s);
+
+  // Skeleton/loading no card da lista
+  function setLoadingAudit(on){
+    const card = document.getElementById('auditCard') || document.querySelector('.card .table-wrap')?.closest('.card');
+    if (!card) return;
+    card.classList.toggle('is-loading', !!on);
+    if (on) card.setAttribute('aria-busy','true'); else card.removeAttribute('aria-busy');
+  }
+
+  // === PAGINAÇÃO AUDIT ===
+  let __auditItems = [];      // fonte completa vinda da API
+  let __auditPage = 1;        // página atual (1-based)
+  let __auditPageSize = 50;   // tamanho padrão
+
+  function setPageSize(n){
+    __auditPageSize = Math.max(1, Number(n||50));
+    __auditPage = 1;
+    render(__auditItems);
+  }
+  function gotoPage(p){
+    const tot = Math.max(1, Math.ceil((__auditItemsFiltered().length)/__auditPageSize));
+    __auditPage = Math.min(Math.max(1, Number(p||1)), tot);
+    render(__auditItems);
+  }
+  function __auditItemsFiltered(){
+    const q = (document.getElementById('auditSearch')?.value || '').trim().toLowerCase();
+    if (!q) return __auditItems;
+    return __auditItems.filter(it => {
+      const meta = it?.meta || {};
+      const txt = [
+        String(it?.ts||''),
+        String(it?.type||''),
+        String(it?.msg||it?.message||''),
+        String(meta?.actor||meta?.user||''),
+        String(meta?.entity||meta?.alvo||''),
+        String(meta?.tenant||'')
+      ].join(' ').toLowerCase();
+      return txt.includes(q);
+    });
+  }
+
+  async function loadLog(){
+    setLoadingAudit(true);
+    try{
+      const arr = await window.apiFetch('/audit/log');
+      render(Array.isArray(arr)?arr:[]);
+    }catch(e){
+      console.warn('[Audit] falha ao carregar logs:', e);
+      try{ window.toast?.('Não foi possível carregar os logs agora.', 'warn'); }catch{}
+      render([]);
+    }finally{
+      setLoadingAudit(false);
+    }
+  }
+
+  function render(items){
+    // guarda a fonte completa
+    __auditItems = Array.isArray(items) ? items : [];
+
+    const body = document.getElementById('auditBody') || document.getElementById('tbodyLogs');
+    if (!body) return;
+
+    // aplica filtro de busca
+    const arr = __auditItemsFiltered();
+
+    // paginação
+    const totRows = arr.length;
+    const totPage = Math.max(1, Math.ceil(totRows / __auditPageSize));
+    if (__auditPage > totPage) __auditPage = totPage;
+    const ini = (__auditPage - 1) * __auditPageSize;
+    const fim = ini + __auditPageSize;
+    const pageItems = arr.slice(ini, fim);
+
+    // limpa e renderiza
+    body.innerHTML = '';
+
+    for (const it of pageItems){
+      const meta    = it?.meta || {};
+      const data    = String(it?.ts||'').slice(0,19).replace('T',' ');
+      const acao    = it?.type || meta?.acao || meta?.action || '';
+      const alvo    = meta?.entity || meta?.alvo || meta?.target || '';
+      const detalhe = it?.msg || it?.message || meta?.detalhe || '';
+      const ator    = meta?.actor || meta?.user || meta?.email || '';
+      const tenant  = meta?.tenant || '';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${data}</td>
+        <td>${escapeHTML(String(acao))}</td>
+        <td>${escapeHTML(String(alvo))}</td>
+        <td>${escapeHTML(String(detalhe))}</td>
+        <td>${escapeHTML(String(ator))}</td>
+        <td>${escapeHTML(String(tenant))}</td>
+      `;
+      body.appendChild(tr);
+    }
+
+    // UI: contadores e navegação
+    const elQtd = document.getElementById('qtdRows');  if (elQtd) elQtd.textContent = String(totRows);
+    const elCur = document.getElementById('curPage');  if (elCur) elCur.textContent = String(__auditPage);
+    const elTot = document.getElementById('totPage');  if (elTot) elTot.textContent = String(totPage);
+
+    // habilita/desabilita botões
+    document.getElementById('prevPage')?.toggleAttribute('disabled', __auditPage <= 1);
+    document.getElementById('nextPage')?.toggleAttribute('disabled', __auditPage >= totPage);
+  }
+
+  function escapeHTML(s){
+    return String(s).replace(/[&<>"'`]/g, c=>({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'
+    }[c]));
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // restaura preferências
+    try {
+      const ps = Number(localStorage.getItem('audit:pageSize') || 50);
+      if (ps) { __auditPageSize = ps; const sel = document.getElementById('pageSize'); if (sel) sel.value = String(ps); }
+      const q = localStorage.getItem('audit:q') || '';
+      const inp = document.getElementById('auditSearch');
+      if (inp) { inp.value = q; __auditPage = 1; }
+    } catch {}
+
+    // carrega os logs
+    loadLog();
+
+ // paginação + busca (salva preferências)
+document.getElementById('pageSize')?.addEventListener('change', (e) => {
+  const raw = (e.target?.value ?? '50');
+  const v = Number(raw);
+  const pageSize = Number.isFinite(v) && v > 0 ? v : 50;
+  setPageSize(pageSize);
+  try { localStorage.setItem('audit:pageSize', String(pageSize)); } catch {}
+});
+
+document.getElementById('prevPage')?.addEventListener('click', () => {
+  gotoPage(__auditPage - 1);
+});
+
+document.getElementById('nextPage')?.addEventListener('click', () => {
+  gotoPage(__auditPage + 1);
+});
+
+document.getElementById('auditSearch')?.addEventListener('input', (e) => {
+  __auditPage = 1; // sempre volta para a primeira página ao filtrar
+  try { localStorage.setItem('audit:q', e.target?.value || ''); } catch {}
+  render(__auditItems);
+});
+
+});
+  // Realtime opcional: recarrega quando houver novas ações auditáveis
+  try{
+    const bc = new BroadcastChannel('kgb-sync');
+    bc.addEventListener('message', ev=>{ if (ev?.data?.type==='audit:new') loadLog(); });
+  }catch{}
+  window.addEventListener('storage', ev=>{ if (ev.key==='audit:ping') loadLog(); });
+
+  // debug
+  window.__dbgLoadAudit = loadLog;
+})();
+</script>
+
+
+</body>
+</html>
+

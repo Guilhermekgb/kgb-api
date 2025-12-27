@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="page-permission" content="page:kgb-formaturas-modelos-convite.html">
+  <title>KGB FORMATURAS - Modelos de Convite</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- TOPO / LISTA MODELOS --------- */
+
+    .linha-topo-modelos{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo select,
+    .campo input,
+    .campo textarea{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+    .campo textarea{
+      min-height:60px;
+      resize:vertical;
+    }
+    .campo select:focus,
+    .campo input:focus,
+    .campo textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+
+    .tabela-simples{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      margin-top:8px;
+    }
+    .tabela-simples thead{
+      background:#f5e7d8;
+    }
+    .tabela-simples th,
+    .tabela-simples td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-simples th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-simples tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .tag-tipo-evento{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+    }
+
+    .badge-ativo{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .badge-ativo i{
+      width:12px; height:12px;
+    }
+    .badge-inativo{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#eee2d3;
+      color:#7a5a3c;
+    }
+    .badge-inativo i{
+      width:12px; height:12px;
+    }
+
+    .btn-acao-mini{
+      border:none;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:11px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .btn-acao-mini i{
+      width:13px; height:13px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    /* --------- GRID: FORM + PRÉVIA --------- */
+
+    .grid-modelo{
+      display:grid;
+      grid-template-columns:minmax(0, 1.2fr) minmax(0, 0.9fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-top:18px;
+    }
+    @media (max-width:1000px){
+      .grid-modelo{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .campo-menor{
+      max-width:200px;
+    }
+
+    .campo-checkbox{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo-checkbox input{
+      width:16px; height:16px;
+      border-radius:4px;
+    }
+
+    .linha-botoes-form{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      margin-top:10px;
+      flex-wrap:wrap;
+    }
+
+    .texto-suporte{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:4px;
+    }
+
+    /* --------- PRÉ-VISUALIZAÇÃO DO CONVITE --------- */
+
+    .preview-wrapper{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .preview-convite{
+      background:linear-gradient(135deg, #f8e3cc, #fdf6ee);
+      border-radius:16px;
+      padding:18px 20px;
+      color:#4b2d16;
+      max-width:480px;
+      margin:0 auto;
+      box-shadow:0 16px 30px rgba(0,0,0,.18);
+      position:relative;
+      overflow:hidden;
+    }
+    .preview-convite::before{
+      content:'';
+      position:absolute;
+      inset:-40px;
+      background:radial-gradient(circle at top right, rgba(255,255,255,.9), transparent 60%);
+      pointer-events:none;
+    }
+    .preview-convite-inner{
+      position:relative;
+      z-index:1;
+    }
+
+    .preview-topo{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .preview-logo{
+      width:64px;
+      height:64px;
+      border-radius:50%;
+      border:2px solid rgba(231,187,129,.9);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:11px;
+      text-align:center;
+      line-height:1.2;
+      padding:4px;
+      box-shadow:0 0 0 1px rgba(0,0,0,.04);
+      background:rgba(255,255,255,.85);
+      color:#4b2d16;
+      overflow:hidden;
+    }
+    .preview-logo img{
+      max-width:100%;
+      max-height:100%;
+      border-radius:50%;
+    }
+
+    .preview-titulo{
+      font-family:"Playfair Display", ui-serif, Georgia;
+      font-size:18px;
+      font-weight:600;
+      margin-bottom:4px;
+      color:#4b2d16;
+    }
+    .preview-subtitulo{
+      font-size:11px;
+      opacity:.9;
+      color:#7a5a3c;
+    }
+
+    .preview-corpo{
+      font-size:12px;
+      line-height:1.5;
+      margin:10px 0;
+      color:#5a3e2b;
+    }
+
+    .preview-dados{
+      font-size:11px;
+      margin-top:6px;
+      border-top:1px dashed rgba(153,108,56,.45);
+      padding-top:6px;
+    }
+    .preview-dados strong{
+      font-weight:600;
+    }
+
+    .preview-rodape{
+      font-size:10px;
+      margin-top:10px;
+      opacity:.95;
+      color:#7a5a3c;
+    }
+
+    .preview-linha-inferior{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:10px;
+      margin-top:8px;
+    }
+
+    .preview-qr{
+      width:64px;
+      height:64px;
+      border-radius:10px;
+      background:repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,.98),
+        rgba(255,255,255,.98) 2px,
+        rgba(0,0,0,.06) 2px,
+        rgba(0,0,0,.06) 4px
+      );
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:9px;
+      color:#4b2d16;
+      text-align:center;
+      padding:4px;
+      box-shadow:0 6px 12px rgba(0,0,0,.18);
+    }
+
+    .preview-numero{
+      font-size:11px;
+      text-align:right;
+      opacity:.9;
+      color:#7a5a3c;
+      margin-top:4px;
+    }
+    #previewTamanhoConvite{
+      display:block;
+      font-size:10px;
+      margin-top:2px;
+    }
+
+    .preview-variaveis{
+      font-size:11px;
+      color:#7a5a3c;
+      background:#fdf7f0;
+      border-radius:10px;
+      padding:8px 10px;
+    }
+    .preview-variaveis code{
+      background:#f3e8da;
+      border-radius:4px;
+      padding:1px 4px;
+      font-size:11px;
+    }
+    body.modo-pdf header,
+body.modo-pdf nav,
+body.modo-pdf .topbar,
+body.modo-pdf .sidebar,
+body.modo-pdf .painel,
+body.modo-pdf .acoes,
+body.modo-pdf .toolbar,
+body.modo-pdf button,
+body.modo-pdf .botoes,
+body.modo-pdf .filtros,
+body.modo-pdf .lista-modelos {
+  display: none !important;
+}
+
+body.modo-pdf .preview,
+body.modo-pdf #preview,
+body.modo-pdf #previewConvite,
+body.modo-pdf .a4,
+body.modo-pdf .a4-page {
+  display: block !important;
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="ticket-percent"></i> Modelos de Convite – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Ajuste os textos e o layout padrão dos convites. Esses modelos serão usados na emissão dos convites com numeração e QR Code para cada aluno.
+        </p>
+
+        <!-- LISTA DE MODELOS -->
+        <section class="card" aria-label="Lista de modelos de convite">
+          <div class="linha-topo-modelos">
+            <div class="grupo-filtros">
+              <div class="campo">
+                <label for="filtroTipoEventoModelo">Filtrar por tipo de evento</label>
+                <select id="filtroTipoEventoModelo">
+                  <option value="">Todos</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="button" class="btn-primario" id="btnNovoModelo">
+              <i data-lucide="plus"></i>
+              Novo modelo de convite
+            </button>
+          </div>
+
+          <table class="tabela-simples">
+            <thead>
+              <tr>
+                <th>Nome do modelo</th>
+                <th>Tipo de evento</th>
+                <th>Usado em</th>
+                <th>Status</th>
+                <th style="width:260px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyModelos">
+              <!-- preenchido via JavaScript com dados reais (localStorage) -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoModelos">Exibindo 0 modelos.</span>
+          </div>
+        </section>
+
+        <!-- FORM + PRÉVIA -->
+        <div class="grid-modelo">
+
+          <!-- FORMULÁRIO DO MODELO -->
+          <section class="card" aria-label="Edição de modelo de convite">
+            <h2><i data-lucide="file-pen-line"></i> Cadastro / edição de modelo</h2>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 260px;">
+                <label for="modeloNome">Nome do modelo</label>
+                <input id="modeloNome" type="text" placeholder="Ex.: Convite padrão – Colação">
+              </div>
+              <div class="campo campo-menor">
+                <label for="modeloTipoEvento">Tipo de evento padrão</label>
+                <select id="modeloTipoEvento">
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="campo campo-menor">
+                <label for="modeloLargura">Largura (cm)</label>
+                <input id="modeloLargura" type="number" min="1" step="0.1" value="16">
+              </div>
+              <div class="campo campo-menor">
+                <label for="modeloAltura">Altura (cm)</label>
+                <input id="modeloAltura" type="number" min="1" step="0.1" value="8">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo">
+                <label for="modeloTitulo">Título do convite</label>
+                <input id="modeloTitulo" type="text" placeholder="Ex.: Convite de Formatura">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo">
+                <label for="modeloMensagem">Mensagem principal</label>
+                <textarea id="modeloMensagem" placeholder="Texto principal do convite. Você pode usar variáveis como {NOME_ALUNO}, {EVENTO}, {DATA_EVENTO}, {LOCAL_EVENTO}..."></textarea>
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo">
+                <label for="modeloRodape">Texto de rodapé</label>
+                <textarea id="modeloRodape" placeholder="Informações extras, orientações de traje, horário de chegada, etc."></textarea>
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox">
+                <input id="modeloUsarLogoPrincipal" type="checkbox" checked>
+                Usar logo principal do sistema (KGB FORMATURAS)
+              </label>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox">
+                <input id="modeloMostrarQr" type="checkbox" checked>
+                Mostrar QR Code no convite (para check-in)
+              </label>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox">
+                <input id="modeloAtivo" type="checkbox" checked>
+                Modelo ativo para novas emissões
+              </label>
+            </div>
+
+            <div class="texto-suporte">
+              No momento da emissão, o sistema vai trocar as variáveis pelos dados reais do aluno e do evento, e gerar um PDF com numeração e QR Code individual.
+            </div>
+
+            <div class="linha-botoes-form">
+              <button type="button" class="btn-secundario" id="btnLimparModelo">
+                <i data-lucide="eraser"></i>
+                Limpar
+              </button>
+              <button type="button" class="btn-primario" id="btnSalvarModelo">
+                <i data-lucide="save"></i>
+                Salvar modelo
+              </button>
+            </div>
+          </section>
+
+          <!-- PRÉ-VISUALIZAÇÃO -->
+          <aside class="card" aria-label="Pré-visualização do convite">
+            <h2><i data-lucide="eye"></i> Pré-visualização</h2>
+
+            <div class="preview-wrapper">
+              <div class="preview-convite">
+                <div class="preview-convite-inner">
+                  <div class="preview-topo">
+                    <div class="preview-logo" id="previewLogo">
+                      <img src="" alt="Logo da formatura" id="previewLogoImg" style="display:none;">
+                      <span id="previewLogoTexto">KGB<br>FORMATURAS</span>
+                    </div>
+                    <div style="flex:1;">
+                      <div class="preview-titulo" id="previewTitulo">
+                        Título do convite
+                      </div>
+                      <div class="preview-subtitulo">
+                        Em homenagem à conquista de <strong id="previewNomeAluno">NOME DO ALUNO</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="preview-corpo" id="previewMensagem">
+                    Aqui será exibida a mensagem do convite. As variáveis como {NOME_ALUNO}, {EVENTO}, {DATA_EVENTO}, {LOCAL_EVENTO} serão trocadas pelos dados reais na emissão.
+                  </div>
+
+                  <div class="preview-dados">
+                    <div><strong>Evento:</strong> <span id="previewEventoLinha">Evento de formatura</span></div>
+                    <div><strong>Data:</strong> <span id="previewDataLinha">00/00/0000 às 00h00</span></div>
+                    <div><strong>Local:</strong> <span id="previewLocalLinha">Local do evento</span></div>
+                    <div><strong>Convidado de:</strong> <span id="previewNomeAluno2">NOME DO ALUNO</span></div>
+                  </div>
+
+                  <div class="preview-linha-inferior">
+                    <div class="preview-rodape" id="previewRodape">
+                      Orientações de chegada, traje e observações gerais aparecerão aqui.
+                    </div>
+                    <div class="preview-qr" id="previewQr">
+                      QR<br>CODE
+                    </div>
+                  </div>
+
+                  <div class="preview-numero" id="previewNumeroConvite">
+                    Nº do convite: LETRA-0001-ANO
+                    <span id="previewTamanhoConvite">Tamanho aproximado: 16 x 8 cm</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="preview-variaveis">
+                Você pode usar variáveis nos textos do modelo:
+                <br>
+                <code>{NOME_ALUNO}</code>,
+                <code>{NUMERO_CONVITE}</code>,
+                <code>{EVENTO}</code>,
+                <code>{DATA_EVENTO}</code>,
+                <code>{HORA_EVENTO}</code>,
+                <code>{LOCAL_EVENTO}</code>,
+                <code>{ESCOLA}</code>,
+                <code>{ANO_FORMATURA}</code>.
+              </div>
+            </div>
+          </aside>
+
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      function getParam(nome) {
+  return new URLSearchParams(window.location.search).get(nome) || '';
+}
+
+const MODO = getParam('modo'); // "pdf" ou vazio
+const DADOS_URL = {
+  numero: getParam('numero'),
+  aluno:  getParam('aluno'),
+  evento: getParam('evento'),
+  escola: getParam('escola'),
+  ano:    getParam('ano')
+};
+
+      if (window.lucide) window.lucide.createIcons();
+
+      const menu = document.getElementById('menuLateral');
+      const btn = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (btn && menu && backdrop) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+        btn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+
+      /* ---------- CONSTANTES ---------- */
+      const LS_KEY_LOGO_FORMATURA   = 'kgb_formaturas_logo_formatura';
+      const LS_KEY_TIPOS_EVENTO     = 'kgb_formaturas_tiposEvento';
+      const LS_KEY_MODELOS_CONVITE  = 'kgb_formaturas_modelos_convite';
+
+      /* ---------- UTIL ---------- */
+      function criarId(prefixo){
+        return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random()*1e6);
+      }
+
+      /* ---------- DOM ELEMENTS ---------- */
+
+      const filtroTipoEventoModelo = document.getElementById('filtroTipoEventoModelo');
+      const tbodyModelos           = document.getElementById('tbodyModelos');
+      const infoResumoModelos      = document.getElementById('infoResumoModelos');
+
+      const modeloNome             = document.getElementById('modeloNome');
+      const modeloTipoEvento       = document.getElementById('modeloTipoEvento');
+      const modeloTitulo           = document.getElementById('modeloTitulo');
+      const modeloMensagem         = document.getElementById('modeloMensagem');
+      const modeloRodape           = document.getElementById('modeloRodape');
+      const modeloUsarLogoPrincipal= document.getElementById('modeloUsarLogoPrincipal');
+      const modeloMostrarQr        = document.getElementById('modeloMostrarQr');
+      const modeloAtivo            = document.getElementById('modeloAtivo');
+      const modeloLargura          = document.getElementById('modeloLargura');
+      const modeloAltura           = document.getElementById('modeloAltura');
+
+      const previewTitulo          = document.getElementById('previewTitulo');
+      const previewMensagem        = document.getElementById('previewMensagem');
+      const previewRodape          = document.getElementById('previewRodape');
+      const previewEventoLinha     = document.getElementById('previewEventoLinha');
+      const previewDataLinha       = document.getElementById('previewDataLinha');
+      const previewLocalLinha      = document.getElementById('previewLocalLinha');
+      const previewNomeAluno       = document.getElementById('previewNomeAluno');
+      const previewNomeAluno2      = document.getElementById('previewNomeAluno2');
+      const previewTamanhoConvite  = document.getElementById('previewTamanhoConvite');
+      const previewLogo            = document.getElementById('previewLogo');
+      const previewLogoImg         = document.getElementById('previewLogoImg');
+      const previewLogoTexto       = document.getElementById('previewLogoTexto');
+      const previewQr              = document.getElementById('previewQr');
+      const previewNumeroConvite   = document.getElementById('previewNumeroConvite');
+
+      const btnLimparModelo        = document.getElementById('btnLimparModelo');
+      const btnSalvarModelo        = document.getElementById('btnSalvarModelo');
+      const btnNovoModelo          = document.getElementById('btnNovoModelo');
+
+      /* ---------- DADOS EM MEMÓRIA ---------- */
+
+      let tiposEvento = [];
+      let modelosConvite = [];
+      let currentEditId = null;
+
+
+      /* ---------- DADOS VINDOS DO CONVITE (URL) ---------- */
+
+function lerDadosConviteURL() {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    numero: params.get('numero') || '',
+    aluno:  params.get('aluno')  || '',
+    evento: params.get('evento') || '',
+    escola: params.get('escola') || '',
+    ano:    params.get('ano')    || ''
+  };
+}
+
+      /* ---------- CARREGAR TIPOS DE EVENTO (LOCAIS) ---------- */
+      function carregarTiposEvento(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_TIPOS_EVENTO);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr)) return [];
+          return arr
+            .map(t => t && t.nome)
+            .filter(Boolean);
+        }catch(e){
+          console.warn('Erro ao carregar tipos de evento para modelos de convite', e);
+          return [];
+        }
+      }
+
+      /* ---------- CARREGAR / SALVAR MODELOS ---------- */
+
+      function carregarModelos(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_MODELOS_CONVITE);
+          const arr = raw ? JSON.parse(raw) : [];
+          return Array.isArray(arr) ? arr : [];
+        }catch(e){
+          console.warn('Erro ao carregar modelos de convite', e);
+          return [];
+        }
+      }
+
+      function salvarModelos(){
+        try{
+          localStorage.setItem(LS_KEY_MODELOS_CONVITE, JSON.stringify(modelosConvite));
+        }catch(e){
+          console.warn('Erro ao salvar modelos de convite', e);
+        }
+      }
+
+      /* ---------- LOGO ---------- */
+
+      function carregarLogoConvite(){
+        if (!previewLogo || !previewLogoImg || !previewLogoTexto) return;
+        try{
+          const url = localStorage.getItem(LS_KEY_LOGO_FORMATURA);
+          if (url && modeloUsarLogoPrincipal && modeloUsarLogoPrincipal.checked){
+            previewLogoImg.src = url;
+            previewLogoImg.style.display = 'block';
+            previewLogoTexto.style.display = 'none';
+          }else{
+            previewLogoImg.style.display = 'none';
+            previewLogoTexto.style.display = 'block';
+            previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
+          }
+        }catch(e){
+          console.error('Erro ao carregar logo da formatura', e);
+          previewLogoImg.style.display = 'none';
+          previewLogoTexto.style.display = 'block';
+          previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
+        }
+      }
+
+      /* ---------- SELECTS DE TIPO DE EVENTO ---------- */
+
+      function popularSelectTipoEvento(){
+        if (!modeloTipoEvento) return;
+
+        modeloTipoEvento.innerHTML = '';
+        const optSel = document.createElement('option');
+        optSel.value = '';
+        optSel.textContent = 'Selecione...';
+        modeloTipoEvento.appendChild(optSel);
+
+        tiposEvento.forEach(nome => {
+          const o = document.createElement('option');
+          o.value = nome;
+          o.textContent = nome;
+          modeloTipoEvento.appendChild(o);
+        });
+      }
+
+      function popularFiltroTipoEvento(){
+        if (!filtroTipoEventoModelo) return;
+
+        const setTipos = new Set();
+        tiposEvento.forEach(t => setTipos.add(t));
+        modelosConvite.forEach(m => { if (m.tipoEvento) setTipos.add(m.tipoEvento); });
+
+        filtroTipoEventoModelo.innerHTML = '';
+        const optTodos = document.createElement('option');
+        optTodos.value = '';
+        optTodos.textContent = 'Todos';
+        filtroTipoEventoModelo.appendChild(optTodos);
+
+        Array.from(setTipos).filter(Boolean).sort().forEach(nome => {
+          const o = document.createElement('option');
+          o.value = nome;
+          o.textContent = nome;
+          filtroTipoEventoModelo.appendChild(o);
+        });
+      }
+
+      /* ---------- TABELA DE MODELOS ---------- */
+
+      function renderTabelaModelos(){
+        if (!tbodyModelos) return;
+        const filtroTipo = filtroTipoEventoModelo ? (filtroTipoEventoModelo.value || '') : '';
+
+        tbodyModelos.innerHTML = '';
+
+        const lista = modelosConvite.filter(m => !filtroTipo || m.tipoEvento === filtroTipo);
+
+        lista.forEach(modelo => {
+          const tr = document.createElement('tr');
+          tr.setAttribute('data-modelo-id', modelo.id);
+          tr.setAttribute('data-tipo-evento', modelo.tipoEvento || '');
+
+          const tdNome = document.createElement('td');
+          tdNome.textContent = modelo.nome || '(sem nome)';
+
+          const tdTipo = document.createElement('td');
+          if (modelo.tipoEvento){
+            const span = document.createElement('span');
+            span.className = 'tag-tipo-evento';
+            span.textContent = modelo.tipoEvento;
+            tdTipo.appendChild(span);
+          }else{
+            tdTipo.textContent = '—';
+          }
+
+          const tdUsado = document.createElement('td');
+          tdUsado.textContent = modelo.usadoEm || '—';
+
+          const tdStatus = document.createElement('td');
+          const badge = document.createElement('span');
+          if (modelo.ativo){
+            badge.className = 'badge-ativo';
+            const ic = document.createElement('i');
+            ic.setAttribute('data-lucide','check-circle-2');
+            badge.appendChild(ic);
+            badge.appendChild(document.createTextNode(' Ativo'));
+          }else{
+            badge.className = 'badge-inativo';
+            const ic = document.createElement('i');
+            ic.setAttribute('data-lucide','pause-circle');
+            badge.appendChild(ic);
+            badge.appendChild(document.createTextNode(' Inativo'));
+          }
+          tdStatus.appendChild(badge);
+
+          const tdAcoes = document.createElement('td');
+          const btnEditar = document.createElement('button');
+          btnEditar.className = 'btn-acao-mini btn-editar-modelo';
+          btnEditar.innerHTML = '<i data-lucide="edit-3"></i> Editar';
+          btnEditar.setAttribute('data-id', modelo.id);
+
+          const btnDuplicar = document.createElement('button');
+          btnDuplicar.className = 'btn-acao-mini btn-duplicar-modelo';
+          btnDuplicar.innerHTML = '<i data-lucide="copy"></i> Duplicar';
+          btnDuplicar.setAttribute('data-id', modelo.id);
+
+          const btnAtivar = document.createElement('button');
+          btnAtivar.className = 'btn-acao-mini btn-toggle-ativo-modelo';
+          if (modelo.ativo){
+            btnAtivar.innerHTML = '<i data-lucide="power"></i> Desativar';
+          }else{
+            btnAtivar.innerHTML = '<i data-lucide="power"></i> Ativar';
+          }
+          btnAtivar.setAttribute('data-id', modelo.id);
+
+          tdAcoes.appendChild(btnEditar);
+          tdAcoes.appendChild(btnDuplicar);
+          tdAcoes.appendChild(btnAtivar);
+
+          tr.appendChild(tdNome);
+          tr.appendChild(tdTipo);
+          tr.appendChild(tdUsado);
+          tr.appendChild(tdStatus);
+          tr.appendChild(tdAcoes);
+
+          tbodyModelos.appendChild(tr);
+        });
+
+        if (infoResumoModelos){
+          infoResumoModelos.textContent = 'Exibindo ' + lista.length + ' modelo' + (lista.length === 1 ? '' : 's') + '.';
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      /* ---------- PRÉVIA ---------- */
+
+      function atualizarPreview(){
+        const hoje = new Date();
+const dataEx = hoje.toLocaleDateString('pt-BR');
+const dadosConvite = lerDadosConviteURL();
+
+const nomeAlunoEx = dadosConvite.aluno || 'NOME DO ALUNO';
+const eventoEx    = dadosConvite.evento || 'Evento de formatura';
+const escolaEx    = dadosConvite.escola || 'ESCOLA';
+const anoEx       = dadosConvite.ano || 'AAAA';
+const numeroEx    = dadosConvite.numero || 'LETRA-0001-ANO';
+
+
+        if (previewNomeAluno)  previewNomeAluno.textContent  = nomeAlunoEx;
+        if (previewNomeAluno2) previewNomeAluno2.textContent = nomeAlunoEx;
+
+        if (previewEventoLinha) previewEventoLinha.textContent = eventoEx;
+        if (previewDataLinha)   previewDataLinha.textContent   = dataEx + ' às ' + horaEx;
+        if (previewLocalLinha)  previewLocalLinha.textContent  = localEx;
+
+        if (modeloTitulo && previewTitulo){
+          previewTitulo.textContent = modeloTitulo.value.trim() || 'Título do convite';
+        }
+
+        if (modeloMensagem && previewMensagem){
+          let txt = modeloMensagem.value.trim();
+          if (!txt){
+            txt = 'Mensagem do convite com variáveis como {NOME_ALUNO}, {EVENTO}, {DATA_EVENTO}, {LOCAL_EVENTO}...';
+          }
+          txt = txt
+            .replaceAll('{NOME_ALUNO}', nomeAlunoEx)
+            .replaceAll('{EVENTO}', eventoEx)
+            .replaceAll('{DATA_EVENTO}', dataEx)
+            .replaceAll('{HORA_EVENTO}', horaEx)
+            .replaceAll('{LOCAL_EVENTO}', localEx)
+            .replaceAll('{ESCOLA}', escolaEx)
+            .replaceAll('{ANO_FORMATURA}', anoEx)
+            .replaceAll('{NUMERO_CONVITE}', numeroEx);
+
+          previewMensagem.textContent = '';
+          const span = document.createElement('span');
+          span.textContent = txt;
+          previewMensagem.appendChild(span);
+        }
+
+        if (modeloRodape && previewRodape){
+          previewRodape.textContent = modeloRodape.value.trim()
+            || 'Orientações de chegada, traje e observações gerais aparecerão aqui.';
+        }
+
+        if (modeloUsarLogoPrincipal){
+          carregarLogoConvite();
+        }
+
+        if (modeloMostrarQr && previewQr){
+          previewQr.style.display = modeloMostrarQr.checked ? 'flex' : 'none';
+        }
+
+        if (previewTamanhoConvite){
+          const larg = parseFloat(modeloLargura?.value) || 16;
+          const alt  = parseFloat(modeloAltura?.value) || 8;
+          previewTamanhoConvite.textContent = `Tamanho aproximado: ${larg} x ${alt} cm`;
+        }
+
+        if (previewNumeroConvite){
+          previewNumeroConvite.firstChild.nodeValue = 'Nº do convite: ' + numeroEx + ' ';
+        }
+      }
+
+      /* ---------- FORM ---------- */
+
+      function limparFormularioModelo(){
+        currentEditId = null;
+        if (modeloNome) modeloNome.value = '';
+        if (modeloTipoEvento) modeloTipoEvento.value = '';
+        if (modeloTitulo) modeloTitulo.value = '';
+        if (modeloMensagem) modeloMensagem.value = '';
+        if (modeloRodape) modeloRodape.value = '';
+        if (modeloUsarLogoPrincipal) modeloUsarLogoPrincipal.checked = true;
+        if (modeloMostrarQr) modeloMostrarQr.checked = true;
+        if (modeloAtivo) modeloAtivo.checked = true;
+        if (modeloLargura) modeloLargura.value = '16';
+        if (modeloAltura) modeloAltura.value = '8';
+        atualizarPreview();
+      }
+
+      function preencherFormComModelo(modelo){
+        currentEditId = modelo.id;
+        if (modeloNome) modeloNome.value = modelo.nome || '';
+        if (modeloTipoEvento) modeloTipoEvento.value = modelo.tipoEvento || '';
+        if (modeloTitulo) modeloTitulo.value = modelo.titulo || '';
+        if (modeloMensagem) modeloMensagem.value = modelo.mensagem || '';
+        if (modeloRodape) modeloRodape.value = modelo.rodape || '';
+        if (modeloUsarLogoPrincipal) modeloUsarLogoPrincipal.checked = !!modelo.usarLogoPrincipal;
+        if (modeloMostrarQr) modeloMostrarQr.checked = !!modelo.mostrarQr;
+        if (modeloAtivo) modeloAtivo.checked = modelo.ativo !== false;
+        if (modeloLargura) modeloLargura.value = modelo.largura != null ? modelo.largura : 16;
+        if (modeloAltura) modeloAltura.value = modelo.altura != null ? modelo.altura : 8;
+        atualizarPreview();
+      }
+
+      /* ---------- LISTENERS ---------- */
+
+      tiposEvento    = carregarTiposEvento();
+      modelosConvite = carregarModelos();
+
+      // Se veio de um convite, tenta selecionar o modelo ativo do evento
+const dadosConvite = lerDadosConviteURL();
+
+if (dadosConvite.evento) {
+  const modeloAuto = modelosConvite.find(m =>
+    m.tipoEvento === dadosConvite.evento && m.ativo
+  );
+
+  if (modeloAuto) {
+    preencherFormComModelo(modeloAuto);
+  }
+}
+
+      popularSelectTipoEvento();
+      popularFiltroTipoEvento();
+      renderTabelaModelos();
+      carregarLogoConvite();
+      atualizarPreview();
+
+      if (filtroTipoEventoModelo){
+        filtroTipoEventoModelo.addEventListener('change', () => {
+          renderTabelaModelos();
+        });
+      }
+
+      ['input','change','keyup'].forEach(ev => {
+        if (modeloTitulo) modeloTitulo.addEventListener(ev, atualizarPreview);
+        if (modeloMensagem) modeloMensagem.addEventListener(ev, atualizarPreview);
+        if (modeloRodape) modeloRodape.addEventListener(ev, atualizarPreview);
+        if (modeloUsarLogoPrincipal) modeloUsarLogoPrincipal.addEventListener(ev, atualizarPreview);
+        if (modeloMostrarQr) modeloMostrarQr.addEventListener(ev, atualizarPreview);
+        if (modeloLargura) modeloLargura.addEventListener(ev, atualizarPreview);
+        if (modeloAltura) modeloAltura.addEventListener(ev, atualizarPreview);
+        if (modeloTipoEvento) modeloTipoEvento.addEventListener(ev, atualizarPreview);
+      });
+
+      if (btnLimparModelo){
+        btnLimparModelo.addEventListener('click', limparFormularioModelo);
+      }
+
+      if (btnNovoModelo){
+        btnNovoModelo.addEventListener('click', () => {
+          limparFormularioModelo();
+          if (modeloNome) modeloNome.focus();
+        });
+      }
+
+      if (btnSalvarModelo){
+        btnSalvarModelo.addEventListener('click', () => {
+          const nome = (modeloNome?.value || '').trim();
+          if (!nome){
+            alert('Informe o nome do modelo de convite.');
+            modeloNome?.focus();
+            return;
+          }
+
+          const novo = {
+            id: currentEditId || criarId('modelo_'),
+            nome,
+            tipoEvento: modeloTipoEvento?.value || '',
+            largura: parseFloat(modeloLargura?.value) || 16,
+            altura:  parseFloat(modeloAltura?.value)  || 8,
+            titulo:  (modeloTitulo?.value   || '').trim(),
+            mensagem:(modeloMensagem?.value || '').trim(),
+            rodape:  (modeloRodape?.value   || '').trim(),
+            usarLogoPrincipal: !!(modeloUsarLogoPrincipal && modeloUsarLogoPrincipal.checked),
+            mostrarQr:         !!(modeloMostrarQr && modeloMostrarQr.checked),
+            ativo:             !!(modeloAtivo && modeloAtivo.checked),
+            usadoEm: '' // pode ser preenchido no futuro de acordo com os eventos
+          };
+
+          if (currentEditId){
+            const idx = modelosConvite.findIndex(m => m.id === currentEditId);
+            if (idx >= 0){
+              modelosConvite[idx] = novo;
+            }else{
+              modelosConvite.push(novo);
+            }
+          }else{
+            modelosConvite.push(novo);
+          }
+
+          salvarModelos();
+          popularFiltroTipoEvento();
+          renderTabelaModelos();
+          alert('Modelo de convite salvo com sucesso!');
+          currentEditId = novo.id;
+        });
+      }
+
+      if (tbodyModelos){
+        tbodyModelos.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('button');
+          if (!btn) return;
+          const id = btn.getAttribute('data-id');
+          if (!id) return;
+
+          const modelo = modelosConvite.find(m => m.id === id);
+          if (!modelo) return;
+
+          if (btn.classList.contains('btn-editar-modelo')){
+            preencherFormComModelo(modelo);
+            if (modeloNome) modeloNome.focus();
+          }
+
+          if (btn.classList.contains('btn-duplicar-modelo')){
+            const copia = {
+              ...modelo,
+              id: criarId('modelo_'),
+              nome: modelo.nome + ' (cópia)'
+            };
+            modelosConvite.push(copia);
+            salvarModelos();
+            renderTabelaModelos();
+            alert('Modelo duplicado.');
+          }
+
+          if (btn.classList.contains('btn-toggle-ativo-modelo')){
+            modelo.ativo = !modelo.ativo;
+            salvarModelos();
+            renderTabelaModelos();
+          }
+        });
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+      if (MODO === 'pdf') {
+  // esconde tudo da página e deixa só a área de preview do convite
+  document.body.classList.add('modo-pdf');
+
+  // espera um pouquinho pro HTML renderizar e só então imprime
+  setTimeout(function () {
+    window.print();
+  }, 800);
+}
+
+    });
+  </script>
+</body>
+</html>

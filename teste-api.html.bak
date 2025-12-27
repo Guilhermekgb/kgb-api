@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Teste de API — KGB Buffet</title>
+
+  <link rel="stylesheet" href="./kgb-common.css"/>
+  <style>
+    body{ background:#f8f1e8; font-family: Inter, system-ui, Arial; margin:0; padding:24px; }
+    h1{ font-family:"Playfair Display", serif; color:#5a3e2b; margin:0 0 12px; }
+    .card{ background:#fff; border:1px solid #e8dcc9; border-radius:12px; padding:16px; margin:12px 0; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    input,button,select{ padding:10px 12px; border-radius:10px; border:1px solid #e8dcc9; }
+    button{ cursor:pointer; }
+    .muted{ color:#6b7280; font-size:12px; }
+    pre{ background:#fff; border:1px dashed #e8dcc9; padding:12px; border-radius:10px; overflow:auto; max-height:40vh; }
+    .ok{ color:#16a34a; } .warn{ color:#f59e0b; } .err{ color:#dc2626; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:8px; }
+  </style>
+</head>
+<body>
+  <h1>Teste de API — KGB Buffet</h1>
+  <p class="muted">Use os botões para chamar sua API sem usar o console.</p>
+
+  <div class="card">
+    <div class="row">
+      <label>API_BASE:</label>
+      <input id="apiBase" style="min-width:320px" placeholder="http://localhost:3001"/>
+      <button id="btnSet">Definir API</button>
+      <span id="apiStatus" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📝 Auditoria</h3>
+    <div class="grid">
+      <button id="logPost">Gravar log (POST /audit/log)</button>
+      <button id="logGet">Listar logs (GET /audit/log)</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>💾 Backup (snapshots)</h3>
+    <div class="grid">
+      <button id="bkPut">Salvar snapshot (PUT /backup/snapshot)</button>
+      <button id="bkList">Listar snapshots (GET /backup/snapshot)</button>
+      <button id="bkGet">Abrir cfg.json (GET /backup/snapshot?name=cfg.json)</button>
+      <button id="bkDel">Apagar cfg.json (DELETE /backup/snapshot?name=cfg.json)</button>
+    </div>
+    <p class="muted">Arquivos em <code>kgb-api/uploads/snapshots/</code></p>
+  </div>
+
+  <div class="card">
+    <h3>💰 Financeiro</h3>
+    <div class="grid">
+      <button id="finMetrics">Métricas (GET /fin/metrics)</button>
+      <button id="finExtrato">Extrato geral (GET /fin/relatorios/extrato)</button>
+      <button id="finExtratoEv">Extrato evento=teste (GET ...?eventId=teste)</button>
+      <button id="criarDados">Criar dados de exemplo (evento "teste")</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🔎 Teste rápido</h3>
+    <div class="grid">
+      <button id="getEvento">GET /api/eventos/teste</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Resultado</h3>
+    <pre id="out">Clique em um botão…</pre>
+    <div class="row">
+      <a href="./index.html">↩ Voltar ao sistema</a>
+    </div>
+  </div>
+
+  <!-- kgb-common.js dá __API_BASE__, apiFetch e kgbAPI.set/show -->
+  <script type="module" src="./kgb-common.js"></script>
+  <script src="./kgb-api/public/api/storage-adapter.js"></script>
+  <script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+  <script>
+    (function(){
+      const $ = s => document.querySelector(s);
+      const out = $('#out');
+      const api = $('#apiBase');
+      const status = $('#apiStatus');
+
+      function show(obj, title){
+        out.textContent = (title? (title + '\\n\\n') : '') + JSON.stringify(obj, null, 2);
+      }
+      function setStatus(txt, cls='muted'){
+        status.className = cls; status.textContent = txt;
+      }
+
+      function ensureApiBase(){
+        api.value = localStorage.getItem('API_BASE') || window.__API_BASE__ || 'http://localhost:3001';
+        setStatus('Atual: ' + api.value);
+      }
+
+      // --- Ações
+      $('#btnSet').onclick = () => {
+        const base = api.value.trim();
+        if (!base) return alert('Informe a URL da API, ex.: http://localhost:3001');
+        localStorage.setItem('API_BASE', base);
+        window.__API_BASE__ = base;
+        setStatus('Definida: ' + base, 'ok');
+      };
+
+      // Auditoria
+      $('#logPost').onclick = async () => {
+        try{
+          const r = await apiFetch('/audit/log', {
+            method:'POST',
+            body: JSON.stringify({ actor:'admin', entity:'teste', action:'abrir', payload:{ok:true} })
+          });
+          show(r, 'POST /audit/log');
+        }catch(e){ show({erro:e.message}, 'POST /audit/log'); }
+      };
+      $('#logGet').onclick = async () => {
+        try{ show(await apiFetch('/audit/log'), 'GET /audit/log'); }
+        catch(e){ show({erro:e.message}, 'GET /audit/log'); }
+      };
+
+      // Backup
+      $('#bkPut').onclick = async () => {
+        try{
+          const r = await apiFetch('/backup/snapshot', {
+            method:'PUT',
+            body: JSON.stringify({ name:'cfg.json', data:{ chave:123 } })
+          });
+          show(r, 'PUT /backup/snapshot');
+        }catch(e){ show({erro:e.message}, 'PUT /backup/snapshot'); }
+      };
+      $('#bkList').onclick = async () => {
+        try{ show(await apiFetch('/backup/snapshot'), 'GET /backup/snapshot'); }
+        catch(e){ show({erro:e.message}, 'GET /backup/snapshot'); }
+      };
+      $('#bkGet').onclick = async () => {
+        try{
+          const r = await fetch(window.__API_BASE__ + '/backup/snapshot?name=cfg.json');
+          const txt = await r.text();
+          show(txt, 'GET /backup/snapshot?name=cfg.json (texto)');
+        }catch(e){ show({erro:e.message}, 'GET /backup/snapshot?name=cfg.json'); }
+      };
+      $('#bkDel').onclick = async () => {
+        try{
+          const r = await apiFetch('/backup/snapshot?name=cfg.json', { method:'DELETE' });
+          show(r, 'DELETE /backup/snapshot?name=cfg.json');
+        }catch(e){ show({erro:e.message}, 'DELETE /backup/snapshot'); }
+      };
+
+      // Financeiro
+      $('#finMetrics').onclick = async () => {
+        try{ show(await apiFetch('/fin/metrics'), 'GET /fin/metrics'); }
+        catch(e){ show({erro:e.message}, 'GET /fin/metrics'); }
+      };
+      $('#finExtrato').onclick = async () => {
+        try{ show(await apiFetch('/fin/relatorios/extrato'), 'GET /fin/relatorios/extrato'); }
+        catch(e){ show({erro:e.message}, 'GET /fin/relatorios/extrato'); }
+      };
+      $('#finExtratoEv').onclick = async () => {
+        try{ show(await apiFetch('/fin/relatorios/extrato?eventId=teste'), 'GET /fin/relatorios/extrato?eventId=teste'); }
+        catch(e){ show({erro:e.message}, 'GET /fin/relatorios/extrato?eventId=teste'); }
+      };
+      $('#criarDados').onclick = async () => {
+        try{
+          const a = await apiFetch('/api/admin/eventos/teste', {
+            method:'POST',
+            body: JSON.stringify({ valorContrato: 37050 })
+          });
+          const b = await apiFetch('/api/admin/eventos/teste/parcelas', {
+            method:'POST',
+            body: JSON.stringify({ id:'parc_1', descricao:'Parcela 1', valor:5000, vencimentoISO:'2025-11-20' })
+          });
+          show({ evento:a, parcela:b }, 'Criado evento/parcela (exemplo)');
+        }catch(e){ show({erro:e.message}, 'Criar dados'); }
+      };
+
+      // Teste rápido
+      $('#getEvento').onclick = async () => {
+        try{ show(await apiFetch('/api/eventos/teste'), 'GET /api/eventos/teste'); }
+        catch(e){ show({erro:e.message}, 'GET /api/eventos/teste'); }
+      };
+
+      // Inicialização
+      ensureApiBase();
+    })();
+  </script>
+</body>
+</html>
+

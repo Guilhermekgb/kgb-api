@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Obrigado!</title>
+
+  <!-- TIPOGRAFIA: Playfair Display (títulos) + Inter (texto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#fdf6ec; --card:#fff; --text:#3b2a1c; --muted:#57452a;
+      --gold:#b88a2d; --gold-d:#a67c1e; --border:#ecdcc3;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      display:grid; place-items:center;
+      font-family:'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size:17px; line-height:1.6;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      text-rendering:optimizeLegibility;
+    }
+    .container{
+      background:var(--card); border:1px solid var(--border);
+      width:min(640px,92vw); padding:42px 36px; border-radius:18px;
+      box-shadow:0 12px 30px rgba(0,0,0,.06); text-align:center;
+    }
+    h1{
+      font-family:'Playfair Display', serif;
+      font-weight:700; font-size:34px; line-height:1.2; letter-spacing:.2px;
+      color:#5a360d; margin:0 0 14px;
+    }
+    p{margin:10px 0 0; color:var(--muted); font-size:18px}
+    .botao{
+      display:inline-block; margin-top:22px; padding:12px 24px;
+      background:var(--gold); color:#fff; text-decoration:none; border-radius:10px;
+      font-family:'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      font-weight:600; letter-spacing:.3px; font-size:16px;
+      transition:transform .15s ease, box-shadow .15s ease, background .2s ease;
+      box-shadow:0 4px 12px rgba(184,138,45,.25);
+    }
+    .botao:hover{ background:var(--gold-d); transform:translateY(-1px); box-shadow:0 6px 16px rgba(184,138,45,.28); }
+    @media (max-width:480px){
+      .container{ padding:32px 22px }
+      h1{ font-size:28px }
+      p{ font-size:16px }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Obrigado pelo seu contato!</h1>
+    <p>Recebemos sua solicitação de orçamento e em breve nossa equipe falará com você pelo WhatsApp.</p>
+    <p>Enquanto isso, veja inspirações e novidades no nosso Instagram:</p>
+    <a class="botao" href="https://www.instagram.com/kgb_buffet?igsh=eXozYzZnNzMwaGhm" target="_blank" rel="noopener">
+      Visitar nosso Instagram
+    </a>
+  </div>
+</body>
+</html>

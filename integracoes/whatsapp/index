@@ -1,0 +1,9 @@
+export async function enviarWhatsApp(numero, mensagem) {
+  console.log(`Simulando envio de WhatsApp para ${numero}: ${mensagem}`);
+  return {
+    status: "sucesso",
+    mensagem: "Mensagem enviada com sucesso (simulado).",
+    numero,
+    conteudo: mensagem
+  };
+}

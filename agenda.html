@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:agenda.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Agenda – Visão Unificada</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css">
+
+  <style>
+    :root{
+      --espresso:#5a3e2b;
+      --gold:#c29a5d;
+      --line:#e8dcc9;
+      --bg:#f8f1e8;
+      --ok:#0f766e;
+      --warn:#b45309;
+      --err:#b91c1c;
+      --muted:#6b7280;
+      --sidebar-w:260px;
+      --cal-h-cell: 92px;
+    }
+        /* Layout base do menu lateral + wrapper */
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+    #menuLateral{
+      flex-shrink:0;
+    }
+
+    /* Botão hambúrguer padrão mobile */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:1001;
+      background:#c29a5d;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      padding:6px 12px;
+      font-size:24px;
+      box-shadow:0 6px 16px rgba(0,0,0,.18);
+      cursor:pointer;
+      display:none; /* só aparece no mobile */
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed;
+        inset:0 auto 0 0;
+        width:var(--sidebar-w);
+        z-index:999;
+      }
+      .wrapper{
+        padding-left:var(--sidebar-w);
+      }
+    }
+
+    @media (max-width:768px){
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999;
+        width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{
+        transform:translateX(0);
+      }
+      .wrapper{
+        padding-left:0;
+      }
+      #hamburguer{
+        display:block;
+      }
+    }
+
+    html, body{ margin:0; padding:0; background:var(--bg); }
+    main.conteudo-principal{ padding:24px clamp(12px, 2.6vw, 28px) 80px; }
+    h1{ font-family:"Playfair Display", serif; color:var(--espresso); display:flex; gap:10px; align-items:center; margin:0 0 12px 0; }
+    .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
+    .pill{ border:1px solid var(--line); border-radius:10px; background:#fff; padding:8px 10px; }
+    .btn{ border:1px solid var(--line); background:#fff; color:var(--espresso); padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+    .btn:hover{ background:#fff6e9; }
+    .segmented{ display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+    .segmented button{ padding:8px 12px; border:none; background:transparent; cursor:pointer; font-weight:600; }
+    .segmented button.active{ background:#f3e8da; }
+    .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+    .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:13px; font-weight:600; background:#fff; border:1px solid var(--line); cursor:pointer; }
+    .chip input{ appearance:none; width:14px; height:14px; border:2px solid var(--line); border-radius:3px; }
+    .chip input:checked{ background:var(--gold); border-color:var(--gold); }
+    .summary{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .sum-badge{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-weight:700; color:var(--espresso); }
+    .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+
+    .cal-month{ display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; grid-template-rows: auto repeat(6, minmax(80px, auto)); }
+    .cal-month .day{ background:#fff; border:1px solid var(--line); border-radius:10px; min-height:var(--cal-h-cell); display:flex; flex-direction:column; overflow:hidden; }
+    .day-head{ display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:#fffdf7; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); }
+    .day-head .dnum{ font-weight:800; color:var(--espresso); }
+    .evts{ display:flex; flex-direction:column; gap:6px; padding:8px; overflow:auto; }
+    .evt{ border-radius:8px; padding:6px 8px; font-size:12px; line-height:1.35; display:flex; gap:8px; align-items:flex-start; cursor:pointer; border:1px solid #eee; }
+    .evt strong{ display:block; font-size:12px; }
+    .evt small{ color:var(--muted); }
+    .st{ display:inline-flex; align-items:center; gap:6px; font-weight:700; }
+    .st i{ width:16px; height:16px; }
+    .k-evento{ background:#fff8ec; border-color:#f1dfc7; }
+    .k-check { background:#eefdf3; border-color:#cfe9da; }
+    .k-fin   { background:#eef5ff; border-color:#cfe0ff; }
+    .k-lead  { background:#f3ecff; border-color:#e0d3ff; }
+    .k-funil { background:#fff0f5; border-color:#ffd6e7; }
+    .k-interno{ background:#f2f2f2; border-color:#e3e3e3; }
+    .st-done{ color:var(--ok); }
+    .st-pending{ color:#334155; }
+    .st-overdue{ color:var(--err); }
+    .st-scheduled{ color:#1d4ed8; }
+
+    dialog#drawer{ width:min(520px,96vw); border:none; padding:0; border-radius:14px; box-shadow:0 10px 40px rgba(0,0,0,.3); }
+    #drawer .dh{ background:var(--gold); color:#fff; font-weight:800; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+    #drawer .db{ padding:14px 16px; background:#fff; }
+
+    .fab{ position:fixed; right:22px; bottom:22px; z-index:10; }
+    .fab .btn{ border-radius:999px; padding:14px 16px; box-shadow:0 8px 20px rgba(0,0,0,.16); }
+  </style>
+</head>
+
+<body>
+  <!-- Botão hamburguer (mobile) -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral" class="no-print"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+      <h1><i data-lucide="calendar-days"></i> Agenda</h1>
+      <div class="toolbar">
+        <div class="segmented">
+          <button id="v-month" class="active"><i data-lucide="calendar"></i> Mês</button>
+          <button id="v-week"><i data-lucide="calendar-range"></i> Semana</button>
+          <button id="v-day"><i data-lucide="calendar-clock"></i> Dia</button>
+          <button id="v-agenda"><i data-lucide="list-todo"></i> Agenda</button>
+          <button id="v-compact"><i data-lucide="grid-3x3"></i> Compacto</button>
+        </div>
+
+        <label class="pill" style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="calendar"></i>
+          <input id="ctrl-date" type="date" style="border:none; outline:none;">
+        </label>
+
+        <div class="chips">
+          <label class="chip"><input type="checkbox" data-src="evento" checked> Eventos</label>
+          <label class="chip"><input type="checkbox" data-src="check" checked> Checklist</label>
+          <label class="chip"><input type="checkbox" data-src="fin" checked> Financeiro</label>
+          <label class="chip"><input type="checkbox" data-src="lead" checked> Leads</label>
+          <label class="chip"><input type="checkbox" data-src="funil" checked> Funil</label>
+          <label class="chip"><input type="checkbox" data-src="interno"> Interno</label>
+        </div>
+      </div>
+
+      <div id="rangeLabel" style="font-weight:700; color:var(--espresso); margin-bottom:8px;"></div>
+      <div id="summary" class="summary"></div>
+      <div id="cal-month" class="cal-month card"></div>
+    </main>
+  </div>
+
+  <dialog id="drawer">
+    <div class="dh">
+      <div id="dw-title"><i data-lucide="info"></i> Detalhes</div>
+      <button class="btn" onclick="document.getElementById('drawer').close()">Fechar</button>
+    </div>
+    <div class="db">
+      <div class="row" id="dw-body"></div>
+      <div class="foot" style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+        <button id="dw-open" class="btn"><i data-lucide="link"></i> Abrir origem</button>
+      </div>
+    </div>
+  </dialog>
+
+
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="agenda-bridge.js"></script>
+
+<script>
+(function(){
+  // ===== helpers base =====
+  const $  = (s, el=document)=> el.querySelector(s);
+  const $$ = (s, el=document)=> Array.from(el.querySelectorAll(s));
+  const fmtDate = d => new Date(d).toISOString().slice(0,10);
+  const firstOfMonth = d => { const x=new Date(d); x.setDate(1); return x; };
+  const lastOfMonth  = d => { const x=new Date(d); x.setMonth(x.getMonth()+1,0); return x; };
+  const pad = n => String(n).padStart(2,'0');
+
+  // ===== estado =====
+  let currentDateISO = new Date().toISOString().slice(0,10);
+  let currentView = 'month'; // 'month' | 'week' | 'day' | 'agenda' | 'compact'
+
+  // ===== dados =====
+  function getAgendaItems(){ try{ return JSON.parse(localStorage.getItem('agendaUnified')||'[]'); }catch{ return []; } }
+
+  // ===== perfil & permissões (UI) =====
+  function getPerfilAtual(){
+    try{
+      const u = JSON.parse(localStorage.getItem('usuarioLogado')||'null')
+             || JSON.parse(localStorage.getItem('currentUser')||'null')
+             || JSON.parse(sessionStorage.getItem('usuarioLogado')||'null')
+             || JSON.parse(sessionStorage.getItem('currentUser')||'null') || null;
+      const perfil = u?.perfil || u?.role || u?.papel || u?.perfilNome || '';
+      return String(perfil||'').trim() || 'Administrador';
+    }catch{ return 'Administrador'; }
+  }
+  function __getPermsPorPerfil(){
+    try{
+      const raw = JSON.parse(localStorage.getItem('permissoes')||'{}') || {};
+      return (raw && typeof raw==='object') ? raw : {};
+    }catch{ return {}; }
+  }
+  function srcKeyToPermId(srcKey){ return `agenda:src:${srcKey}`; }
+  function canSeeSource(srcKey){
+    const perfil = getPerfilAtual();
+    const map = __getPermsPorPerfil();
+    const ids = Array.isArray(map?.[perfil]) ? map[perfil] : [];
+    // se nada configurado para o perfil, não bloqueia (compat retro)
+    if (!ids.length) return true;
+    return ids.includes(srcKeyToPermId(srcKey));
+  }
+
+  // ===== mapeamento de fontes =====
+  function mapSrc(raw){
+    const s = String(raw||'').toLowerCase();
+    if (s.startsWith('event'))                return 'evento';
+    if (s.startsWith('fin') || s==='parcela') return 'fin';
+    if (s.startsWith('check'))                return 'check';
+    if (s.startsWith('lead'))                 return 'lead';
+    if (s.startsWith('funil'))                return 'funil';
+    if (s.startsWith('intern'))               return 'interno';
+    return 'interno';
+  }
+
+  // ===== chips (UI) =====
+  function ensureChipStyle(){
+    if (document.getElementById('agenda-perm-style')) return;
+    const st = document.createElement('style');
+    st.id = 'agenda-perm-style';
+    st.textContent = `.chip.is-hidden{ display:none !important; }`;
+    document.head.appendChild(st);
+  }
+  function applyChipsPermissions(){
+    ensureChipStyle();
+    const wrap = $('.chips'); if (!wrap) return;
+    wrap.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+      const srcKey = cb?.dataset?.src || '';
+      const allowed = canSeeSource(srcKey);
+      if (!allowed){
+        cb.checked = false;
+        cb.disabled = true;
+        cb.closest('label.chip')?.classList.add('is-hidden');
+      } else {
+        cb.disabled = false;
+        cb.closest('label.chip')?.classList.remove('is-hidden');
+      }
+    });
+  }
+  function getSelectedSources(){
+    const sel = new Set();
+    $$('.chips input[type="checkbox"]').forEach(ch=>{
+      const key = ch.dataset.src;
+      if (ch.checked && canSeeSource(key)) sel.add(key);
+    });
+    return sel;
+  }
+
+  // ===== drawer =====
+  function openDrawer(it){
+    $('#dw-title').innerHTML = `<i data-lucide="info"></i> ${it.title}`;
+    const body = $('#dw-body');
+    body.innerHTML = `
+      <div><label>Origem</label><div class="value">${it.src}</div></div>
+      <div><label>Data</label><div class="value">${it.date}</div></div>
+      <div><label>Status</label><div class="value">${it.status||'scheduled'}</div></div>
+      <div><label>Descrição</label><div class="value">${it.desc||'-'}</div></div>
+    `;
+    $('#dw-open').onclick = ()=>{
+      const url = window.__agendaBridge?.buildEntityUrl?.(it.entity) || '';
+      if (url) window.location.href = url;
+      else alert('Origem não configurada para este item.');
+    };
+    document.getElementById('drawer').showModal();
+    try{ window.lucide?.createIcons?.(); }catch{}
+  }
+
+  // ===== filtros comuns =====
+  function itemsByMonth(){
+    const base  = new Date(currentDateISO);
+    const first = firstOfMonth(base);
+    const last  = lastOfMonth(base);
+    const start = fmtDate(first);
+    const end   = fmtDate(last);
+
+    const label = first.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    $('#rangeLabel').textContent = label.charAt(0).toUpperCase() + label.slice(1);
+
+    applyChipsPermissions();
+    const selected = getSelectedSources();
+    const all = Array.isArray(getAgendaItems()) ? getAgendaItems() : [];
+    return all
+      .filter(it => {
+        const d = String(it?.date || '').slice(0,10);
+        return d && d >= start && d <= end;
+      })
+      .filter(it => {
+        const key = mapSrc(it?.src || it?.entity?.type || '');
+        if (!canSeeSource(key)) return false;
+        return selected.size ? selected.has(key) : true;
+      })
+      .map(it => ({...it, _srcKey: mapSrc(it.src)}));
+  }
+
+  // ===== render: MÊS =====
+  function renderMonth(){
+    const grid = $('#cal-month'); if (!grid) return;
+    grid.innerHTML = '';
+
+    const base  = new Date(currentDateISO);
+    const first = firstOfMonth(base);
+    const last  = lastOfMonth(base);
+    const daysInMonth = last.getDate();
+
+    const items = itemsByMonth();
+
+    const byISO = items.reduce((acc,it)=>{
+      const d = String(it.date).slice(0,10);
+      (acc[d] ||= []).push(it);
+      return acc;
+    }, {});
+
+    for (let i=1; i<=daysInMonth; i++){
+      const d = new Date(first);
+      d.setDate(i);
+      const iso = fmtDate(d);
+
+      const cell = document.createElement('div');
+      cell.className = 'day';
+
+      const head = document.createElement('div');
+      head.className = 'day-head';
+      head.innerHTML = `<span>${d.toLocaleDateString('pt-BR',{weekday:'short'})}</span><span class="dnum">${d.getDate()}</span>`;
+      cell.appendChild(head);
+
+      const list = document.createElement('div');
+      list.className = 'evts';
+
+      (byISO[iso]||[]).forEach(it=>{
+        const e = document.createElement('div');
+        e.className = `evt k-${it._srcKey}`;
+        e.innerHTML = `<strong>${it.title}</strong><small>${it.timeStart||'Dia todo'}</small>`;
+        e.onclick = ()=> openDrawer(it);
+        list.appendChild(e);
+      });
+
+      cell.appendChild(list);
+      grid.appendChild(cell);
+    }
+  }
+
+  // ===== render: SEMANA =====
+  function renderWeek(){
+    const host = $('#cal-month'); if (!host) return;
+    host.innerHTML = '';
+    const base = new Date(currentDateISO);
+    const dow = base.getDay(); // 0..6
+    const start = new Date(base); start.setDate(base.getDate() - dow); // domingo
+    const items = itemsByMonth();
+    const byISO = items.reduce((acc,it)=>{ const d=String(it.date).slice(0,10); (acc[d] ||= []).push(it); return acc; }, {});
+    for(let i=0;i<7;i++){
+      const d = new Date(start); d.setDate(start.getDate()+i);
+      const iso = fmtDate(d);
+      const card = document.createElement('div');
+      card.className = 'day';
+      card.innerHTML = `
+        <div class="day-head"><span>${d.toLocaleDateString('pt-BR',{weekday:'long'})}</span><span class="dnum">${d.getDate()}</span></div>
+        <div class="evts"></div>
+      `;
+      const list = card.querySelector('.evts');
+      (byISO[iso]||[]).forEach(it=>{
+        const e = document.createElement('div');
+        e.className = `evt k-${it._srcKey}`;
+        e.innerHTML = `<strong>${it.title}</strong><small>${it.timeStart||'Dia todo'}</small>`;
+        e.onclick = ()=> openDrawer(it);
+        list.appendChild(e);
+      });
+      host.appendChild(card);
+    }
+  }
+
+  // ===== render: DIA =====
+  function renderDay(){
+    const host = $('#cal-month'); if (!host) return;
+    host.innerHTML = '';
+    const iso = currentDateISO;
+    const items = itemsByMonth().filter(it => String(it.date).slice(0,10) === iso);
+    const card = document.createElement('div');
+    card.className = 'day';
+    card.innerHTML = `
+      <div class="day-head"><span>${new Date(iso).toLocaleDateString('pt-BR',{weekday:'long'})}</span><span class="dnum">${new Date(iso).getDate()}</span></div>
+      <div class="evts"></div>
+    `;
+    const list = card.querySelector('.evts');
+    items.forEach(it=>{
+      const e = document.createElement('div');
+      e.className = `evt k-${it._srcKey}`;
+      e.innerHTML = `<strong>${it.title}</strong><small>${it.timeStart||'Dia todo'}</small>`;
+      e.onclick = ()=> openDrawer(it);
+      list.appendChild(e);
+    });
+    host.appendChild(card);
+  }
+
+  // ===== render: AGENDA (lista) =====
+  function renderAgendaList(){
+    const host = $('#cal-month'); if (!host) return;
+    host.innerHTML = '';
+    const items = itemsByMonth().sort((a,b)=> String(a.date).localeCompare(String(b.date)));
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.style.padding = '0';
+    const ul = document.createElement('div');
+    ul.style.display = 'flex';
+    ul.style.flexDirection = 'column';
+    ul.style.gap = '8px';
+    ul.style.padding = '12px';
+    items.forEach(it=>{
+      const row = document.createElement('div');
+      row.className = `evt k-${it._srcKey}`;
+      row.style.display = 'flex';
+      row.style.justifyContent = 'space-between';
+      row.style.alignItems = 'center';
+      row.style.padding = '8px 10px';
+      row.innerHTML = `
+        <div><strong>${(String(it.date).slice(0,10).split('-').reverse().join('/'))}</strong> — ${it.title}</div>
+        <small>${it.timeStart||'Dia todo'}</small>
+      `;
+      row.onclick = ()=> openDrawer(it);
+      ul.appendChild(row);
+    });
+    box.appendChild(ul);
+    host.appendChild(box);
+  }
+
+  // ===== render: COMPACTO (grade simples) =====
+  function renderCompact(){
+    // Reaproveita o mês, mas sem subtítulos/labels detalhados
+    renderMonth();
+    // Poderia adicionar regras extras de CSS se quiser células mais baixas
+  }
+
+  // ===== render switch =====
+  function render(){
+    // resumo (contagens) — recalcula para o mês atual
+    const items = itemsByMonth();
+    const counts = {evento:0, check:0, fin:0, lead:0, funil:0, interno:0};
+    items.forEach(it => { counts[it._srcKey]++; });
+    $('#summary').innerHTML = `
+      <span class="sum-badge">Eventos: ${counts.evento}</span>
+      <span class="sum-badge">Checklist: ${counts.check}</span>
+      <span class="sum-badge">Financeiro: ${counts.fin}</span>
+      <span class="sum-badge">Leads: ${counts.lead}</span>
+      <span class="sum-badge">Funil: ${counts.funil}</span>
+      <span class="sum-badge">Interno: ${counts.interno}</span>
+    `;
+
+    if (currentView==='month')   renderMonth();
+    else if (currentView==='week')   renderWeek();
+    else if (currentView==='day')    renderDay();
+    else if (currentView==='agenda') renderAgendaList();
+    else if (currentView==='compact')renderCompact();
+
+    try{ window.lucide?.createIcons?.(); }catch{}
+  }
+
+  // ===== listeners chips & data =====
+  const chipsWrap = $('.chips');
+  if (chipsWrap){
+    chipsWrap.querySelectorAll('input[type="checkbox"]').forEach(ch=>{
+      ch.addEventListener('change', ()=>{
+        const key = ch.dataset.src;
+        if (!canSeeSource(key)){ ch.checked=false; return; }
+        render();
+      }, {passive:true});
+    });
+    chipsWrap.addEventListener('change', (ev)=>{
+      const tgt = ev.target;
+      if (tgt?.matches?.('input[type="checkbox"]')){
+        const key = tgt.dataset.src;
+        if (!canSeeSource(key)){ tgt.checked=false; return; }
+        render();
+      }
+    });
+  }
+
+  const dateInput = $('#ctrl-date');
+  if (dateInput){
+    dateInput.value = currentDateISO;
+    dateInput.addEventListener('change', ()=>{
+      const v = String(dateInput.value||'').slice(0,10);
+      if (v) currentDateISO = v;
+      applyChipsPermissions();
+      render();
+    }, {passive:true});
+  }
+
+  // ===== listeners de visão (segmented buttons) =====
+  const btnMonth   = $('#v-month');
+  const btnWeek    = $('#v-week');
+  const btnDay     = $('#v-day');
+  const btnAgenda  = $('#v-agenda');
+  const btnCompact = $('#v-compact');
+
+  function setActiveView(v){
+    currentView = v;
+    [btnMonth,btnWeek,btnDay,btnAgenda,btnCompact].forEach(b=> b?.classList.remove('active'));
+    ({month:btnMonth,week:btnWeek,day:btnDay,agenda:btnAgenda,compact:btnCompact}[v])?.classList.add('active');
+    render();
+  }
+  btnMonth?.addEventListener('click',  ()=> setActiveView('month'));
+  btnWeek?.addEventListener('click',   ()=> setActiveView('week'));
+  btnDay?.addEventListener('click',    ()=> setActiveView('day'));
+  btnAgenda?.addEventListener('click', ()=> setActiveView('agenda'));
+  btnCompact?.addEventListener('click',()=> setActiveView('compact'));
+
+  // ===== live updates entre abas =====
+  window.addEventListener('storage', (e)=>{
+    const k = e?.key || '';
+    if (k==='agendaUnified' || k==='agendaUnified:ping' || k==='permissoes'){
+      applyChipsPermissions();
+      render();
+    }
+  });
+
+  // ===== init =====
+  applyChipsPermissions();
+  setActiveView('month'); // define a active e chama render
+})();
+</script>
+  <script>
+    // Toggle mobile (hamburguer + backdrop)
+    (function ensureHamburguer(){
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside || !back) return;
+
+      if (!back.hasAttribute('data-bound')) {
+        back.setAttribute('data-bound','1');
+        back.addEventListener('click', () => {
+          aside.classList.remove('aberto');
+          back.hidden = true;
+        });
+      }
+
+      if (!btn.hasAttribute('data-bound')) {
+        btn.setAttribute('data-bound','1');
+        btn.addEventListener('click', () => {
+          const opened = aside.classList.toggle('aberto');
+          back.hidden = !opened;
+        });
+      }
+    })();
+  </script>
+
+
+</body>
+</html>
+

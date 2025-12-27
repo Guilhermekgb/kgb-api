@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:fichas-tecnicas.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <title>Fichas Técnicas (Insumos & Pratos)</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{ --gold:#c29a5d; --brown:#5a3e2b; --line:#eadfce; --bg:#f8f1e8; }
+    html,body{margin:0;padding:0;background:var(--bg);height:100%}
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    #menuLateral{flex-shrink:0;background:#5a3e2b;height:100vh;overflow:auto}
+    main.conteudo-principal{flex-grow:1;padding:40px;overflow-y:auto}
+    .conteudo-central{max-width:1100px;margin:0 auto}
+    h1{display:flex;gap:10px;align-items:center;color:var(--brown);margin:0 0 12px}
+    .tabs{display:flex;gap:8px;margin:8px 0 16px;flex-wrap:wrap}
+    .tab{border:1px solid var(--line);background:#fff;color:var(--brown);padding:8px 12px;border-radius:10px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+    .tab.ativo{background:#fbf5ee;font-weight:700}
+    .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+    .toolbar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:8px}
+    .btn{background:var(--gold);color:#fff;border:0;border-radius:10px;padding:10px 14px;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .btn-ghost{background:#fff;color:var(--brown);border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 12px;border-top:1px solid #f0e6d8}
+    thead th{background:#fbf5ee;color:var(--brown);border-top:0}
+    td.acoes{white-space:nowrap}
+    .input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+    .muted{color:#667085}
+    #hamburguer{position:fixed;top:12px;left:12px;z-index:1001;background:#c29a5d;border:0;color:#fff;font-size:24px;padding:6px 12px;border-radius:8px;display:none}
+    @media (max-width:768px){
+      #hamburguer{display:block}
+      #menuLateral{position:fixed;transform:translateX(-100%);transition:transform .3s ease;z-index:999;width:260px}
+      #menuLateral.aberto{transform:translateX(0)}
+      main.conteudo-principal{padding:20px}
+    }
+
+    /* Modal genérico */
+    .modal{position: fixed;inset: 0;display: none;place-items: center;background: rgba(0,0,0,.32);padding: 16px;z-index: 5000 !important;}
+    .modal.aberto{ display: grid; }
+    .modal .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;width:min(860px,96vw);max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.18)}
+    .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+
+    .grid{display:grid;gap:10px}
+    .grid4{grid-template-columns: 1.2fr 160px 160px 180px}
+    .grid3{grid-template-columns: 1fr 160px 160px}
+    @media (max-width:1000px){ .grid4{grid-template-columns: 1fr 1fr} .grid3{grid-template-columns:1fr 1fr} }
+    @media (max-width:600px){ .grid4,.grid3{grid-template-columns:1fr} }
+
+    .pill{display:inline-flex;gap:8px;align-items:center;background:#fbf5ee;border:1px solid var(--line);padding:6px 10px;border-radius:999px}
+    .num{ text-align:right }
+        /* Backdrop do menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:900;
+    }
+
+    /* Travar scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+  </style>
+</head>
+<body>
+   <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="chef-hat"></i> Fichas Técnicas</h1>
+
+        <div class="tabs">
+          <button class="tab ativo" id="tabInsumos" type="button"><i data-lucide="boxes"></i> Insumos</button>
+          <button class="tab" id="tabPratos" type="button"><i data-lucide="utensils"></i> Fichas Técnicas</button>
+        </div>
+
+        <!-- INSUMOS -->
+        <section id="secInsumos" class="card">
+          <div class="toolbar">
+            <button class="btn-ghost" id="btnImportar"><i data-lucide="upload"></i> Importar</button>
+            <button class="btn-ghost" id="btnExportar"><i data-lucide="download"></i> Exportar</button>
+
+            <button class="btn-ghost" id="btnGerenciarCategorias">
+              <i data-lucide="tags"></i> Categorias de insumo…
+            </button>
+
+            <button class="btn" id="btnNovoInsumo" onclick="window.abrirModalInsumo && abrirModalInsumo()">
+              <i data-lucide="plus"></i> Novo insumo
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Unid. pacote</th>
+                <th>Qtd/pack</th>
+                <th>R$ Pack</th>
+                <th>R$ Unit</th>
+                <th class="acoes">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbInsumos">
+              <tr><td colspan="7" class="muted">Nenhum insumo cadastrado.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- PRATOS -->
+        <section id="secPratos" class="card" style="display:none">
+          <div class="toolbar">
+            <button class="btn" id="btnNovoPrato"><i data-lucide="plus"></i> Novo prato</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Prato</th>
+                <th>Rendimento (porções)</th>
+                <th>Custo/porção</th>
+                <th>Custo total</th>
+                <th class="acoes">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbPratos">
+              <tr><td colspan="5" class="muted">Nenhuma ficha técnica cadastrada.</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal INSUMO -->
+  <div class="modal" id="modalInsumo" aria-hidden="true">
+    <div class="box">
+      <h3 style="margin:0 0 8px;color:#5a3e2b"><i data-lucide="package-plus"></i> <span id="ttlInsumo">Novo insumo</span></h3>
+
+      <form id="frmInsumo" class="grid" style="grid-template-columns:1.2fr 180px 160px 180px">
+        <div>
+          <label>Nome</label>
+          <input id="insNome" class="input" placeholder="Ex.: Molho vermelho, Purê de batata..." required />
+        </div>
+        <div>
+          <label>Categoria</label>
+          <select id="insCategoria" class="input"></select>
+          <div class="muted" style="font-size:12px;margin-top:4px">
+            Gerencie em “Categorias de insumo…”
+          </div>
+        </div>
+        <div>
+          <label>Unid. pacote</label>
+          <select id="insUnid" class="input">
+            <option value="un">un</option>
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="ml">ml</option>
+            <option value="l">l</option>
+          </select>
+        </div>
+        <div>
+          <label>Qtd/pack</label>
+          <input id="insQtdPack" class="input num" type="number" min="0" step="0.01" placeholder="Ex.: 1000" required />
+        </div>
+        <div>
+          <label>R$ do pack</label>
+          <input id="insPrecoPack" class="input num" type="number" min="0" step="0.01" placeholder="Ex.: 39,90" required />
+        </div>
+
+        <div style="grid-column:1/-1">
+          <label>Observações (opcional)</label>
+          <textarea id="insObs" class="input" rows="2" placeholder="Marca preferida, fornecedor, melhor lugar de compra…"></textarea>
+        </div>
+
+        <div class="muted" style="grid-column:1/-1">
+          Dica: use <b>kg/l</b> quando comprar “por quilo/litro”; o sistema converte para <b>g/ml</b> automaticamente (1 kg = 1000 g, 1 l = 1000 ml).
+        </div>
+
+        <div class="actions" style="grid-column:1/-1">
+          <button type="button" class="btn-ghost" id="btnCancelarInsumo">Cancelar</button>
+          <button type="submit" class="btn" id="btnSalvarInsumo">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal PRATO (inalterado) -->
+  <div class="modal" id="modalPrato" aria-hidden="true">
+    <div class="box">
+      <h3 style="margin:0 0 8px;color:#5a3e2b"><i data-lucide="utensils-crossed"></i> <span id="ttlPrato">Novo prato</span></h3>
+
+      <div class="grid grid3">
+        <div>
+          <label>Nome do prato</label>
+          <input id="prNome" class="input" placeholder="Ex.: Escondidinho de costela" />
+        </div>
+        <div>
+          <label>Rendimento (porções)</label>
+          <input id="prPorcoes" class="input num" type="number" min="1" value="10" />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="pill"><i data-lucide="calculator"></i> <span id="prResumo">Total R$ 0,00 · R$/porção R$ 0,00</span></div>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0">
+
+      <div class="grid" style="gap:8px">
+        <div class="grid grid3">
+          <div>
+            <label>Insumo</label>
+            <select id="selInsumo" class="input"></select>
+          </div>
+          <div>
+            <label>Qtd usada</label>
+            <input id="inQtdUsada" class="input num" type="number" min="0" step="0.01" placeholder="Ex.: 250" />
+          </div>
+          <div>
+            <label>Unidade</label>
+            <select id="selUnidade" class="input"></select>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <button class="btn" id="btnAddInsumo"><i data-lucide="plus"></i> Adicionar insumo</button>
+        </div>
+      </div>
+
+      <table style="margin-top:8px">
+        <thead>
+          <tr>
+            <th>Insumo</th>
+            <th>Qtd usada</th>
+            <th>R$/unit base</th>
+            <th>Subtotal</th>
+            <th class="acoes">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbItensPrato">
+          <tr><td colspan="5" class="muted">Nenhum insumo adicionado.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="actions">
+        <button type="button" class="btn-ghost" id="btnCancelarPrato">Cancelar</button>
+        <button type="button" class="btn" id="btnSalvarPrato">Salvar prato</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Categorias de Insumo -->
+  <div class="modal" id="modalCategorias" aria-hidden="true">
+    <div class="box">
+      <h3 style="margin:0 0 8px;color:#5a3e2b">
+        <i data-lucide="tags"></i> Categorias de insumo
+      </h3>
+
+      <div class="grid" style="grid-template-columns:1fr auto;gap:8px;margin-bottom:10px">
+        <input id="novaCategoriaNome" class="input" placeholder="Nome da categoria (ex.: Hortifrúti, Frios...)" />
+        <button class="btn" id="btnAddCategoria"><i data-lucide="plus"></i> Adicionar</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th style="width:120px" class="acoes">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="listaCategorias">
+          <tr><td colspan="2" class="muted">Nenhuma categoria cadastrada.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="actions">
+        <button type="button" class="btn-ghost" id="btnFecharCategorias">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="fichas-tecnicas.js"></script>
+
+  <!-- Módulo leve de categorias (escopo isolado, sem globais) -->
+<script>
+(function () {
+  const STORAGE = 'insumos.categorias';
+  const read  = () => { try { return JSON.parse(localStorage.getItem(STORAGE) || '[]'); } catch { return []; } };
+  const write = (arr) => {
+    try { localStorage.setItem(STORAGE, JSON.stringify(arr)); } catch {}
+    // avisa o restante da tela que as categorias mudaram
+    window.dispatchEvent(new Event('insumo:categorias:changed'));
+  };
+  const uid = () => 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const state = { cats: [] };
+
+  function renderListaCategorias() {
+    const tb = document.getElementById('listaCategorias');
+    tb.innerHTML = '';
+    if (!state.cats.length) {
+      tb.innerHTML = '<tr><td colspan="2" class="muted">Nenhuma categoria cadastrada.</td></tr>';
+      return;
+    }
+    for (const c of state.cats) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="input" data-id="${c.id}" value="${c.nome}"></td>
+        <td class="acoes" style="text-align:right">
+          <button class="btn-ghost" data-act="del" data-id="${c.id}">
+            <i data-lucide="trash-2"></i> Excluir
+          </button>
+        </td>`;
+      tb.appendChild(tr);
+    }
+
+    // editar nome (salva em tempo real)
+    tb.querySelectorAll('input[data-id]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const id = inp.dataset.id;
+        const cat = state.cats.find(x => x.id === id);
+        if (cat) { cat.nome = inp.value; write(state.cats); }
+      });
+    });
+
+    // excluir
+    tb.querySelectorAll('button[data-act="del"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        state.cats = state.cats.filter(x => x.id !== id);
+        write(state.cats);
+        renderListaCategorias();
+      });
+    });
+
+    window.lucide?.createIcons?.();
+  }
+
+  function abrirModalCategorias() {
+    state.cats = read();
+    renderListaCategorias();
+    document.getElementById('modalCategorias').classList.add('aberto');
+  }
+  function fecharModalCategorias() {
+    document.getElementById('modalCategorias').classList.remove('aberto');
+  }
+
+  // binds
+  document.getElementById('btnGerenciarCategorias')?.addEventListener('click', abrirModalCategorias);
+  document.getElementById('btnFecharCategorias')?.addEventListener('click', fecharModalCategorias);
+  document.getElementById('btnAddCategoria')?.addEventListener('click', () => {
+    const inp = document.getElementById('novaCategoriaNome');
+    const nome = (inp.value || '').trim();
+    if (!nome) return;
+    state.cats.push({ id: uid(), nome });
+    write(state.cats);
+    inp.value = '';
+    renderListaCategorias();
+  });
+})();
+</script>
+<script>
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob){
+        setOpened(false);
+      }
+    }
+
+    // clique no hambúrguer
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    // clique no fundo escuro
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    // clique fora do menu fecha também
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+</body>
+</html>
+
+

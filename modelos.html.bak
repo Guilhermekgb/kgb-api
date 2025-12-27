@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:modelos.html">
+  <meta charset="UTF-8" />
+  <title>Modelos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais (sempre antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- Guard / RBAC -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Seus estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <!-- Estilos desta página -->
+  <link rel="stylesheet" href="modelos.css" />
+
+  <!-- Ajustes do menu mobile desta página -->
+  <style>
+    /* Fundo escuro atrás do menu (mobile) */
+    #menuBackdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 998;
+    }
+
+    /* Quando o menu está aberto, trava o scroll do fundo */
+    body.no-scroll{
+      overflow: hidden;
+    }
+
+    /* Comportamento do menu no mobile */
+    @media (max-width:768px){
+      #menuLateral{
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform .3s ease;
+        z-index: 999;
+      }
+
+      #menuLateral.aberto{
+        transform: translateX(0);
+      }
+
+      main.conteudo-principal{
+        margin-left: 0;
+        padding: 20px;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <!-- FORÇA largura total e centralização aqui -->
+      <div class="content-frame" style="max-width:none;width:100%;margin:0 auto;">
+
+        <h1 class="titulo-pagina"><i data-lucide="file-text"></i> Modelos de Documentos</h1>
+
+        <!-- Barra de ações -->
+        <div class="topbar">
+          <div class="search">
+            <i data-lucide="search"></i>
+            <input id="buscaCards" type="text" placeholder="Buscar modelos..." />
+          </div>
+          <button id="btnNovoCard" class="btn btn-primary">
+            <i data-lucide="plus"></i> Novo modelo
+          </button>
+        </div>
+
+        <!-- Grade de cards -->
+        <div id="cardsGrid" class="cards-grid"></div>
+
+        <!-- Dica quando vazio -->
+        <p id="gridVazioHint" class="grid-vazio">Nenhum modelo ainda. Clique em “Novo modelo”.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- ================== EDITOR OVERLAY ================== -->
+  <div id="editorOverlay" class="overlay" hidden>
+    <div class="overlay-dialog">
+      <div class="overlay-header">
+        <div class="editor-title">
+          <i data-lucide="file-text"></i>
+          <span id="editorNome">Sem título</span>
+        </div>
+        <div class="overlay-actions">
+          <button id="btnEditar" class="btn btn-secondary"><i data-lucide="pencil"></i> Editar</button>
+          <button id="btnSalvar" class="btn btn-primary" disabled><i data-lucide="save"></i> Salvar</button>
+          <button id="btnVisualizar" class="btn"><i data-lucide="eye"></i> Visualizar</button>
+          <button id="btnFechar" class="btn btn-ghost"><i data-lucide="x"></i> Fechar</button>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div id="toolbar" class="editor-toolbar" aria-disabled="true">
+        <button class="tb" data-cmd="bold"><b>B</b></button>
+        <button class="tb" data-cmd="italic"><i>I</i></button>
+        <button class="tb" data-cmd="underline"><u>U</u></button>
+        <button class="tb" data-cmd="strikeThrough">S</button>
+
+        <select id="blockFormat" class="tb">
+          <option value="p">Parágrafo</option>
+          <option value="H1">Título 1</option>
+          <option value="H2">Título 2</option>
+          <option value="H3">Título 3</option>
+        </select>
+
+        <button class="tb" data-cmd="insertUnorderedList">• Lista</button>
+        <button class="tb" data-cmd="insertOrderedList">1. Lista</button>
+
+        <button class="tb" data-cmd="justifyLeft">⟸</button>
+        <button class="tb" data-cmd="justifyCenter">≡</button>
+        <button class="tb" data-cmd="justifyRight">⟹</button>
+        <button class="tb" data-cmd="justifyFull">≣</button>
+
+        <label class="tb tb-inline">Tamanho:
+          <select id="fontSizeSel" class="tb">
+            <option value="3" selected>Normal</option>
+            <option value="4">Grande</option>
+            <option value="5">Muito grande</option>
+            <option value="6">Enorme</option>
+          </select>
+        </label>
+
+        <button class="tb" id="btnLink">Link</button>
+        <button class="tb" id="btnImgUrl">Imagem (URL)</button>
+        <label class="tb tb-upload">
+          <input id="btnImgUpload" type="file" accept="image/*" hidden>
+          Upload imagem
+        </label>
+
+        <label class="tb tb-inline">
+          Tam. img:
+          <select id="imgQuick">
+            <option value="25">25%</option>
+            <option value="50">50%</option>
+            <option value="75">75%</option>
+            <option value="100" selected>100%</option>
+          </select>
+        </label>
+
+        <button class="tb" id="btnClear">Limpar formato</button>
+        <button class="tb" id="btnToggleHtml">Ver código HTML</button>
+      </div>
+
+      <!-- Folha A4 -->
+      <div class="a4-wrap">
+        <div id="pageCounter" class="page-counter" hidden>—</div>
+        <div id="a4Editor" class="a4">
+          <div id="editorHtml" contenteditable="false"></div>
+        </div>
+        <textarea id="editorTexto" class="editor-textarea" hidden></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Painel de ferramentas da imagem -->
+  <div id="imgTools" class="img-tools" hidden>
+    <div class="row" style="align-items:center; gap:8px;">
+      <strong style="cursor:move;">Imagem</strong>
+      <div style="margin-left:auto; display:flex; gap:6px;">
+        <button type="button" class="tb" id="imgDock" title="Fixar/soltar no rodapé">📌</button>
+        <button type="button" class="tb close" id="imgClose" title="Fechar">✕</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>% largura:
+        <input type="range" id="imgWSlider" min="10" max="100" value="100">
+      </label>
+      <span id="imgWLabel">100%</span>
+    </div>
+
+    <div class="row">
+      <label>Largura (px): <input type="number" id="imgWpx" min="20" step="10"></label>
+      <label>Altura (px):  <input type="number" id="imgHpx" min="20" step="10"></label>
+      <label><input type="checkbox" id="imgLock" checked> Manter proporção</label>
+    </div>
+
+    <div class="row">
+      Alinhar:
+      <button type="button" class="tb" id="imgAlignLeft">⟸ Esquerda</button>
+      <button type="button" class="tb" id="imgAlignCenter">Centro</button>
+      <button type="button" class="tb" id="imgAlignRight">Direita ⟹</button>
+      <button type="button" class="tb" id="imgRemoveFloat">Sem fluxo</button>
+    </div>
+  </div>
+
+  <!-- ================== MODAL DE PRÉ-VISUALIZAÇÃO ================== -->
+  <div id="previewModal" class="preview-overlay" hidden>
+    <div class="preview-dialog">
+      <div class="preview-header">
+        <strong>Pré-visualização (A4)</strong>
+        <div class="grow"></div>
+        <div class="preview-controls">
+          <button type="button" class="btn" id="btnPreviewPrev">◀</button>
+          <span id="previewPageInfo" class="muted">Página 1/1</span>
+          <button type="button" class="btn" id="btnPreviewNext">▶</button>
+        </div>
+        <button type="button" class="btn" id="btnPreviewPrint">Imprimir</button>
+        <button type="button" class="btn btn-ghost" id="btnPreviewClose">Fechar</button>
+      </div>
+      <div class="preview-body">
+        <iframe id="previewFrame" title="Preview"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="modelos.js" defer></script>
+
+   <!-- NOVO: controle do menu mobile -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn      = document.getElementById('hamburguer');
+      const menu     = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) {
+        console.warn('[menu-mobile:modelos] Botão ou menu não encontrados');
+        return;
+      }
+
+      function fecharMenu(){
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded','false');
+        if (backdrop) backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+
+      function toggleMenu(ev){
+        if (ev) ev.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        if (backdrop) backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      }
+
+      // Clicar no hambúrguer abre/fecha
+      btn.addEventListener('click', toggleMenu);
+
+      // Clicar no fundo escuro fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Clicar fora do menu fecha (no mobile)
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+          fecharMenu();
+        }
+      });
+
+      // Se voltar pra tela grande, garante que o menu volte ao normal
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+  </script>
+  
+  <!-- Botão de fechar dentro do menu lateral (mobile) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menu = document.getElementById('menuLateral');
+      const btnHamb = document.getElementById('hamburguer');
+      if (!menu || !btnHamb) return;
+
+      // Cria o botão X dentro do menu
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'fecharMenuMobile';
+      closeBtn.type = 'button';
+      closeBtn.setAttribute('aria-label', 'Fechar menu');
+      closeBtn.innerHTML = '<i data-lucide="x"></i>';
+      closeBtn.style.cssText = `
+        display:none;
+        position:absolute;
+        top:12px;
+        right:12px;
+        border:none;
+        border-radius:8px;
+        padding:6px 10px;
+        font-size:20px;
+        background:#c29a5d;
+        color:#fff;
+        z-index:1200;
+      `;
+      menu.prepend(closeBtn);
+
+      // Mostra/esconde o botão só em telas até 768px
+      const atualizarVisibilidade = () => {
+        if (window.innerWidth <= 768) {
+          closeBtn.style.display = 'block';
+        } else {
+          closeBtn.style.display = 'none';
+        }
+      };
+      atualizarVisibilidade();
+      window.addEventListener('resize', atualizarVisibilidade);
+
+      // Clicar no X faz o MESMO que clicar no hambúrguer
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        btnHamb.click();
+      });
+
+      // Renderiza o ícone X
+      try { window.lucide?.createIcons?.(); } catch(e) {}
+    });
+  </script>
+
+  </body>
+</html>

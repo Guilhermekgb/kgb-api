@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:financeiro-categorias.html">
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (categorias) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard / RBAC (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH COMMON + GUARD (categorias) === -->
+
+  <title>Financeiro • Configurações</title>
+
+  <!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- Estilos desta tela -->
+  <link rel="stylesheet" href="financeiro-categorias.css" />
+
+  
+
+  <!-- Ícones (opcional) -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+
+      <header class="topo">
+        <h1>Configurações Financeiras</h1>
+      </header>
+
+      <!-- Abas em cima -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="categorias">Categorias</button>
+        <button class="tab" data-tab="contas">Contas Débito</button>
+        <button class="tab" data-tab="cartoes">Cartão de crédito</button>
+        <button class="tab" data-tab="tipos">Formas de Pagamento</button>
+      </nav>
+
+      <!-- Painel: Categorias -->
+      <section id="panel-categorias" class="panel active">
+        <section class="filtros fancy">
+          <label>Ver
+            <select id="catTipoFiltro">
+              <option value="entrada">Categorias de ENTRADA</option>
+              <option value="saida">Categorias de SAÍDA</option>
+            </select>
+          </label>
+
+          <label>Escopo
+            <select id="catEscopoFiltro">
+              <option value="empresa">Empresarial</option>
+              <option value="pessoal">Pessoal</option>
+              <option value="ambas">Ambas</option>
+            </select>
+          </label>
+        </section>
+
+        <div class="tabela">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:64px;">Cor</th>
+                <th>Descrição</th>
+                <th style="width:200px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbCategorias"></tbody>
+          </table>
+          <div class="hint" id="hintCategorias">Nenhuma categoria.</div>
+        </div>
+
+        <!-- Botões embaixo -->
+        <div class="panel-actions">
+          <button id="btnNovaCategoria" class="btn primario">+ Nova categoria</button>
+        </div>
+      </section>
+
+      <!-- Painel: Contas (somente nome + escopo) -->
+      <section id="panel-contas" class="panel" hidden>
+        <div class="tabela">
+          <table>
+           <thead>
+  <tr>
+    <th>Conta</th>
+    <th style="width:160px;">Escopo</th>
+    <th style="width:160px;">Saldo</th>
+    <th style="width:200px;">Ações</th>
+  </tr>
+</thead>
+            <tbody id="tbContas"></tbody>
+          </table>
+          <div class="hint" id="hintContas">Nenhuma conta cadastrada.</div>
+        </div>
+
+        <div class="panel-actions">
+          <button id="btnNovaConta" class="btn primario">+ Nova conta</button>
+        </div>
+      </section>
+
+      <!-- Painel: Cartões (fechamento/vencimento/limite aqui) -->
+      <section id="panel-cartoes" class="panel" hidden>
+        <div class="tabela">
+          <table>
+            <thead>
+              <tr>
+                <th>Cartão</th>
+                <th style="width:120px;">Fech.</th>
+                <th style="width:120px;">Venc.</th>
+                <th style="width:140px;">Limite</th>
+                <th style="width:200px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbCartoes"></tbody>
+          </table>
+          <div class="hint" id="hintCartoes">Nenhum cartão cadastrado.</div>
+        </div>
+
+        <div class="panel-actions">
+          <button id="btnNovoCartao" class="btn primario">+ Novo cartão</button>
+        </div>
+      </section>
+
+      <!-- Painel: Tipos -->
+      <section id="panel-tipos" class="panel" hidden>
+        <div class="tabela">
+          <table>
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th style="width:200px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbTipos"></tbody>
+          </table>
+          <div class="hint" id="hintTipos">Nenhum tipo cadastrado.</div>
+        </div>
+
+        <div class="panel-actions">
+          <button id="btnNovoTipo" class="btn primario">+ Novo tipo</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL: Categoria -->
+<dialog id="dlgCategoria" class="modal">
+  <form method="dialog" class="modal-box" id="formCategoria">
+    <div class="modal-header">
+      <h3 id="dlgCategoriaTitulo">Nova categoria</h3>
+      <button type="button" class="btn-ghost" data-close="dlgCategoria">✕</button>
+    </div>
+
+    <div class="form-grid">
+      <label>Tipo
+        <select id="catTipo">
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+        </select>
+      </label>
+
+      <label>Escopo
+        <select id="catEscopo">
+          <option value="empresa">Empresarial</option>
+          <option value="pessoal">Pessoal</option>
+          <option value="ambas">Ambas</option>
+        </select>
+      </label>
+
+      <label class="full">Descrição
+        <input id="catDesc" type="text" placeholder="Ex.: Insumos, Receitas, Serviços..." />
+      </label>
+
+      <label>Cor
+        <input id="catCor" type="color" value="#16a34a" />
+      </label>
+    </div>
+
+    <!-- Subcategorias digitadas -->
+    <section id="boxSubcats" class="subcats" style="display:none">
+      <div class="subcats-header">
+        <h4>Subcategorias</h4>
+        <small class="muted">Digite e clique em “+”.</small>
+      </div>
+
+      <div class="subcats-add">
+        <input id="subDesc" type="text" placeholder="Nome da subcategoria..." />
+        <button id="btnAddSub" type="button" title="Adicionar subcategoria">+</button>
+      </div>
+
+      <ul id="subList" class="subcats-list"></ul>
+
+      <div id="subcatsHintNew" class="muted" style="display:none">
+        Salve a categoria primeiro para poder adicionar subcategorias.
+      </div>
+    </section>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" data-close="dlgCategoria">Cancelar</button>
+      <button class="btn primario" id="btnSalvarCategoria">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: Conta (somente nome + escopo) -->
+<dialog id="dlgConta" class="modal">
+  <form method="dialog" class="modal-box" id="formConta">
+    <div class="modal-header">
+      <h3 id="dlgContaTitulo">Nova conta</h3>
+      <button type="button" class="btn-ghost" data-close="dlgConta">✕</button>
+    </div>
+    <div class="form-grid">
+      <label class="full">Nome da conta
+        <input id="ctNome" type="text" placeholder="Ex.: Itaú Empresa, Nubank Pessoal" />
+      </label>
+      <label>Escopo
+        <select id="ctEscopo">
+          <option value="empresa">Empresarial</option>
+          <option value="pessoal">Pessoal</option>
+        </select>
+      </label>
+      <label>Saldo atual
+  <input id="ctSaldo" type="text" inputmode="decimal" placeholder="Ex.: 5000,00" />
+</label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" data-close="dlgConta">Cancelar</button>
+      <button class="btn primario" id="btnSalvarConta">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: Cartão -->
+<dialog id="dlgCartao" class="modal">
+  <form method="dialog" class="modal-box" id="formCartao">
+    <div class="modal-header">
+      <h3 id="dlgCartaoTitulo">Novo cartão</h3>
+      <button type="button" class="btn-ghost" data-close="dlgCartao">✕</button>
+    </div>
+    <div class="form-grid">
+      <label class="full">Nome do cartão
+        <input id="ccNome" type="text" placeholder="Ex.: Nubank, Itaú Visa..." />
+      </label>
+      <label>Dia fechamento
+        <input id="ccFech" type="number" min="1" max="31" value="10" />
+      </label>
+      <label>Dia vencimento
+        <input id="ccVenc" type="number" min="1" max="31" value="20" />
+      </label>
+      <label>Limite
+        <input id="ccLimite" type="number" step="0.01" />
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" data-close="dlgCartao">Cancelar</button>
+      <button class="btn primario" id="btnSalvarCartao">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: Tipo -->
+<dialog id="dlgTipo" class="modal">
+  <form method="dialog" class="modal-box" id="formTipo">
+    <div class="modal-header">
+      <h3 id="dlgTipoTitulo">Novo tipo de conta</h3>
+      <button type="button" class="btn-ghost" data-close="dlgTipo">✕</button>
+    </div>
+    <div class="form-grid">
+      <label class="full">Descrição do tipo
+        <input id="tpDesc" type="text" placeholder="Ex.: Conta corrente, Carteira" />
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" data-close="dlgTipo">Cancelar</button>
+      <button class="btn primario" id="btnSalvarTipo">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Scripts -->
+<script src="financeiro-categorias.js" defer></script>
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", ()=> {
+    try { lucide.createIcons(); } catch(e){}
+  });
+</script>
+<script>
+  // Re-render quando algo mudar no FG
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'financeiroGlobal' || e.key === 'financeiroGlobal:ping') {
+      try {
+        // chame as funções que redesenham cada aba da tela de categorias
+        if (typeof renderCategorias === 'function') renderCategorias();
+        if (typeof renderContas === 'function') renderContas();
+        if (typeof renderCartoes === 'function') renderCartoes();
+        if (typeof renderTipos === 'function') renderTipos();
+      } catch {}
+    }
+  });
+
+  // Também reage ao evento customizado disparado pelo modal
+  window.addEventListener('finmodal:confirm', () => {
+    try {
+      if (typeof renderCategorias === 'function') renderCategorias();
+      if (typeof renderContas === 'function') renderContas();
+      if (typeof renderCartoes === 'function') renderCartoes();
+      if (typeof renderTipos === 'function') renderTipos();
+    } catch {}
+  });
+</script>
+
+</body>
+</html>
+
+

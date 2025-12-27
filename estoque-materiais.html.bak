@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:estoque-materiais.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- (opcional) ativar ENFORCE do guard p/ testes -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard de permissões (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <title>Estoque – Materiais</title>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    :root { --gold:#c29a5d; --brown:#5a3e2b; --beige:#f8f1e8; }
+    html, body { background:#f8f1e8; margin:0; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral { flex-shrink:0; background-color:#5a3e2b; height:100vh; overflow-y:auto; }
+
+    header.topbar { background:white; padding:10px 16px; display:flex; align-items:center; gap:12px; box-shadow:0 1px 0 rgba(0,0,0,.06); border-radius:14px; }
+    header.topbar h1 { margin:0; font-size:18px; color:#5a3e2b; }
+
+    main.conteudo-principal { flex-grow:1; padding:40px; height:100vh; overflow-y:auto; }
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+
+    .card { background:white; border:1px solid #eadfcd; border-radius:14px; box-shadow:0 2px 6px rgba(0,0,0,.04); padding:14px; }
+    .grid { display:grid; gap:12px; }
+    .grid.cols-4 { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+
+    label { font-size:12px; color:#5a3e2b; display:block; margin-bottom:6px; }
+    input[type="text"], input[type="number"], input[type="url"], select, textarea { width:100%; padding:10px; border-radius:10px; border:1px solid #e0d6c4; background:#fff; }
+
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { border:1px solid var(--gold); background:#fff; color:var(--brown); padding:8px 12px; border-radius:10px; cursor:pointer; }
+    .btn.primary { background:var(--gold); color:white; border-color:var(--gold); }
+
+    .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:12px; flex-wrap:wrap; }
+    .sec-title { font-weight:700; color:#5a3e2b; margin:0 0 8px 0; }
+    .muted { color:#7a6a5c; font-size:12px; }
+    .pill { padding:2px 8px; border-radius:999px; border:1px solid #eadfcd; font-size:12px; }
+
+    table { width:100%; border-collapse:collapse; background:white; }
+    th, td { border-bottom:1px solid #eee; padding:10px; text-align:left; }
+    th { background:#faf6ef; color:#5a3e2b; font-weight:600; }
+
+    #hamburguer { position:fixed; top:12px; left:12px; background:#c29a5d; border:none; color:white; font-size:24px; padding:6px 12px; border-radius:8px; z-index:1001; display:none; }
+    /* Wrapper pra tabela não “estourar” no celular */
+    .tabela-scroll{
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .tabela-scroll table{
+      min-width: 720px; /* pode aumentar se quiser mais folga, ex.: 900px */
+    }
+
+    /* pequenos ajustes visuais do bloco de imagem */
+    .img-row { grid-column:1 / -1; }
+    .img-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .img-inline input[type="file"] { max-width:260px; }
+
+    @media (max-width: 768px) {
+      #hamburguer { display:block; }
+      #menuLateral { position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:999; width:260px; }
+      #menuLateral.aberto { transform:translateX(0); }
+      main.conteudo-principal { margin-left:0; padding:20px; }
+    }
+
+    @media print{
+      #menuLateral, #hamburguer, .no-print { display:none !important; }
+      main.conteudo-principal { padding:0; }
+      .card { box-shadow:none; border:none; }
+      header.topbar { box-shadow:none; }
+    }
+  </style>
+</head>
+<body>
+
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <header class="topbar">
+          <i data-lucide="boxes"></i>
+          <h1>Estoque – Materiais</h1>
+          <div style="margin-left:auto" class="muted">Cadastre seus materiais por setor</div>
+        </header>
+
+        <!-- Cadastro -->
+        <section class="card">
+          <div class="toolbar">
+            <div>
+              <div class="sec-title">Novo Material</div>
+              <div class="muted">Quando o tipo for “por pessoa”, informe também Razão e Margem (%).</div>
+            </div>
+            <div class="actions">
+              <button class="btn" id="btnExport" type="button">Exportar</button>
+              <input class="no-print" type="file" id="fileImport" accept=".json" style="display:none">
+              <button class="btn" id="btnImport" type="button">Importar</button>
+            </div>
+          </div>
+
+          <div class="grid cols-4">
+            <div>
+              <label>Nome</label>
+              <input type="text" id="matNome" placeholder="ex.: Taça vinho 350ml">
+            </div>
+            <div>
+              <label>Setor</label>
+              <select id="matSetor"></select>
+            </div>
+            <div>
+              <label>Unidade</label>
+              <select id="matUnidade">
+                <option value="un">un</option>
+                <option value="par">par</option>
+                <option value="conjunto">conjunto</option>
+              </select>
+            </div>
+            <div>
+              <label>Tipo de Consumo</label>
+              <select id="matTipo">
+                <option value="por_pessoa">Por pessoa</option>
+                <option value="fixo">Fixo</option>
+              </select>
+            </div>
+
+            <div id="grpRazao" style="display:none">
+              <label>Razão por convidado</label>
+              <input type="number" min="0" step="0.01" id="matRazao" value="1">
+            </div>
+            <div id="grpMargem" style="display:none">
+              <label>Margem (%)</label>
+              <input type="number" min="0" step="1" id="matMargem" value="20">
+            </div>
+
+            <div>
+              <label>Custo de reposição (R$)</label>
+              <input type="number" min="0" step="0.01" id="matCusto">
+            </div>
+            <div>
+              <label>Estoque atual (opcional)</label>
+              <input type="number" min="0" step="1" id="matEstoque">
+            </div>
+            <div>
+              <label>Mínimo (opcional)</label>
+              <input type="number" min="0" step="1" id="matMinimo">
+            </div>
+            <div>
+              <label>Observações</label>
+              <input type="text" id="matObs">
+            </div>
+
+            <!-- IMAGEM: URL + arquivo + prévia (linha inteira) -->
+            <div class="img-row">
+              <label>Imagem (URL) (opcional)</label>
+              <div class="img-inline">
+                <input type="url" id="matImg" placeholder="https://exemplo.com/foto.jpg" style="flex:1; min-width:220px;">
+                <input type="file" id="matImgFile" accept="image/*" class="no-print">
+                <button class="btn no-print" type="button" id="btnPreviewImg">Pré-visualizar</button>
+              </div>
+              <div class="muted">Você pode informar uma URL ou escolher um arquivo.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px" class="actions">
+            <button class="btn primary" id="btnAddMaterial" type="button">Adicionar material</button>
+          </div>
+        </section>
+
+               <!-- Lista -->
+        <section class="card" style="margin-top:12px">
+          <div class="toolbar">
+            <div class="sec-title">Materiais cadastrados</div>
+            <div>
+              <label class="pill">Filtrar setor:
+                <select id="fSetor"></select>
+              </label>
+            </div>
+          </div>
+
+          <!-- NOVO: wrapper com scroll horizontal -->
+          <div class="tabela-scroll">
+            <table id="tMateriais">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Setor</th>
+                  <th>Un</th>
+                  <th>Tipo</th>
+                  <th>Razão</th>
+                  <th>Margem%</th>
+                  <th>Estoque</th>
+                  <th>Reposição</th>
+                  <th class="no-print">Foto</th>
+                  <th class="no-print">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // ======= KEYS =======
+    const KEY_SETORES_OLD = 'estoque.setores';
+    const KEY_SETORES_NEW = 'estoque:setores';
+    const KEY_MATERIAIS   = 'estoque:materiais';
+    const KEY_MATERIAIS_OLD = 'estoque.materiais';
+
+     // ======= API (opcional, para rodar na nuvem) =======
+    const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+
+    async function apiCreateMaterial(mat){
+      if (!HAS_API) return;
+      try{
+        await window.callApi("/estoque/materiais", "POST", mat);
+      }catch(e){
+        console.error("Falha ao criar material na API", e);
+      }
+    }
+
+    async function apiUpdateMaterial(id, mat){
+      if (!HAS_API) return;
+      try{
+        await window.callApi(`/estoque/materiais/${encodeURIComponent(id)}`, "PUT", mat);
+      }catch(e){
+        console.error("Falha ao atualizar material na API", e);
+      }
+    }
+
+    async function apiDeleteMaterial(id){
+      if (!HAS_API) return;
+      try{
+        await window.callApi(`/estoque/materiais/${encodeURIComponent(id)}`, "DELETE", {});
+      }catch(e){
+        console.error("Falha ao excluir material na API", e);
+      }
+    }
+
+    // ======= Utils =======
+    const money = v => Number(v || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+
+    // parser inteligente
+    function parseNumberBR(v){
+      let s = String(v ?? '').trim();
+      if (!s) return null;
+      const hasComma = s.includes(','), hasDot = s.includes('.');
+      if (hasComma && hasDot){
+        const lastComma = s.lastIndexOf(','), lastDot = s.lastIndexOf('.');
+        s = (lastComma > lastDot) ? s.replace(/\./g,'').replace(',', '.') : s.replace(/,/g, '');
+      } else if (hasComma){
+        s = s.replace(',', '.');
+      }
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    const uuid = () => 'mat_' + Math.random().toString(36).slice(2,9);
+
+    // ======= Setores: migração + deduplicação =======
+    function normalizeNome(s){ return String((s?.nome||'').trim().toLowerCase()); }
+    function uniqueSetores(arr){
+      const map = new Map();
+      (arr||[]).forEach(s=>{
+        if(!s) return;
+        const key = s.id != null ? String(s.id) : normalizeNome(s);
+        const prev = map.get(key);
+        if(!prev) map.set(key, s);
+        else{
+          const ta = new Date(s.updatedAt||0).getTime();
+          const tb = new Date(prev?.updatedAt||0).getTime();
+          if (ta>tb) map.set(key, s);
+        }
+      });
+      return [...map.values()];
+    }
+    (function migrarSetores(){
+      try{
+        const a = JSON.parse(localStorage.getItem(KEY_SETORES_OLD)||'[]');
+        const b = JSON.parse(localStorage.getItem(KEY_SETORES_NEW)||'[]');
+        const merged = uniqueSetores([...a, ...b]).filter(s=>s && s.ativo!==false);
+        localStorage.setItem(KEY_SETORES_NEW, JSON.stringify(merged));
+        localStorage.removeItem(KEY_SETORES_OLD);
+      }catch(e){}
+    })();
+
+    function loadSetores(){
+      try{
+        const arr = JSON.parse(localStorage.getItem(KEY_SETORES_NEW)||'[]');
+        return uniqueSetores(arr).filter(s=>s && s.ativo!==false)
+          .sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+      }catch{ return []; }
+    }
+
+    // ======= Materiais =======
+    function uniqueByIdOrName(arr){
+      const map = new Map();
+      (arr||[]).forEach(m=>{
+        if(!m) return;
+        const key = m.id != null ? String(m.id) : String((m.nome||'').toLowerCase());
+        if(!map.has(key)) map.set(key, m);
+        else {
+          const a = m.updatedAt ? new Date(m.updatedAt).getTime() : 0;
+          const b = map.get(key).updatedAt ? new Date(map.get(key).updatedAt).getTime() : 0;
+          if (a > b) map.set(key, m);
+        }
+      });
+      return [...map.values()];
+    }
+
+    function loadMateriais(){
+      try{
+        const novo = JSON.parse(localStorage.getItem(KEY_MATERIAIS)    || '[]');
+        const antigo = JSON.parse(localStorage.getItem(KEY_MATERIAIS_OLD) || '[]');
+        return uniqueByIdOrName([...(antigo||[]), ...(novo||[])]);
+      }catch{ return []; }
+    }
+
+    function saveMateriais(arr){
+      try{
+        const payload = JSON.stringify(arr || []);
+        if (payload.length > 4_700_000){
+          alert('Muitos dados salvos no navegador. Exporte, apague alguns itens e importe novamente.');
+          return false;
+        }
+        localStorage.setItem(KEY_MATERIAIS, payload);
+        try { localStorage.removeItem(KEY_MATERIAIS_OLD); } catch {}
+        return true;
+      }catch(e){
+        console.error('Falha ao salvar materiais', e);
+        alert('Não foi possível salvar (limite do navegador).');
+        return false;
+      }
+    }
+
+    function openFotoPreview(src, nome){
+      if(!src){ alert('Este material não possui imagem cadastrada.'); return; }
+      const dlg = document.getElementById('dlgFotoMat');
+      const img = document.getElementById('fotoMatImg');
+      const ttl = document.getElementById('fotoMatTitulo');
+      if (ttl) ttl.textContent = nome ? ('Foto — ' + nome) : 'Foto do material';
+      if (img) { img.src = ''; img.src = src; }
+      if (dlg && dlg.showModal) dlg.showModal();
+      else if (dlg) dlg.setAttribute('open','');
+    }
+
+    // ======= Imagem: carregar arquivo e gerar Data URL =======
+    (function wireImagem(){
+      const file = document.getElementById('matImgFile');
+      const url  = document.getElementById('matImg');
+      const btnPrev = document.getElementById('btnPreviewImg');
+
+      if (file) {
+        file.addEventListener('change', ()=>{
+          const f = file.files?.[0];
+          if (!f) return;
+          if (!/^image\//.test(f.type)) { alert('Selecione um arquivo de imagem.'); return; }
+          const reader = new FileReader();
+          reader.onload = ()=>{
+            url.value = reader.result || '';
+            openFotoPreview(url.value, document.getElementById('matNome')?.value || 'Novo material');
+          };
+          reader.readAsDataURL(f);
+        });
+      }
+
+      if (btnPrev) {
+        btnPrev.addEventListener('click', ()=>{
+          const val = (url?.value || '').trim();
+          if (!val) { alert('Informe uma URL ou escolha um arquivo.'); return; }
+          openFotoPreview(val, document.getElementById('matNome')?.value || 'Novo material');
+        });
+      }
+    })();
+
+    // ======= Preenche selects de setores =======
+    function fillSetores(){
+      const sel = document.getElementById('matSetor');
+      const fsel = document.getElementById('fSetor');
+      sel.innerHTML = '<option value="">Selecione…</option>';
+      fsel.innerHTML = '<option value="">Todos</option>';
+      for(const s of loadSetores()){
+        sel.add(new Option(s.nome, String(s.id)));
+        fsel.add(new Option(s.nome, String(s.id)));
+      }
+    }
+
+    // ======= Mostrar/Ocultar razão/margem =======
+    function toggleRazao(){
+      const isPessoa = document.getElementById('matTipo').value === 'por_pessoa';
+      document.getElementById('grpRazao').style.display = isPessoa ? '' : 'none';
+      document.getElementById('grpMargem').style.display = isPessoa ? '' : 'none';
+    }
+    document.getElementById('matTipo')?.addEventListener('change', toggleRazao);
+    toggleRazao();
+
+    // ======= Render da tabela =======
+    function render(){
+      const tb = document.querySelector('#tMateriais tbody');
+      tb.innerHTML = '';
+      const setorFilter = String(document.getElementById('fSetor').value || '');
+      const setores = Object.fromEntries(loadSetores().map(s=>[String(s.id),s]));
+
+      loadMateriais()
+        .filter(m => !setorFilter || String(m.setorId) === setorFilter)
+        .forEach(m=>{
+          const estoqueStr = (m.estoqueQtd ?? null) === null ? '—' : String(m.estoqueQtd);
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+  <td>${m.nome}</td>
+  <td>${setores[String(m.setorId)]?.nome || '-'}</td>
+  <td>${m.unidade}</td>
+  <td>${m.tipoConsumo}</td>
+  <td>${m.tipoConsumo==='por_pessoa' ? (m.razaoPorConvidado ?? '') : ''}</td>
+  <td>${m.tipoConsumo==='por_pessoa' ? (m.margemPercent ?? '') : ''}</td>
+  <td>${estoqueStr}</td>
+  <td>${money(m.custoReposicao||0)}</td>
+  <td class="no-print">
+    ${m.imagemUrl ? '<button class="btn btn-foto" type="button" data-src="'+m.imagemUrl+'" data-nome="'+(m.nome||'')+'">📷</button>' : '—'}
+  </td>
+  <td class="no-print">
+    <button class="btn btn-editar-material" data-id="${m.id}" type="button">Editar</button>
+    <button class="btn" data-del="${m.id}" type="button">Excluir</button>
+  </td>`;
+          tb.appendChild(tr);
+        });
+
+      tb.querySelectorAll('.btn-editar-material').forEach(btn=>{
+        btn.addEventListener('click', ()=> openEditarMaterial(btn.dataset.id));
+      });
+          tb.querySelectorAll('[data-del]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const id = btn.dataset.del;
+          if(!confirm('Excluir material?')) return;
+
+          const novo = loadMateriais().filter(x => String(x.id) !== String(id));
+          if (saveMateriais(novo)) {
+            // Se a API existir, também exclui na nuvem
+            if (HAS_API) {
+              apiDeleteMaterial(id);
+            }
+            render();
+          }
+        });
+      });
+
+    }
+
+    // Delegação para o botão 📷 (funciona após qualquer render)
+    document.querySelector('#tMateriais tbody').addEventListener('click', (e)=>{
+      const btn = e.target.closest('.btn-foto');
+      if (!btn) return;
+      openFotoPreview(btn.dataset.src, btn.dataset.nome);
+    });
+
+    document.getElementById('fSetor')?.addEventListener('change', render);
+
+    // ======= Adicionar material =======
+       document.getElementById('btnAddMaterial').addEventListener('click', ()=>{
+      const nome = document.getElementById('matNome').value.trim();
+      const setorId = document.getElementById('matSetor').value;
+      if(!nome || !setorId){
+        alert('Informe nome e setor.');
+        return;
+      }
+
+      const imgUrl  = (document.getElementById('matImg')?.value || '').trim();
+      const isPessoa = document.getElementById('matTipo').value === 'por_pessoa';
+
+      const obj = {
+        id: uuid(),
+        nome,
+        setorId: String(setorId),
+        unidade: document.getElementById('matUnidade').value,
+        tipoConsumo: document.getElementById('matTipo').value,
+        razaoPorConvidado: isPessoa ? (parseNumberBR(document.getElementById('matRazao').value) ?? 1) : null,
+        margemPercent:    isPessoa ? (parseNumberBR(document.getElementById('matMargem').value) ?? 20) : null,
+        custoReposicao:   parseNumberBR(document.getElementById('matCusto').value) ?? 0,
+        estoqueQtd:       parseNumberBR(document.getElementById('matEstoque').value),
+        minimo:           parseNumberBR(document.getElementById('matMinimo').value),
+        obs: document.getElementById('matObs').value.trim(),
+        imagemUrl: imgUrl || ''
+      };
+
+      const arr = loadMateriais();
+      arr.push(obj);
+
+      if (saveMateriais(arr)) {
+        // Se a API existir, também salva na nuvem
+        if (HAS_API) {
+          apiCreateMaterial(obj);
+        }
+
+        document.getElementById('matNome').value = '';
+        document.getElementById('matObs').value  = '';
+        const _img  = document.getElementById('matImg');     if (_img)  _img.value  = '';
+        const _file = document.getElementById('matImgFile'); if (_file) _file.value = '';
+        render();
+      }
+    });
+
+
+    // ======= Export / Import =======
+    document.getElementById('btnExport').onclick = ()=>{
+      const blob = new Blob([localStorage.getItem(KEY_MATERIAIS)||'[]'], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'materiais.json'; a.click();
+    };
+    document.getElementById('btnImport').onclick = ()=> document.getElementById('fileImport').click();
+    document.getElementById('fileImport').addEventListener('change', (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const parsed = JSON.parse(reader.result || '[]');
+          if (!Array.isArray(parsed)) throw new Error('Formato inválido');
+          if (saveMateriais(parsed)) render();
+        }catch{
+          alert('Arquivo inválido. Certifique-se de exportar pelo próprio sistema.');
+        }
+      };
+      reader.readAsText(f);
+    });
+
+    // ======= Modal Editar =======
+    let _editMatId = null;
+
+    function preencherSelectSetores_ed(){
+      const sel = document.getElementById('edSetor');
+      if (!sel) return;
+      sel.innerHTML = '';
+      const setores = loadSetores().sort((a,b)=> String(a.nome||'').localeCompare(b.nome||''));
+      setores.forEach(s => sel.add(new Option(s.nome || ('Setor '+s.id), String(s.id))));
+    }
+    function toggleRazaoEd(){
+      const isPessoa = document.getElementById('edTipoConsumo').value === 'por_pessoa';
+      document.getElementById('grpEdRazao').style.display = isPessoa ? '' : 'none';
+      document.getElementById('grpEdMargem').style.display = isPessoa ? '' : 'none';
+    }
+
+    window.openEditarMaterial = (id)=>{
+      const mats = loadMateriais();
+      const m = mats.find(x => String(x.id) === String(id));
+      if (!m){ alert('Material não encontrado.'); return; }
+
+      _editMatId = String(m.id);
+      preencherSelectSetores_ed();
+
+      document.getElementById('edId').value          = m.id || '';
+      document.getElementById('edNome').value        = m.nome || '';
+      document.getElementById('edSetor').value       = String(m.setorId ?? '');
+      document.getElementById('edUnidade').value     = m.unidade ?? 'un';
+      document.getElementById('edTipoConsumo').value = m.tipoConsumo ?? 'fixo';
+      document.getElementById('edRazao').value       = (m.razaoPorConvidado ?? 1);
+      document.getElementById('edMargem').value      = (m.margemPercent ?? 20);
+      document.getElementById('edCusto').value       = (m.custoReposicao ?? 0);
+      document.getElementById('edEstoque').value     = (m.estoqueQtd ?? '');
+      document.getElementById('edMinimo').value      = (m.minimo ?? '');
+      document.getElementById('edObs').value         = m.obs ?? '';
+
+      toggleRazaoEd();
+
+      const dlg = document.getElementById('dlgEditarMaterial');
+      if (dlg && dlg.showModal) dlg.showModal();
+    };
+
+    document.getElementById('edTipoConsumo')?.addEventListener('change', toggleRazaoEd);
+
+       document.getElementById('btnSalvarEdicao')?.addEventListener('click', (e)=>{
+      const nome       = document.getElementById('edNome').value.trim();
+      const setorId    = document.getElementById('edSetor').value;
+      const unidade    = document.getElementById('edUnidade').value;
+      const tipoConsumo = document.getElementById('edTipoConsumo').value;
+
+      const razao      = parseNumberBR(document.getElementById('edRazao').value);
+      const margem     = parseNumberBR(document.getElementById('edMargem').value);
+      const custo      = parseNumberBR(document.getElementById('edCusto').value) ?? 0;
+      const estoqueQtd = parseNumberBR(document.getElementById('edEstoque').value);
+      const minimo     = parseNumberBR(document.getElementById('edMinimo').value);
+      const obs        = document.getElementById('edObs').value || '';
+
+      if (!nome || !setorId || !unidade){
+        alert('Preencha Nome, Setor e Unidade.');
+        e.preventDefault();
+        return;
+      }
+
+      const mats = loadMateriais();
+      const i = mats.findIndex(x => String(x.id) === String(_editMatId));
+      if (i < 0){
+        alert('Material não encontrado.');
+        return;
+      }
+
+      mats[i] = {
+        ...mats[i],
+        id: _editMatId,
+        nome,
+        setorId: String(setorId),
+        unidade,
+        tipoConsumo,
+        razaoPorConvidado: (tipoConsumo === 'por_pessoa' ? (razao ?? 1) : null),
+        margemPercent:     (tipoConsumo === 'por_pessoa' ? (margem ?? 20) : null),
+        custoReposicao: custo,
+        estoqueQtd, // null ou número
+        minimo,     // null ou número
+        obs
+      };
+
+      if (saveMateriais(mats)) {
+        // Se a API existir, também atualiza na nuvem
+        if (HAS_API) {
+          apiUpdateMaterial(_editMatId, mats[i]);
+        }
+        render();
+      }
+      // o <dialog> fecha pelo próprio form (value=default)
+    });
+
+    // ======= Menu lateral ativo =======
+    (function watchMenu(){
+      const alvo = document.getElementById('menuLateral');
+      if (!alvo) return;
+      const obs = new MutationObserver((muts, o)=>{
+        if (alvo.firstElementChild) {
+          const current = location.pathname.split('/').pop();
+          const link = alvo.querySelector('a[href$="'+current+'"]');
+          if (link) link.classList.add('ativo');
+          o.disconnect();
+        }
+      });
+      obs.observe(alvo, { childList:true });
+    })();
+
+    // Init
+    fillSetores();
+    render();
+  });
+  </script>
+
+  <script> try{ lucide.createIcons(); }catch(e){} </script>
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- ========== MODAL: Editar material ========== -->
+  <dialog id="dlgEditarMaterial">
+    <form method="dialog" style="min-width:700px;max-width:90vw">
+      <div class="sec-title">Editar material</div>
+
+      <div class="grid cols-4" style="margin-top:8px">
+        <div style="grid-column:1/-1">
+          <label>Nome</label>
+          <input id="edNome" type="text" required>
+        </div>
+
+        <div>
+          <label>Setor</label>
+          <select id="edSetor" required></select>
+        </div>
+
+        <div>
+          <label>Unidade</label>
+          <select id="edUnidade">
+            <option value="un">un</option>
+            <option value="par">par</option>
+            <option value="conjunto">conjunto</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Tipo de Consumo</label>
+          <select id="edTipoConsumo">
+            <option value="por_pessoa">Por pessoa</option>
+            <option value="fixo">Fixo</option>
+          </select>
+        </div>
+
+        <div id="grpEdRazao" style="display:none">
+          <label>Razão por convidado</label>
+          <input id="edRazao" type="number" min="0" step="0.01">
+        </div>
+
+        <div id="grpEdMargem" style="display:none">
+          <label>Margem (%)</label>
+          <input id="edMargem" type="number" min="0" step="1">
+        </div>
+      </div>
+
+      <div class="grid cols-4" style="margin-top:8px">
+        <div>
+          <label>Custo de reposição (R$)</label>
+          <input id="edCusto" type="number" min="0" step="0.01">
+        </div>
+        <div>
+          <label>Estoque atual (opcional)</label>
+          <input id="edEstoque" type="number" min="0" step="1">
+        </div>
+        <div>
+          <label>Mínimo (opcional)</label>
+          <input id="edMinimo" type="number" min="0" step="1">
+        </div>
+        <div>
+          <label>Código/ID (somente leitura)</label>
+          <input id="edId" type="text" readonly>
+        </div>
+
+        <div style="grid-column:1/-1">
+          <label>Observações</label>
+          <input id="edObs" type="text" placeholder="Opcional">
+        </div>
+      </div>
+
+      <div class="actions" style="justify-content:flex-end;margin-top:12px">
+        <button class="btn" value="cancel">Cancelar</button>
+        <button class="btn primary" id="btnSalvarEdicao" value="default">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ========== MODAL: Foto material ========== -->
+  <dialog id="dlgFotoMat" style="padding:0;border:0;border-radius:14px;max-width:90vw">
+    <div style="background:#fff; border:1px solid #eadfcd; border-radius:14px; overflow:hidden; max-width:min(720px, 90vw)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fbf5ee;border-bottom:1px solid #eadfcd">
+        <strong id="fotoMatTitulo" style="color:#5a3e2b">Foto do material</strong>
+        <button class="btn" onclick="document.getElementById('dlgFotoMat').close()" style="background:#fff;border-color:#eadfcd">Fechar</button>
+      </div>
+      <div style="padding:10px;background:#fff">
+        <img id="fotoMatImg" src="" alt="Foto do material" style="display:block;max-width:100%;height:auto;border-radius:10px">
+      </div>
+    </div>
+  </dialog>
+
+</body>
+</html>
+

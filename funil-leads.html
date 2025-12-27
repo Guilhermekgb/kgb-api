@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:funil-leads.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="api-base" content="https://kgb-api.onrender.com">
+
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+   var DEV_API  = "https://kgb-api.onrender.com"; // usar sempre a nuvem
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Funil de Leads</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+
+  <!-- Estilos base do seu projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  
+  <!-- Estilos do funil -->
+  <link rel="stylesheet" href="funil-leads.css" />
+  <style>
+  :root{
+    --sidebar-w:260px;
+  }
+
+  /* Botão hamburguer (mobile) */
+  #hamburguer{
+    position:fixed;
+    top:12px;
+    left:12px;
+    background:#c29a5d;
+    color:#fff;
+    border:none;
+    font-size:24px;
+    padding:6px 12px;
+    border-radius:8px;
+    z-index:1100;
+    display:none; /* só mostra no mobile */
+  }
+
+ /* Layout do menu lateral no DESKTOP */
+@media (min-width:769px){
+  #menuLateral{
+    position:fixed;
+    left:0;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    z-index:1000;
+  }
+  /* NÃO precisa mais empurrar o conteúdo com padding-left */
+  .wrapper{
+    padding-left:0; /* ou simplesmente remova esse bloco da .wrapper */
+  }
+}
+
+  /* Layout e animação do menu lateral no CELULAR */
+  @media (max-width:768px){
+    #hamburguer{
+      display:block;
+    }
+    #menuLateral{
+      position:fixed;
+      left:0;
+      top:0;
+      height:100vh;
+      width:var(--sidebar-w);
+      transform:translateX(-100%);
+      transition:transform .3s ease;
+      z-index:1000;
+    }
+    #menuLateral.aberto{
+      transform:translateX(0);
+    }
+    .wrapper{
+      padding-left:0;
+    }
+  }
+  /* Botão Hamburguer */
+#hamburguer {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: #c29a5d;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  z-index: 1001;
+  display: none;
+  box-shadow: 0 6px 16px rgba(0,0,0,.12);
+}
+
+/* Backdrop */
+#menuBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 998;
+}
+
+@media (max-width:768px){
+  #hamburguer { display: block; }
+  .conteudo-principal {
+    margin-left: 0 !important;
+    padding: 20px;
+  }
+}
+
+</style>
+
+  <!-- Fonte moderna e elegante -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+<body class="no-sticky pagina-funil">
+
+  <!-- Botão Mobile (apenas uma vez) -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral"></aside>
+    <!-- Backdrop para clique fora do menu -->
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+
+        <header class="fl-topbar">
+          <h1 class="fl-titulo">
+            <i data-lucide="columns"></i> Funil de Leads
+          </h1>
+
+          <div class="fl-acoes-dir">
+            <a class="btn primario" href="orcamento.html">
+              <i data-lucide="plus"></i> Novo Orçamento
+            </a>
+            <!-- botão de notificações removido -->
+
+
+          </div>
+        </header>
+<div class="fl-scroll-area"></div>
+       <!-- Filtros -->
+<section class="fl-filtros">
+  <input
+    id="filtroBusca"
+    type="search"
+    placeholder="Buscar: nome, data evento, local, convidados, WhatsApp, próximo retorno..."
+  />
+
+  <!-- Visível só para ADMIN (o JS oculta para vendedor) -->
+  <div class="filtros">
+    <label for="filtroResponsavel">Responsável:</label>
+    <select id="filtroResponsavel">
+      <option value="todos">Todos</option>
+    </select>
+  </div>
+</section>
+
+<!-- Indicadores -->
+<section id="fl-indicadores" class="fl-indicadores" aria-live="polite">
+  <div class="ind"><div class="k">Total no mês</div><div class="v" id="indTotalMes">–</div></div>
+  <div class="ind"><div class="k">Coluna com mais leads</div><div class="v" id="indTopColuna">–</div></div>
+  <div class="ind"><div class="k">Tempo médio p/ fechar</div><div class="v" id="indTempoMedio">–</div></div>
+  <div class="ind"><div class="k">Taxa de conversão</div><div class="v" id="indConversao">–</div></div>
+</section>
+
+<!-- Barra de rolagem horizontal (só no topo) -->
+<div class="fl-scroll-x" id="scrollXTop">
+  <div id="scrollXTopInner"></div>
+</div>
+
+<!-- Colunas do funil -->
+<section id="funilScroller" class="fl-scroller">
+  <div id="funil-container" class="fl-container"></div>
+</section>
+      </div>
+    </main>
+  </div>
+
+<!-- INCLUA APENAS EM HOMOLOG/PROD -->
+<!-- <script src="./config.env.js"></script> -->
+
+<!-- Adapter de API (module) -->
+<script type="module" src="./api/remote-adapter.js"></script>
+
+<script type="module" src="menu-lateral.js"></script>
+<script src="agenda-bridge.js"></script>
+<script src="funil-leads.js" defer></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded",()=>{
+    window.lucide?.createIcons?.();
+  });
+</script>
+</body>
+</html>

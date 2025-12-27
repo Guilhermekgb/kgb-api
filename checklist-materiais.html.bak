@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:checklist-materiais.html">
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH kgb-common (deve vir antes do guard) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<!-- === FIM PATCH kgb-common === -->
+<!-- === INÍCIO PATCH GUARD (RBAC) === -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH GUARD === -->
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Checklist de Materiais – Evento</title>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    :root { --gold:#c29a5d; --brown:#5a3e2b; --beige:#f8f1e8; }
+    html, body { background:#f8f1e8; margin:0; }
+    header.topbar { position:static !important; background:white; padding:10px 16px; display:flex; align-items:center; gap:12px; box-shadow:0 1px 0 rgba(0,0,0,.06); }
+    header.topbar h1 { margin:0; font-size:18px; color:#5a3e2b; }
+    main.conteudo-principal { flex-grow:1; padding:40px; min-height:100vh; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn { border:1px solid #c29a5d; background:#fff; color:#5a3e2b; padding:8px 12px; border-radius:10px; cursor:pointer; }
+    .btn.primary { background:#c29a5d; color:white; border-color:#c29a5d; }
+    .card { background:white; border:1px solid #eadfcd; border-radius:14px; box-shadow:0 2px 6px rgba(0,0,0,.04); padding:14px; }
+    .grid { display:grid; gap:12px; }
+    .grid.cols-4 { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    label { font-size:12px; color:#5a3e2b; display:block; margin-bottom:6px; }
+    input[type="text"], input[type="number"], select, textarea { width:100%; padding:10px; border-radius:10px; border:1px solid #e0d6c4; background:#fff; }
+    table { width:100%; border-collapse:collapse; background:white; }
+    th, td { border-bottom:1px solid #eee; padding:10px; text-align:left; }
+    th { background:#faf6ef; color:#5a3e2b; font-weight:600; }
+    .sec-title { font-weight:700; color:#5a3e2b; margin:0 0 8px 0; }
+    .muted { color:#7a6a5c; font-size:12px; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral { flex-shrink:0; background-color:#5a3e2b; height:100vh; overflow-y:auto; }
+    .conteudo-central { max-width:1100px; margin:0 auto; }
+    .pill { padding:2px 6px; border-radius:6px; border:1px dashed #dac8a7; background:#fff8ef; }
+    .list-box li{margin:6px 0}
+    input[disabled]{background:#fafafa}
+    .tabs { display:flex; gap:8px; border-bottom:1px solid #eadfcd; }
+    .tab { border:1px solid #eadfcd; background:#fff; padding:8px 12px; border-radius:10px 10px 0 0; cursor:pointer; }
+    .tab.active { background:var(--beige); border-bottom-color:transparent; font-weight:600; color:var(--brown); }
+    .card + .card { margin-top: 16px; }
+    #listaMercado ul { display: grid; gap: 8px; }
+    #listaMercado li label { display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid #eadfcd; border-radius:10px; background:#fffdf8; }
+    #listas table td input { padding:8px; border-radius:8px; }
+    .grid.gap-lg { gap:16px; }
+    table{ border-spacing:0; border-collapse:separate; }
+    th,td{ border-bottom:1px solid #eee; }
+    tbody tr:hover{ background:#fffdf6; }
+    tbody tr + tr td{ border-top: none; }
+    td input[type="number"], td input[type="text"]{
+      width:100%; box-sizing:border-box; padding:8px; border:1px solid #e8e0cf; border-radius:8px;
+    }
+    section.card{ margin-bottom:14px; }
+
+    @media print{
+      #menuLateral, #hamburguer, .no-print { display:none !important; }
+      main.conteudo-principal { padding:0; }
+      .card { box-shadow:none; border:none; }
+      header.topbar { box-shadow:none; }
+    }
+    /* === Lista de Mercado em colunas por categoria === */
+#listaMercado .cats-grid{
+  display:grid;
+  gap:12px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+#listaMercado .cat-card{
+  background:#fff;
+  border:1px solid #eadfcd;
+  border-radius:12px;
+  padding:10px;
+}
+#listaMercado .cat-card h4{
+  margin:0 0 8px 0;
+  font-size:14px;
+  color:#5a3e2b;
+}
+#listaMercado .cat-card ul{
+  list-style:none;
+  padding:0;
+  margin:0;
+  display:grid;
+  gap:8px;
+}
+#listaMercado .cat-card li label{
+  display:flex; gap:10px; align-items:center;
+  padding:8px 10px; border:1px solid #eadfcd; border-radius:10px; background:#fffdf8;
+}
+#listaMercado .cat-card li .muted{ font-size:12px; color:#7a6a5c; margin-left:auto; }
+/* === Lista de Mercado por categorias (colunas) === */
+#listaMercado.cols-categorias{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap:12px;
+}
+#listaMercado input.qtd-edit{
+  padding:6px 8px;
+  border:1px solid #e0d6c4;
+  border-radius:8px;
+  text-align:right;
+}
+
+.cat-card{
+  background:#fff;
+  border:1px solid #eadfcd;
+  border-radius:12px;
+  padding:10px;
+}
+.cat-card .cat-title{
+  font-weight:700;
+  color:#5a3e2b;
+  margin:0 0 8px 0;
+  font-size:14px;
+}
+.cat-card ul{ list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+.cat-card li label{
+  display:flex; gap:10px; align-items:center;
+  padding:8px 10px; border:1px solid #eadfcd;
+  border-radius:10px; background:#fffdf8;
+}
+/* === Lista de Mercado em colunas por categoria === */
+.market-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap:12px;
+  align-items:start;
+}
+.market-col{
+  border:1px solid #eadfcd;
+  border-radius:12px;
+  background:#fffdf8;
+  padding:10px;
+}
+.market-col h4{
+  margin:0 0 8px 0;
+  color:#5a3e2b;
+  font-size:14px;
+  font-weight:700;
+  border-bottom:1px dashed #eadfcd;
+  padding-bottom:6px;
+}
+.market-col ul{
+  list-style:none;
+  padding:0;
+  margin:0;
+  display:grid;
+  gap:8px;
+}
+.market-col li label{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:8px 10px;
+  border:1px solid #eadfcd;
+  border-radius:10px;
+  background:#fff;
+}
+/* botão mini para observações */
+.obs-btn{
+  border:1px solid #dac8a7;
+  background:#fffdf8;
+  border-radius:999px;
+  padding:0 8px;
+  line-height:22px;
+  height:24px;
+  font-size:12px;
+  cursor:pointer;
+}
+.obs-btn.has-note{
+  border-color:#c29a5d;
+  background:#fff5e4;
+  font-weight:600;
+}
+.obs-badge{
+  margin-left:6px;
+  font-size:11px;
+  color:#7a6a5c;
+}
+.foto-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:24px; height:24px; padding:0; margin-left:6px;
+  border:1px solid #dac8a7; background:#fffdf8; border-radius:6px; cursor:pointer;
+}
+.foto-btn:hover{ background:#fff7ea; }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+ <div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+  <main class="conteudo-principal">
+
+           <header class="topbar">
+          <i data-lucide="clipboard-list"></i>
+          <h1>Checklist de Materiais – Evento</h1>
+          <div style="margin-left:auto" class="muted">Gere a saída/retorno por evento</div>
+        </header>
+
+        <!-- Abas -->
+        <nav class="tabs" id="tabsChecklist" style="margin:12px 0">
+          <button class="tab active" data-tab="materiais">Materiais</button>
+          <button class="tab" data-tab="insumos">Insumos</button>
+        </nav>
+
+        <!-- ===================== ABA MATERIAIS ===================== -->
+        <div id="abaMateriais">
+          <!-- DADOS DO EVENTO -->
+          <section class="card">
+            <div class="actions" style="justify-content:space-between">
+              <div>
+                <div class="sec-title">Dados do Evento</div>
+                <div class="muted">Escolha um evento salvo (lista mostra o <b>NOME</b> do evento).</div>
+              </div>
+              <div class="actions">
+                <button class="btn" id="btnCarregar">Carregar/Atualizar</button>
+                <button class="btn" id="btnSalvar">Salvar rascunho</button>
+                <button class="btn" id="btnImprimir">Imprimir A4</button>
+              </div>
+            </div>
+
+            <div class="grid cols-3">
+              <div>
+                <label>Selecionar Evento (opcional)</label>
+                <select id="selEvento"></select>
+              </div>
+              <div>
+                <label>ID do Evento</label>
+                <input type="text" id="evtId" placeholder="ex.: evt_123">
+              </div>
+              <div>
+                <label>Convidados</label>
+                <input type="number" id="evtConvidados" min="1" value="100">
+              </div>
+            </div>
+          </section>
+
+          <!-- ADIÇÃO POR SETOR -->
+          <section class="card">
+            <div class="sec-title">Adicionar por Setor</div>
+            <div class="grid cols-4">
+              <div><label>Setor</label><select id="selSetor"></select></div>
+              <div><label>&nbsp;</label><button class="btn" id="btnListarMateriais">Listar Materiais</button></div>
+              <div><label>&nbsp;</label><button class="btn" id="btnIncluirTudo">Incluir tudo</button></div>
+              <div><label>&nbsp;</label><button class="btn" id="btnIncluirSelecionados">Incluir selecionados</button></div>
+            </div>
+            <div id="listaMateriaisSetor" style="margin-top:10px"></div>
+          </section>
+
+          <!-- SAÍDA x RETORNO por SETOR -->
+          <section class="card">
+            <div class="sec-title">Saída x Retorno (por Setor)</div>
+            <div id="listas"></div>
+          </section>
+
+          <!-- PAINEL DE LINK/QR (aparece depois de GERAR) -->
+          <section id="execPanel" class="card" style="display:none"></section>
+
+          <!-- FINALIZAÇÃO GERAL DO CHECKLIST -->
+          <section class="card no-print">
+            <div class="actions" style="justify-content:flex-end">
+              <button class="btn primary" id="btnGerarChecklistExec">
+                GERAR CHECKLIST (tela do responsável / QR)
+              </button>
+            </div>
+            <div class="muted" style="margin-top:6px">
+              Isso finaliza a SAÍDA (salva) e mostra o link/QR da tela de execução para o responsável conferir o RETORNO.
+            </div>
+          </section>
+        </div>
+        <!-- =================== /ABA MATERIAIS =================== -->
+
+        <!-- ====================== ABA INSUMOS ====================== -->
+        <div id="abaInsumos" style="display:none">
+          <!-- TOPO / AÇÕES -->
+          <section class="card">
+            <div class="actions" style="justify-content:space-between">
+              <div>
+                <div class="sec-title">Insumos</div>
+                <div class="muted">Gere a lista de mercado a partir do cardápio e use itens do estoque quando houver.</div>
+              </div>
+              <div class="actions">
+                <button class="btn" id="btnGerarListaMercado">Gerar lista a partir do cardápio</button>
+                <button class="btn" id="btnUsarDoEstoque">Usar itens do estoque…</button>
+                <button class="btn" id="btnSalvarListaMercado">Salvar rascunho</button>
+                <button class="btn" id="btnImprimirInsumos">Imprimir A4</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- LISTA DE MERCADO -->
+          <section class="card">
+            <div class="sec-title">Lista de Mercado</div>
+            <div class="muted">Categorias: verduras, secos, geladeira, freezer, etc. (regras simples + categoria do cadastro).</div>
+
+            <div class="grid cols-4" style="margin-top:8px">
+              <div>
+                <label>Agrupar por</label>
+                <select id="insumosAgruparPor">
+                  <option value="categoria">Categoria</option>
+                  <option value="alfabetica">Ordem alfabética</option>
+                </select>
+              </div>
+              <div>
+                <label>Mostrar</label>
+                <select id="insumosMostrar">
+                  <option value="todos">Todos</option>
+                  <option value="pendentes">Somente pendentes</option>
+                  <option value="comprados">Somente comprados</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="listaMercado" style="margin-top:12px"></div>
+          </section>
+
+          <!-- CONSUMO & RETORNO (PÓS-EVENTO) -->
+          <section class="card">
+            <div class="sec-title">Consumo & Retorno</div>
+            <div class="muted">Informe sobras (quantidade + status: cru/preparado) após o evento.</div>
+            <div id="insumosRetorno" style="margin-top:10px"></div>
+            <div class="actions" style="margin-top:10px; justify-content:flex-end">
+              <button class="btn primary" id="btnGerarEstoqueInsumos">Gerar estoque de insumos</button>
+            </div>
+          </section>
+
+       <!-- MODAL: Usar do estoque -->
+<dialog id="dlgUsarDoEstoque">
+  <form method="dialog" style="min-width: 580px; max-width: 90vw">
+    <div class="sec-title">Usar itens do estoque</div>
+    <div class="muted">Marque os itens e ajuste a quantidade a usar. Ao salvar, vamos debitar do estoque e também abater da lista de mercado deste evento.</div>
+    <div id="estoqueInsumosLista" style="margin-top:10px; max-height: 50vh; overflow:auto"></div>
+    <div class="actions" style="justify-content:flex-end; margin-top:12px">
+      <button class="btn" value="cancel">Cancelar</button>
+      <button class="btn primary" id="btnSalvarUsarDoEstoque" value="default">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+
+<!-- MODAL: Observações do item da lista (somente leitura) -->
+<dialog id="dlgObsInsumo">
+  <form method="dialog" style="min-width:560px; max-width:90vw">
+    <div class="sec-title">Observações do item</div>
+
+    <div class="grid cols-3" style="margin-top:8px">
+      <div style="grid-column:1 / -1">
+        <label>Item</label>
+        <input id="obsItemNome" type="text" readonly>
+      </div>
+      <div style="grid-column:1 / -1">
+        <label>Observação do cadastro (somente leitura)</label>
+        <textarea id="obsPadrao" rows="3" readonly></textarea>
+      </div>
+    </div>
+
+    <div class="actions" style="justify-content:flex-end; margin-top:12px">
+      <button class="btn" value="cancel">Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: Escolher item da lista para registrar sobra -->
+<dialog id="dlgEscolherEstoque">
+  <form method="dialog" style="min-width:600px; max-width:90vw">
+    <div class="sec-title">Registrar sobras para o estoque</div>
+    <div class="muted">Clique em “Registrar sobra” no item desejado quantas vezes precisar (cru/preparado).</div>
+
+    <div id="listaParaEstoque" style="margin-top:10px; display:grid; gap:8px; max-height:55vh; overflow:auto"></div>
+
+    <div class="actions" style="justify-content:flex-end; margin-top:12px">
+      <button class="btn" value="cancel">Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: Registro de sobra (qtd/tipo/obs) -->
+<dialog id="dlgRegistrarSobra">
+  <form method="dialog" style="min-width:520px; max-width:90vw">
+    <div class="sec-title">Registrar sobra</div>
+    <div class="grid cols-3" style="margin-top:8px">
+      <div style="grid-column:1 / -1">
+        <label>Item</label>
+        <input id="regItemNome" type="text" readonly>
+      </div>
+      <div>
+        <label>Quantidade</label>
+        <input id="regQtd" type="number" min="0" step="0.01">
+      </div>
+      <div>
+        <label>Unidade</label>
+        <input id="regUn" type="text" readonly>
+      </div>
+      <div>
+        <label>Tipo</label>
+        <select id="regTipo">
+          <option value="cru">Cru</option>
+          <option value="preparado">Preparado</option>
+        </select>
+      </div>
+      <div style="grid-column:1 / -1">
+        <label>Observações</label>
+        <textarea id="regObs" rows="3" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="actions" style="justify-content:flex-end; margin-top:12px">
+      <button class="btn" value="cancel">Cancelar</button>
+      <button class="btn primary" id="btnSalvarRegistro" value="default">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+        <!-- ==================== /ABA INSUMOS ==================== -->
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+  /* ===== Utils/Storage ===== */
+  const KEY_EVENTOS = 'eventos';
+  const getLS  = (k)=> JSON.parse(localStorage.getItem(k)||'[]');
+  const getObj = (k)=> JSON.parse(localStorage.getItem(k)||'null');
+  const setObj = (k,v)=> {
+    try { localStorage.setItem(k, JSON.stringify(v)); }
+    catch(e){ alert('Não foi possível salvar (limite do navegador atingido).'); }
+  };
+  // ===== API (opcional, nuvem) =====
+  const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+  function saveChecklistSaidaBackend(evtId, payload){
+    if (!HAS_API || !evtId) return;
+    try{
+      window
+        .callApi(
+          `/eventos/${encodeURIComponent(String(evtId))}/checklist-saida`,
+          'PUT',
+          payload
+        )
+        .catch(err => {
+          console.error('[checklist-materiais] falha ao salvar checklist-saida na API', err);
+        });
+    }catch(e){
+      console.error('[checklist-materiais] erro inesperado ao chamar saveChecklistSaidaBackend', e);
+    }
+  }
+  async function criarOuAtualizarLinkExecucao(evtId){
+    if (!HAS_API || !evtId) return null;
+
+    try{
+      const resp = await window.callApi(
+        `/eventos/${encodeURIComponent(String(evtId))}/checklist-link`,
+        'POST',
+        {}
+      );
+      const data = resp?.data ?? resp;
+      const token     = data?.token || null;
+      const expiresAt = data?.expiresAt || null;
+
+      if (!token) return null;
+
+      // monta a URL da execução usando o token vindo do backend
+      const base = location.origin || (location.protocol+'//'+location.host);
+      const path = location.pathname.replace(/\/[^/]*$/, '/');
+      const execUrl = `${base}${path}checklist-execucao.html?id=${encodeURIComponent(evtId)}&t=${encodeURIComponent(token)}`;
+
+      // guarda no localStorage como antes (mas usando expiresAt do backend se existir)
+      saveExecLinks(evtId, execUrl, expiresAt);
+
+      return { execUrl, posUrl: makePosUrl(evtId), token, expiresAt };
+    }catch(e){
+      console.error('[checklist-materiais] erro ao gerar link de execução na API', e);
+      return null;
+    }
+  }
+
+  async function syncEstoqueFromBackend(){
+    if (!HAS_API) return;
+
+    try{
+      const [respSet, respMat, respIns] = await Promise.all([
+        window.callApi("/estoque/setores",   "GET", {}),
+        window.callApi("/estoque/materiais", "GET", {}),
+        window.callApi("/estoque/insumos",   "GET", {})
+      ]);
+
+      const setores = Array.isArray(respSet?.data) ? respSet.data : (Array.isArray(respSet) ? respSet : []);
+      const mats    = Array.isArray(respMat?.data) ? respMat.data : (Array.isArray(respMat) ? respMat : []);
+      const insumos = Array.isArray(respIns?.data) ? respIns.data : (Array.isArray(respIns) ? respIns : []);
+
+      // Setores → usa o normalizador que você já tinha
+      if (Array.isArray(setores) && setores.length){
+        const norm = __uniqueSetores(setores);
+        try {
+          localStorage.setItem("estoque:setores", JSON.stringify(norm));
+        } catch(e){}
+      }
+
+      // Materiais
+      if (Array.isArray(mats) && mats.length){
+        try {
+          localStorage.setItem("estoque:materiais", JSON.stringify(mats));
+        } catch(e){}
+      }
+
+      // Insumos (entradas de estoque/sobras), mesmos campos da tela estoque-insumos
+      if (Array.isArray(insumos) && insumos.length){
+        try {
+          localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(insumos));
+        } catch(e){}
+      }
+    }catch(e){
+      console.error("Falha ao sincronizar estoque com a API", e);
+      // em caso de erro, segue com o que tiver no localStorage
+    }
+  }
+
+ function __normalizeNomeSetor(s){
+  return String((s?.nome||'').trim().toLowerCase());
+}
+function __uniqueSetores(arr){
+  const byKey = new Map();
+  (arr||[]).forEach(s=>{
+    if(!s) return;
+    const key = String(s.id ?? __normalizeNomeSetor(s));
+    const prev = byKey.get(key);
+    // mantém o mais recente (se tiver updatedAt) ou o primeiro válido
+    if(!prev) byKey.set(key, s);
+    else {
+      const ta = new Date(s.updatedAt||0).getTime();
+      const tb = new Date(prev.updatedAt||0).getTime();
+      if (ta > tb) byKey.set(key, s);
+    }
+  });
+  return [...byKey.values()];
+}
+
+// migração "one-shot": consolida na chave nova e remove a antiga
+(function __migrarSetores(){
+  const a = getLS('estoque.setores')   || [];
+  const b = getLS('estoque:setores')   || [];
+  const merged = __uniqueSetores([...a, ...b]).filter(s => s && s.ativo !== false);
+  try {
+    localStorage.setItem('estoque:setores', JSON.stringify(merged));
+    localStorage.removeItem('estoque.setores');
+  } catch(e){}
+})();
+
+const loadSetores = () => {
+  const arr = getLS('estoque:setores') || [];
+  return __uniqueSetores(arr)
+    .filter(s => s && s.ativo !== false)
+    .sort((a,b)=> (a.nome||'').localeCompare(b.nome||''));
+};
+  const loadMateriais = ()=> [...getLS('estoque.materiais'), ...getLS('estoque:materiais')];
+  const loadEventos   = ()=> getObj(KEY_EVENTOS) || [];
+
+  const keySaida   = (id)=> 'checklist:saida:'+id;
+  const keyRetorno = (id)=> 'checklist:retorno:'+id;
+
+  // estado (sem kits)
+  let state = { evtId:'', convidados:100, itens:[], setoresVisiveis:new Set() };
+
+  // ==== token/link da tela de execução
+  function buildExecUrl(evtId){
+    const K = 'checklistExec:token:'+evtId;
+    let token = localStorage.getItem(K) || '';
+    if (!token) {
+      try {
+        token = crypto.randomUUID();
+        localStorage.setItem(K, token);
+      } catch {
+        token = 't_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+      }
+    }
+    const base = location.origin || (location.protocol+'//'+location.host);
+    const path = location.pathname.replace(/\/[^/]*$/, '/');
+    return `${base}${path}checklist-execucao.html?id=${encodeURIComponent(evtId)}&t=${encodeURIComponent(token)}`;
+  }
+// === Persistência dos links (com expiração de 7 dias) ===
+const keyLinks = (id)=> `checklist:links:${id}`;
+
+function makePosUrl(evtId){
+  const base = location.origin || (location.protocol+'//'+location.host);
+  const path = location.pathname.replace(/\/[^/]*$/, '/');
+  return `${base}${path}pos-evento.html?id=${encodeURIComponent(evtId)}`;
+}
+
+function saveExecLinks(evtId, execUrl, expiresAtFromApi){
+  if (!evtId || !execUrl) return;
+  const expiresAt = expiresAtFromApi || (Date.now() + 7*24*60*60*1000); // fallback de 7 dias
+  const payload = {
+    execUrl,
+    posUrl: makePosUrl(evtId),
+    createdAt: new Date().toISOString(),
+    expiresAt
+  };
+  try { localStorage.setItem(keyLinks(evtId), JSON.stringify(payload)); } catch {}
+}
+
+
+function loadExecLinks(evtId){
+  try{
+    const raw = JSON.parse(localStorage.getItem(keyLinks(evtId)) || 'null');
+    if (!raw) return null;
+    if (Date.now() > Number(raw.expiresAt||0)) {
+      // expirado -> limpa e não mostra
+      localStorage.removeItem(keyLinks(evtId));
+      return null;
+    }
+    return raw; // {execUrl,posUrl,createdAt,expiresAt}
+  }catch{ return null; }
+}
+
+  function nomeVisivelEvento(ev){ return ev?.nomeEvento || ev?.titulo || ev?.nome || ev?.cliente || ev?.evento || ('Evento '+(ev?.id||'')); }
+  function dataISO(ev){ return String(ev?.data || ev?.dataEvento || ev?.dataDoEvento || '').slice(0,10); }
+  function formatDateBR(iso){
+    const v=String(iso||'').trim(); if(!v) return '';
+    if(/^\d{4}-\d{2}-\d{2}$/.test(v)){ const [y,m,d]=v.split('-'); return `${d}/${m}/${y}`; }
+    const d=new Date(v); if(!isFinite(d)) return v;
+    const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0'), yy=d.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }
+  const getNomeIndex = ()=> { try{ return JSON.parse(localStorage.getItem('eventos:nomeIndex')||'[]'); }catch{return [];} };
+
+  // ===== Estoque de Insumos (entradas de sobras) =====
+const KEY_ESTOQUE_INSUMOS = 'insumos:estoque';
+
+// lê todas as entradas de estoque
+function loadEstoqueInsumos(){
+  try { return JSON.parse(localStorage.getItem(KEY_ESTOQUE_INSUMOS) || '[]'); }
+  catch { return []; }
+}
+// salva substituindo (simples)
+function saveEstoqueInsumos(arr){
+  try { localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(arr)); } catch {}
+}
+
+// util: step por unidade (reusa a sua função se já existir)
+function stepForUnit_est(un){
+  const u = String(un||'').toLowerCase();
+  if (u==='kg' || u==='l') return '0.1';
+  return '1';
+}
+
+  // ========= Normalização de payload salvo
+  function hydrateFromSaved(obj){
+    if(!obj) return;
+    state.evtId      = String(obj.eventoId || state.evtId || '');
+    state.convidados = Number(obj.convidados || state.convidados || 0);
+    state.itens      = Array.isArray(obj.itens) ? obj.itens.map(i => ({
+      materialId: i.materialId || i.m,
+      setorId:    i.setorId    || i.s,
+      previsto:   i.previsto   ?? i.p ?? 0,
+      enviado:    i.enviado    ?? i.e ?? 0,
+      retornado:  i.retornado  ?? i.r ?? null,
+      obs:        i.obs        ?? i.o ?? ''
+    })) : [];
+  }
+
+ /* ===== Inicialização ===== */
+  async function init(){
+
+    // Eventos por nome
+    const selEv = document.getElementById('selEvento');
+    selEv.innerHTML = '<option value="">(selecionar)</option>';
+    let idx = getNomeIndex();
+    if (!Array.isArray(idx) || !idx.length) {
+      const arr = loadEventos();
+      idx = (arr||[]).map(ev=>({
+        id:String(ev.id||''),
+        nome:nomeVisivelEvento(ev),
+        convidados:Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? ev.convidados ?? 0) || 0,
+        dataISO:dataISO(ev)
+      })).filter(x=>x.id);
+    }
+    idx.sort((a,b)=> String(a.dataISO||'').localeCompare(String(b.dataISO||'')));
+    idx.forEach(e=> selEv.add(new Option(`${e.nome}${e.dataISO ? ' — ' + formatDateBR(e.dataISO) : ''}`, e.id)));
+    selEv.onchange = ()=>{
+      const id = selEv.value; if(!id) return;
+      const ev  = loadEventos().find(e=> String(e.id)===String(id));
+      const qtd = ev ? (ev.quantidadeConvidados ?? ev.qtdConvidados ?? ev.convidados ?? 0) : 0;
+      document.getElementById('evtId').value = id;
+      document.getElementById('evtConvidados').value = String(qtd||0);
+      state.evtId = id; state.convidados = Number(qtd||0);
+      applyEventoToUIById(state.evtId);
+      refreshPreviews();
+    };
+
+    // Setores
+    const selSetor = document.getElementById('selSetor');
+    selSetor.innerHTML = '<option value="">(selecionar)</option>';
+    for(const s of loadSetores()) selSetor.add(new Option(s.nome, s.id));
+
+    // Convidados → atualiza previews
+    const inpConv = document.getElementById('evtConvidados');
+    inpConv.addEventListener('input', ()=>{
+      state.convidados = Number(inpConv.value||0);
+      refreshPreviews();
+    });
+  }
+
+  // Primeiro sincroniza estoque com a API (se existir), depois monta a tela
+  (async function bootChecklistMateriais(){
+    try{
+      if (HAS_API) {
+        await syncEstoqueFromBackend();
+      }
+    }catch(e){
+      console.error("Erro ao sincronizar estoque no boot do checklist:", e);
+    }
+    await init();
+  })();
+
+// ====== Fichas Técnicas (modelo novo ft:pratos/ft:insumos) ======
+const K_PRT = 'ft:pratos';
+const K_INS = 'ft:insumos';
+const getLSsafe = (k, fallback=[]) => {
+  try { const v = JSON.parse(localStorage.getItem(k)||'null'); return Array.isArray(v) ? v : fallback; }
+  catch { return fallback; }
+};
+
+
+// Busca os catálogos atuais de FT
+function loadFTPratos(){ return getLSsafe(K_PRT, []); }
+function loadFTInsumos(){ return getLSsafe(K_INS, []); }
+function montarListaDeMercadoFromFT(pratosSel, convidados){
+  const pratos  = loadFTPratos();
+  const insumos = loadFTInsumos();
+  if (!Array.isArray(pratos)  || !pratos.length)  return [];
+  if (!Array.isArray(insumos) || !insumos.length) return [];
+
+  const pratoById    = Object.fromEntries(pratos.map(p  => [String(p.id), p]));
+  const pratoByNome  = Object.fromEntries(pratos.map(p  => [String((p.nome||'').toLowerCase()), p]));
+  const insumoById   = Object.fromEntries(insumos.map(i => [String(i.id), i]));
+  const insumoByNome = Object.fromEntries(insumos.map(i => [String((i.nome||'').toLowerCase()), i]));
+
+  // key = "<nome em lower>||<base>" → bucket somado
+  const bucket = new Map(); // { nome, base, valSum, catKey, insumoId }
+
+  for (const pSel of (pratosSel || [])){
+    const prato = pratoById[String(pSel.id)] || pratoByNome[String((pSel.nome||'').toLowerCase())];
+    if (!prato) continue;
+
+    const porcoes = Number(prato.porcoes || 0) || 1;
+    const mult    = Math.ceil(Number(convidados || 0) / porcoes);
+
+    for (const it of (prato.itens || [])){
+      const ins      = insumoById[String(it.insumoId)];
+      const nomeI    = ins?.nome || it.nome || `insumo ${it.insumoId||''}`;
+      const unUsada  = it.unidUsada || ins?.unid || 'un';
+      const qtdTotal = Number(it.qtd || 0) * mult;
+
+      // categoria: 1) do cadastro (se houver), 2) regra automática, 3) 'outros'
+      const catFromCad =
+        (typeof getCategoriaNomeDoInsumo === 'function' ? getCategoriaNomeDoInsumo(ins) : (ins?.categoria || '')) || '';
+      const catByRule =
+        (typeof categorizeInsumoPelasRegras === 'function'
+          ? categorizeInsumoPelasRegras(nomeI)
+          : (typeof categorizeInsumo === 'function'
+              ? categorizeInsumo(nomeI, unUsada, ins?.categoria)
+              : 'outros'));
+      const catKey = String(catFromCad || catByRule || 'outros').toLowerCase();
+
+      const base = toBaseQty(qtdTotal, unUsada); // { val, base }
+      const key  = nomeI.toLowerCase() + '||' + base.base;
+
+      if (!bucket.has(key)){
+        bucket.set(key, { nome: nomeI, base: base.base, valSum: 0, catKey, insumoId: ins?.id ?? null });
+      }
+      bucket.get(key).valSum += base.val;
+    }
+  }
+
+  // monta lista final
+  const lista = [];
+  for (const item of bucket.values()){
+    const out = fromBaseSum(item.valSum, item.base); // { val, un }
+    // obs do cadastro (se existir)
+    let obsPadrao = '';
+    if (item.insumoId && insumoById[String(item.insumoId)]) {
+      obsPadrao = insumoById[String(item.insumoId)].obs || '';
+    } else {
+      const byNome = insumoByNome[String(item.nome||'').toLowerCase()];
+      obsPadrao = byNome?.obs || '';
+    }
+
+    lista.push({
+      nome: item.nome,
+      un: out.un,
+      qtd: out.val,
+      categoria: item.catKey, // sempre lowercase; o título é gerado na renderização
+      comprado: false,
+      obsPadrao,
+      obsEvento: '' // permanece vazio; você mostra no modal de observações
+    });
+  }
+
+  // ordena por categoria e nome
+  lista.sort((a,b) =>
+    String(a.categoria||'').localeCompare(String(b.categoria||'')) ||
+    String(a.nome||'').localeCompare(String(b.nome||'')));
+
+  return lista;
+}
+function getEventoNomeById(evtId){
+  const eventos = loadEventos() || [];
+  const ev = eventos.find(e => String(e.id) === String(evtId));
+  return ev ? nomeVisivelEvento(ev) : (evtId || '—');
+}
+
+// monta a tabela dentro do modal "Usar itens do estoque"
+function openDlgUsarDoEstoque(){
+  const dlg  = document.getElementById('dlgUsarDoEstoque');
+  const host = document.getElementById('estoqueInsumosLista');
+  host.innerHTML = '';
+
+  const dados = (loadEstoqueInsumos()||[]).slice().sort((a,b)=> String(b.dataISO||'').localeCompare(String(a.dataISO||'')));
+
+  if (!dados.length){
+    host.innerHTML = '<span class="pill">Não há itens no estoque.</span>';
+  } else {
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th></th>
+          <th>Data</th>
+          <th>Evento</th>
+          <th>Insumo</th>
+          <th style="text-align:right">Quantidade</th>
+          <th>Un</th>
+          <th>Tipo</th>
+          <th>Observações</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tb = table.querySelector('tbody');
+
+    for (const it of dados){
+      const tr = document.createElement('tr');
+      const step = (String(it.un||'').toLowerCase()==='kg' || String(it.un||'').toLowerCase()==='l') ? '0.1' : '1';
+      tr.dataset.id = it.id;
+      tr.dataset.un = it.un;
+      tr.dataset.nome = it.nome;
+
+      tr.innerHTML = `
+        <td><input type="checkbox" class="use-check"></td>
+        <td>${formatDateBR(it.dataISO)}</td>
+        <td>${getEventoNomeById(it.eventoId)}</td>
+        <td>${it.nome}</td>
+        <td style="text-align:right">
+          <input type="number" class="use-qtd" min="0" step="${step}" value="${it.qtd}" style="width:90px">
+        </td>
+        <td>${it.un}</td>
+        <td>${it.tipo||''}</td>
+        <td>${it.obs||''}</td>
+      `;
+      tb.appendChild(tr);
+    }
+    host.appendChild(table);
+  }
+
+  if (dlg?.showModal) dlg.showModal();
+}
+
+  /* ===== Abas: Materiais / Insumos ===== */
+  (function bindTabs(){
+    const nav = document.getElementById('tabsChecklist');
+    if (!nav) return;
+    const btns = nav.querySelectorAll('button.tab');
+    const views = {
+      materiais: document.getElementById('abaMateriais'),
+      insumos: document.getElementById('abaInsumos')
+    };
+    btns.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        btns.forEach(b=> b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        if (tab === 'insumos') {
+          views.materiais.style.display = 'none';
+          views.insumos.style.display = '';
+        } else {
+          views.materiais.style.display = '';
+          views.insumos.style.display = 'none';
+        }
+      });
+    });
+  })();
+
+  // ====== Prefill pelo ?id= e/ou carregar rascunho salvo ======
+  (function prefillFromURL(){
+    const p  = new URLSearchParams(location.search);
+    const id = p.get('id');
+    if (!id) return;
+
+    state.evtId = id;
+    const inpId = document.getElementById('evtId');
+    if (inpId) inpId.value = id;
+
+    // tenta achar o evento e preencher convidados e o select
+    const eventos = loadEventos() || [];
+    const ev = eventos.find(e => String(e.id) === String(id));
+    const qtd = ev ? (ev.quantidadeConvidados ?? ev.qtdConvidados ?? ev.convidados ?? 0) : 0;
+
+    const inpConv = document.getElementById('evtConvidados');
+    if (inpConv) {
+      inpConv.value = String(qtd || 0);
+      state.convidados = Number(qtd || 0);
+    }
+
+    const selEv = document.getElementById('selEvento');
+    if (selEv) {
+      const opt = Array.from(selEv.options).find(o => String(o.value) === String(id));
+      if (opt) selEv.value = id;
+      // se já houver link válido salvo (7 dias), mostra painel
+const saved = loadExecLinks(state.evtId);
+if (saved?.execUrl) showExecPanel(saved.execUrl);
+
+    }
+  })();
+
+  function applyEventoToUIById(id){
+    const eventos = loadEventos();
+    const ev = (eventos||[]).find(e => String(e.id)===String(id));
+    if (!ev) return;
+    const qtd = ev.quantidadeConvidados ?? ev.qtdConvidados ?? ev.convidados ?? '';
+    document.getElementById('evtConvidados').value = String(qtd||'');
+    state.convidados = Number(qtd||0);
+    const h = document.querySelector('header.topbar h1');
+    if (h) h.textContent = 'Checklist de Materiais – ' + (nomeVisivelEvento(ev) || 'Evento');
+  }
+
+  // Se houver rascunho/saída salvo, hidrata a tela
+  (function loadSavedOnOpen(){
+    const id = state.evtId || document.getElementById('evtId')?.value;
+    if(!id) return;
+    const saved = JSON.parse(localStorage.getItem(keySaida(id))||'null');
+    if(saved){
+      hydrateFromSaved(saved);
+      document.getElementById('evtId').value = state.evtId;
+      document.getElementById('evtConvidados').value = String(state.convidados || 0);
+      refreshPreviews(); renderListas();
+      const savedLinks = loadExecLinks(state.evtId || document.getElementById('evtId')?.value);
+if (savedLinks?.execUrl) showExecPanel(savedLinks.execUrl);
+
+    }
+  })();
+
+  /* ===== Cálculos ===== */
+  function calcPrevistoMaterial(m){
+    const convidados = Number(document.getElementById('evtConvidados').value||0);
+    if(m.tipoConsumo === 'por_pessoa'){
+      const razao = Number(m.razaoPorConvidado || 0);
+      const margem = 1 + (Number(m.margemPercent ?? 20)/100);
+      return Math.ceil(convidados * razao * margem);
+    }
+    return 1;
+  }
+
+  // helpers
+  const num = (v)=> (v===''||v===null||v===undefined) ? null : Number(v);
+
+  function ensureItem(materialId, sugestao, setorId){
+    const mid = String(materialId);
+    let it = state.itens.find(x => String(x.materialId) === mid);
+    if(!it){
+      it = { materialId: mid, setorId, previsto: sugestao ?? 0, enviado: sugestao ?? 0, retornado: null, obs: '' };
+      state.itens.push(it);
+    }
+    return it;
+  }
+
+  // inputs (Saída/Retorno/Obs) — sugere quantidade apenas quando o campo editado é 'enviado'
+  window.upd = (materialId, field, value)=>{
+    const mats = Object.fromEntries(loadMateriais().map(m => [String(m.id), m]));
+    const m = mats[String(materialId)];
+    if(!m) return;
+    const sugestao = (field === 'enviado') ? calcPrevistoMaterial(m) : 0;
+    const it = ensureItem(materialId, sugestao, m.setorId);
+    if(field==='enviado' || field==='retornado') it[field] = num(value);
+    else if(field==='obs') it.obs = String(value||'');
+    renderListas();
+  };
+
+  /* ===== Por Setor ===== */
+  document.getElementById('btnListarMateriais').onclick = ()=> renderSetorList();
+  document.getElementById('btnIncluirTudo').onclick = ()=> includeSetor(true);
+  document.getElementById('btnIncluirSelecionados').onclick = ()=> includeSetor(false);
+
+  function renderSetorList(){
+    const setId = document.getElementById('selSetor').value;
+    const wrap = document.getElementById('listaMateriaisSetor');
+    wrap.innerHTML='';
+    if(!setId){ wrap.textContent='Selecione um setor.'; return; }
+    const mats = loadMateriais().filter(m => String(m.setorId) === String(setId));
+    if(!mats.length){ wrap.textContent='Não há materiais cadastrados neste setor.'; return; }
+    const ul = document.createElement('ul'); ul.className='list-box'; ul.style.listStyle='none'; ul.style.padding=0;
+    for(const m of mats){
+      const prev = calcPrevistoMaterial(m);
+      const li = document.createElement('li');
+      li.innerHTML = `<label><input type="checkbox" value="${m.id}"> ${m.nome} <span class="muted">— previsto: <b>${prev}</b></span></label>`;
+      ul.appendChild(li);
+    }
+    wrap.appendChild(ul);
+  }
+
+  function includeSetor(tudo){
+    const setId = document.getElementById('selSetor').value; if(!setId) return;
+    const matsAll = loadMateriais().filter(m => String(m.setorId) === String(setId));
+    const ids = tudo ? null : Array.from(document.querySelectorAll('#listaMateriaisSetor input[type=checkbox]:checked'))
+                      .map(el => String(el.value));
+    const matsSel = ids ? matsAll.filter(m => ids.includes(String(m.id))) : matsAll;
+
+    for(const m of matsSel){
+      const previsto = calcPrevistoMaterial(m);
+      const it = ensureItem(m.id, 0, m.setorId); // cria com 0 se novo
+      it.previsto = Number(it.previsto || 0) + previsto;
+      it.enviado  = Number(it.enviado  || 0) + previsto;
+    }
+    state.setoresVisiveis.add(setId);
+    renderListas();
+  }
+
+  /* ===== Saída/Retorno por Setor ===== */
+  function renderListas(){
+  const wrap = document.getElementById('listas');
+  wrap.innerHTML = '';
+
+  const setores = loadSetores();
+  const matsMap = Object.fromEntries(loadMateriais().map(m => [String(m.id), m]));
+
+  for (const s of setores){
+    const sid = String(s.id);
+    const itensSetor = state.itens.filter(x => String(x.setorId) === sid);
+
+    // só mostra setor se tiver item OU se usuário já o “marcou como visível”
+    if (!itensSetor.length && !state.setoresVisiveis.has(sid)) continue;
+
+    // ordena por nome do material (fica mais fácil de conferir)
+    itensSetor.sort((a,b)=>{
+      const an = (matsMap[String(a.materialId)]?.nome || a.materialId || '').toString().toLowerCase();
+      const bn = (matsMap[String(b.materialId)]?.nome || b.materialId || '').toString().toLowerCase();
+      return an.localeCompare(bn);
+    });
+
+    const section = document.createElement('section');
+    section.style.marginBottom = '12px';
+
+    section.innerHTML = `
+      <div class="sec-title" style="display:flex; align-items:center; gap:8px; justify-content:space-between">
+        <span>${s.nome}</span>
+        <button class="btn btn-limpar-setor" data-setor-id="${sid}">Limpar setor</button>
+      </div>
+    `;
+
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <thead>
+        <tr><th colspan="4">SAÍDA</th><th colspan="3">RETORNO</th></tr>
+        <tr>
+          <th>Item</th><th>Quantidade</th><th>Obs</th><th>Ações</th>
+          <th>Item</th><th>Quantidade</th><th>Observação</th>
+        </tr>
+      </thead>
+    `;
+    const tb = document.createElement('tbody');
+
+    for (const it of itensSetor){
+      const midStr = String(it.materialId);
+      const nome   = matsMap[midStr]?.nome || it.materialId;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${nome}</td>
+        <td>
+          <input type="number" min="0" step="1" value="${it.enviado ?? ''}"
+                 data-mid="${midStr}" data-field="enviado">
+        </td>
+        <td>
+          <input type="text" value="${it.obs || ''}"
+                 data-mid="${midStr}" data-field="obs" data-col="saida">
+        </td>
+        <td>
+          <button class="btn btn-remover" data-mid="${midStr}" data-setor-id="${sid}">Remover</button>
+        </td>
+
+        <td>${nome}</td>
+        <td>
+          <input type="number" min="0" step="1" value="${it.retornado ?? ''}"
+                 data-mid="${midStr}" data-field="retornado">
+        </td>
+        <td>
+          <input type="text" value="${it.obs || ''}"
+                 data-mid="${midStr}" data-field="obs" data-col="retorno">
+        </td>
+      `;
+      tb.appendChild(tr);
+    }
+
+    table.appendChild(tb);
+    section.appendChild(table);
+    wrap.appendChild(section);
+  }
+
+  // rodapé: limpar tudo
+  const footer = document.createElement('div');
+  footer.className = 'actions';
+  footer.style.cssText = 'justify-content:flex-end; margin-top:8px';
+  footer.innerHTML = `<button class="btn btn-limpar-tudo">Limpar tudo</button>`;
+  wrap.appendChild(footer);
+
+  /* ====== BINDINGS ====== */
+
+  // Quantidades: atualiza em tempo real
+  wrap.querySelectorAll('input[type="number"][data-mid]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const materialId = String(inp.dataset.mid);
+      const field = inp.dataset.field; // 'enviado' | 'retornado'
+      const raw = inp.value.trim();
+      const val = raw === '' ? null : Math.max(0, Number(raw));
+      window.upd(materialId, field, val);
+    });
+  });
+
+  // Observações: salva no 'change' (não re-renderiza a cada tecla)
+  wrap.querySelectorAll('input[type="text"][data-mid][data-field="obs"]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const materialId = String(inp.dataset.mid);
+      const val = String(inp.value || '');
+      window.upd(materialId, 'obs', val);
+    });
+  });
+
+  // Remover item
+  wrap.querySelectorAll('.btn-remover').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mid = String(btn.dataset.mid);
+      const sid = String(btn.dataset.setorId);
+      state.itens = state.itens.filter(x => !(String(x.materialId) === mid && String(x.setorId) === sid));
+      if (!state.itens.some(x => String(x.setorId) === sid)) state.setoresVisiveis.delete(sid);
+      renderListas();
+    });
+  });
+
+  // Limpar setor
+  wrap.querySelectorAll('.btn-limpar-setor').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const sid = String(btn.dataset.setorId);
+      if (!confirm('Remover todos os itens deste setor?')) return;
+      state.itens = state.itens.filter(x => String(x.setorId) !== sid);
+      state.setoresVisiveis.delete(sid);
+      renderListas();
+    });
+  });
+
+  // Limpar tudo
+  wrap.querySelector('.btn-limpar-tudo')?.addEventListener('click', ()=>{
+    if (!confirm('Remover todos os itens de todos os setores?')) return;
+    state.itens = [];
+    state.setoresVisiveis.clear();
+    renderListas();
+    refreshPreviews();
+  });
+}
+
+  function refreshPreviews(){
+    renderSetorList();
+  }
+
+  // Garantir EVENTOID
+  function ensureEvtId(){
+    if (state.evtId && String(state.evtId).trim()) return true;
+    const fromInput = document.getElementById('evtId').value.trim();
+    if (fromInput) { state.evtId = fromInput; return true; }
+    const fromURL = new URLSearchParams(location.search).get('id');
+    if (fromURL) { state.evtId = fromURL; document.getElementById('evtId').value = fromURL; return true; }
+    return false;
+  }
+
+  // Compactar payload
+  function makeSaidaLight(obj){
+    const clone = {
+      eventoId: obj.eventoId,
+      dataGeracao: obj.dataGeracao,
+      convidados: obj.convidados,
+      status: obj.status || 'saida_rascunho',
+      itens: Array.isArray(obj.itens) ? obj.itens.map(i => ({
+        m:i.materialId, s:i.setorId,
+        p:i.previsto,
+        e:i.enviado,
+        r:(i.retornado==null?undefined:i.retornado),
+        o:(i.obs?i.obs:undefined)
+      })) : []
+    };
+    return JSON.parse(JSON.stringify(clone));
+  }
+
+  // Painel rápido com link/QR
+  function showExecPanel(url){
+    const box = document.getElementById('execPanel');
+    if(!box) return;
+    box.style.display = '';
+
+   const posUrl = makePosUrl(state.evtId);
+
+
+    box.innerHTML = `
+      <div class="sec-title">Tela de Execução (link público)</div>
+      <div class="grid" style="grid-template-columns: 1fr auto; align-items:center; gap:8px">
+        <input type="text" id="execLink" value="${url}" readonly />
+        <div class="actions">
+          <button class="btn" id="btnCopiarLink">Copiar link</button>
+          <button class="btn primary" id="btnAbrirExec">Abrir Execução</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px">Envie este link para quem fará a conferência do retorno.</div>
+
+      <div style="margin-top:12px; display:grid; grid-template-columns: 1fr auto; align-items:center; gap:8px">
+        <input type="text" id="posLink" value="${posUrl}" readonly />
+        <div class="actions">
+          <button class="btn" id="btnCopiarPos">Copiar Pós-Evento</button>
+          <button class="btn" id="btnAbrirPos">Abrir Pós-Evento</button>
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <img id="qrExec" alt="QR code" />
+        <div class="muted">QR gerado por serviço público (precisa de internet).</div>
+      </div>
+    `;
+
+    const qr = document.getElementById('qrExec');
+    qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+
+    document.getElementById('btnAbrirExec').onclick = ()=> window.open(url, '_blank');
+    document.getElementById('btnCopiarLink').onclick = async ()=>{
+      try { await navigator.clipboard.writeText(url); alert('Link de Execução copiado'); }
+      catch{ alert('Copie manualmente o campo de texto.'); }
+    };
+
+    document.getElementById('btnAbrirPos').onclick = ()=> window.open(posUrl, '_blank');
+    document.getElementById('btnCopiarPos').onclick = async ()=>{
+      try { await navigator.clipboard.writeText(posUrl); alert('Link de Pós-Evento copiado'); }
+      catch{ alert('Copie manualmente o campo de texto.'); }
+    };
+  }
+
+  // === GERAR CHECKLIST (sem kits)
+  document.getElementById('btnGerarChecklistExec').onclick = ()=>{
+    if(!ensureEvtId()){
+      alert('Informe EVENTOID e clique em "Carregar/Atualizar" antes.');
+      return;
+    }
+
+    const raw = {
+      eventoId: state.evtId,
+      dataGeracao: new Date().toISOString(),
+      convidados: state.convidados,
+      itens: state.itens,
+      status: 'saida_finalizada'
+    };
+    const payload = makeSaidaLight(raw);
+    try { localStorage.setItem(keySaida(state.evtId), JSON.stringify(payload)); }
+    catch{ alert('Não foi possível salvar tudo (limite do navegador).'); }
+
+const url = buildExecUrl(state.evtId);
+showExecPanel(url);
+saveExecLinks(state.evtId, url);
+
+  };
+
+// === LER DEFINIÇÕES DO EVENTO (inclui a tela nova com chave definicoes_evento_<id>) ===
+// Substitua sua loadDefinicoesDoEvento inteira por esta
+function loadDefinicoesDoEvento(evtId){
+  // 1) chaves diretas
+  const tries = [
+    `definicoes_evento_${evtId}`,            // NOVA
+    `definicoes:evento:${evtId}`,
+    `definicoes-evento:${evtId}`,
+    `evento:definicoes:${evtId}`,
+    `definicoesEvento:${evtId}`,
+    `evento:${evtId}:definicoes`,
+  ];
+  for (const k of tries){
+    try{ const v = JSON.parse(localStorage.getItem(k)||'null'); if (v) return v; }catch{}
+  }
+
+  // 2) mapas { [id]: definicao }
+  const mapKeys = ['definicoes:evento','eventos:definicoes','definicoesEventos'];
+  for (const k of mapKeys){
+    try{
+      const mp = JSON.parse(localStorage.getItem(k)||'null');
+      if (mp && typeof mp==='object'){
+        const v = mp[evtId] || mp[String(evtId)];
+        if (v) return v;
+      }
+    }catch{}
+  }
+
+  // 3) varredura geral
+  for (let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i)||'';
+    if (!/defini|card[aá]pio|evento/i.test(key)) continue;
+    try{
+      const v = JSON.parse(localStorage.getItem(key)||'null');
+      const idOk = String(v?.eventoId ?? v?.id ?? v?.idEvento ?? '') === String(evtId);
+      const temMenu = v?.cardapio?.itens?.length || v?.itensCardapio?.length || v?.pratos?.length || (v?.itens && typeof v.itens==='object');
+      if (idOk && temMenu) return v;
+    }catch{}
+  }
+
+  // 4) fallback antigo
+  const card = JSON.parse(localStorage.getItem('cardapioSelecionado')||'null');
+  if (card) return { cardapio: card, _from:'cardapioSelecionado' };
+  return null;
+}
+
+
+// === PEGAR PRATOS TICADOS A PARTIR DO OBJETO VINDO DA FUNÇÃO ACIMA ===
+// Substitua sua extractPratosSelecionados por esta
+function extractPratosSelecionados(def){
+  if (!def) return [];
+  // NOVO: sessão de definições salva em definicoes_evento_<id>
+  if (def.itens && typeof def.itens === 'object'){
+    const out = [];
+    Object.values(def.itens).forEach(arr=>{
+      (arr||[]).forEach(x=>{
+        const id = String(x?.id ?? x?.pratoId ?? x?.codigo ?? x?.nome ?? '').trim();
+        const nome = x?.nome || x?.titulo || id;
+        if (id) out.push({ id, nome });
+      });
+    });
+    return out;
+  }
+  // Legados/variantes
+  const itens = def?.cardapio?.itens || def?.itensCardapio || def?.pratos || [];
+  return (itens||[])
+    .filter(x => x?.checked===true || x?.selecionado===true || x?.ticado===true ||
+                 x?.ativo===true   || x?.marcado===true     || x?.habilitado===true || x?.id)
+    .map(x => ({ id:String(x.id ?? x.pratoId ?? x.codigo ?? x.nome ?? ''), nome:(x.nome || x.titulo || x.id) }));
+}
+// grupo de unidade: 'peso' (g/kg), 'volume' (ml/l) ou 'un'
+function unitGroup(un) {
+  const u = String(un||'').toLowerCase();
+  if (u==='kg' || u==='g')  return 'peso';
+  if (u==='l'  || u==='ml') return 'volume';
+  return 'un'; // tudo que não for kg/g/l/ml tratamos como unidade
+}
+
+// converte de base -> unidade alvo SEM trocar a unidade do item
+function fromBaseToUnit(baseVal, base, targetUn){
+  const tu = String(targetUn||'').toLowerCase();
+  if (base==='g'){
+    if (tu==='kg') return baseVal/1000;
+    return baseVal; // g
+  }
+  if (base==='ml'){
+    if (tu==='l') return baseVal/1000;
+    return baseVal; // ml
+  }
+  // base é 'un' (ou outra); mantemos o número
+  return baseVal;
+}
+
+// === Conversões de unidade (mantém as suas funções toBaseQty/fromBaseSum/normalizeUnit) ===
+// ... (use as MESMAS normalizeUnit, toBaseQty e fromBaseSum que já estão no seu arquivo) ...
+
+// === LER FICHAS TÉCNICAS do modelo novo (ft:pratos + ft:insumos).
+// Se não existirem, cai nos formatos antigos (mantendo compat).
+function loadFichasTecnicas(){
+  // NOVO esquema
+  try{
+    const pratos = JSON.parse(localStorage.getItem('ft:pratos')||'[]')||[];
+    const insumos = JSON.parse(localStorage.getItem('ft:insumos')||'[]')||[];
+    if (Array.isArray(pratos) && pratos.length){
+      const insById = new Map(insumos.map(i=>[String(i.id), i]));
+      // devolve no formato esperado pelo checklist: cada ficha tem .insumos [{nome,un,qtdPorPessoa,qtdFixa,categoria}]
+      const fichas = pratos.map(p=>{
+        const porcoes = Math.max(1, Number(p.porcoes||1));
+        const itens = (p.itens||[]).map(it=>{
+          const ins = insById.get(String(it.insumoId)) || {};
+          const nome = ins.nome || '(insumo)';
+          // it.qtdBase está na unidade base do insumo (un/g/ml) — converter p/ por pessoa:
+          const qtdPP = Number(it.qtdBase||0) / porcoes; // consumo por porção (=pessoa)
+          const unBase = (()=>{
+            const u = String(ins.unid||'un').toLowerCase();
+            if (u==='kg' || u==='g')  return 'g';
+            if (u==='l'  || u==='ml') return 'ml';
+            return 'un';
+          })();
+          return { nome, un: unBase, qtdPorPessoa: qtdPP, qtdFixa: 0, categoria: ins.categoria || undefined };
+        });
+        return { id:String(p.id||p.nome||''), nome:p.nome||'', insumos: itens };
+      });
+      return fichas;
+    }
+  }catch{}
+
+  // Legados (mantém suporte antigo)
+  const tries = ['fichas:tecnicas','fichas-tecnicas','fichasTecnicas','fichas_tecnicas'];
+  for (const k of tries){
+    try{ const arr = JSON.parse(localStorage.getItem(k)||'null'); if (arr) return arr; }catch{}
+  }
+  const all = [];
+  for (let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    if (/^ficha:prato:/.test(key||'')){
+      try{ const v = JSON.parse(localStorage.getItem(key)||'null'); if (v) all.push(v); }catch{}
+    }
+  }
+  return all;
+}
+// === Ajuste: ao usar o NOVO formato acima, cada ficha já vem com .insumos pronto.
+// Mantemos parseInsumosDaFicha para compat com o legado:
+function parseInsumosDaFicha(f){
+  if (Array.isArray(f?.insumos) && f.insumos.length && f.insumos[0]?.qtdPorPessoa != null){
+    // já está no formato que montarListaDeMercado espera
+    return f.insumos;
+  }
+  // compat (se vier de um legado com "ingredientes" etc.)
+  const out = [];
+  const arr = f?.insumos || f?.ingredientes || [];
+  for (const it of (arr||[])){
+    const nome = String(it?.nome ?? it?.insumo ?? it?.descricao ?? '').trim();
+    if (!nome) continue;
+    const un   = String(it?.unidade ?? it?.un ?? it?.medida ?? 'un').trim();
+    const qtd  = Number(it?.qtd ?? it?.quantidade ?? it?.porcao ?? 0) || 0;
+    const porPessoa = (it?.porPessoa===true) || (it?.tipo==='por_pessoa') || (it?.escala==='pessoa');
+    out.push({
+      nome, un,
+      qtdPorPessoa: porPessoa ? qtd : 0,
+      qtdFixa:      porPessoa ? 0   : qtd,
+      categoria: it?.categoria || undefined
+    });
+  }
+  return out;
+}
+
+  function indexFichasPorPrato(fichas){
+    const idx = {};
+    for (const f of (fichas||[])){
+      const key = String(f?.id ?? f?.pratoId ?? f?.codigo ?? f?.nome ?? '').trim();
+      if (!key) continue;
+      idx[key.toLowerCase()] = f;
+    }
+    return idx;
+  }
+
+
+
+const CATEGORY_RULES = {
+  verduras:  /(alface|rúcula|rucula|agri[aã]o|tomate|pepino|cenoura|couve|verdura|legume|salada)/i,
+  secos:     /(arroz|feij[aã]o|farinha|farofa|a[cç]ucar|macarr[aã]o|massa|lentilha|gr[ãa]o|graos?)/i,
+  geladeira: /(manteiga|margarina|requeij[aã]o|queijo|cheddar|presunto|maionese|creme|leite|iogurte)/i,
+  freezer:   /(congelad|batata|polpa|hamb[uú]rguer|sorvete|gelo)/i,
+  descartaveis: /(guardanapo|prato descart[aá]vel|copos?|saco|esponja|detergente|alvejante|lixo)/i
+};
+function categorizeInsumoPelasRegras(nome){
+  const n = (nome||'').toLowerCase();
+  for (const [cat, rx] of Object.entries(CATEGORY_RULES)){
+    if (rx.test(n)) return cat;
+  }
+  return 'outros';
+}
+
+
+ function normalizeUnit(un){
+  un = (un||'').toLowerCase().trim();
+  if (['kg','quilo','quilos','kilo','kilos'].includes(un)) return 'kg';
+  if (['g','grama','gramas'].includes(un)) return 'g';
+  if (['l','litro','litros'].includes(un)) return 'l';
+  if (['ml','mililitro','mililitros'].includes(un)) return 'ml';
+  if (!un) return 'un';
+  return un;
+}
+function toBaseQty(qtd, un){
+  un = normalizeUnit(un);
+  if (un==='kg') return { val: qtd*1000, base:'g' };
+  if (un==='g')  return { val: qtd,      base:'g' };
+  if (un==='l')  return { val: qtd*1000, base:'ml'};
+  if (un==='ml') return { val: qtd,      base:'ml'};
+  return { val:qtd, base:un };
+}
+function fromBaseSum(val, base){
+  if (base==='g')  return { val: Math.round((val/1000)*100)/100, un:'kg' };
+  if (base==='ml') return { val: Math.round((val/1000)*100)/100, un:'l'  };
+  return { val: Math.ceil(val), un: base };
+}
+
+
+function montarListaDeMercado(pratosSel, fichasIdx, convidados){
+  const map = new Map(); // nome||base
+  for (const p of (pratosSel||[])){
+    const f = fichasIdx[String(p.id||'').toLowerCase()] || fichasIdx[(p.nome||'').toLowerCase()];
+    if (!f) continue;
+    const ins = parseInsumosDaFicha(f);
+    for (const it of ins){
+      const qtd = (Number(it.qtdFixa||0) + Number(it.qtdPorPessoa||0) * Number(convidados||0));
+      if (!qtd) continue;
+
+      // tenta nome legível vindo da ficha; se for ID numérico, traduz
+      const mapCats = _catsById();
+      let catLegivel = (it.categoria && mapCats[String(it.categoria)]) ? mapCats[String(it.categoria)] : (it.categoria || null);
+      if (!catLegivel) catLegivel = categorizeInsumoPelasRegras(it.nome);
+      const catKey = String(catLegivel).toLowerCase();
+
+      const base = toBaseQty(qtd, it.un);
+      const k = it.nome.toLowerCase() + '||' + base.base;
+
+      if (!map.has(k)) map.set(k, { nome:it.nome, base:base.base, valSum:0, catNome:catLegivel, catKey });
+      const bucket = map.get(k);
+      bucket.valSum += base.val;
+    }
+  }
+  const lista = [];
+  for (const item of map.values()){
+    const out = fromBaseSum(item.valSum, item.base);
+    lista.push({ nome:item.nome, un:out.un, qtd:out.val, categoriaNome:item.catNome, categoriaKey:item.catKey, comprado:false });
+  }
+  lista.sort((a,b)=> (a.categoriaKey||'').localeCompare(b.categoriaKey||'') || a.nome.localeCompare(b.nome));
+  return lista;
+}
+
+
+  const keyListaMercado = (id)=> `insumos:lista:${id}`;
+
+ // Lê categorias personalizadas (criadas em Fichas Técnicas)
+// === Categorias personalizadas (vindas da tela Fichas Técnicas) ===
+function getCatsPersonalizadas(){
+  try { return JSON.parse(localStorage.getItem('insumos.categorias') || '[]'); }
+  catch { return []; }
+}
+const _catsById = () => Object.fromEntries(
+  (getCatsPersonalizadas() || []).map(c => [String(c.id), String(c.nome || '').trim()])
+);
+
+// Retorna o NOME legível da categoria de um insumo (se houver)
+function getCategoriaNomeDoInsumo(ins){
+  const map = _catsById();
+  const raw = (ins && (ins.categoriaId ?? ins.categoria)) ?? '';
+  const nome = map[String(raw)] || (typeof raw === 'string' ? raw : '');
+  return (nome && nome.trim()) ? nome.trim() : null;
+}
+
+function catName(c){ return (c && c.nome) ? String(c.nome) : ''; }
+
+// Normaliza o nome de categoria de cada item (string)
+function getItemCatNome(item){
+  // se já veio pronta do gerador, usa; senão "outros"
+  const nome = (item.categoria || '').toString().trim();
+  return nome || 'outros';
+}
+
+// cache para re-render (filtros)
+let _listaMercadoCache = [];
+// ... normalizeUnit, toBaseQty, fromBaseSum aqui em cima ...
+
+// ↓ Cole AQUI, uma única vez
+function stepForUnit(un){
+  const u = String(un||'').toLowerCase();
+  if (u === 'kg' || u === 'l')  return '0.1';
+  if (u === 'g'  || u === 'ml') return '1';
+  return '1';
+}
+
+function renderListaMercado(lista = [], agrupar, mostrar){
+  const host = document.getElementById('listaMercado');
+  if (!host) return;
+  host.innerHTML = '';
+
+  _listaMercadoCache = Array.isArray(lista) ? lista : [];
+
+  const selAgrupar = document.getElementById('insumosAgruparPor');
+  const selMostrar = document.getElementById('insumosMostrar');
+  agrupar = (agrupar ?? (selAgrupar ? selAgrupar.value : 'categoria')) || 'categoria';
+  mostrar = (mostrar ?? (selMostrar ? selMostrar.value : 'todos')) || 'todos';
+
+  if (!Array.isArray(lista) || !lista.length){
+    host.innerHTML = '<span class="pill">Nenhum item ainda. Clique em "Gerar lista a partir do cardápio".</span>';
+    return;
+  }
+
+  let itens = lista.slice();
+  if (mostrar === 'pendentes') itens = itens.filter(i => !i.comprado);
+  if (mostrar === 'comprados') itens = itens.filter(i =>  i.comprado);
+
+  const getCatKey = (i) => String(i?.categoriaKey ?? i?.categoria ?? i?.categoriaNome ?? 'outros').toLowerCase();
+  const getCatLabel = (i) => {
+    const n = (i?.categoriaNome || i?.categoria || '').toString().trim();
+    if (n) return n;
+    const k = getCatKey(i); return k.charAt(0).toUpperCase()+k.slice(1);
+  };
+
+  // --- COLUNAS POR CATEGORIA ---
+  if (agrupar === 'categoria'){
+    const grupos = new Map();
+    for (const it of itens){
+      const key = getCatKey(it) || 'outros';
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(it);
+    }
+
+    const catKeys = Array.from(grupos.keys()).sort((a,b)=> a.localeCompare(b));
+    catKeys.forEach(k => grupos.get(k).sort((a,b)=> (a.nome||'').localeCompare(b.nome||'')));
+
+    const grid = document.createElement('div');
+    grid.className = 'market-grid';
+
+    for (const key of catKeys){
+      const col = document.createElement('div');
+      col.className = 'market-col';
+
+      const h = document.createElement('h4');
+      const exemplo = grupos.get(key)[0];
+      h.textContent = getCatLabel(exemplo);
+      col.appendChild(h);
+
+      const ul = document.createElement('ul');
+
+      grupos.get(key).forEach(item => {
+        const li  = document.createElement('li');
+        const idx = lista.indexOf(item);
+        const temObs = (item.obsEvento && item.obsEvento.trim()) || (item.obsPadrao && item.obsPadrao.trim());
+
+        li.innerHTML = `
+          <label style="display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid #eadfcd; border-radius:10px; background:#fff;">
+            <input type="checkbox" data-idx="${idx}" ${item.comprado ? 'checked' : ''} aria-label="Marcar como comprado">
+            <b>${item.nome}</b>
+            <span class="muted" style="margin-left:auto; display:flex; align-items:center; gap:6px">
+              <input class="qtd-edit" type="number" min="0" step="${stepForUnit(item.un)}"
+                     value="${item.qtd}" data-idx="${idx}" style="width:82px">
+              <span>${item.un}</span>
+              <button type="button" class="obs-btn ${temObs ? 'has-note' : ''}" data-idx="${idx}" title="Observações">i</button>
+            </span>
+          </label>
+        `;
+        ul.appendChild(li);
+      });
+
+      col.appendChild(ul);
+      grid.appendChild(col);
+    }
+
+    host.appendChild(grid);
+
+    host.querySelectorAll('input[type="checkbox"][data-idx]').forEach(cb=>{
+      cb.addEventListener('change', e=>{
+        const i = Number(e.currentTarget.dataset.idx);
+        if (i >= 0) {
+          lista[i].comprado = e.currentTarget.checked;
+          try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+        }
+      });
+    });
+    host.querySelectorAll('input.qtd-edit[data-idx]').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const i = Number(e.currentTarget.dataset.idx);
+        const v = e.currentTarget.value === '' ? 0 : Number(e.currentTarget.value);
+        if (!Number.isFinite(v) || v < 0) return;
+        if (i >= 0) {
+          lista[i].qtd = v;
+          try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+        }
+      });
+    });
+    host.querySelectorAll('.obs-btn[data-idx]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const i = Number(btn.dataset.idx);
+        const item = lista[i];
+        if (!item) return;
+        const dlg  = document.getElementById('dlgObsInsumo');
+        const nome = document.getElementById('obsItemNome');
+        const obsP = document.getElementById('obsPadrao');
+        if (nome) nome.value = item.nome || '';
+        if (obsP) obsP.value = (item.obsEvento?.trim() || item.obsPadrao?.trim() || '—');
+        if (dlg?.showModal) dlg.showModal();
+      });
+    });
+
+    return;
+  }
+
+  // --- LISTA ALFABÉTICA ---
+  itens.sort((a,b)=> (a.nome||'').localeCompare(b.nome||''));
+
+  const ul = document.createElement('ul');
+  ul.style.listStyle='none';
+  ul.style.padding=0;
+  ul.style.display='grid';
+  ul.style.gap='8px';
+
+  itens.forEach(item=>{
+    const idx = lista.indexOf(item);
+    const temObs = (item.obsEvento && item.obsEvento.trim()) || (item.obsPadrao && item.obsPadrao.trim());
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <label style="display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid #eadfcd; border-radius:10px; background:#fff;">
+        <input type="checkbox" data-idx="${idx}" ${item.comprado ? 'checked' : ''} aria-label="Marcar como comprado">
+        <b>${item.nome}</b>
+        <span class="muted" style="margin-left:auto; display:flex; align-items:center; gap:6px">
+          <input class="qtd-edit" type="number" min="0" step="${stepForUnit(item.un)}"
+                 value="${item.qtd}" data-idx="${idx}" style="width:82px">
+          <span>${item.un}</span>
+          <button type="button" class="obs-btn ${temObs ? 'has-note' : ''}" data-idx="${idx}" title="Observações">i</button>
+        </span>
+      </label>
+    `;
+    ul.appendChild(li);
+  });
+
+  host.appendChild(ul);
+
+  ul.querySelectorAll('input[type="checkbox"][data-idx]').forEach(cb=>{
+    cb.addEventListener('change', e=>{
+      const i = Number(e.currentTarget.dataset.idx);
+      if (i >= 0) {
+        lista[i].comprado = e.currentTarget.checked;
+        try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+      }
+    });
+  });
+  ul.querySelectorAll('input.qtd-edit[data-idx]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.currentTarget.dataset.idx);
+      const v = e.currentTarget.value === '' ? 0 : Number(e.currentTarget.value);
+      if (!Number.isFinite(v) || v < 0) return;
+      if (i >= 0) {
+        lista[i].qtd = v;
+        try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+      }
+    });
+  });
+  ul.querySelectorAll('.obs-btn[data-idx]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const i = Number(btn.dataset.idx);
+      const item = lista[i];
+      if (!item) return;
+      const dlg  = document.getElementById('dlgObsInsumo');
+      const nome = document.getElementById('obsItemNome');
+      const obsP = document.getElementById('obsPadrao');
+      if (nome) nome.value = item.nome || '';
+      if (obsP) obsP.value = (item.obsEvento?.trim() || item.obsPadrao?.trim() || '—');
+      if (dlg?.showModal) dlg.showModal();
+    });
+  });
+}
+
+function openDlgEscolherEstoque(){
+  const dlg = document.getElementById('dlgEscolherEstoque');
+  const host = document.getElementById('listaParaEstoque');
+  host.innerHTML = '';
+
+  // usamos o cache da lista atual gerada
+  const lista = Array.isArray(_listaMercadoCache) ? _listaMercadoCache : [];
+  if (!lista.length){
+    host.innerHTML = '<span class="pill">Gere a lista de mercado primeiro.</span>';
+  } else {
+    for (const it of lista){
+      // um cartão simples com botão “Registrar sobra”
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.style.padding = '10px';
+      div.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px">
+          <b>${it.nome}</b>
+          <span class="muted">(${it.qtd} ${it.un})</span>
+          <div style="margin-left:auto" class="actions">
+            <button class="btn btnRegistrarSobra" data-nome="${it.nome}" data-un="${it.un}">Registrar sobra</button>
+          </div>
+        </div>
+      `;
+      host.appendChild(div);
+    }
+
+    host.querySelectorAll('.btnRegistrarSobra').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        openDlgRegistrarSobra(b.dataset.nome, b.dataset.un);
+      });
+    });
+  }
+
+  if (dlg?.showModal) dlg.showModal();
+}
+
+let _regContext = null; // guarda {nome, un, evtId}
+
+function openDlgRegistrarSobra(nome, un){
+  _regContext = { nome, un, evtId: state.evtId || document.getElementById('evtId')?.value || '' };
+
+  const dlg = document.getElementById('dlgRegistrarSobra');
+  document.getElementById('regItemNome').value = nome;
+  document.getElementById('regUn').value = un;
+
+  const qtd = document.getElementById('regQtd');
+  qtd.value = '';
+  qtd.step  = stepForUnit_est(un);
+
+  document.getElementById('regTipo').value = 'cru';
+  document.getElementById('regObs').value  = '';
+
+  if (dlg?.showModal) dlg.showModal();
+}
+
+document.getElementById('btnSalvarRegistro')?.addEventListener('click', (e)=>{
+  // evita fechar sem salvar, o <form method=dialog> já fecha — aqui apenas deixa o default
+  const nome = document.getElementById('regItemNome').value;
+  const un   = document.getElementById('regUn').value;
+  const qtdV = Number(document.getElementById('regQtd').value || 0);
+  const tipo = document.getElementById('regTipo').value;
+  const obs  = document.getElementById('regObs').value || '';
+
+  if (!qtdV || qtdV <= 0){ alert('Informe uma quantidade válida.'); e.preventDefault(); return; }
+
+  const arr = loadEstoqueInsumos();
+  arr.push({
+    id: 'st_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    dataISO: new Date().toISOString(),
+    eventoId: _regContext?.evtId || '',
+    nome, un, qtd: qtdV, tipo, obs
+  });
+  saveEstoqueInsumos(arr);
+  // deixa o dialog fechar normalmente
+});
+document.getElementById('btnGerarEstoqueInsumos')?.addEventListener('click', ()=>{
+  if (!_listaMercadoCache?.length){
+    const lista = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId))||'[]');
+    _listaMercadoCache = Array.isArray(lista) ? lista : [];
+  }
+  openDlgEscolherEstoque();
+});
+
+// re-render ao mudar os filtros
+document.getElementById('insumosAgruparPor')?.addEventListener('change', ()=> renderListaMercado(_listaMercadoCache));
+document.getElementById('insumosMostrar')?.addEventListener('change',   ()=> renderListaMercado(_listaMercadoCache));
+ document.getElementById('btnGerarListaMercado').onclick = ()=>{
+  if(!ensureEvtId()){ alert('Informe EVENTOID'); return; }
+
+  // 1) pega Definições (pratos ticados)
+  const def = loadDefinicoesDoEvento(state.evtId);
+  if (!def){ alert('Não encontrei as Definições do Evento para gerar a lista.\nSalve o cardápio na tela Definições primeiro.'); return; }
+
+  const pratosSel = extractPratosSelecionados(def);
+  if (!pratosSel.length){ alert('Nenhum prato ticado no cardápio das Definições do Evento.'); return; }
+
+  const convidados = Number(document.getElementById('evtConvidados').value || state.convidados || 0);
+
+  // 2) tenta pelo modelo NOVO (ft:pratos/ft:insumos)
+  const temFTNovas = Array.isArray(loadFTPratos()) && loadFTPratos().length;
+  let lista = [];
+  if (temFTNovas){
+    lista = montarListaDeMercadoFromFT(pratosSel, convidados);
+  } else {
+    // fallback p/ modelo antigo (se existir):
+    const fich = loadFichasTecnicas(); // sua função antiga
+    if (!Array.isArray(fich) || !fich.length){
+      alert('Não encontrei Fichas Técnicas. Cadastre/importe as fichas na tela de Fichas Técnicas.');
+      return;
+    }
+    const fichIdx = indexFichasPorPrato(fich);
+    lista = montarListaDeMercado(pratosSel, fichIdx, convidados); // sua função antiga
+  }
+
+  // 3) persistir + renderizar
+  try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch(e){}
+  renderListaMercado(lista);
+
+  alert(`Lista de mercado gerada a partir do cardápio (${pratosSel.length} prato(s), ${convidados} convidado(s)).`);
+};
+// Salvar rascunho manualmente (além de salvar a cada clique)
+document.getElementById('btnSalvarListaMercado').onclick = ()=>{
+  if(!ensureEvtId()){ alert('Informe EVENTOID'); return; }
+  const lista = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId)) || '[]');
+  try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch(e){}
+  alert('Rascunho da lista de mercado salvo.');
+};
+
+ document.getElementById('btnUsarDoEstoque').onclick = ()=>{
+  openDlgUsarDoEstoque();
+};
+document.getElementById('btnSalvarUsarDoEstoque')?.addEventListener('click', ()=>{
+  const cont = document.getElementById('estoqueInsumosLista');
+  const linhas = cont?.querySelectorAll('tbody tr') || [];
+  if (!linhas.length) return;
+
+  // pega a lista atual do evento
+  if (!_listaMercadoCache?.length){
+    const lst = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId))||'[]');
+    _listaMercadoCache = Array.isArray(lst) ? lst : [];
+  }
+  const lista = _listaMercadoCache;
+
+  // estoque atual
+  const arr = loadEstoqueInsumos();
+
+  // processa linhas ticadas
+  let houveMudanca = false;
+  linhas.forEach(tr=>{
+    const chk = tr.querySelector('.use-check');
+    if (!chk?.checked) return;
+
+    const id   = tr.dataset.id;
+    const nome = tr.dataset.nome || '';
+    const un   = tr.dataset.un   || '';
+    const qtdInp = tr.querySelector('.use-qtd');
+    let usarQtd = Number(qtdInp?.value || 0);
+    if (!usarQtd || usarQtd <= 0) return;
+
+    // limita pela quantidade disponível
+    const rec = arr.find(x => x.id === id);
+    if (!rec) return;
+    if (usarQtd > Number(rec.qtd||0)) usarQtd = Number(rec.qtd||0);
+
+    // 1) Debita do estoque
+    rec.qtd = Math.max(0, Number(rec.qtd||0) - usarQtd);
+    if (rec.qtd === 0){
+      const idx = arr.findIndex(x => x.id === id);
+      if (idx >= 0) arr.splice(idx, 1);
+    }
+    houveMudanca = true;
+
+    // 2) Abate da lista de mercado deste evento
+    const item = lista.find(i => String(i.nome||'').toLowerCase() === String(nome||'').toLowerCase());
+    if (!item) return;
+
+    const g1 = unitGroup(item.un);
+    const g2 = unitGroup(un);
+    if (g1 !== g2){
+      return;
+    }
+
+    const itemBase = toBaseQty(Number(item.qtd||0), item.un);
+    const usarBase = toBaseQty(usarQtd, un);
+    if (itemBase.base !== usarBase.base){
+      return;
+    }
+
+    const novoBaseVal = Math.max(0, itemBase.val - usarBase.val);
+    let novaQtd = fromBaseToUnit(novoBaseVal, itemBase.base, item.un);
+
+    if (itemBase.base === 'g' || itemBase.base === 'ml'){
+      if (String(item.un).toLowerCase()==='kg' || String(item.un).toLowerCase()==='l'){
+        novaQtd = Math.round(novaQtd*100)/100;
+      } else {
+        novaQtd = Math.round(novaQtd);
+      }
+    } else {
+      novaQtd = Math.round(novaQtd);
+    }
+
+    item.qtd = novaQtd;
+  });
+
+  if (houveMudanca){
+    saveEstoqueInsumos(arr);
+    try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+    renderListaMercado(lista);
+  }
+  // deixa o dialog fechar normalmente (form method=dialog)
+});
+
+  document.getElementById('btnImprimirInsumos').onclick = ()=> window.print();
+// Filtros da Lista de Mercado
+
+(function initListaMercado(){
+    const id = new URLSearchParams(location.search).get('id') || state.evtId;
+    if (!id) return;
+    const lista = JSON.parse(localStorage.getItem(keyListaMercado(id))||'null') || [];
+    renderListaMercado(lista);
+  })();
+
+  // ====== Botões principais ======
+  document.getElementById('btnCarregar').onclick = ()=>{
+    state.evtId = document.getElementById('evtId').value.trim() || state.evtId;
+    state.convidados = Number(document.getElementById('evtConvidados').value||0);
+    if(!ensureEvtId()){ alert('Informe EVENTOID'); return; }
+    applyEventoToUIById(state.evtId);
+    renderListas(); refreshPreviews();
+    const saved = loadExecLinks(state.evtId);
+if (saved?.execUrl) showExecPanel(saved.execUrl);
+
+  };
+
+ document.getElementById('btnSalvar').onclick = async ()=>{
+  if (!ensureEvtId()){
+    alert('Use Carregar/Atualizar para definir EVENTOID');
+    return;
+  }
+
+  const payload = {
+    eventoId   : state.evtId,
+    dataGeracao: new Date().toISOString(),
+    convidados : state.convidados,
+    itens      : state.itens,
+    status     : 'saida_rascunho'
+  };
+
+  // Salva saída no navegador
+  setObj(keySaida(state.evtId), payload);
+
+  // Salva saída na nuvem
+  if (HAS_API) {
+    saveChecklistSaidaBackend(state.evtId, payload);
+  }
+
+  // Gera/atualiza link de execução via backend
+  let urlExec = null;
+  if (HAS_API) {
+    const info = await criarOuAtualizarLinkExecucao(state.evtId);
+    urlExec = info?.execUrl || null;
+  } else {
+    // fallback antigo (só local) se não houver API
+    const base = location.origin || (location.protocol+'//'+location.host);
+    const path = location.pathname.replace(/\/[^/]*$/, '/');
+    urlExec = `${base}${path}checklist-execucao.html?id=${encodeURIComponent(state.evtId)}`;
+    saveExecLinks(state.evtId, urlExec, null);
+  }
+
+  alert('Rascunho salvo');
+
+  if (urlExec) {
+    showExecPanel(urlExec);
+  }
+};
+
+
+  document.getElementById('btnImprimir').onclick = ()=> window.print();
+
+  // Destacar link ativo no menu
+  (function watchMenu(){
+    const alvo = document.getElementById('menuLateral');
+    if (!alvo) return;
+    const obs = new MutationObserver((muts, o)=>{
+      if (alvo.firstElementChild) {
+        const current = location.pathname.split('/').pop();
+        const link = alvo.querySelector('a[href$="'+current+'"]');
+        if (link) link.classList.add('ativo');
+        o.disconnect();
+      }
+    });
+    obs.observe(alvo, { childList:true });
+  })();
+
+  // Helpers gerais de limpeza
+  function limparSetor(setorId){
+    state.itens = state.itens.filter(x => x.setorId!==setorId);
+    state.setoresVisiveis.delete(setorId);
+    renderListas();
+  }
+  function limparTudo(){
+    if(!confirm('Remover TODOS os itens deste evento?')) return;
+    state.itens = [];
+    state.setoresVisiveis.clear();
+    renderListas(); refreshPreviews();
+  }
+(function addFotoButtonsToMateriais(){
+  // 1) Carregar materiais (ambas as chaves)
+  function loadAllMateriais(){
+    try{
+      const a = JSON.parse(localStorage.getItem('estoque.materiais')||'[]');
+      const b = JSON.parse(localStorage.getItem('estoque:materiais')||'[]');
+      return [...a, ...b];
+    }catch{ return []; }
+  }
+  const mats = loadAllMateriais();
+  const byName = {};
+  const byId   = {};
+  mats.forEach(m=>{
+    if(!m) return;
+    byId[String(m.id)] = m;
+    if(m.nome){
+      byName[String(m.nome).trim().toLowerCase()] = m;
+    }
+  });
+
+  const host = document.getElementById('listas');
+  if(!host) return;
+
+  // 2) Injeta o botão 📷 nas colunas de Item (SAÍDA e RETORNO)
+  function process(){
+    host.querySelectorAll('tbody tr').forEach(tr=>{
+      // normalmente a 1ª e a 5ª <td> são as colunas "Item"
+      const tds = tr.querySelectorAll('td');
+      // tente detectar onde estão as colunas “Item”:
+      // a sua tabela deste arquivo monta cabeçalho com: Item, Quantidade, Obs, Ações, Item, Quantidade, Observação
+      const itemIdxs = [0, 4]; // 0 = Item (SAÍDA), 4 = Item (RETORNO)
+
+      itemIdxs.forEach(idx=>{
+        const td = tds[idx];
+        if(!td) return;
+        if(td.querySelector('.foto-btn')) return; // não duplica
+
+        const nome = (td.textContent||'').trim();
+        const m = byName[nome.toLowerCase()];
+        const src = m?.imagemUrl;
+
+        if(!src) return; // sem imagem, não mostra o botão
+
+        const btn = document.createElement('button');
+        btn.className = 'foto-btn';
+        btn.type = 'button';
+        btn.title = 'Ver foto';
+        btn.textContent = '📷';
+        // Gravamos ambos para máxima compatibilidade:
+        btn.dataset.src = src;             // abre direto pela URL
+        if (m?.id != null) btn.dataset.mid = String(m.id); // fallback por ID, se necessário
+        btn.dataset.nome = m?.nome || nome;
+
+        td.appendChild(document.createTextNode(' '));
+        td.appendChild(btn);
+      });
+    });
+  }
+
+  // roda já e também sempre que algo mudar dentro de #listas
+  process();
+  const mo = new MutationObserver(()=> process());
+  mo.observe(host, { childList:true, subtree:true });
+
+  // 3) Abertura/fechamento do modal — referencias BUSCADAS na hora (evita null)
+  document.addEventListener('click', (ev)=>{
+    const b = ev.target.closest('.foto-btn');
+    if(!b) return;
+
+    // tenta primeiro por data-src; se não houver, tenta via data-mid -> localStorage
+    let src  = b.dataset.src || '';
+    let nome = b.dataset.nome || '';
+
+    if(!src && b.dataset.mid){
+      const mid = String(b.dataset.mid);
+      const mat = byId[mid] ||
+                  (loadAllMateriais().find(mm => String(mm.id) === mid) || null);
+      if (mat?.imagemUrl) {
+        src  = mat.imagemUrl;
+        nome = nome || mat.nome || '';
+      }
+    }
+
+    if(!src){
+      alert('Este material não possui imagem cadastrada.');
+      return;
+    }
+
+    // busca elementos do dialog no momento do clique
+    const dlg   = document.getElementById('dlgFotoMaterial');
+    const img   = document.getElementById('fotoMaterial');
+    const title = document.getElementById('fotoMatTitulo');
+
+    if(img)   img.src = src;
+    if(title) title.textContent = nome ? ('Foto — ' + nome) : 'Foto do material';
+
+    if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+    else if (dlg) dlg.setAttribute('open','');
+  });
+
+  // botão fechar (pode ainda não existir quando este IIFE rodar; então delegamos)
+  document.addEventListener('click', (ev)=>{
+    if (ev.target && ev.target.id === 'btnFecharFoto'){
+      const dlg = document.getElementById('dlgFotoMaterial');
+      if (dlg) dlg.close();
+    }
+  });
+})();
+
+  // Remover um único material
+  window.removerItem = (materialId)=>{
+    const mid = String(materialId);
+    state.itens = state.itens.filter(x => String(x.materialId) !== mid);
+    renderListas();
+  };
+  </script>
+<!-- MODAL de Foto do Material (reutilizável) -->
+<dialog id="dlgFotoMaterial" style="padding:0;border:0;border-radius:14px;max-width:90vw">
+  <div style="background:#fff; border:1px solid #eadfcd; border-radius:14px; overflow:hidden; max-width:min(720px, 90vw)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fbf5ee;border-bottom:1px solid #eadfcd">
+      <strong id="fotoMatTitulo" style="color:#5a3e2b">Foto do material</strong>
+      <button id="btnFecharFoto" class="btn" style="background:#fff;border-color:#eadfcd">Fechar</button>
+    </div>
+    <div style="padding:10px; background:#fff">
+      <img id="fotoMaterial" src="" alt="Foto do material" style="display:block; max-width:100%; height:auto; border-radius:10px;">
+    </div>
+  </div>
+</dialog>
+  <script> try{ lucide.createIcons(); }catch(e){} </script>
+  <script type="module" src="menu-lateral.js"></script>
+  <script> try{ lucide.createIcons(); }catch(e){} </script>
+  <script>
+    (function () {
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      let   back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside) return;
+
+      // Garante que o backdrop exista
+      if (!back) {
+        back = document.createElement('div');
+        back.id = 'menuBackdrop';
+        back.hidden = true;
+        document.body.appendChild(back);
+      }
+
+      function abrirMenu() {
+        aside.classList.add('aberto');
+        back.hidden = false;
+      }
+
+      function fecharMenu() {
+        aside.classList.remove('aberto');
+        back.hidden = true;
+      }
+
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) {
+          fecharMenu();
+        } else {
+          abrirMenu();
+        }
+      });
+
+      back.addEventListener('click', fecharMenu);
+    })();
+  </script>
+  <script type="module" src="menu-lateral.js"></script>
+</body>
+</html>
+

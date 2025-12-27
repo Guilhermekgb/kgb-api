@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:orcamento.html">
+  <meta charset="UTF-8">
+  <title>Orçamento – Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "https://kgb-api.onrender.com"; // usar sempre a nuvem
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+<script src="./kgb-api/public/api/storage-adapter.js"></script>
+<script src="./kgb-api/public/js/fotos-shim.js"></script>
+
+<!-- (Opcional) ativar ENFORCE do guard -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard / RBAC (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- CSS globais existentes -->
+  <link rel="stylesheet" href="menu-lateral.css">
+  <link rel="stylesheet" href="style.css">
+  <!-- NOVO: CSS desta página -->
+  <link rel="stylesheet" href="orcamento.css">
+  <link rel="icon" href="data:,">
+  <style>
+    /* Layout base da página de orçamento */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #f8f1e8;
+      height: 100%;
+    }
+
+    .wrapper {
+      display: flex;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    main.conteudo-principal {
+      flex-grow: 1;
+      min-height: 100vh;
+      overflow-y: auto;
+      padding: 40px;
+    }
+
+    .conteudo-central {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Botão hambúrguer (mobile) */
+    #hamburguer {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1001;
+      display: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+
+    @media (max-width: 768px) {
+      #hamburguer {
+        display: block;
+      }
+
+      main.conteudo-principal {
+        margin-left: 0 !important;
+        padding: 20px;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <!-- Botão Mobile -->
+  <button
+    id="hamburguer"
+    type="button"
+    aria-label="Abrir menu"
+    aria-controls="menuLateral"
+    aria-expanded="false">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <main class="conteudo-principal">
+
+    <div class="conteudo-central">
+
+      <h1 style="margin-top: 20px;"><i data-lucide="plus-circle"></i> Cadastrar Novo Lead</h1>
+
+      <div class="card">
+        <form id="form-orcamento">
+          <div class="grid-2">
+            <div>
+              <h2 class="subtitulo">Dados do Evento</h2>
+              <label for="nome"><i data-lucide="user"></i> Nome completo:</label>
+              <input type="text" id="nome" name="nome">
+            </div>
+
+            <div class="campo-data">
+              <label for="data_evento"><i data-lucide="calendar"></i> Data do Evento:</label>
+              <input type="date" id="data_evento" name="data_evento">
+            </div>
+
+            <div id="alertaData" class="alerta-data" style="display:none"></div>
+
+            <div>
+              <label for="whatsapp"><i data-lucide="smartphone"></i> WhatsApp:</label>
+              <input type="tel" id="whatsapp" name="whatsapp">
+            </div>
+
+            <div>
+              <label for="telefone"><i data-lucide="phone"></i> Telefone:</label>
+              <input type="tel" id="telefone" name="telefone">
+            </div>
+
+            <div>
+              <label for="local_evento"><i data-lucide="map-pin"></i> Local do Evento:</label>
+              <input type="text" id="local_evento" name="local_evento">
+            </div>
+
+            <div>
+              <label for="convidados"><i data-lucide="users"></i> Quantidade de Convidados:</label>
+              <input type="number" id="convidados" name="convidados">
+            </div>
+
+            <div>
+              <label for="email"><i data-lucide="mail"></i> E-mail:</label>
+              <input type="email" id="email" name="email">
+            </div>
+
+            <div>
+              <label for="como_conheceu"><i data-lucide="search"></i> Como nos conheceu?</label>
+              <select id="como_conheceu" name="como_conheceu">
+                <option value="">Selecione</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label for="tipo_evento"><i data-lucide="type"></i> Tipo de Evento:</label>
+              <select id="tipo_evento" name="tipo_evento">
+                <option value="">Selecione</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="horario_evento"><i data-lucide="clock"></i> Horário do Evento:</label>
+              <input type="time" id="horario_evento" name="horario_evento">
+            </div>
+          </div>
+
+          <h2 style="margin-top: 40px; margin-bottom: 10px; font-size: 20px; color: #5C4033; font-weight: 600;">
+  Itens Inclusos no Orçamento
+</h2>
+
+<div class="tabs">
+  <button type="button" class="tab" data-target="tab-cardapios">Cardápio</button>
+  <button type="button" class="tab" data-target="tab-adicionais">
+    Adicionais <span class="badge" id="badgeAdd">Nenhum</span>
+  </button>
+  <button type="button" class="tab" data-target="tab-servicos">
+    Pacotes / Produtos <span class="badge" id="badgeServ">Nenhum</span>
+  </button>
+</div>
+
+<div id="tab-cardapios" class="tab-pane">
+  <div id="cardapiosLista" class="grid-cards"></div>
+</div>
+
+<div id="tab-adicionais" class="tab-pane">
+  <div id="adicionaisLista" class="grid-cards"></div>
+  <div id="tagAdicional" class="lista-tags"></div>
+</div>
+
+<div id="tab-servicos" class="tab-pane">
+  <div id="servicosLista" class="grid-cards"></div>
+  <div id="tagPacote" class="lista-tags"></div>
+</div>
+
+
+<div id="descontosObservacoes">
+  <h2 class="subtitulo">Descontos e Observações</h2>
+
+  <!-- GRID DOS CAMPOS -->
+  <div class="grid-2" style="margin-top: 20px;">
+    <div>
+      <label for="desconto_reais"><i data-lucide="dollar-sign"></i> Desconto (R$):</label>
+      <input type="number" id="desconto_reais" min="0">
+    </div>
+
+    <div>
+      <label for="desconto_porcentagem"><i data-lucide="percent"></i> Desconto (%):</label>
+      <input type="number" id="desconto_porcentagem" min="0" max="100">
+    </div>
+
+    <div style="grid-column: span 2;">
+      <label for="observacoes"><i data-lucide="file-text"></i> Observações:</label>
+
+      <div style="display:flex; gap:10px; align-items:center; margin:6px 0 8px;">
+        <button
+          type="button"
+          id="btnInserirModelo"
+          style="background:#c29a5d;color:#fff;border:none;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer"
+        >
+          Escolher modelo
+        </button>
+      </div>
+
+      <textarea id="observacoes" placeholder="Informações adicionais..." rows="6"></textarea>
+    </div>
+  </div>
+  <!-- /GRID FECHADA AQUI -->
+
+  <!-- ÚNICO RESUMO DE VALOR -->
+  <div id="valorResumoFinal" class="bloco-valor-total">
+
+    <span class="titulo">Valor Total Estimado:</span>
+    <div id="valor_total" class="valor">R$ 0,00</div>
+  </div>
+</div>
+<!-- Comparativo quando houver 2+ cardápios -->
+<div id="comparativo_cardapios_resumo" style="display:none; margin-top:14px; font-size:14px;">
+  <div style="color:#a87d45; font-weight:600; margin-bottom:6px;">Comparativo de Cardápios</div>
+  <div id="comparativo_lista_resumo" style="display:grid; gap:6px;"></div>
+  <div style="margin-top:8px; color:#7a7a7a;">
+    Selecione <b>apenas 1 cardápio</b> para calcular o total geral. Adicionais/Pacotes somam em qualquer opção.
+  </div>
+</div>
+
+<!-- Botões -->
+<div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 30px;">
+  <button type="button" onclick="salvarLeadFunil('evento')" class="botao-dourado">
+    <i data-lucide="save"></i> Salvar Lead
+  </button>
+
+  <button type="button" onclick="salvarLeadFunil('proposta')" class="botao-dourado">
+    <i data-lucide="file-text"></i> Gerar Proposta
+  </button>
+
+  <button type="button" onclick="salvarLeadFunil('degustacao')" class="botao-dourado">
+    <i data-lucide="calendar-clock"></i> Agendar Degustação
+  </button>
+</div>
+
+
+          <div>
+            <label for="responsavel_lead"><i data-lucide="user-check"></i> Responsável pelo Lead:</label>
+            <select id="responsavel_lead" name="responsavel_lead">
+              <option value="">Selecione o responsável</option>
+            </select>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module" src="menu-lateral.js"></script>
+  <!-- Deixa a função replaceVars disponível na página -->
+<script type="module">
+  import { replaceVars } from './template-utils.js';
+  window.replaceVars = replaceVars;
+</script>
+<!-- Ponte opcional para integrar agendaUnified/notificationsFeed -->
+<script src="agenda-bridge.js"></script>
+
+  <!-- JS desta página (unificado) -->
+  <script src="orcamento.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn  = document.getElementById('hamburguer');
+    const menu = document.getElementById('menuLateral');
+    if (!btn || !menu) return;
+
+    // Abre/fecha menu
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opened = menu.classList.toggle('aberto');
+      btn.setAttribute('aria-expanded', opened ? 'true' : 'false');
+      document.body.style.overflow = opened ? 'hidden' : '';
+    });
+
+    // Fecha ao clicar fora
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('aberto')) return;
+      const clicouNoMenu  = menu.contains(e.target);
+      const clicouNoBotao = btn.contains(e.target);
+      if (!clicouNoMenu && !clicouNoBotao) {
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      }
+    });
+
+    // Fecha ao voltar para largura de desktop
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768 && menu.classList.contains('aberto')) {
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      }
+    });
+  });
+</script>
+
+  <script type="module" src="./api/api-config.js"></script>
+
+  <!-- Modal: conflitos de data -->
+  <div id="modalConflitosData" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:#fffaf4; width:min(820px, 92vw); max-height:80vh; overflow:auto; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.2); padding:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
+        <h3 id="tituloConflitos" style="margin:0; color:#5C4033;">⚠️ Conflitos nessa data</h3>
+        <button type="button" onclick="fecharModalConflitos()" style="border:1px solid #d8c4a8; background:#fff; color:#5C4033; padding:8px 12px; border-radius:10px; cursor:pointer;">Fechar</button>
+      </div>
+      <div id="listaConflitosData" style="display:grid; gap:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Modal Selecionar Pacotes -->
+  <div id="modalPacotes" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto">
+      <h3 class="text-xl font-bold mb-4">Selecionar Pacotes Disponíveis</h3>
+      <div id="listaPacotesModal" class="space-y-2"></div>
+      <div class="flex justify-end mt-6" style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button onclick="fecharModalPacotes()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancelar</button>
+        <button onclick="adicionarPacotesSelecionados()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Adicionar Selecionados</button>
+      </div>
+    </div>
+  </div>
+
+  
+<!-- Modal: Agendar degustação -->
+<div id="modalDeg" class="modal-backdrop" style="display:none;">
+  <div class="modal-box" role="dialog" aria-modal="true" style="max-width:560px;">
+    <h3 style="margin:0 0 10px 0;">Agendar degustação</h3>
+
+    <label for="selDeg" style="display:block;margin-bottom:6px;">Escolha uma data disponível:</label>
+    <select id="selDeg" class="input" style="width:100%;"></select>
+
+    <div class="muted" style="margin:6px 0 12px;">
+      Não encontrou a data?
+      <a href="degustacoes-disponiveis.html" target="_blank">abrir “Degustações disponíveis”</a>
+    </div>
+
+    <!-- Campos extras: só aparecem após selecionar a data -->
+    <div id="degCamposExtra" style="display:none; margin-top:8px;">
+      <div class="form-group" style="margin-bottom:10px;">
+        <label for="degNomeCasal">Nome do cliente/casal</label>
+        <input id="degNomeCasal" class="input" placeholder="Ex.: Ana & Pedro">
+      </div>
+      <div class="form-group">
+        <label for="degAcomp">Acompanhantes (só número)</label>
+        <input id="degAcomp" type="number" min="0" value="0" class="input">
+      </div>
+    </div>
+
+  <div class="modal-actions" style="margin-top:16px; display:flex; gap:8px; justify-content:flex-end;">
+  <button id="degCancel" type="button" class="btn btn-cancel" onclick="closeDegModal()">Cancelar</button>
+  <button id="degSalvar" type="button" class="btn btn-save" onclick="salvarDegustacaoNoLead()">Agendar</button>
+</div>
+
+  </div>
+</div>
+
+
+</body>
+</html>
+

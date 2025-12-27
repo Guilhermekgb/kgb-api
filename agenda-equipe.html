@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:agenda-equipe.html">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Agenda da Equipe — Somente Eventos</title>
+
+  <!-- Estilos: global antes, menu depois (como no modelo-base) -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root{
+      --sidebar-w:260px;
+      --espresso:#5a3e2b; --gold:#c29a5d; --line:#e8dcc9; --bg:#f8f1e8; --muted:#6b7280;
+    }
+
+    html, body{ margin:0; padding:0; background:#f8f1e8; height:100%; }
+
+    /* Mesmas fontes e layout do modelo-base */
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3{ font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif; }
+
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+    main.conteudo-principal{
+      flex:1; min-height:100vh; height:auto; overflow-y:auto;
+      width:100% !important; max-width:none !important; margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+    .conteudo-central{ display:contents !important; }
+
+    h1{ font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+    }
+
+    /* Desktop: menu fixo */
+    @media (min-width:769px){
+      #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); height:100vh; z-index:999; }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+    /* Mobile: off-canvas */
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{ position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:999; width:var(--sidebar-w); }
+      #menuLateral.aberto{ transform:translateX(0); }
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* Força o fundo espresso liso do aside como no modelo-base */
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* UI local da Agenda Equipe */
+    .toolbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0 16px; }
+    .segmented{ display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+    .segmented button{ padding:8px 12px; border:none; background:transparent; cursor:pointer; font-weight:600; color:#4b423b; }
+    .segmented button.active{ background:#f3e8da; }
+    .pill{ border:1px solid var(--line); border-radius:10px; background:#fff; padding:8px 10px; display:flex; align-items:center; gap:8px; }
+
+    .summary{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .sum-badge{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-weight:700; color:var(--espresso); }
+
+    .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+    .cal{ display:grid; grid-template-columns: repeat(7, 1fr); gap:6px; }
+    .day{ background:#fff; border:1px solid var(--line); border-radius:10px; min-height:100px; display:flex; flex-direction:column; overflow:hidden; }
+    .day-head{ display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:#fffdf7; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); }
+    .day-head .dnum{ font-weight:800; color:var(--espresso); }
+    .evts{ display:flex; flex-direction:column; gap:6px; padding:8px; overflow:auto; }
+    .evt{ border-radius:8px; padding:6px 8px; font-size:12px; line-height:1.35; display:flex; gap:8px; align-items:flex-start; cursor:pointer; border:1px solid #eee; background:#fff8ec; border-color:#f1dfc7; }
+    .evt strong{ display:block; font-size:12px; }
+    .evt small{ color:var(--muted); }
+
+    .list .row{ display:flex; justify-content:space-between; align-items:center; border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 10px; }
+    .list{ display:flex; flex-direction:column; gap:8px; }
+  #menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.32);
+  z-index:998;
+}
+
+body.no-scroll{
+  overflow:hidden;
+}
+</style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado por JS) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="calendar-days"></i> Agenda da Equipe</h1>
+
+        <div class="toolbar">
+          <div class="segmented">
+            <button id="v-month"   class="active"><i data-lucide="calendar"></i> Mês</button>
+            <button id="v-week"><i data-lucide="calendar-range"></i> Semana</button>
+            <button id="v-day"><i data-lucide="calendar-clock"></i> Dia</button>
+            <button id="v-agenda"><i data-lucide="list-todo"></i> Agenda</button>
+          </div>
+
+          <label class="pill">
+            <i data-lucide="calendar"></i>
+            <input id="ctrl-date" type="date" style="border:none; outline:none;">
+          </label>
+
+          <div id="rangeLabel" style="font-weight:700; color:var(--espresso); margin-left:auto;"></div>
+        </div>
+
+        <div id="summary" class="summary"></div>
+        <div id="host" class="card"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Drawer de detalhes -->
+  <dialog id="drawer">
+    <div class="dh" style="background:var(--gold); color:#fff; font-weight:800; padding:12px 16px; display:flex; align-items:center; justify-content:space-between;">
+      <div id="dw-title"><i data-lucide="info"></i> Detalhes</div>
+      <button class="btn" onclick="document.getElementById('drawer').close()">Fechar</button>
+    </div>
+    <div class="db" style="padding:14px 16px; background:#fff;">
+      <div class="row" id="dw-body"></div>
+      <div class="foot" style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+        <button id="dw-open" class="btn"><i data-lucide="link"></i> Abrir origem</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Base do app: apiFetch, toasts, onFGChange, etc. -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Scripts do menu e guard (mesma lógica do modelo-base) -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Bridge opcional (para abrir evento detalhado) -->
+  <script src="./agenda-bridge.js"></script>
+
+  <!-- Lógica da Agenda Equipe (somente eventos) -->
+  <script>
+  (function(){
+    const $  = (s, el=document)=> el.querySelector(s);
+    const pad = n => String(n).padStart(2,'0');
+    const fmtISO = d => {
+      const x = new Date(d);
+      const z = new Date(x.getTime() - x.getTimezoneOffset()*60000);
+      return z.toISOString().slice(0,10);
+    };
+    const firstOfMonth = d => { const x=new Date(d); x.setDate(1); return x; };
+    const lastOfMonth  = d => { const x=new Date(d); x.setMonth(x.getMonth()+1,0); return x; };
+
+    let currentDateISO = fmtISO(new Date());
+    let currentView = 'month'; // 'month' | 'week' | 'day' | 'agenda'
+
+    /* ---- Origem de dados: somente eventos ---- */
+    function readEventos(){
+      let xs = [];
+      try { xs = JSON.parse(localStorage.getItem('m30.eventos')||'[]') || []; } catch {}
+      // fallback legado
+      try {
+        const legado = JSON.parse(localStorage.getItem('eventos')||'[]') || [];
+        if (Array.isArray(legado) && legado.length){
+          const seen = new Set(xs.map(e => String(e.id)));
+          legado.forEach(e => {
+            const id = String(e.id||'');
+            if (id && !seen.has(id)) { xs.push(e); seen.add(id); }
+          });
+        }
+      } catch {}
+      if (!Array.isArray(xs)) xs = [];
+      return xs
+        .map(e => ({
+          id: e.id,
+          nome: e.nomeEvento || e.nome || e.titulo || 'Evento',
+          dataISO: String(e.data || e.dataEvento || e.dataDoEvento || '').slice(0,10),
+          hora: String(e.horarioEvento || e.horaEvento || e.horarioCerimonia || e.horaCerimonia || '').slice(0,5),
+          local: (e.local && (e.local.nome||e.local.descricao)) ? (e.local.nome||e.local.descricao) : (e.local || ''),
+          status: (e.status || 'ativo')
+        }))
+        .filter(ev => ev.dataISO);
+    }
+
+    function openDrawer(ev){
+      $('#dw-title').innerHTML = `<i data-lucide="info"></i> ${ev.nome}`;
+      $('#dw-body').innerHTML = `
+        <div><label>Data</label><div class="value">${ev.dataISO.split('-').reverse().join('/')}${ev.hora?(' às '+ev.hora):''}</div></div>
+        <div><label>Local</label><div class="value">${ev.local||'-'}</div></div>
+        <div><label>Status</label><div class="value">${(ev.status||'ativo').toUpperCase()}</div></div>
+      `;
+      $('#dw-open').onclick = ()=>{
+        const url = window.__agendaBridge?.buildEntityUrl?.({type:'evento', id: ev.id})
+                 || `evento-detalhado.html#id=${encodeURIComponent(ev.id)}`;
+        window.location.href = url;
+      };
+      document.getElementById('drawer').showModal();
+      try{ window.lucide?.createIcons?.(); }catch{}
+    }
+
+    function monthRangeISO(){
+      const base = new Date(currentDateISO);
+      const a = firstOfMonth(base), b = lastOfMonth(base);
+      return { start: fmtISO(a), end: fmtISO(b), first: a, last: b };
+    }
+    function eventsOfCurrentMonth(){
+      const {start,end} = monthRangeISO();
+      return readEventos().filter(ev => ev.dataISO >= start && ev.dataISO <= end);
+    }
+
+    function renderSummary(list){
+      const host = $('#summary');
+      const total = list.length;
+      const hojeIso = fmtISO(new Date());
+      const futuros = list.filter(e => e.dataISO > hojeIso).length;
+      const deHoje  = list.filter(e => e.dataISO === hojeIso).length;
+      host.innerHTML = `
+        <span class="sum-badge">Total no mês: ${total}</span>
+        <span class="sum-badge">Hoje: ${deHoje}</span>
+        <span class="sum-badge">Futuros: ${futuros}</span>
+      `;
+    }
+
+    function renderMonth(){
+      const host = $('#host'); host.innerHTML = '';
+      const grid = document.createElement('div'); grid.className='cal';
+      const { first, last } = monthRangeISO();
+      const days = last.getDate();
+      const items = eventsOfCurrentMonth();
+      const byISO = items.reduce((acc,ev)=>{ (acc[ev.dataISO] ||= []).push(ev); return acc; }, {});
+
+      for (let i=1; i<=days; i++){
+        const d = new Date(first); d.setDate(i);
+        const iso = fmtISO(d);
+        const day = document.createElement('div'); day.className='day';
+        const head = document.createElement('div'); head.className='day-head';
+        head.innerHTML = `<span>${d.toLocaleDateString('pt-BR',{weekday:'short'})}</span><span class="dnum">${i}</span>`;
+        const list = document.createElement('div'); list.className='evts';
+
+        (byISO[iso]||[]).forEach(ev=>{
+          const e = document.createElement('div'); e.className='evt';
+          e.innerHTML = `<strong>${ev.nome}</strong><small>${ev.hora || 'Dia todo'}${ev.local?(' · '+ev.local):''}</small>`;
+          e.onclick = ()=> openDrawer(ev);
+          list.appendChild(e);
+        });
+
+        day.appendChild(head); day.appendChild(list); grid.appendChild(day);
+      }
+      host.appendChild(grid);
+    }
+
+    function renderWeek(){
+      const host = $('#host'); host.innerHTML='';
+      const wrap = document.createElement('div'); wrap.className='cal';
+      wrap.style.gridTemplateColumns='repeat(7,1fr)';
+
+      const base = new Date(currentDateISO);
+      const dow = base.getDay(); // 0..6
+      const sun = new Date(base); sun.setDate(base.getDate()-dow);
+
+      const all = eventsOfCurrentMonth();
+      const byISO = all.reduce((acc,ev)=>{ (acc[ev.dataISO] ||= []).push(ev); return acc; }, {});
+
+      for (let i=0;i<7;i++){
+        const d = new Date(sun); d.setDate(sun.getDate()+i);
+        const iso = fmtISO(d);
+        const col = document.createElement('div'); col.className='day';
+        col.innerHTML = `
+          <div class="day-head"><span>${d.toLocaleDateString('pt-BR',{weekday:'long'})}</span><span class="dnum">${d.getDate()}</span></div>
+          <div class="evts"></div>
+        `;
+        const list = col.querySelector('.evts');
+        (byISO[iso]||[]).forEach(ev=>{
+          const e = document.createElement('div'); e.className='evt';
+          e.innerHTML = `<strong>${ev.nome}</strong><small>${ev.hora || 'Dia todo'}${ev.local?(' · '+ev.local):''}</small>`;
+          e.onclick = ()=> openDrawer(ev);
+          list.appendChild(e);
+        });
+        wrap.appendChild(col);
+      }
+      host.appendChild(wrap);
+    }
+
+    function renderDay(){
+      const host = $('#host'); host.innerHTML='';
+      const iso = currentDateISO;
+      const list = eventsOfCurrentMonth().filter(e => e.dataISO === iso);
+      const card = document.createElement('div'); card.className='day';
+      card.innerHTML = `
+        <div class="day-head"><span>${new Date(iso).toLocaleDateString('pt-BR',{weekday:'long'})}</span><span class="dnum">${new Date(iso).getDate()}</span></div>
+        <div class="evts"></div>
+      `;
+      const evts = card.querySelector('.evts');
+      list.forEach(ev=>{
+        const e = document.createElement('div'); e.className='evt';
+        e.innerHTML = `<strong>${ev.nome}</strong><small>${ev.hora || 'Dia todo'}${ev.local?(' · '+ev.local):''}</small>`;
+        e.onclick = ()=> openDrawer(ev);
+        evts.appendChild(e);
+      });
+      host.appendChild(card);
+    }
+
+    function renderAgenda(){
+      const host = $('#host'); host.innerHTML='';
+      const all = eventsOfCurrentMonth().sort((a,b)=> String(a.dataISO||'').localeCompare(String(b.dataISO||'')));
+      const box = document.createElement('div'); box.className='list';
+      all.forEach(ev=>{
+        const row = document.createElement('div'); row.className='row';
+        row.innerHTML = `
+          <div><strong>${ev.dataISO.split('-').reverse().join('/')}</strong> — ${ev.nome}</div>
+          <small>${ev.hora || 'Dia todo'}${ev.local?(' · '+ev.local):''}</small>
+        `;
+        row.onclick = ()=> openDrawer(ev);
+        box.appendChild(row);
+      });
+      host.appendChild(box);
+    }
+
+    function render(){
+      const base = new Date(currentDateISO);
+      const first = firstOfMonth(base);
+      const label = first.toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
+      $('#rangeLabel').textContent = label.charAt(0).toUpperCase() + label.slice(1);
+
+      renderSummary(eventsOfCurrentMonth());
+
+      if (currentView==='month') renderMonth();
+      else if (currentView==='week') renderWeek();
+      else if (currentView==='day') renderDay();
+      else renderAgenda();
+
+      try{ window.lucide?.createIcons?.(); }catch{}
+    }
+
+    // listeners
+    const dateInput = $('#ctrl-date');
+    if (dateInput){
+      dateInput.value = currentDateISO;
+      dateInput.addEventListener('change', ()=>{
+        const v = String(dateInput.value||'').slice(0,10);
+        if (v) currentDateISO = v;
+        render();
+      }, {passive:true});
+    }
+
+    const btnMonth  = $('#v-month');
+    const btnWeek   = $('#v-week');
+    const btnDay    = $('#v-day');
+    const btnAgenda = $('#v-agenda');
+    function setActive(v){
+      currentView = v;
+      [btnMonth,btnWeek,btnDay,btnAgenda].forEach(b=> b?.classList.remove('active'));
+      ({month:btnMonth,week:btnWeek,day:btnDay,agenda:btnAgenda}[v])?.classList.add('active');
+      render();
+    }
+    btnMonth?.addEventListener('click', ()=> setActive('month'));
+    btnWeek?.addEventListener('click',  ()=> setActive('week'));
+    btnDay?.addEventListener('click',   ()=> setActive('day'));
+    btnAgenda?.addEventListener('click',()=> setActive('agenda'));
+
+    // Live updates quando outra tela salvar eventos
+    window.addEventListener('storage', (e)=>{
+      if (['m30.eventos','eventos'].includes(e.key) || (e.key||'').endsWith(':ping')){
+        render();
+      }
+    });
+
+    // init
+    render();
+  })();
+  </script>
+</body>
+</html>
+

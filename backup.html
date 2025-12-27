@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:backup.html">
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Backup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- XLSX para exportar Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    html, body { margin:0; padding:0; background:#f8f1e8; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1100px; margin:0 auto; }
+
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1,
+    .conteudo-principal h2,
+    .conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{ font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none; box-shadow:0 6px 16px rgba(0,0,0,.12);
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    .bloco{
+      background:#fff; border:1px solid #eadfce; border-radius:12px;
+      padding:18px; box-shadow:0 8px 24px rgba(0,0,0,.04); margin:16px 0;
+    }
+    .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    @media (max-width: 900px){ .grid-2{ grid-template-columns: 1fr; } }
+
+    .help{ font-size:.9rem; color:#6a5a4a; }
+    .muted{ color:#7c6a58; }
+    .inline-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+
+    .chip{
+      display:inline-flex; align-items:center; gap:6px; padding:6px 10px;
+      border:1px solid #eadfce; border-radius:999px; background:#fffaf2; font-size:.9rem;
+    }
+
+    /* Modal */
+    .modal-backup { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+      z-index:10000; justify-content:center; align-items:center; padding:16px; box-sizing:border-box; }
+    .modal-conteudo { background:#fff7ed; padding:24px; border-radius:12px; width:100%; max-width:520px;
+      border:1px solid #eadfce; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+    .modal-conteudo h3{ margin:0 0 10px; color:#5c4033; font-size:20px; }
+    .modal-conteudo label{ font-size:.95rem; color:#5c4033; }
+    .modal-conteudo select, .modal-conteudo input{
+      width:100%; padding:10px; margin:10px 0; border:1px solid #e6ded2; border-radius:10px; background:#fff;
+    }
+    .botoes-modal { text-align:right; margin-top:10px; }
+
+    /* Tabela simples */
+    table.snap { width:100%; border-collapse:collapse; font-size:.95rem; }
+    table.snap th, table.snap td { padding:8px 10px; border-top:1px solid #eadfce; text-align:left; }
+    table.snap th { background:#fff7ed; color:#5c4033; }
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="shield-check"></i> Backup e Segurança</h1>
+
+        <!-- SEGURANÇA -->
+        <div class="bloco">
+          <h2><i data-lucide="lock"></i> Segurança do Sistema</h2>
+          <div class="grid-2">
+            <div>
+              <ul>
+                <li>Expiração automática de sessão por inatividade (configurável)</li>
+                <li>Controle de acesso por perfil e permissões</li>
+                <li>Histórico de logs de backup/restauração</li>
+                <li>Bloqueio após tentativas inválidas de login (no middleware)</li>
+              </ul>
+              <div class="help">
+                <div><b>Usuário logado:</b> <span id="usrInfo">—</span></div>
+                <div><b>Firebase detectado:</b> <span id="fbDetect">—</span></div>
+                As políticas avançadas (bloqueio, IP allowlist) serão aplicadas pelo <b>Middleware de Permissões</b> no deploy.
+              </div>
+            </div>
+            <div>
+              <label for="sessaoTimeoutMin">Tempo de inatividade p/ logout (minutos)</label>
+              <input id="sessaoTimeoutMin" type="number" min="1" step="1" value="20"/>
+              <div class="inline-actions" style="margin-top:8px">
+                <button id="btnAplicarSessao" class="botao-dourado"><i data-lucide="save"></i> Aplicar</button>
+                <span class="chip"><i data-lucide="timer"></i> <span id="sessaoStatus" class="muted">Padrão: 20 min</span></span>
+              </div>
+
+              <hr style="margin:16px 0; border:none; border-top:1px solid #eadfce" />
+
+              <label>IP Allowlist (somente referência — aplicação real no backend)</label>
+              <input id="ipNovo" type="text" placeholder="Ex.: 200.201.202.203/32 ou 200.201.0.0/16"/>
+              <div class="inline-actions" style="margin-top:8px">
+                <button id="btnAddIP" class="botao-dourado"><i data-lucide="plus"></i> Adicionar</button>
+                <button id="btnDetectarIP" class="botao-dourado" title="Consulta serviço público ipify"><i data-lucide="radar"></i> Detectar meu IP</button>
+              </div>
+              <div id="listaIPs" class="help" style="margin-top:10px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BACKUP MANUAL / EXPORTAÇÕES -->
+        <div class="bloco">
+          <h2><i data-lucide="database"></i> Backup Manual & Exportações</h2>
+          <p>Faça o download completo dos dados do sistema.</p>
+          <div class="inline-actions">
+            <button id="btnBackupManual" class="botao-dourado"><i data-lucide="download-cloud"></i> Exportar JSON</button>
+            <button id="btnExportarExcel" class="botao-dourado"><i data-lucide="file-spreadsheet"></i> Exportar Excel</button>
+           <button id="btnBackupServidor" class="botao-dourado" style="background:#a67c00;color:#fff">
+  <i data-lucide="database"></i> Backup do servidor
+</button>
+            <button id="btnRestaurarBackup" class="botao-dourado"><i data-lucide="upload-cloud"></i> Restaurar (.json)</button>
+            <button id="btnLimparCaches" class="botao-dourado" style="background:#dcc6a2;color:#3a2a1c">
+             <i data-lucide="trash-2"></i> Limpar caches
+            </button>
+          </div>
+          <input type="file" id="inputBackup" accept=".json" style="display:none" />
+          <p id="infoBackup" style="margin-top:10px; font-size:.9rem; color:#5c4033;"></p>
+        </div>
+
+        <!-- BACKUP AUTOMÁTICO -->
+        <div class="bloco">
+          <h2><i data-lucide="clock"></i> Backup Automático (Sombra)</h2>
+          <p>O sistema guarda snapshots no próprio navegador (sem pedir download) seguindo a frequência configurada.</p>
+          <div class="inline-actions" style="margin-bottom:8px;">
+            <button id="btnAbrirModalBackup" class="botao-dourado"><i data-lucide="settings"></i> Configurar</button>
+            <button id="btnRodarAutoAgora" class="botao-dourado"><i data-lucide="play"></i> Executar agora</button>
+            <button id="btnExportarUltimoAuto" class="botao-dourado"><i data-lucide="download"></i> Exportar último auto-backup</button>
+          </div>
+          <div class="help">
+            <span class="chip"><i data-lucide="calendar-clock"></i> Frequência: <b id="freqInfo">—</b></span>
+            <span class="chip"><i data-lucide="archive"></i> Retenção: <b id="retInfo">—</b></span>
+            <div id="autoInfo" style="margin-top:8px" class="muted"></div>
+          </div>
+        </div>
+
+        <!-- LISTA DE SNAPSHOTS -->
+        <div class="bloco">
+          <h2><i data-lucide="history"></i> Snapshots</h2>
+          <p class="help">
+            Abaixo listamos os snapshots do <b>backend</b> (server.js) e os <b>locais</b> (auto + por chave).
+          </p>
+
+          <!-- Botão novo: Criar Snapshot Agora -->
+          <div class="inline-actions" style="margin:10px 0 6px;">
+            <button id="btnSnapCreateNow" class="botao-dourado">
+              <i data-lucide="hard-drive-download"></i> Criar snapshot agora
+            </button>
+          </div>
+
+          <div id="snapTableWrap"></div>
+        </div>
+
+        <!-- INTEGRAÇÃO COM FIREBASE -->
+        <div class="bloco">
+          <h2><i data-lucide="cloud-upload"></i> Integração com Firebase (opcional)</h2>
+          <p class="help">
+            Se o SDK do Firebase estiver carregado e configurado (<code>window.firebase</code>), cada backup manual/automático
+            tenta enviar o snapshot para a coleção <code>backups</code> (Firestore) ou caminho <code>/backups</code> (Realtime DB).
+          </p>
+          <div class="inline-actions">
+            <button id="btnTestarFirebase" class="botao-dourado"><i data-lucide="wifi"></i> Testar conexão</button>
+            <span id="fbStatus" class="muted"></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL DE CONFIG DO BACKUP AUTO -->
+  <div id="modalBackup" class="modal-backup" aria-hidden="true">
+    <div class="modal-conteudo" role="dialog" aria-modal="true" aria-labelledby="tituloModalBackup">
+      <h3 id="tituloModalBackup">Configurar Backup Automático</h3>
+      <label for="frequencia">Intervalo (dias):</label>
+      <select id="frequencia">
+        <option value="1">A cada 1 dia</option>
+        <option value="7" selected>A cada 7 dias</option>
+        <option value="30">A cada 30 dias</option>
+      </select>
+      <label for="retencao">Retenção (quantidade de versões guardadas):</label>
+      <input id="retencao" type="number" min="1" step="1" value="10" />
+      <div class="botoes-modal">
+        <button id="btnSalvarFrequencia" class="botao-dourado">Salvar</button>
+        <button id="btnFecharModal" class="botao-dourado" style="background:#ccc; color:#333;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Menu (carrega núcleo/idle/logout global) -->
+<script type="module" src="menu-lateral.js"></script>
+
+  <!-- Controller da página (modo backend real) -->
+  <script>
+    /* ===================== Ajuste de layout p/ menu fixo ===================== */
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    /* ===================== Helpers globais (sem duplicar) ===================== */
+    (function(){
+      if (typeof window.$ !== 'function') {
+        window.$ = (s, el=document) => el.querySelector(s);
+      }
+      if (typeof window.$$ !== 'function') {
+        window.$$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+      }
+      if (typeof window.esc !== 'function') {
+        // CORRIGIDO: '>' agora vira &gt; (antes estava &lt;)
+        window.esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[m]));
+      }
+      if (typeof window.fmtBR !== 'function') {
+        window.fmtBR = (iso) => { try { return new Date(iso).toLocaleString('pt-BR'); } catch { return String(iso||''); } };
+      }
+    })();
+
+    // Base da API
+    function apiBase(){
+      return window.__API_BASE__ || localStorage.getItem('API_BASE') || 'http://localhost:3001';
+    }
+
+    /**
+     * Chama a API real (server.js) sempre com x-tenant-id: default.
+     * - GET: se "body" vier, vira querystring (?k=v)
+     * - Outros métodos: envia JSON no corpo
+     * - Retorna JSON quando houver "application/json"; senão, texto
+     */
+    async function api(endpoint, method='GET', body){
+      let url = apiBase() + String(endpoint || '');
+
+      const isGet = String(method || 'GET').toUpperCase() === 'GET';
+      const opts = { method: String(method || 'GET').toUpperCase(), headers: { 'x-tenant-id':'default' } };
+
+      if (isGet) {
+        if (body && typeof body === 'object' && Object.keys(body).length){
+          const qs = new URLSearchParams(body).toString();
+          url += (url.includes('?') ? '&' : '?') + qs;
+        }
+      } else {
+        opts.headers['Content-Type'] = 'application/json';
+        if (body !== undefined) opts.body = JSON.stringify(body);
+      }
+
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const text = await res.text().catch(()=>String(res.status));
+        throw new Error(`API error: ${res.status} — ${text}`);
+      }
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      return ct.includes('application/json') ? res.json() : res.text();
+    }
+
+    /* ===================== CONFIG BÁSICA ===================== */
+    const SESSAO_TIMEOUT_MIN_PADRAO = Number(localStorage.getItem('sessao.timeout.min')) || 20;
+    const AUTO_BKP_FREQ_DIAS = Number(localStorage.getItem('frequenciaBackup')) || 7;
+    const AUTO_BKP_RETENCAO  = Number(localStorage.getItem('autoBackupRetencao')) || 10;
+    const AUTO_BKP_KEY       = '__autoBackups';      // anel de retenção local
+    const AUTO_BKP_META_KEY  = '__autoBackups.meta'; // meta local
+
+    // Ícones iniciais
+    document.addEventListener('DOMContentLoaded', () => { window.lucide?.createIcons?.(); });
+
+    /* ===================== Segurança / sessão / firebase detect ===================== */
+    (function initSessao(){
+      const input = $('#sessaoTimeoutMin');
+      const status = $('#sessaoStatus');
+      const usrSpan = $('#usrInfo');
+      const fbSpan  = $('#fbDetect');
+
+      const user = (()=>{ try{
+        const u = JSON.parse(localStorage.getItem('usuarioAtual')||'null');
+        return (u?.nome || u?.email || localStorage.getItem('usuario') || '—');
+      }catch{ return localStorage.getItem('usuario') || '—'; }})();
+      usrSpan.textContent = user;
+
+      fbSpan.textContent = (window.firebase && (firebase.firestore || firebase.database)) ? 'SIM' : 'NÃO';
+
+      input.value = SESSAO_TIMEOUT_MIN_PADRAO;
+      status.textContent = `Atual: ${SESSAO_TIMEOUT_MIN_PADRAO} min`;
+
+      $('#btnAplicarSessao')?.addEventListener('click', ()=>{
+        const v = Math.max(1, Number(input.value)||SESSAO_TIMEOUT_MIN_PADRAO);
+        localStorage.setItem('sessao.timeout.min', String(v));
+        status.textContent = `Atual: ${v} min`;
+        if (window.__idleLogout?.reset) {
+          window.__idleLogout.reset();
+        } else {
+          setTimeout(()=>{ location.href = 'login.html'; }, v*60*1000);
+        }
+      });
+    })();
+
+    /* ===================== IP Allowlist (UI local) ===================== */
+    (function ipAllowlistUI(){
+      const $lista = $('#listaIPs');
+      const $novo = $('#ipNovo');
+      function render(){
+        const ips = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+        $lista.innerHTML = ips.length
+          ? ips.map((ip,idx)=>`<span class="chip" title="Clique p/ remover" data-idx="${idx}"><i data-lucide="shield"></i>${esc(ip)}</span>`).join(' ')
+          : '<span class="muted">Nenhum IP cadastrado.</span>';
+        window.lucide?.createIcons?.();
+        $lista.querySelectorAll('.chip').forEach(ch=>{
+          ch.addEventListener('click', ()=>{
+            const i = Number(ch.getAttribute('data-idx'));
+            const ips2 = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+            ips2.splice(i,1);
+            localStorage.setItem('ip.allowlist', JSON.stringify(ips2));
+            render();
+          });
+        });
+      }
+      $('#btnAddIP')?.addEventListener('click', ()=>{
+        const v = ($novo.value||'').trim();
+        if (!v) return;
+        const ips = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+        if (!ips.includes(v)) ips.push(v);
+        localStorage.setItem('ip.allowlist', JSON.stringify(ips));
+        $novo.value = '';
+        render();
+      });
+      $('#btnDetectarIP')?.addEventListener('click', async ()=>{
+        try{
+          const r = await fetch('https://api.ipify.org?format=json');
+          const j = await r.json();
+          $novo.value = j.ip || '';
+        }catch{
+          alert('Não foi possível detectar o IP agora.');
+        }
+      });
+      render();
+    })();
+
+    /* ===================== Backup Manual / Excel / Restauração / Limpar caches ===================== */
+   (function backupManual(){
+  const btnBackupManual   = $("#btnBackupManual");
+  const btnBackupServidor = $("#btnBackupServidor");
+  const btnRestaurar      = $("#btnRestaurarBackup");
+  const inputBackup       = $("#inputBackup");
+  const infoBackup        = $("#infoBackup");
+  const btnExcel          = $("#btnExportarExcel");
+  const btnLimparCaches   = $("#btnLimparCaches");
+
+        // Backup direto do servidor (banco/API)
+btnBackupServidor?.addEventListener('click', async () => {
+  if (!confirm('Gerar backup direto do servidor (banco na nuvem)?')) return;
+  const old = btnBackupServidor.textContent;
+  btnBackupServidor.disabled = true;
+  btnBackupServidor.textContent = 'Gerando backup...';
+  try {
+    const resp = await api('/backup/dump', 'POST', {});
+    console.log('Resposta /backup/dump:', resp);
+    const realName = (resp && resp.name) ? resp.name : '(sem nome)';
+    alert('✅ Backup do servidor criado: ' + realName);
+  } catch (e) {
+    console.error('[Backup] Erro ao chamar /backup/dump:', e);
+    alert('Não foi possível criar o backup do servidor agora.');
+  } finally {
+    btnBackupServidor.disabled = false;
+    btnBackupServidor.textContent = old;
+  }
+});
+
+
+
+      atualizaInfo();
+
+      btnBackupManual?.addEventListener("click", () => {
+        try{
+          const dump = coletarDumpLocalStorage();
+          downloadJSON(dump, gerarNomeArquivo('backup-sistema','json'));
+          localStorage.setItem("ultimoBackupManual", new Date().toISOString());
+          salvarLog("Backup manual (JSON)");
+          tentarEnviarParaFirebase('manual', dump);
+          atualizaInfo();
+        }catch(e){
+          console.error(e); alert("Não foi possível gerar o backup agora.");
+        }
+      });
+
+      btnExcel?.addEventListener('click', ()=>{
+        try{
+          const dump = coletarDumpLocalStorage();
+          exportarExcelDoDump(dump);
+          salvarLog("Backup manual (Excel)");
+        }catch(e){
+          console.error(e); alert("Falha ao exportar Excel.");
+        }
+      });
+
+      btnRestaurar?.addEventListener("click", () => inputBackup?.click());
+      inputBackup?.addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const dados = JSON.parse(String(evt.target?.result || '{}'));
+            if (!confirm("Isso substituirá dados atuais salvos no navegador. Deseja continuar?")) return;
+            for (const chave in dados) {
+              if (!Object.prototype.hasOwnProperty.call(dados, chave)) continue;
+              if (chave === '__backup_meta') continue;
+              localStorage.setItem(chave, dados[chave]);
+            }
+            localStorage.setItem("ultimaRestauracao", new Date().toISOString());
+            salvarLog("Restauração concluída");
+            alert("Backup restaurado com sucesso!");
+            location.reload();
+          } catch {
+            alert("Erro ao importar o backup. Verifique o arquivo selecionado.");
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      btnLimparCaches?.addEventListener('click', ()=>{
+        if (!confirm('Remover caches temporários (layout/snapshot/_html/_imagem/cache/tmp/buffer)?')) return;
+        const re = /(layout|snapshot|_html|_imagem|cache|tmp|buffer)/i;
+        const removidas = [];
+        for (let i=localStorage.length-1;i>=0;i--){
+          const k = localStorage.key(i);
+          if (re.test(k)) { removidas.push(k); localStorage.removeItem(k); }
+        }
+        salvarLog('Limpeza de caches', { removidas });
+        alert(`Removidas ${removidas.length} chaves de cache.`);
+      });
+
+      function atualizaInfo() {
+        const bkp = localStorage.getItem("ultimoBackupManual");
+        const res = localStorage.getItem("ultimaRestauracao");
+        let html = "";
+        if (bkp) html += `🕒 Último backup manual: ${esc(fmtBR(bkp))}<br>`;
+        if (res) html += `🔁 Última restauração: ${esc(fmtBR(res))}`;
+        infoBackup.innerHTML = html || '<span class="muted">Ainda não foi realizado backup/restauração.</span>';
+      }
+    })();
+
+    function gerarNomeArquivo(prefixo='backup-sistema', ext='json'){
+      const d = new Date(); const pad = (n)=>String(n).padStart(2,'0');
+      return `${prefixo}-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.${ext}`;
+    }
+
+    function coletarDumpLocalStorage(){
+      const dump = {};
+      for (let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        dump[k] = localStorage.getItem(k);
+      }
+      const usuarioAtual = (()=>{ try{
+        const u = JSON.parse(localStorage.getItem('usuarioAtual') || 'null');
+        if (u && (u.id || u.nome)) return u.id || u.nome;
+      }catch{} return localStorage.getItem('usuario') || 'admin'; })();
+      const versaoSistema = localStorage.getItem('app.version') || '1.0.0';
+      dump.__backup_meta = { createdAt:new Date().toISOString(), origin:location.origin, usuario:usuarioAtual, versaoSistema };
+      return dump;
+    }
+
+    function salvarLog(acao, extra){
+      try{
+        const logs = JSON.parse(localStorage.getItem("logs") || "[]");
+        logs.push({ data: new Date().toISOString(), acao, ...(extra||{}) });
+        localStorage.setItem("logs", JSON.stringify(logs));
+      }catch{}
+    }
+
+    function downloadJSON(obj, nome){
+      const dados = JSON.stringify(obj, null, 2);
+      const blob  = new Blob([dados], { type: "application/json" });
+      const url   = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = nome; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportarExcelDoDump(dump){
+      const wb = XLSX.utils.book_new();
+      const meta = dump.__backup_meta || {};
+      const visao = [
+        ["Origin", meta.origin || location.origin],
+        ["Criado em", meta.createdAt || new Date().toISOString()],
+        ["Total de chaves", Object.keys(dump).filter(k=>k!=='__backup_meta').length]
+      ];
+      const sh1 = XLSX.utils.aoa_to_sheet(visao);
+      XLSX.utils.book_append_sheet(wb, sh1, "VisaoGeral");
+      const linhas = [["Chave", "Bytes", "Preview"]];
+      for (const k of Object.keys(dump)){
+        if (k === '__backup_meta') continue;
+        const v = String(dump[k] ?? '');
+        linhas.push([k, new Blob([v]).size, v.slice(0, 2000)]);
+      }
+      const sh2 = XLSX.utils.aoa_to_sheet(linhas);
+      XLSX.utils.book_append_sheet(wb, sh2, "Chaves");
+      XLSX.writeFile(wb, gerarNomeArquivo('backup-sistema', 'xlsx'));
+    }
+
+    /* ===================== Auto-backup (sombra com retenção + servidor) ===================== */
+    (function autoBackup(){
+      function lerMeta(){ try { return JSON.parse(localStorage.getItem(AUTO_BKP_META_KEY)) || { lastRun:null, freqDias:7, ret:10 }; } catch { return { lastRun:null, freqDias:7, ret:10 }; } }
+      function salvarMeta(meta){ try { localStorage.setItem(AUTO_BKP_META_KEY, JSON.stringify(meta)); } catch {} }
+      function lerLista(){ try { return JSON.parse(localStorage.getItem(AUTO_BKP_KEY)) || []; } catch { return []; } }
+      function salvarLista(arr){ try { localStorage.setItem(AUTO_BKP_KEY, JSON.stringify(arr || [])); } catch {} }
+
+      const btnAbrirModal  = $("#btnAbrirModalBackup");
+      const btnFecharModal = $("#btnFecharModal");
+      const modal          = $("#modalBackup");
+      const selFrequencia  = $("#frequencia");
+      const inpRetencao    = $("#retencao");
+      const btnSalvarFreq  = $("#btnSalvarFrequencia");
+      const btnRodarAgora  = $("#btnRodarAutoAgora");
+      const btnExportAuto  = $("#btnExportarUltimoAuto");
+      const freqInfo       = $("#freqInfo");
+      const retInfo        = $("#retInfo");
+      const autoInfo       = $("#autoInfo");
+
+      function atualizarResumo(){
+        const meta  = lerMeta();
+        const lista = lerLista();
+        const last  = lista[lista.length-1];
+
+        if (freqInfo) freqInfo.textContent = `${meta.freqDias} dia(s)`;
+        if (retInfo)  retInfo.textContent  = `${meta.ret} versões`;
+        if (autoInfo) {
+          autoInfo.innerHTML = last
+            ? `Último auto-backup: <b>${esc(fmtBR(last.createdAt))}</b> (${esc(last.name||'auto')}) — total de versões armazenadas: ${lista.length}`
+            : '<span class="muted">Nenhum auto-backup armazenado ainda.</span>';
+        }
+        if (typeof window.renderSnapshotsTable === 'function') {
+          try { window.renderSnapshotsTable(); } catch {}
+        }
+      }
+
+          async function rodarAutoBackup(){
+        // Nome "provisório" só para mostrar na interface
+        const nomeArq = `dump-auto-${new Date().toISOString().replace(/[:T\-\.Z]/g,'').slice(0,14)}.json`;
+
+        // 1) Atualiza retenção local (apenas metadados)
+        const meta  = lerMeta();
+        const lista = lerLista();
+        const novo  = { name: nomeArq, createdAt: new Date().toISOString(), origem: 'servidor' };
+        lista.push(novo);
+        while (lista.length > Number(meta.ret || 10)) lista.shift();
+        salvarLista(lista);
+
+        // 2) Pede para o SERVIDOR gerar o dump do banco
+        try {
+          const resp = await api('/backup/dump', 'POST', {});
+          console.log('Auto-backup /backup/dump =>', resp);
+          const realName = (resp && resp.name) ? resp.name : nomeArq;
+
+          // Atualiza o nome na lista local com o nome real que o servidor gerou
+          novo.name = realName;
+          salvarLista(lista);
+
+          try { alert('✅ Auto-backup criado no servidor: ' + realName); } catch {}
+        } catch (e) {
+          console.error('[Auto-backup] Erro ao chamar /backup/dump:', e);
+          try { alert('Não foi possível criar o auto-backup no servidor agora.'); } catch {}
+        }
+
+        // 3) Marca a data da última execução e atualiza o resumo na tela
+        meta.lastRun = new Date().toISOString();
+        salvarMeta(meta);
+        atualizarResumo();
+      }
+
+      // Listeners do modal/ações
+      btnAbrirModal?.addEventListener('click', ()=>{ if (modal) modal.style.display = 'flex'; });
+      btnFecharModal?.addEventListener('click', ()=>{ if (modal) modal.style.display = 'none'; });
+      modal?.addEventListener('click', (e)=>{ if (e.target===modal) modal.style.display='none'; });
+
+      btnSalvarFreq?.addEventListener('click', ()=>{
+        const meta = lerMeta();
+        const dias = Number(selFrequencia?.value || meta.freqDias || 7);
+        const ret  = Math.max(1, Number(inpRetencao?.value || meta.ret || 10));
+        meta.freqDias = Math.max(1, dias);
+        meta.ret      = ret;
+        salvarMeta(meta);
+        localStorage.setItem("frequenciaBackup", String(meta.freqDias));
+        localStorage.setItem("autoBackupRetencao", String(meta.ret));
+        if (modal) modal.style.display = 'none';
+        atualizarResumo();
+        alert(`Configurações salvas: ${meta.freqDias} dia(s), retenção ${meta.ret}.`);
+      });
+
+      btnRodarAgora?.addEventListener('click', async ()=>{
+        btnRodarAgora.disabled = true;
+        const old = btnRodarAgora.textContent;
+        btnRodarAgora.textContent = 'Gerando...';
+        await rodarAutoBackup();
+        btnRodarAgora.textContent = old;
+        btnRodarAgora.disabled = false;
+      });
+
+      btnExportAuto?.addEventListener('click', ()=>{
+        const lista = lerLista();
+        if (!lista.length){ alert('Nenhum auto-backup disponível.'); return; }
+        const last = lista[lista.length-1];
+        downloadJSON(last.data, last.name);
+      });
+
+      // Agenda automática (6h)
+      (function schedule(){
+        const meta = lerMeta();
+        selFrequencia.value = String(meta.freqDias || AUTO_BKP_FREQ_DIAS);
+        inpRetencao.value   = String(meta.ret || AUTO_BKP_RETENCAO);
+        atualizarResumo();
+
+        if (meta.lastRun){
+          const ms = Date.now() - new Date(meta.lastRun).getTime();
+          const dias = ms / (1000*60*60*24);
+          if (dias >= (Number(meta.freqDias)||7)) { rodarAutoBackup(); }
+        } else {
+          meta.lastRun = new Date().toISOString();
+          salvarMeta(meta);
+          atualizarResumo();
+        }
+
+        setInterval(()=>{
+          const m = lerMeta();
+          if (!m.lastRun) return;
+          const decorrido = Date.now() - new Date(m.lastRun).getTime();
+          const dias = decorrido / (1000*60*60*24);
+          if (dias >= (Number(m.freqDias)||7)) { rodarAutoBackup(); }
+        }, 6 * 60 * 60 * 1000);
+      })();
+    })();
+
+    /* ===================== Tabela de Snapshots (backend + locais) ===================== */
+    async function renderSnapshotsTable(){
+      const wrap = document.getElementById('snapTableWrap');
+      if (!wrap) return;
+
+      // ========== 0) Ação: Criar snapshot agora (PUT /backup/snapshot) ==========
+      const btnCreate = document.getElementById('btnSnapCreateNow');
+      if (btnCreate && !btnCreate.__bound){
+        btnCreate.__bound = true;
+        btnCreate.addEventListener('click', async ()=>{
+          const name = (()=>{
+            const d = new Date(); const pad = n=>String(n).padStart(2,'0');
+            return `snap-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+          })();
+      try{
+    const resp = await api('/backup/dump', 'POST', { name });
+    const realName = resp?.name || name;
+    alert('✅ Backup do servidor criado: ' + realName);
+    renderSnapshotsTable();
+  }catch(e){
+            console.warn('Criar snapshot agora falhou:', e);
+            alert('Não consegui criar o snapshot agora.');
+          }
+        });
+      }
+
+      // ========== 1) BACKEND REAL ==========
+      let html = '<h3 style="margin:8px 0 6px;color:#5c4033;display:flex;align-items:center;gap:8px;"><i data-lucide="server"></i> Backend</h3>';
+      let files = [];
+      try {
+        const list = await api('/backup/snapshot','GET');
+        files = Array.isArray(list?.files) ? list.files : (Array.isArray(list) ? list : []);
+      } catch (e) {
+        console.warn('GET /backup/snapshot falhou:', e);
+      }
+
+      if (!files.length){
+        html += '<div class="muted">Nenhum snapshot no backend.</div>';
+      } else {
+        const rows = files.map(name => {
+          const safe = String(name);
+          return `
+            <tr data-name="${safe}">
+              <td>${safe}</td>
+              <td class="inline-actions">
+                <button class="botao-dourado js-open"   title="Abrir (preview)">Abrir</button>
+                <button class="botao-dourado js-export" title="Exportar JSON (cache)">Exportar</button>
+                <button class="botao-dourado js-delete" title="Excluir snapshot">Excluir</button>
+              </td>
+            </tr>`;
+        }).join('');
+        html += `
+          <table class="snap">
+            <thead><tr><th>Arquivo</th><th>Ações</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      // ========== 2) LOCAIS (auto + por chave) ==========
+      function listarSnapshotsPorChave(){
+        const out = [];
+        for (let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if (k && k.startsWith('backup:')){
+            const [, chave, ts] = k.split(':');
+            const val = localStorage.getItem(k) || '';
+            out.push({ tipo:'chave', chave, ts:Number(ts)||Date.now(), key:k, bytes:new Blob([val]).size, data:val });
+          }
+        }
+        return out.sort((a,b)=>b.ts-a.ts);
+      }
+      const autos = JSON.parse(localStorage.getItem('__autoBackups') || '[]')
+        .map(a => ({ tipo:'auto', ts:new Date(a.createdAt).getTime(), name:a.name, data:a.data, bytes:new Blob([JSON.stringify(a.data)]).size }));
+      const chaves = listarSnapshotsPorChave();
+
+      html += '<h3 style="margin:16px 0 6px;color:#5c4033;display:flex;align-items:center;gap:8px;"><i data-lucide="hard-drive"></i> Locais (navegador)</h3>';
+      if (!autos.length && !chaves.length){
+        html += '<div class="muted">Nenhum snapshot local.</div>';
+      } else {
+        let t = '<table class="snap"><thead><tr><th>Tipo</th><th>Quando</th><th>Chave / Nome</th><th>Tamanho</th><th>Ação</th></tr></thead><tbody>';
+        autos.forEach(a=>{
+          t += `<tr>
+            <td>Auto</td>
+            <td>${a.ts ? new Date(a.ts).toLocaleString('pt-BR') : '-'}</td>
+            <td>${(a.name||'auto')}</td>
+            <td>${a.bytes} B</td>
+            <td><button class="botao-dourado" data-act="rest-auto" data-ts="${a.ts}">Restaurar</button></td>
+          </tr>`;
+        });
+        chaves.forEach(c=>{
+          t += `<tr>
+            <td>Chave</td>
+            <td>${c.ts ? new Date(c.ts).toLocaleString('pt-BR') : '-'}</td>
+            <td>${c.chave}</td>
+            <td>${c.bytes} B</td>
+            <td><button class="botao-dourado" data-act="rest-chave" data-key="${c.key}">Restaurar</button></td>
+          </tr>`;
+        });
+        t += '</tbody></table>';
+        html += t;
+      }
+
+      wrap.innerHTML = html;
+      window.lucide?.createIcons?.();
+
+      // --- Ações backend ---
+      wrap.querySelectorAll('.js-open').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const name = btn.closest('tr')?.getAttribute('data-name');
+          if (!name) return;
+          try{
+            const res = await api('/backup/snapshot','GET',{ name });
+            const txt = (typeof res === 'string') ? res : JSON.stringify(res, null, 2);
+            const blob = new Blob([txt], { type: 'application/json' });
+            const url  = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(()=>URL.revokeObjectURL(url), 10000);
+          }catch(e){
+            alert('Não foi possível abrir o snapshot.');
+          }
+        });
+      });
+
+      wrap.querySelectorAll('.js-export').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const name = btn.closest('tr')?.getAttribute('data-name');
+          if (!name) return;
+          const full = localStorage.getItem('backup:full:' + name);
+          if (!full){ alert('Conteúdo completo não está em cache local deste navegador.'); return; }
+          const blob = new Blob([full], { type:'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = name;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+      });
+
+      wrap.querySelectorAll('.js-delete').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const name = btn.closest('tr')?.getAttribute('data-name');
+          if (!name) return;
+          if (!confirm('Excluir o snapshot "' + name + '"?')) return;
+          try{
+            await api('/backup/snapshot','DELETE',{ name });
+            localStorage.removeItem('backup:full:' + name);
+            renderSnapshotsTable();
+          }catch(e){
+            const msg = (e && e.message) ? e.message : 'Erro ao excluir.';
+            alert(msg);
+          }
+        });
+      });
+
+      // --- Ações locais ---
+      wrap.querySelectorAll('button[data-act="rest-auto"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const ts = Number(btn.getAttribute('data-ts'));
+          const lista = JSON.parse(localStorage.getItem('__autoBackups') || '[]');
+          const item = lista.find(it => new Date(it.createdAt).getTime() === ts);
+          if (!item) return alert('Auto-backup não encontrado.');
+          const dump = item.data || {};
+          if (!confirm('Restaurar o auto-backup inteiro? Isso sobrescreverá as chaves atuais.')) return;
+          for (const k of Object.keys(dump)){
+            if (k === '__backup_meta') continue;
+            localStorage.setItem(k, dump[k]);
+          }
+          localStorage.setItem('ultimaRestauracao', new Date().toISOString());
+          alert('Restauração concluída. Recarregando…');
+          location.reload();
+        });
+      });
+
+      wrap.querySelectorAll('button[data-act="rest-chave"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const fullKey = btn.getAttribute('data-key'); // backup:<chave>:<ts>
+          if (!fullKey) return;
+          const [, chave] = fullKey.split(':');
+          if (!confirm(`Restaurar snapshot da chave "${chave}"?`)) return;
+          const val = localStorage.getItem(fullKey);
+          if (val == null) return alert('Snapshot não encontrado.');
+          localStorage.setItem(chave, val);
+          const logs = JSON.parse(localStorage.getItem("logs") || "[]");
+          logs.push({ data: new Date().toISOString(), acao:'Restauração por chave', chave, fullKey });
+          localStorage.setItem("logs", JSON.stringify(logs));
+          alert(`Chave "${chave}" restaurada.`);
+          location.reload();
+        });
+      });
+    }
+
+    /* ===================== Firebase (opcional) ===================== */
+    function firebaseDisponivel(){
+      return !!(window.firebase && (firebase.firestore || firebase.database));
+    }
+    function tentarEnviarParaFirebase(tipo, dump){
+      try{
+        if (!firebaseDisponivel()) return;
+        if (firebase.firestore){
+          const db = firebase.firestore();
+          db.collection('backups').add({
+            tipo, createdAt: new Date(), origin: location.origin,
+            tamanhoBytes: new Blob([JSON.stringify(dump)]).size
+          }).catch(()=>{});
+        } else if (firebase.database){
+          const db = firebase.database();
+          db.ref('/backups').push({
+            tipo, createdAt: new Date().toISOString(), origin: location.origin
+          });
+        }
+      }catch{}
+    }
+    (function botoesFirebase(){
+      const btn = $('#btnTestarFirebase'); const out = $('#fbStatus');
+      btn?.addEventListener('click', ()=>{
+        if (firebaseDisponivel()){
+          out.textContent = 'Firebase detectado. Backups serão enviados.';
+        } else {
+          out.textContent = 'Firebase NÃO detectado nesta página.';
+        }
+      });
+    })();
+
+    // Render inicial da lista de snapshots (depois que a página carrega)
+    document.addEventListener('DOMContentLoaded', ()=> {
+      window.lucide?.createIcons?.();
+      renderSnapshotsTable();
+    });
+    // === INÍCIO PATCH FF-3 (Backups UI — Snapshots API) ===
+(function backupsAPI(){
+  const base = (typeof window.__API_BASE__ === 'string') ? window.__API_BASE__ : '';
+
+  // 1) Criar snapshot agora
+  const btnCriar = document.getElementById('btnCriarSnapshotAgora') 
+                || document.querySelector('[data-bkp-criar]');
+  btnCriar?.addEventListener('click', async () => {
+    const nome = `snap-${new Date().toISOString().replace(/[:T\-\.Z]/g,'').slice(0,14)}.json`;
+    // pode enviar seus dados locais juntos, se quiser: const data = coletarDumpLocalStorage();
+    try{
+      const r = await fetch(base + '/backup/snapshot', {
+        method:'PUT',
+        headers:{ 'content-type':'application/json', 'x-tenant-id':'default' },
+        body: JSON.stringify({ name: nome /*, data*/ })
+      });
+      if (!r.ok){ alert('Falha ao criar snapshot.'); return; }
+      alert('✅ Snapshot criado: ' + nome);
+      renderSnapshotsTable?.();
+    }catch(e){ alert('Não foi possível criar snapshot agora.'); }
+  });
+
+  // 2) Funções auxiliares para Exportar/Excluir (se a sua tabela já chama essas classes)
+  document.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.js-open,.js-export,.js-delete');
+    if (!btn) return;
+    const row  = btn.closest('tr');
+    const name = row?.getAttribute('data-name');
+    if (!name) return;
+
+    if (btn.classList.contains('js-open')){
+      try{
+        const txt  = await fetch(base + '/backup/snapshot?name=' + encodeURIComponent(name),
+                                 { headers:{ 'x-tenant-id':'default' } }).then(r=>r.text());
+        const blob = new Blob([txt], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        window.open(url, '_blank'); setTimeout(()=>URL.revokeObjectURL(url), 10000);
+      }catch(e){ alert('Não foi possível abrir o snapshot.'); }
+    }
+
+    if (btn.classList.contains('js-export')){
+      const full = localStorage.getItem('backup:full:' + name);
+      if (!full){ alert('Conteúdo não está em cache local. Abra primeiro para cachear.'); return; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([full], {type:'application/json'}));
+      a.download = name; a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    if (btn.classList.contains('js-delete')){
+      if (!confirm('Excluir o snapshot "' + name + '"?')) return;
+      const r = await fetch(base + '/backup/snapshot?name=' + encodeURIComponent(name), {
+        method:'DELETE', headers:{ 'x-tenant-id':'default' }
+      });
+      if (r.ok){ localStorage.removeItem('backup:full:' + name); renderSnapshotsTable?.(); }
+      else { alert('Não foi possível excluir.'); }
+    }
+  });
+})();
+// === FIM PATCH FF-3 ===
+
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Escolas</title>
+
+  <!-- PERMISSÃO DA PÁGINA (para o guard/permissões) -->
+  <meta name="page-permission" content="page:kgb-formaturas-escolas.html">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- ESTILO ESPECÍFICO: LISTA DE ESCOLAS --------- */
+
+    .linha-topo-escolas{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo input,
+    .campo select,
+    .campo textarea{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      min-width:150px;
+      outline:none;
+      resize:vertical;
+    }
+    .campo textarea{
+      border-radius:10px;
+      min-height:50px;
+    }
+    .campo input:focus,
+    .campo select:focus,
+    .campo textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#c29a5d;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario i{
+      width:16px; height:16px;
+    }
+
+    .box-tabela-escolas{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+
+    .tabela-escolas{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-escolas thead{
+      background:#f5e7d8;
+    }
+    .tabela-escolas th,
+    .tabela-escolas td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-escolas th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-escolas tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .tag-ano{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+      margin-bottom:2px;
+    }
+    .tag-ano-arquivado{
+      background:#ececf1;
+      color:#555;
+      font-style:italic;
+    }
+
+    .acoes-escolas{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .btn-acao{
+      border:none;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-acao i{
+      width:13px; height:13px;
+    }
+    .btn-acao-danger{
+      background:#ffe8e5;
+      color:#a32222;
+    }
+
+    .btn-whats-linha{
+      border:none;
+      border-radius:999px;
+      padding:3px 8px;
+      font-size:11px;
+      cursor:pointer;
+      background:#25d366;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      margin-left:4px;
+      white-space:nowrap;
+    }
+    .btn-whats-linha i{
+      width:12px; height:12px;
+    }
+
+    .telefone-linha{
+      font-size:12px;
+      color:#6c4b30;
+      line-height:1.4;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .paginacao{
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .paginacao button{
+      border:none;
+      background:#f3e7da;
+      color:#6c4b30;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      cursor:pointer;
+    }
+
+    /* --------- MODAL (CADASTRO / EDIÇÃO DE ESCOLA) --------- */
+
+    .modal-backdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1200;
+    }
+    .modal-escola{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1201;
+    }
+    .modal-card{
+      background:#fff;
+      border-radius:16px;
+      padding:18px 20px 14px;
+      box-shadow:0 14px 40px rgba(0,0,0,.25);
+      max-width:620px;
+      width:100%;
+    }
+    .modal-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:8px;
+    }
+    .modal-header h2{
+      font-size:18px;
+      margin:0;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .modal-header button{
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      padding:4px;
+      border-radius:999px;
+    }
+    .modal-header button:hover{
+      background:#f5e7d8;
+    }
+    .modal-body{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:10px 14px;
+      margin-bottom:10px;
+    }
+    @media (max-width:620px){
+      .modal-body{
+        grid-template-columns:1fr;
+      }
+    }
+    .modal-body .campo input,
+    .modal-body .campo textarea{
+      border-radius:8px;
+      min-width:0;
+    }
+    .campo-full{
+      grid-column:1 / -1;
+    }
+    .modal-footer{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+    }
+    .paginacao button[disabled]{
+      opacity:.4;
+      cursor:default;
+    }
+
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    /* Backdrop do menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:900;
+    }
+
+    /* Travar scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+  </style>
+
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="school-2"></i> Escolas – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Cadastre e gerencie as escolas participantes das formaturas. O arquivamento será feito por ano na tela de alunos.
+        </p>
+
+        <div class="linha-topo-escolas">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="campoBuscaEscola">Pesquisar escola</label>
+              <input id="campoBuscaEscola" type="text" placeholder="Digite o nome da escola...">
+            </div>
+            <div class="campo">
+              <label for="selectAno">Ano da formatura</label>
+              <select id="selectAno">
+                <option value="">Todos os anos</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="button" class="btn-primario" id="btnNovaEscola">
+            <i data-lucide="plus"></i>
+            Cadastrar nova escola
+          </button>
+        </div>
+
+        <section class="box-tabela-escolas" aria-label="Lista de escolas">
+          <table class="tabela-escolas">
+            <thead>
+              <tr>
+                <th>Escola</th>
+                <th>Telefone / WhatsApp</th>
+                <th>Responsável</th>
+                <th>Anos com formatura</th>
+                <th style="width:280px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyEscolas">
+              <!-- será preenchido via JS -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoEscolas">Exibindo 0 escolas.</span>
+            <div class="paginacao">
+              <button disabled>&laquo;</button>
+              <button disabled>1</button>
+              <button disabled>&raquo;</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL DE CADASTRO / EDIÇÃO DA ESCOLA (INICIALMENTE ESCONDIDO) -->
+  <div id="modalEscolaBackdrop" class="modal-backdrop" style="display:none;"></div>
+  <div id="modalEscola" class="modal-escola" style="display:none;" aria-modal="true" role="dialog">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="tituloModalEscola">
+          <i data-lucide="school-2"></i>
+          Nova escola
+        </h2>
+        <button type="button" id="btnFecharModal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="campo">
+          <label for="escolaNome">Nome da escola</label>
+          <input type="text" id="escolaNome" placeholder="Ex.: Escola Alfa">
+        </div>
+        <div class="campo">
+          <label for="escolaTelefone">Telefone da escola</label>
+          <input type="text" id="escolaTelefone" placeholder="Ex.: (11) 2222-3344">
+        </div>
+        <div class="campo">
+          <label for="escolaResponsavel1">Responsável 1</label>
+          <input type="text" id="escolaResponsavel1" placeholder="Ex.: Maria Silva – Coordenação">
+        </div>
+        <div class="campo">
+          <label for="escolaResponsavel2">Responsável 2</label>
+          <input type="text" id="escolaResponsavel2" placeholder="Opcional">
+        </div>
+        <div class="campo">
+          <label for="escolaWhats1">Telefone / WhatsApp 1</label>
+          <input type="text" id="escolaWhats1" placeholder="Ex.: 11999998888">
+        </div>
+        <div class="campo">
+          <label for="escolaWhats2">Telefone / WhatsApp 2</label>
+          <input type="text" id="escolaWhats2" placeholder="Opcional">
+        </div>
+
+        <div class="campo campo-full">
+          <label for="escolaEndereco">Endereço da escola</label>
+          <input type="text" id="escolaEndereco" placeholder="Rua, número, bairro, cidade">
+        </div>
+        <div class="campo campo-full">
+          <label for="escolaObservacao">Observações</label>
+          <textarea id="escolaObservacao" placeholder="Anotações importantes sobre a escola (ex.: regras de uso do auditório, contatos alternativos, etc.)"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secundario" id="btnCancelarModal">
+          <i data-lucide="x"></i> Cancelar
+        </button>
+        <button type="button" class="btn-primario" id="btnSalvarEscola">
+          <i data-lucide="save"></i> Salvar escola
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <!-- Helper pro guard -->
+  <script>
+    function currentPageFile(){
+      return (location.pathname || '')
+        .split('/').pop()
+        .split('?')[0]
+        .split('#')[0];
+    }
+  </script>
+
+  <!-- Menu lateral -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Proteção / permissões -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Lógica da tela de escolas -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      /* ---------- MENU MOBILE ---------- */
+      const menu = document.getElementById('menuLateral');
+      const btn = document.getElementById('hamburguer');
+      const backdropMenu = document.getElementById('menuBackdrop');
+
+      if (btn && menu && backdropMenu) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdropMenu.hidden = !aberto;
+        };
+        btn.addEventListener('click', toggleMenu);
+        backdropMenu.addEventListener('click', toggleMenu);
+      }
+
+      /* ---------- LOCALSTORAGE ---------- */
+      const STORAGE_KEY = 'kgb-formaturas-escolas';
+
+      function carregarEscolas(){
+        try{
+          const texto = localStorage.getItem(STORAGE_KEY);
+          if (!texto) return [];
+          const arr = JSON.parse(texto);
+          return Array.isArray(arr) ? arr : [];
+        }catch(e){
+          console.warn('Erro ao carregar escolas do localStorage:', e);
+          return [];
+        }
+      }
+
+      function salvarEscolas(lista){
+        try{
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
+        }catch(e){
+          console.warn('Erro ao salvar escolas no localStorage:', e);
+        }
+      }
+
+      let escolas = carregarEscolas();
+
+      /* ---------- ELEMENTOS ---------- */
+      const campoBuscaEscola = document.getElementById('campoBuscaEscola');
+      const selectAno = document.getElementById('selectAno');
+      const tbodyEscolas = document.getElementById('tbodyEscolas');
+      const infoResumoEscolas = document.getElementById('infoResumoEscolas');
+      const btnNovaEscola = document.getElementById('btnNovaEscola');
+
+      // Modal
+      const modalBackdrop = document.getElementById('modalEscolaBackdrop');
+      const modal = document.getElementById('modalEscola');
+      const tituloModalEscola = document.getElementById('tituloModalEscola');
+      const btnFecharModal = document.getElementById('btnFecharModal');
+      const btnCancelarModal = document.getElementById('btnCancelarModal');
+      const btnSalvarEscola = document.getElementById('btnSalvarEscola');
+
+      const campoNome = document.getElementById('escolaNome');
+      const campoTelefone = document.getElementById('escolaTelefone');
+      const campoResp1 = document.getElementById('escolaResponsavel1');
+      const campoResp2 = document.getElementById('escolaResponsavel2');
+      const campoWhats1 = document.getElementById('escolaWhats1');
+      const campoWhats2 = document.getElementById('escolaWhats2');
+      const campoEndereco = document.getElementById('escolaEndereco');
+      const campoObs = document.getElementById('escolaObservacao');
+
+      let escolaEmEdicaoId = null;
+
+      /* ---------- POPULAR SELECT DE ANO COM DADOS REAIS ---------- */
+      function popularSelectAno(){
+        if (!selectAno) return;
+
+        const valorAtual = selectAno.value || '';
+
+        const anosSet = new Set();
+        escolas.forEach(e => {
+          (e.anosAtivos || []).forEach(ano => anosSet.add(ano));
+          (e.anosArquivados || []).forEach(ano => anosSet.add(ano));
+        });
+
+        const anos = [...anosSet]
+          .filter(a => typeof a === 'number' && !isNaN(a))
+          .sort((a,b) => a - b);
+
+        selectAno.innerHTML =
+          '<option value="">Todos os anos</option>' +
+          anos.map(ano => `<option value="${ano}">${ano}</option>`).join('');
+
+        if (valorAtual){
+          const valNum = parseInt(valorAtual, 10);
+          if (anos.includes(valNum)){
+            selectAno.value = valorAtual;
+          }
+        }
+      }
+
+      function formatAnos(escola){
+        const anosArq = escola.anosArquivados || [];
+        const anosAtv = escola.anosAtivos || [];
+        const ps = [];
+
+        anosArq.sort().forEach(ano => {
+          ps.push(`<span class="tag-ano tag-ano-arquivado">${ano} (arquivado)</span>`);
+        });
+        anosAtv.sort().forEach(ano => {
+          ps.push(`<span class="tag-ano">${ano}</span>`);
+        });
+
+        return ps.join(' ');
+      }
+
+      function criarCelulaTelefones(escola){
+        const tel = escola.telefone || '-';
+        const w1 = escola.whatsapp1 || '';
+        const w2 = escola.whatsapp2 || '';
+        const nome1 = escola.responsavel1 || 'Contato 1';
+        const nome2 = escola.responsavel2 || 'Contato 2';
+
+        let html = `<div class="telefone-linha"><strong>Tel:</strong> ${tel}</div>`;
+
+        if (w1){
+          html += `<div class="telefone-linha">
+              <strong>Whats 1:</strong> ${nome1} – ${w1}
+              <button class="btn-whats-linha" data-whats="${w1}">
+                <i data-lucide="send"></i> Whats
+              </button>
+            </div>`;
+        }
+        if (w2){
+          html += `<div class="telefone-linha">
+              <strong>Whats 2:</strong> ${nome2} – ${w2}
+              <button class="btn-whats-linha" data-whats="${w2}">
+                <i data-lucide="send"></i> Whats
+              </button>
+            </div>`;
+        }
+
+        return html;
+      }
+
+      function abrirWhats(numeroRaw){
+        let numero = (numeroRaw || '').toString().replace(/\D/g,'');
+        if (!numero){
+          alert('Número de WhatsApp vazio.');
+          return;
+        }
+        if (numero.length <= 11){
+          numero = '55' + numero;
+        }
+        const link = 'https://wa.me/' + numero;
+        window.open(link, '_blank');
+      }
+
+      function renderTabelaEscolas(){
+        if (!tbodyEscolas) return;
+
+        const termo = (campoBuscaEscola?.value || '').toLowerCase().trim();
+        const anoSelStr = selectAno?.value || '';
+        const anoSel = anoSelStr ? parseInt(anoSelStr,10) : null;
+
+        const filtradas = escolas.filter(e => {
+          if (termo && !e.nome.toLowerCase().includes(termo)) return false;
+          if (anoSel){
+            const ativos = e.anosAtivos || [];
+            const arq = e.anosArquivados || [];
+            if (!ativos.includes(anoSel) && !arq.includes(anoSel)) return false;
+          }
+          return true;
+        });
+
+        if (filtradas.length === 0){
+          tbodyEscolas.innerHTML = `
+            <tr>
+              <td colspan="5">Nenhuma escola encontrada com os filtros atuais.</td>
+            </tr>
+          `;
+        } else {
+          const anoLabel = anoSelStr || '';
+          tbodyEscolas.innerHTML = filtradas.map(e => {
+            return `
+              <tr data-escola-id="${e.id}">
+                <td>${e.nome}</td>
+                <td>${criarCelulaTelefones(e)}</td>
+                <td>${e.responsavel1 || '-'}</td>
+                <td>${formatAnos(e)}</td>
+                <td>
+                  <div class="acoes-escolas">
+                    <button class="btn-acao btn-ver-alunos" data-escola-id="${e.id}">
+                      <i data-lucide="users"></i>
+                      Ver alunos ${anoLabel || ''}
+                    </button>
+                    <button class="btn-acao btn-editar-escola" data-escola-id="${e.id}">
+                      <i data-lucide="edit-3"></i>
+                      Editar escola
+                    </button>
+                    <button class="btn-acao btn-acao-danger btn-excluir-escola" data-escola-id="${e.id}">
+                      <i data-lucide="trash-2"></i>
+                      Excluir
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        if (infoResumoEscolas){
+          infoResumoEscolas.textContent = `Exibindo ${filtradas.length} escola(s).`;
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+
+        // Ações dos botões da tabela
+        tbodyEscolas.querySelectorAll('.btn-ver-alunos').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.dataset.escolaId;
+            const escola = escolas.find(e => e.id === id);
+            const anoSelValue = selectAno?.value || '';
+            if (!escola){
+              alert('Escola não encontrada.');
+              return;
+            }
+            if (!anoSelValue){
+              alert('Selecione o ano da formatura para ver os alunos dessa escola.');
+              return;
+            }
+            const url = `kgb-formaturas-alunos.html?ano=${encodeURIComponent(anoSelValue)}&escola=${encodeURIComponent(escola.nome)}`;
+            window.location.href = url;
+          });
+        });
+
+        tbodyEscolas.querySelectorAll('.btn-editar-escola').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.dataset.escolaId;
+            abrirModalEdicao(id);
+          });
+        });
+
+        tbodyEscolas.querySelectorAll('.btn-excluir-escola').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.dataset.escolaId;
+            const escola = escolas.find(e => e.id === id);
+            if (!escola) return;
+            const ok = confirm(`Tem certeza que deseja excluir a escola "${escola.nome}"?`);
+            if (!ok) return;
+            escolas = escolas.filter(e => e.id !== id);
+            salvarEscolas(escolas);
+            popularSelectAno();
+            renderTabelaEscolas();
+          });
+        });
+
+        tbodyEscolas.querySelectorAll('.btn-whats-linha').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const num = btn.dataset.whats || '';
+            abrirWhats(num);
+          });
+        });
+      }
+
+      /* ---------- MODAL: ABRIR / FECHAR ---------- */
+      function limparCamposModal(){
+        campoNome.value = '';
+        campoTelefone.value = '';
+        campoResp1.value = '';
+        campoResp2.value = '';
+        campoWhats1.value = '';
+        campoWhats2.value = '';
+        campoEndereco.value = '';
+        campoObs.value = '';
+      }
+
+      function abrirModalNova(){
+        escolaEmEdicaoId = null;
+        tituloModalEscola.innerHTML = '<i data-lucide="school-2"></i> Nova escola';
+        limparCamposModal();
+        modalBackdrop.style.display = 'flex';
+        modal.style.display = 'flex';
+        if (window.lucide) window.lucide.createIcons();
+        setTimeout(() => campoNome.focus(), 50);
+      }
+
+      function abrirModalEdicao(id){
+        const escola = escolas.find(e => e.id === id);
+        if (!escola){
+          alert('Escola não encontrada.');
+          return;
+        }
+        escolaEmEdicaoId = id;
+        tituloModalEscola.innerHTML = '<i data-lucide="edit-3"></i> Editar escola';
+
+        campoNome.value = escola.nome || '';
+        campoTelefone.value = escola.telefone || '';
+        campoResp1.value = escola.responsavel1 || '';
+        campoResp2.value = escola.responsavel2 || '';
+        campoWhats1.value = escola.whatsapp1 || '';
+        campoWhats2.value = escola.whatsapp2 || '';
+        campoEndereco.value = escola.endereco || '';
+        campoObs.value = escola.observacao || '';
+
+        modalBackdrop.style.display = 'flex';
+        modal.style.display = 'flex';
+        if (window.lucide) window.lucide.createIcons();
+        setTimeout(() => campoNome.focus(), 50);
+      }
+
+      function fecharModal(){
+        modalBackdrop.style.display = 'none';
+        modal.style.display = 'none';
+        escolaEmEdicaoId = null;
+      }
+
+      if (btnNovaEscola){
+        btnNovaEscola.addEventListener('click', abrirModalNova);
+      }
+      [btnFecharModal, btnCancelarModal].forEach(b => {
+        if (b) b.addEventListener('click', fecharModal);
+      });
+
+      modalBackdrop.addEventListener('click', fecharModal);
+
+      // Salvar escola (novo/edição)
+      if (btnSalvarEscola){
+        btnSalvarEscola.addEventListener('click', () => {
+          const nome = campoNome.value.trim();
+          if (!nome){
+            alert('Informe o nome da escola.');
+            campoNome.focus();
+            return;
+          }
+
+          const telefone = campoTelefone.value.trim();
+          const resp1 = campoResp1.value.trim();
+          const resp2 = campoResp2.value.trim();
+          const w1 = campoWhats1.value.trim();
+          const w2 = campoWhats2.value.trim();
+          const end = campoEndereco.value.trim();
+          const obs = campoObs.value.trim();
+
+          if (escolaEmEdicaoId){
+            const escola = escolas.find(e => e.id === escolaEmEdicaoId);
+            if (!escola){
+              alert('Escola não encontrada.');
+              return;
+            }
+            escola.nome = nome;
+            escola.telefone = telefone;
+            escola.responsavel1 = resp1;
+            escola.responsavel2 = resp2;
+            escola.whatsapp1 = w1;
+            escola.whatsapp2 = w2;
+            escola.endereco = end;
+            escola.observacao = obs;
+          } else {
+            // nova escola – por padrão, associa ao ano selecionado (se houver)
+            const anoSelStr = selectAno?.value || '';
+            const anoSel = anoSelStr ? parseInt(anoSelStr,10) : null;
+            const nova = {
+              id: 'esc' + Date.now(),
+              nome,
+              telefone,
+              responsavel1: resp1,
+              responsavel2: resp2,
+              whatsapp1: w1,
+              whatsapp2: w2,
+              endereco: end,
+              observacao: obs,
+              anosAtivos: anoSel ? [anoSel] : [],
+              anosArquivados: []
+            };
+            escolas.push(nova);
+          }
+
+          salvarEscolas(escolas);
+          popularSelectAno();
+          fecharModal();
+          renderTabelaEscolas();
+        });
+      }
+
+      /* ---------- FILTROS ---------- */
+      [campoBuscaEscola, selectAno].forEach(ctrl => {
+        if (!ctrl) return;
+        const evt = ctrl.tagName === 'INPUT' ? 'input' : 'change';
+        ctrl.addEventListener(evt, renderTabelaEscolas);
+      });
+
+      // Render inicial
+      popularSelectAno();
+      renderTabelaEscolas();
+    });
+  </script>
+
+  <script>
+    (function initHamburguer(){
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside || !back) return;
+
+      function setOpened(open){
+        const opened = !!open;
+        aside.classList.toggle('aberto', opened);
+        back.hidden = !opened;
+        document.body.classList.toggle('no-scroll', opened);
+
+        const icon = btn.querySelector('i[data-lucide]');
+        if (icon){
+          icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+          try { window.lucide?.createIcons?.(); } catch(e){}
+        }
+      }
+
+      function isMobile(){ return window.innerWidth <= 768; }
+
+      function syncVisibility(){
+        const mob = isMobile();
+        btn.style.display = mob ? 'block' : 'none';
+        if (!mob){
+          setOpened(false);
+        }
+      }
+
+      if (!btn.hasAttribute('data-bound')){
+        btn.setAttribute('data-bound','1');
+        btn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          setOpened(!aside.classList.contains('aberto'));
+        });
+      }
+
+      if (!back.hasAttribute('data-bound')){
+        back.setAttribute('data-bound','1');
+        back.addEventListener('click', ()=> setOpened(false));
+      }
+
+      document.addEventListener('click', (e)=>{
+        if (!aside.classList.contains('aberto')) return;
+        if (!aside.contains(e.target) && !btn.contains(e.target)){
+          setOpened(false);
+        }
+      });
+
+      syncVisibility();
+      window.addEventListener('resize', syncVisibility);
+    })();
+  </script>
+
+</body>
+</html>

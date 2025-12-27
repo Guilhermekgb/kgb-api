@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:montagem-cardapio.html">
+  <meta charset="UTF-8" />
+  <title>Montagem do Cardápio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (montagem-cardapio) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  guard({ permissao: 'page:montagem-cardapio.html' });
+  aplicarPermissoesNaTela();
+</script>
+<!-- === FIM PATCH COMMON + GUARD (montagem-cardapio) === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --sidebar-w:260px;
+      --dourado:#c29a5d; --dourado-escuro:#a67c37; --marrom:#5a3e2b;
+      --muted:#6b7280; --bg:#f8f1e8; --card:#ffffff; --line:#ece6dd;
+    }
+    html, body{ margin:0; padding:0; background:var(--bg); height:100%; }
+
+    /* === tipografia igual ao modelo-base (sem afetar o menu via CSS global estranho) === */
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1,h2,h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      color:var(--marrom);
+    }
+
+    /* ===== Layout base ===== */
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; height:100vh; overflow-y:auto; }
+
+    /* Desktop: menu fixo e recuo no conteúdo */
+@media (min-width:769px){
+  #menuLateral{
+    position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:999;
+  }
+  /* Recuo só no main, sem usar padding da wrapper */
+  main.conteudo-principal{
+    margin-left: var(--sidebar-w) !important;
+  }
+}
+
+
+    /* Mobile: off-canvas */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001; display:none;
+      background:#c29a5d; color:#fff; border:none; font-size:24px; padding:6px 12px; border-radius:8px;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+    }
+
+    /* garante aparência do aside como no modelo-base */
+    aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+
+    main.conteudo-principal{
+      flex-grow:1; min-height:100vh; overflow-y:auto;
+      padding:40px; background:var(--bg);
+    }
+    .conteudo-central{ max-width:1280px; margin:0 auto; padding-bottom:40px; }
+
+    h1{ font-size:28px; display:flex; align-items:center; gap:10px; margin:0 0 16px 0; }
+
+    /* ===== NUNCA esconda todos os ícones. Se precisar ocultar ícones de componentes internos, escopar: */
+    /* .conteudo-principal .algum-bloco [data-lucide]{ display:none } */
+
+    /* ===== Grade principal desta tela ===== */
+    .layout{ grid-template-columns: 1fr !important; display:grid; gap:24px; align-items:start; }
+    .resumo-sticky{ grid-column:1 / -1; position:static !important; top:auto !important; }
+
+    /* ===== Controles, cards e chips ===== */
+    .card{ background:var(--card); border-radius:14px; border:1px solid #eadfd1; box-shadow:0 6px 20px rgba(90,62,43,.06); padding:18px; }
+    .card h2{ font-size:20px; margin:0 0 8px 0; letter-spacing:.2px; }
+
+    /* Acordeão dos cards colapsáveis */
+    .card[data-collapsible] .card-head{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer;
+      padding-bottom:8px; border-bottom:1px dashed #eadfd1;
+    }
+    .card[data-collapsible] .card-body{ display:none; padding-top:12px; }
+    .card[data-collapsible].aberto .card-body{ display:block; }
+
+    .input{ padding:8px 12px; border:1px solid #ccc; border-radius:8px; font-family:inherit; font-size:14px; background:#fff; }
+    .botao{ display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; cursor:pointer; }
+    .botao-dourado{ background:var(--dourado); color:#fff; padding:10px 14px; font-weight:700; box-shadow:0 6px 14px rgba(194,154,93,.25); }
+    .botao-dourado:hover{ background:var(--dourado-escuro); }
+    .botao-ghost{ background:#fff; color:var(--marrom); padding:8px 12px; border:1px solid #eadfd1; }
+    .muted{ color:var(--muted); }
+    .hint{ color:var(--muted); font-size:12px; }
+
+    /* Topo */
+    .topbar label{font-size:12px; color:#7a6a5c;}
+    .topbar .linha{ display:grid !important; grid-template-columns:minmax(220px,460px) 130px 130px; align-items:end; gap:12px; row-gap:8px; }
+    .topbar .linha > div:first-child{ max-width:460px; }
+    .topbar .linha .input{ width:100%; }
+    .faixas-bloco{ grid-column:1 / -1; }
+    @media (max-width: 1200px){ .topbar .linha{ grid-template-columns:1fr 1fr 1fr; } }
+    .faixas-bloco label{ display:block; margin-bottom:6px; color:var(--muted); }
+
+    .faixas-scroll{ display:flex; flex-wrap:wrap; gap:8px; max-width:100%; overflow:hidden; }
+    .faixa{ display:flex; align-items:center; gap:8px; border:1px solid #eadfd1; border-radius:12px; padding:8px 10px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.05); cursor:pointer; flex:0 0 auto; }
+    .faixa input{ display:none; }
+    .faixa .tag{ font-size:12px; color:#444; background:#f8f3ea; padding:2px 8px; border-radius:999px; }
+    .faixa strong{ color:var(--marrom); }
+    .faixa.ativa{ outline:2px solid var(--dourado); box-shadow:0 0 0 4px rgba(194,154,93,.16) }
+
+    .savebar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    #saveStatus{ white-space:nowrap; color:var(--muted); font-size:12px; opacity:.9 }
+
+    /* Listas / tabelas */
+    #blocosMontagem h3{ margin:0 0 10px 0; }
+    .lista-pratos{ list-style:none; padding-left:0; }
+    .lista-pratos li{ margin:6px 0; display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #f0e6d9; border-radius:10px; background:#fff }
+    .lista-pratos li + li{ margin-top:8px }
+    .btn-icon{ background:transparent; border:none; cursor:pointer; font-size:16px; }
+
+    table{ width:100%; border-collapse:collapse; }
+    th,td{ padding:10px; border-bottom:1px solid #eee; text-align:left; }
+    .kpis table tr td:last-child{ text-align:right; }
+    table thead th{ background:#faf6f0; border-bottom:1px solid #eadfd1; font-size:13px; color:#6b5c50 }
+    table tbody tr:hover{ background:#fffdfa }
+
+    .toolbar{ display:flex; align-items:center; gap:12px; justify-content:space-between; flex-wrap:wrap; padding:6px 0; border-bottom:1px dashed #eadfd1; margin-bottom:10px }
+
+    /* Limites */
+    .cabecalho-cat{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px }
+    .limite-ui{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+    .limite-ui input.limite-cat{ width:64px; padding:4px 6px; border:1px solid #eadfd1; border-radius:6px; font-size:12px; text-align:center; }
+    .restam{ font-size:12px; color:#8a7a6d; }
+
+    /* Seções (cards) */
+    #tiposSelecionar{ display:grid; grid-template-columns: repeat(3, minmax(220px,1fr)); gap:10px; }
+    @media (max-width:1100px){ #tiposSelecionar{ grid-template-columns: repeat(2, minmax(240px,1fr)); } }
+    @media (max-width:680px){ #tiposSelecionar{ grid-template-columns: 1fr; } }
+    .tipo-chip{ border:1px solid #eadfd1; border-radius:12px; padding:12px 14px; background:#fff; display:flex; align-items:center; gap:10px; transition: box-shadow .2s, border-color .2s, background .2s; cursor:pointer; }
+    .tipo-chip input{ width:18px; height:18px; margin:0; }
+    .tipo-chip strong{ font-size:15px; color:#5a3e2b; }
+    .tipo-chip:hover{ box-shadow:0 6px 18px rgba(90,62,43,.08); }
+    .tipo-chip.ativo{ border-color:var(--dourado); background:#fffaf1; box-shadow:0 0 0 4px rgba(194,154,93,.14); }
+
+    /* Dialog tipos */
+    dialog{ border:none; border-radius:12px; padding:0; width:min(680px, 96vw); box-shadow:0 20px 60px rgba(0,0,0,.25); }
+    .dlg-head{ padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+    .dlg-body{ padding:16px; display:grid; gap:12px; }
+    .dlg-foot{ padding:12px 16px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; }
+    .lista-tipos{ width:100%; border-collapse:collapse; }
+    .lista-tipos th,.lista-tipos td{ border-bottom:1px solid #eee; padding:10px; text-align:left; }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado por menu-lateral.js) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="chef-hat"></i> Montagem do Cardápio: <span id="nomeCardapio">—</span></h1>
+
+        <!-- TOPO -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="topbar">
+            <div class="linha">
+              <div>
+                <label>Cardápio cadastrado</label>
+                <select id="selectCardapioBase" class="input" style="width:100%;">
+                  <option value="">Selecione um cardápio</option>
+                </select>
+              </div>
+              <div>
+                <label>Convidados</label>
+                <input type="number" id="qtdConvidados" class="input" value="1" min="1" />
+              </div>
+              <div>
+                <label>Horas de evento</label>
+                <input type="number" id="horasEvento" class="input" value="5" step="0.5" min="0" />
+              </div>
+              <div class="faixas-bloco">
+                <label>Faixa de preço</label>
+                <div id="faixasCards" class="faixas-scroll"></div>
+                <select id="selectFaixaManual" class="input" style="display:none;">
+                  <option value="">Selecione faixa</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="savebar">
+              <button id="btnSalvarSessao" class="botao botao-dourado" type="button"><i data-lucide="save"></i> Salvar sessão</button>
+              <button id="btnResetarSessao" class="botao botao-ghost" type="button" title="Limpa valores salvos deste cardápio"><i data-lucide="rotate-ccw"></i> Resetar</button>
+              <label class="muted" style="display:inline-flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggleAutosave" checked />
+                Auto-salvar
+              </label>
+              <span id="saveStatus" class="muted">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="layout">
+          <!-- ESQUERDA -->
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <!-- RASCUNHO -->
+            <div class="card" data-collapsible id="cardRascunho">
+              <div class="card-head">
+                <h2 style="margin:0;">Criar rascunho de cardápio</h2>
+                <span class="hint">clique para abrir/fechar</span>
+              </div>
+              <div class="card-body">
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+                  <input id="nomeRascunho" class="input" placeholder="Nome do rascunho (ex.: Cardápio Teste)" style="flex:1; min-width:260px;" />
+                  <button id="btnAddFaixaRascunho" class="botao botao-ghost" type="button"><i data-lucide="plus"></i> Adicionar faixa</button>
+                  <button id="btnUsarRascunho" class="botao botao-dourado" type="button"><i data-lucide="sparkles"></i> Usar rascunho</button>
+                </div>
+
+                <div class="faixas-rascunho" id="faixasRascunhoContainer"
+                     style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:center;">
+                  <strong>Mín.</strong><strong>Máx.</strong><strong>Valor por pessoa (R$)</strong><strong>Ação</strong>
+                </div>
+
+                <p class="muted" style="margin:8px 0 0 0;">O rascunho vale só para esta simulação (não grava em “Cardápios e Produtos”).</p>
+              </div>
+            </div>
+
+            <!-- SEÇÕES DO CARDÁPIO -->
+            <div class="card aberto" data-collapsible id="cardSecoes">
+              <div class="card-head">
+                <h2 style="margin:0;">Seções do cardápio</h2>
+                <span class="hint">clique para abrir/fechar</span>
+              </div>
+              <div class="card-body">
+                <div class="toolbar">
+                  <div></div>
+                  <div style="display:flex; gap:8px;">
+                    <button id="btnGerenciarTipos" class="botao botao-ghost" type="button">
+                      <i data-lucide="settings"></i> Gerenciar tipos
+                    </button>
+                  </div>
+                </div>
+                <p class="muted" style="margin:6px 0 12px;">Marque as seções que farão parte deste cardápio. O bloco <strong>Adicional</strong> é fixo.</p>
+
+                <div id="acoesSecoes" style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                  <button type="button" class="botao botao-ghost" id="selecionarTudoTipos">Selecionar tudo</button>
+                  <button type="button" class="botao botao-ghost" id="limparTudoTipos">Limpar</button>
+                </div>
+
+                <div id="tiposSelecionar" class="faixas-scroll"></div>
+              </div>
+            </div>
+
+            <!-- ITENS -->
+            <div class="card">
+              <div class="toolbar">
+                <h2 style="margin:0;">Adicionar Itens</h2>
+                <label class="muted" style="display:flex; align-items:center; gap:6px;">
+                  <input type="checkbox" id="toggleSelecionados" />
+                  Mostrar apenas selecionados
+                </label>
+              </div>
+
+              <!-- BUSCA -->
+              <div style="display:flex; gap:8px; align-items:center; margin:12px 0 2px;">
+                <input id="buscaPratoFT" class="input" type="text" placeholder="Buscar prato (digite parte do nome)…" style="flex:1;">
+              </div>
+
+              <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <select id="selectPrato" class="input">
+                    <option value="">Selecione um prato (Ficha Técnica)</option>
+                  </select>
+                </div>
+
+                <select id="selectCategoria" class="input">
+                  <option value="">Categoria</option>
+                </select>
+                <button id="btnAdicionarPrato" class="botao botao-dourado" type="button">Adicionar Prato</button>
+
+                <select id="selectAdicional" class="input">
+                  <option value="">Selecione um adicional cadastrado</option>
+                </select>
+                <button id="btnAdicionarAdicional" class="botao botao-ghost" type="button" title="Adiciona como categoria 'Adicional'">
+                  Adicionar Adicional
+                </button>
+
+                <button id="btnCalcularTotais" class="botao botao-ghost" type="button">Calcular Totais</button>
+              </div>
+            </div>
+
+            <!-- BLOCOS DINÂMICOS + ADICIONAL -->
+            <div id="blocosMontagem" class="card"></div>
+
+            <!-- CUSTOS FIXOS -->
+            <div class="card aberto" data-collapsible id="cardCustos">
+              <div class="card-head">
+                <h2 style="margin:0;">Custos Fixos Operacionais</h2>
+                <span class="hint">clique para abrir/fechar</span>
+              </div>
+              <div class="card-body">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px; justify-content:flex-end;">
+                  <button id="btnSugerirCustos" class="botao botao-dourado" type="button" title="Preenche quantidades conforme convidados/horas">Gerar custos sugeridos</button>
+                  <button id="btnRecalcularSugestoes" class="botao botao-ghost" type="button" title="Recalcula sugestões">Recalcular</button>
+                  <button id="btnLimparCustos" class="botao botao-ghost" type="button" title="Zera as quantidades">Limpar</button>
+                </div>
+
+                <p class="muted" style="margin:6px 0 14px 0;">Itens do catálogo de Custos Fixos. Você pode alterar as quantidades manualmente.</p>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Quantidade</th>
+                      <th>Valor Unitário (R$)</th>
+                      <th>Total (R$)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabelaCustosFixosMontagem"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- RESUMO FINAL -->
+          <aside class="resumo-sticky">
+            <div class="card kpis">
+              <h2 style="margin-top:0;">Resumo Final</h2>
+
+              <div id="avisoLucro" style="display:none; margin:8px 0; background:#fff3cd; border:1px solid #ffe69c; color:#664d03; padding:8px 12px; border-radius:8px; font-size:14px;">
+                Atenção: preço abaixo do necessário. Ajuste o valor por pessoa ou reduza custos.
+              </div>
+
+              <table>
+                <tr><td><strong>Valor Venda Cardápio:</strong></td><td id="valorVendaCardapio">R$ 0,00</td></tr>
+                <tr><td><strong>Valor Venda Adicional:</strong></td><td id="valorVendaAdicional">R$ 0,00</td></tr>
+                <tr><td><strong>Custo do Cardápio (ingredientes):</strong></td><td id="totalIngredientes">R$ 0,00</td></tr>
+                <tr><td><strong>Custo dos Adicionais:</strong></td><td id="custoAdicional">R$ 0,00</td></tr>
+                <tr><td><strong>Custos Fixos:</strong></td><td id="totalCustosFixos">R$ 0,00</td></tr>
+                <tr><td><strong>Custo Cardápio por Pessoa:</strong></td><td id="custoCardapioPorPessoa">R$ 0,00</td></tr>
+                <tr><td><strong>Custo Adicional por Pessoa:</strong></td><td id="custoAdicionalPorPessoa">R$ 0,00</td></tr>
+                <tr><td><strong>Custo Fixo por Pessoa:</strong></td><td id="custoFixoPorPessoa">R$ 0,00</td></tr>
+                <tr style="border-top:1px solid #ddd;"><td><strong>Gasto total por pessoa:</strong></td><td id="gastoTotalPorPessoa"><strong>R$ 0,00</strong></td></tr>
+                <tr style="border-top:1px solid #ddd;"><td><strong>Lucro Estimado:</strong></td><td id="lucroEstimado" style="color:#b1762d;"><strong>R$ 0,00</strong></td></tr>
+              </table>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Dialog: Gerenciar Tipos -->
+  <dialog id="dlgTipos">
+    <div class="dlg-head">
+      <strong>Gerenciar tipos de seção</strong>
+      <button class="icon-btn" type="button" id="btnFecharDlgTipos">Fechar</button>
+    </div>
+    <div class="dlg-body">
+      <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end;">
+        <div>
+          <label>Nome da seção</label>
+          <input id="novoTipoNome" class="input" placeholder="Ex.: Entrada, Acompanhamento, Café da Manhã..." />
+        </div>
+        <button id="btnAdicionarTipo" class="botao botao-dourado" type="button">Adicionar</button>
+      </div>
+
+      <table class="lista-tipos" id="tabelaTipos">
+        <thead><tr><th>Nome</th><th style="width:160px;">Ações</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <p class="muted" style="margin:0;">Dica: “Adicional” é um bloco fixo e não precisa ser cadastrado aqui.</p>
+    </div>
+    <div class="dlg-foot">
+      <button class="botao botao-ghost" type="button" id="btnFecharDlgTipos2">Fechar</button>
+    </div>
+  </dialog>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="montagem-cardapio.js" defer></script>
+  <script>
+    // Ativa ícones (inclusive os do menu, que agora não estão mais bloqueados)
+    document.addEventListener('DOMContentLoaded', () => {
+      try{ window.lucide?.createIcons?.(); }catch{}
+    });
+  </script>
+</body>
+</html>
+
+

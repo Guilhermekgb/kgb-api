@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <meta name="page-permission" content="page:financeiro-resumo.html">
+
+  <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH ORDEM COMUM (resumo) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard (usa coisas do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH ORDEM COMUM (resumo) === -->
+
+  <title>Resumo Financeiro</title>
+ <script src="https://unpkg.com/lucide@latest" defer></script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    /* === Chip "Disp. agora" (KGB) === */
+    .chip-disp {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border: 1px solid var(--dourado);
+      background: #fff6e9;           /* dourado clarinho */
+      color: var(--marrom);
+      border-radius: 999px;
+      font-size: 12.5px;
+      line-height: 1.3;
+      white-space: nowrap;
+    }
+    .chip-disp b,
+    .chip-disp strong { font-weight: 800; color: var(--marrom); }
+    @media (max-width: 720px) {
+      .chip-disp { font-size: 12px; padding: 2px 7px; }
+    }
+
+    /* para inputs que devem ocupar as 2 colunas do grid do diálogo */
+    #dlg-ajuste .body .span-2 { grid-column: 1 / -1; }
+
+    :root{
+      --dourado:#c29a5d; --marrom:#5a3e2b; --line:#e8dcc9;
+      --bg:#f8f1e8; --ok:#0f766e; --bad:#b91c1c; --muted:#6b7280;
+    }
+    body{margin:0;background:var(--bg);}
+    .wrapper{display:flex;min-height:100vh;}
+    #menuLateral{position:fixed;top:0;left:0;width:260px;height:100vh;z-index:100;}
+    main.conteudo-principal{flex:1;padding:28px;margin-left:260px;}
+    @media (max-width:768px){
+      #menuLateral{transform:translateX(-100%);transition:transform .3s}
+      #menuLateral.aberto{transform:translateX(0)}
+      main.conteudo-principal{margin-left:0;padding:16px}
+    }
+
+    h1{font-family:"Playfair Display",serif;color:var(--marrom);margin:0 0 10px;display:flex;gap:8px;align-items:center}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.06)}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px}
+    .kpi .title{font-weight:800;color:var(--marrom);margin-bottom:6px}
+    .kpi .big{font-size:22px;font-weight:800}
+    .pos{color:var(--ok)} .neg{color:var(--bad)} .muted{color:var(--muted);font-size:12px}
+    .table{margin-top:12px}
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    thead th{position:sticky;top:0;background:var(--dourado);color:#fff;font-weight:800;text-align:left;padding:12px}
+    tbody td{padding:10px 12px;border-bottom:1px solid #f0e6d6;font-size:13px;color:#2e261a}
+    tfoot td{padding:10px 12px;font-weight:800;border-top:2px solid var(--line);background:#fffdf7}
+    .num{text-align:right}
+    .green{color:var(--ok)} .red{color:var(--bad)}
+    .clickable{cursor:pointer}
+    .toolbar{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap}
+    .pill{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px}
+
+    /* Drilldown (modal) */
+   dialog#drill{padding:0;border:none;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.25);width:min(900px,96vw)}
+    .dlgh{background:var(--dourado);color:#fff;padding:12px 16px;font-weight:800;display:flex;justify-content:space-between;align-items:center}
+    .dlgb{padding:12px;background:#fff}
+    .btn{border:1px solid #d9c7aa;background:#fff;color:var(--marrom);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+    .btn:hover{background:#fff6e9}
+
+    /* ===== Ajuste de Saldo: botão + dialog ===== */
+    #ajusteSaldoBtn{ margin-left:8px; }
+    dialog#dlg-ajuste{ border:1px solid #e8dcc9; border-radius:12px; padding:0; width:min(520px,96vw); }
+    #dlg-ajuste .head{ background:#c29a5d; color:#fff; font-weight:800; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+    #dlg-ajuste .body{ padding:14px 16px; display:grid; gap:10px; grid-template-columns: 1fr 1fr; }
+    #dlg-ajuste .body label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:#5a3e2b;}
+    #dlg-ajuste .body input, #dlg-ajuste .body select{ border:1px solid #e8dcc9; border-radius:10px; padding:8px; }
+    #dlg-ajuste .foot{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #e8dcc9; }
+    @media (max-width:560px){ #dlg-ajuste .body{ grid-template-columns:1fr; } }
+  /* ===== D5-G: Toasts, microanimação de KPIs e badge "quitada" ===== */
+#toastHost{
+  position: fixed; right: 18px; bottom: 18px;
+  display: flex; flex-direction: column; gap: 8px; z-index: 9999;
+}
+.toast{
+  background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--ok);
+  box-shadow: 0 8px 28px rgba(0,0,0,.15);
+  border-radius: 12px; padding: 10px 12px; font-weight: 700; color: var(--marrom);
+}
+.toast small{ display:block; font-weight: 600; color: var(--muted); margin-top: 2px; }
+
+@keyframes kpi-bump {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.kpi-bump{
+  animation: kpi-bump .55s ease;
+}
+
+.badge-quitada{
+  display:inline-flex; align-items:center; gap:6px;
+  margin-left:8px; padding:2px 8px; border-radius: 999px;
+  background:#ecfdf5; border:1px solid #99f6e4; color:#065f46; font-size:12px; font-weight:800;
+}
+.badge-quitada i{ width:14px; height:14px; }
+    /* Botão hamburguer (mobile) */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:110;          /* um pouco acima do menu */
+      display:none;
+      background:#c29a5d;
+      color:#fff;
+      border:none;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+      cursor:pointer;
+    }
+    #hamburguer i{
+      width:20px;
+      height:20px;
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+    }
+        /* Menu mobile: trava scroll + backdrop */
+    body.no-scroll{
+      overflow: hidden;
+    }
+
+    @media (max-width:768px){
+      #menuBackdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.38);
+        z-index: 99;
+      }
+    }
+
+</style>
+</head>
+<body>
+  <!-- Botão mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+      <h1><i data-lucide="pie-chart"></i> Resumo Financeiro</h1>
+
+      <!-- toolbar com botão de ajuste -->
+      <div class="toolbar">
+        <label>Mês
+          <input id="f-mes" class="pill" type="month" />
+        </label>
+
+        <button type="button" id="ajusteSaldoBtn" class="btn pill">
+          <i data-lucide="refresh-ccw"></i> Atualizar saldo
+        </button>
+      </div>
+
+      <section class="kpis">
+        <div class="card kpi">
+          <div class="title">Saldo geral</div>
+          <div id="kpi-saldo" class="big">—</div>
+          <div id="kpi-saldo-delta" class="muted"></div>
+        </div>
+        <div class="card kpi">
+          <div class="title">Total faturas (mês)</div>
+          <div id="kpi-fatura" class="big">—</div>
+          <div id="kpi-fatura-delta" class="muted"></div>
+        </div>
+        <div class="card kpi">
+          <div class="title">Contas</div>
+          <div id="kpi-contas" class="big">—</div>
+          <div class="muted">Quantidade de contas cadastradas</div>
+        </div>
+        <div class="card kpi">
+          <div class="title">Cartões</div>
+          <div id="kpi-cartoes" class="big">—</div>
+          <div class="muted">Quantidade de cartões cadastrados</div>
+        </div>
+      </section>
+
+      <section class="card table" style="margin-top:12px;">
+        <div class="title" style="font-weight:800;color:var(--marrom);margin-bottom:6px">Minhas contas</div>
+        <table>
+          <thead><tr>
+            <th>Conta</th><th>Tipo</th>
+            <th class="num">Entradas (mês)</th>
+            <th class="num">Saídas (mês)</th>
+            <th class="num">Saldo atual</th>
+          </tr></thead>
+          <tbody id="tb-contas"></tbody>
+          <tfoot><tr>
+            <td colspan="2">Totais</td>
+            <td class="num" id="tot-contas-in"></td>
+            <td class="num" id="tot-contas-out"></td>
+            <td class="num" id="tot-contas-saldo"></td>
+          </tr></tfoot>
+        </table>
+      </section>
+
+      <section class="card table" style="margin-top:12px;">
+        <div class="title" style="font-weight:800;color:var(--marrom);margin-bottom:6px">Meus cartões</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Cartão</th>
+              <th>Fechamento</th>
+              <th>Vencimento</th>
+              <th class="num" title="Soma das parcelas com vencimento no mês para lançamentos no cartão.">Fatura (mês)</th>
+              <th class="num">Limite</th>
+              <th class="num">Disponível</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tb-cartoes"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Totais</td>
+              <td class="num" id="tot-cart-fatura"></td>
+              <td class="num" id="tot-cart-limite"></td>
+              <td class="num" id="tot-cart-disp"></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Drilldown -->
+  <dialog id="drill">
+    <div class="dlgh">
+      <div id="drill-title"><i data-lucide="list"></i> Detalhes</div>
+      <button class="btn" onclick="document.getElementById('drill').close()">Fechar</button>
+    </div>
+    <div class="dlgb">
+      <div class="muted" id="drill-sub"></div>
+      <div style="margin-top:8px;max-height:60vh;overflow:auto">
+        <table style="width:100%">
+          <thead><tr>
+            <th>Data</th><th>Descrição</th><th class="num">Valor</th><th>Status</th>
+          </tr></thead>
+          <tbody id="drill-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- ===== Página: Resumo (saldos, contas, cartões) ===== -->
+  <script>
+  /* ===================== Helpers ===================== */
+  const money = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
+// yyyy-mm-dd local (zera hora local e formata sem UTC)
+function ymdLocal(dt){
+  const d = (dt instanceof Date) ? dt : new Date(String(dt||''));
+  if (isNaN(d)) return '';
+  d.setHours(0,0,0,0);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+// yyyy-mm (local) do "agora"
+function todayYM(){
+  const d = new Date(); d.setHours(0,0,0,0);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function inMonth(iso, ym){ return String(iso||'').slice(0,7) === ym; }
+
+  const readLS = (k, fb) => { try{const v=JSON.parse(localStorage.getItem(k)); return (v??fb);}catch{return fb;} };
+
+  // Shim opcional: se existir um registrador global, usamos também
+  const onFinStoreChanged =
+    (typeof window !== 'undefined' && typeof window.onFinStoreChanged === 'function')
+      ? window.onFinStoreChanged
+      : null;
+  try { onFinStoreChanged && onFinStoreChanged(() => { try { renderTudo(); } catch {} }); } catch {}
+
+  function getCfg(){
+    const cfg = readLS('configFinanceiro', {}) || {};
+    cfg.contas  = Array.isArray(cfg.contas)?cfg.contas:[];   // contas correntes e afins
+    cfg.cartoes = Array.isArray(cfg.cartoes)?cfg.cartoes:[]; // cartões
+    cfg.tipos   = Array.isArray(cfg.tipos)?cfg.tipos:[];     // opcional
+    return cfg;
+  }
+  function getFG(){
+    const g = readLS('financeiroGlobal', {}) || {};
+    g.lancamentos   = Array.isArray(g.lancamentos)   ? g.lancamentos   : [];
+    g.parcelas      = Array.isArray(g.parcelas)      ? g.parcelas      : [];
+    g.movimentos    = Array.isArray(g.movimentos)    ? g.movimentos    : []; /* ✅ robustez */
+    g.contas        = Array.isArray(g.contas)        ? g.contas        : []; /* ✅ robustez */
+    g.saldoPorConta = (g.saldoPorConta && typeof g.saldoPorConta==='object') ? g.saldoPorConta : {};
+    return g;
+  }
+
+  // saldo atual por conta = saldoInicial (config/contas) + (créditos - débitos) em g.movimentos
+  function saldoAtualPorConta(){
+    const cfg = getCfg();
+    const g   = getFG();
+
+    // 1) Se já existe o espelho de saldos, usa ele (fonte da verdade)
+    if (g.saldoPorConta && typeof g.saldoPorConta === 'object' && Object.keys(g.saldoPorConta).length){
+      return new Map(
+        Object.entries(g.saldoPorConta).map(([id, val]) => [String(id), Number(val || 0)])
+      );
+    }
+
+    // 2) Fallback: recalcula de saldoInicial + movimentos (config + global)
+    const byId = {};
+    (cfg.contas || []).forEach(ct => {
+      const id = String(ct.id);
+      byId[id] = {
+        id,
+        saldo: Number(ct.saldo || ct.saldoInicial || 0),
+      };
+    });
+    (g.contas || []).forEach(c => {
+      const id = String(c.id);
+      if (!byId[id]) byId[id] = { id, saldo: Number(c.saldoInicial || 0) };
+    });
+    (g.movimentos || []).forEach(m => {
+      const id = String(m.contaId || '');
+      if (!id || !byId[id]) return;
+      const v  = Number(m.valor || 0);
+      if (String(m.tipo) === 'credito') byId[id].saldo += v;
+      else if (String(m.tipo) === 'debito') byId[id].saldo -= v;
+    });
+
+    return new Map(Object.entries(byId).map(([id, o]) => [id, o.saldo]));
+  }
+
+  // somatórios do mês, por conta (entradas/saídas quitadas no mês pelo dataPagamentoISO)
+  function sumMesPorConta(ym){
+    const g = getFG();
+    const mapIn  = new Map();
+    const mapOut = new Map();
+
+    for (const p of g.parcelas){
+      const l = g.lancamentos.find(x=>String(x.id)===String(p.lancamentoId));
+      if (!l) continue;
+      const st = String(p.status||'').toLowerCase();
+      if (!['pago','recebido','baixado','quitado','liquidado','parcial'].includes(st)) continue;
+
+      const d = p.dataPagamentoISO || l.dataPagamentoISO || p.vencimentoISO || l.dataISO;
+      if (!inMonth(d, ym)) continue;
+
+      const cid = String(p.contaId ?? l.contaId ?? '');
+      if (!cid) continue;
+
+      const v = Number(p.totalPago ?? p.valor ?? 0);
+      const isEntrada = String(l.tipo||'entrada').toLowerCase()==='entrada';
+      if (isEntrada) mapIn.set(cid, (mapIn.get(cid)||0) + v);
+      else           mapOut.set(cid,(mapOut.get(cid)||0) + v);
+    }
+    return {in:mapIn, out:mapOut};
+  }
+
+  // fatura do mês (cartão) = soma das parcelas com vencimento no mês para lançamentos do tipo saída naquele cartão
+  function faturaCartaoMes(cartaoId, ym){
+    const g = getFG();
+    let soma = 0;
+    for (const p of g.parcelas){
+      const l = g.lancamentos.find(x=>String(x.id)===String(p.lancamentoId));
+      if (!l) continue;
+      const contaDoLanc = String(p.contaId ?? l.contaId ?? '');
+      if (contaDoLanc !== String(cartaoId)) continue;
+      if (String(l.tipo||'').toLowerCase() !== 'saida') continue;
+      const vcto = p.vencimentoISO || p.vencimento;
+      if (String(vcto||'').slice(0,7) !== ym) continue;
+
+      const valor = Number(p.valor||0);
+      const pago  = Number(p.totalPago||0);
+      soma += Math.max(0, valor - pago);
+    }
+    return soma;
+  }
+
+  function moneyClass(n){ return n>=0?'pos':'neg'; }
+  function deltaText(curr, prev){
+    if (!Number.isFinite(prev)) return '';
+    const diff = curr - prev;
+    const pct  = prev===0 ? 0 : (diff/prev)*100;
+    const arrow = diff>=0 ? '↑' : '↓';
+    return `${arrow} ${money(Math.abs(diff))} (${pct.toFixed(1)}% vs mês anterior)`;
+  }
+
+  /* ===================== Render ===================== */
+  const $ = s => document.querySelector(s);
+  const tbContas  = $('#tb-contas');
+  const tbCartoes = $('#tb-cartoes');
+  // permite abrir o drill com Enter/Espaço nas linhas clicáveis
+document.addEventListener('keydown', (e) => {
+  const tr = e.target.closest?.('tr.clickable');
+  if (!tr) return;
+  const k = e.key?.toLowerCase();
+  if (k === 'enter' || k === ' ') {
+    e.preventDefault();
+    tr.click();
+  }
+});
+/* ===== D5-G helpers (cole acima de renderTudo) ===== */
+window.__kpiPrev = window.__kpiPrev || { saldo:null, fatura:null };
+
+function showToast(msg, sub){
+  try{
+    const host = document.getElementById('toastHost');
+    if (!host) return;
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = `${msg}${sub ? `<small>${sub}</small>` : ''}`;
+    host.appendChild(el);
+    setTimeout(() => {
+      el.style.transition = 'opacity .3s ease, transform .3s ease';
+      el.style.opacity = '0'; el.style.transform = 'translateY(6px)';
+      setTimeout(() => el.remove(), 320);
+    }, 2600);
+  }catch{}
+}
+
+function animateKPI(selector, oldVal, newVal){
+  try{
+    if (oldVal == null || Number(oldVal) === Number(newVal)) return;
+    const node = document.querySelector(selector);
+    if (!node) return;
+    node.classList.remove('kpi-bump');
+    // força reflow p/ reiniciar a animação
+    // eslint-disable-next-line no-unused-expressions
+    void node.offsetWidth;
+    node.classList.add('kpi-bump');
+  }catch{}
+}
+ function renderTudo(){
+const ym = $('#f-mes').value || todayYM();
+$('#f-mes').value = ym;
+
+
+  const cfg    = getCfg();
+  const saldos = saldoAtualPorConta(); // Map(contaId => saldoAtual)
+  const fluxo  = sumMesPorConta(ym);
+
+  // ---------- Tabela "Minhas contas" ----------
+  tbContas.innerHTML = '';
+  let tIn = 0, tOut = 0, tSaldo = 0;
+
+  (cfg.contas || []).forEach(c => {
+    const idStr    = String(c.id);
+    const entradas = Number(fluxo.in.get(idStr)  || 0);
+    const saidas   = Number(fluxo.out.get(idStr) || 0);
+    const saldo    = Number(saldos.get(idStr)    || 0);
+
+    tIn    += entradas;
+    tOut   += saidas;
+    tSaldo += saldo;
+
+    const tr = document.createElement('tr');
+    tr.classList.add('clickable');
+    tr.dataset.kind = 'conta';
+    tr.dataset.id   = c.id;
+
+    // === A11y: foco por teclado e rótulo descritivo
+    tr.tabIndex = 0;
+    tr.setAttribute('role','button');
+    tr.setAttribute('aria-label', `Ver detalhes da conta ${c.nome||''} em ${ym}`);
+
+    tr.innerHTML = `
+      <td>${c.nome || '-'}</td>
+      <td>${c.tipo || 'Banco'}</td>
+      <td class="num green">${money(entradas)}</td>
+      <td class="num red">${money(saidas)}</td>
+      <td class="num ${moneyClass(saldo)}">${money(saldo)}</td>`;
+    tbContas.appendChild(tr);
+  });
+
+  // Totais da tabela
+  $('#tot-contas-in').textContent    = money(tIn);
+  $('#tot-contas-out').textContent   = money(tOut);
+  $('#tot-contas-saldo').textContent = money(tSaldo);
+
+  // ---------- KPI "Saldo geral" ----------
+  const saldoGeral = tSaldo;
+  $('#kpi-saldo').innerHTML = `<span class="${moneyClass(saldoGeral)}">${money(saldoGeral)}</span>`;
+  animateKPI('#kpi-saldo', window.__kpiPrev.saldo, saldoGeral);
+  window.__kpiPrev.saldo = saldoGeral;
+
+  // ---------- Delta vs mês anterior ----------
+const prevYM = (() => {
+  const [Y,M] = ym.split('-').map(Number);
+  const d = new Date(Y, M - 1, 1);
+  d.setHours(0,0,0,0);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+})();
+
+
+  // saldo até o fim do mês anterior
+  const mapPrev = new Map();
+  (cfg.contas || []).forEach(c =>
+    mapPrev.set(String(c.id), Number(c.saldo || c.saldoInicial || 0))
+  );
+
+  const g = getFG();
+const lastDayPrev = (() => {
+  const [py, pm] = prevYM.split('-').map(Number);
+  const d = new Date(py, pm, 0); // último dia do mês anterior
+  return ymdLocal(d);
+})();
+
+
+  for (const p of (g.parcelas || [])) {
+    const l = (g.lancamentos || []).find(x => String(x.id) === String(p.lancamentoId));
+    if (!l) continue;
+
+    const st = String(p.status || '').toLowerCase();
+    if (!['pago','recebido','baixado','quitado','liquidado','parcial'].includes(st)) continue;
+
+    const dPg = (p.dataPagamentoISO || l.dataPagamentoISO || '').toString().slice(0,10);
+    if (dPg && dPg <= lastDayPrev) {
+      const cid = String(p.contaId ?? l.contaId ?? '');
+      if (!cid) continue;
+      const isEntrada = String(l.tipo || 'entrada').toLowerCase() === 'entrada';
+      const v = Number(p.totalPago ?? p.valor ?? 0);
+      mapPrev.set(cid, (mapPrev.get(cid) || 0) + (isEntrada ? +v : -v));
+    }
+  }
+
+  let saldoPrev = 0; mapPrev.forEach(v => saldoPrev += Number(v || 0));
+  $('#kpi-saldo-delta').textContent = deltaText(saldoGeral, saldoPrev);
+
+  // ---------- KPIs auxiliares ----------
+  $('#kpi-contas').textContent  = (cfg.contas  || []).length;
+  $('#kpi-cartoes').textContent = (cfg.cartoes || []).length;
+
+  const totalFaturas     = (cfg.cartoes || []).reduce((acc, k) => acc + faturaCartaoMes(k.id, ym),     0);
+  const totalFaturasPrev = (cfg.cartoes || []).reduce((acc, k) => acc + faturaCartaoMes(k.id, prevYM), 0);
+  $('#kpi-fatura').textContent       = money(totalFaturas);
+  $('#kpi-fatura-delta').textContent = deltaText(totalFaturas, totalFaturasPrev);
+  animateKPI('#kpi-fatura', window.__kpiPrev.fatura, totalFaturas);
+  window.__kpiPrev.fatura = totalFaturas;
+
+  // ---------- Meus cartões ----------
+  tbCartoes.innerHTML = '';
+  let tFat = 0, tLim = 0, tDisp = 0;
+
+  (cfg.cartoes || []).forEach(k => {
+    const fat  = faturaCartaoMes(k.id, ym);
+    const lim  = Number(k.limite || k.limiteCredito || 0);
+    const gAll = getFG();
+
+    // Exposição total do cartão (todas as parcelas não pagas, de qualquer mês)
+    const expostoTotal = (gAll.parcelas||[])
+      .map(p => {
+        const l = (gAll.lancamentos||[]).find(x => String(x.id)===String(p.lancamentoId));
+        if (!l) return null;
+        const cid  = String(p.contaId ?? l.contaId ?? '');
+        const tipo = String(l.tipo||'').toLowerCase();
+        const st   = String(p.status||'pendente').toLowerCase();
+        if (cid !== String(k.id)) return null;
+        if (tipo !== 'saida') return null;
+        if (['pago','recebido','baixado','quitado','liquidado'].includes(st)) return null;
+        const ja = Number(p.totalPago||0);
+        const vv = Number(p.valor||0);
+        return Math.max(0, vv - ja);
+      })
+      .filter(v => v != null)
+      .reduce((s,v)=>s+v,0);
+
+    const dispAgora = Math.max(0, Number(lim) - Number(expostoTotal||0));
+    const disp      = Math.max(0, lim - fat);
+
+    tFat += fat; tLim += lim; tDisp += disp;
+
+    const tr = document.createElement('tr');
+    tr.classList.add('clickable');
+    tr.dataset.kind = 'cartao';
+    tr.dataset.id   = k.id;
+
+    // === A11y para linha de cartão
+    tr.tabIndex = 0;
+    tr.setAttribute('role','button');
+    tr.setAttribute('aria-label', `Ver itens da fatura do cartão ${k.nome||''} em ${ym}`);
+
+    // Status visual da fatura
+   const currYM = todayYM();
+
+    let statusHTML = '';
+    if (fat <= 0) {
+      statusHTML = '<span class="muted">✔️ Quitada</span>';
+    } else if (ym < currYM) {
+      statusHTML = '<span class="red">⏰ Atrasada</span>';
+    } else {
+      statusHTML = '<span class="muted">🕓 Em aberto</span>';
+    }
+
+    tr.innerHTML = `
+      <td>
+        ${k.nome || '-'}
+        ${statusHTML}
+        <span class="chip-disp" title="Limite real considerando todas as parcelas pendentes (todas as faturas em aberto).">
+          Disp. agora: <strong>${money(dispAgora)}</strong>
+        </span>
+      </td>
+      <td>${k.fechamento ?? '-'}</td>
+      <td>${k.vencimento ?? '-'}</td>
+      <td class="num ${moneyClass(fat * -1)}" title="Soma das parcelas com vencimento no mês para lançamentos no cartão.">${money(fat)}</td>
+      <td class="num">${money(lim)}</td>
+      <td class="num ${moneyClass(disp)}">${money(disp)}</td>
+      <td>
+        <button class="btn pill" data-action="pagar-fatura" data-cartao="${k.id}">
+          <i data-lucide="credit-card"></i> Pagar fatura
+        </button>
+      </td>
+    `;
+    tbCartoes.appendChild(tr);
+  });
+
+  $('#tot-cart-fatura').textContent = money(tFat);
+  $('#tot-cart-limite').textContent = money(tLim);
+  $('#tot-cart-disp').textContent   = money(tDisp);
+
+  try { window.lucide?.createIcons?.(); } catch {}
+}
+
+
+  // mês inicial + filtro
+  (function initMonth(){
+const ym = todayYM();
+const el = document.getElementById('f-mes');
+el.value = ym;
+
+    el.addEventListener('change', renderTudo);
+  })();
+
+  // render inicial
+  renderTudo();
+try { window.lucide?.createIcons?.(); } catch {}
+
+(function wireResumoLiveReload(){
+  // evita dupla inscrição se o script for reinjetado
+  if (window.__RESUMO_LIVE_BOUND__) return;
+  window.__RESUMO_LIVE_BOUND__ = true;
+
+  function onPing(){
+    try { renderTudo(); } catch(e){ console.warn('Resumo: render falhou', e); }
+  }
+
+  // Eventos internos do app
+  window.addEventListener('fin-store-changed', onPing);
+  window.addEventListener('finmodal:confirm',  onPing);
+
+  // Storage changes (outras abas / config)
+  window.addEventListener('storage', (ev)=> {
+    if (!ev || !ev.key) return;
+    const k = String(ev.key);
+    if (k === 'financeiroGlobal' || k === 'financeiroGlobal:ping' || k === 'configFinanceiro'){
+      if (document.visibilityState === 'visible') onPing();
+    }
+  }, { passive:true });
+
+  // BroadcastChannel cross-tabs
+  try {
+    const bc = new BroadcastChannel('mrubuffet');
+    window.__RESUMO_BC__ = bc;
+    bc.onmessage = (e)=>{ if (e?.data?.type === 'fin-store-changed') {
+      if (document.visibilityState === 'visible') onPing();
+    }};
+    // fecha o canal ao sair
+    window.addEventListener('beforeunload', () => { try { bc.close(); } catch {} }, { once:true });
+  } catch {}
+})();
+
+
+  </script>
+  <!-- ===== Ajuste de Saldo: dialog + lógica ===== -->
+  <dialog id="dlg-ajuste">
+    <div class="head">
+      <div><i data-lucide="refresh-ccw"></i> Atualização de saldo de conta</div>
+      <button id="ajusteClose" class="btn">Fechar</button>
+    </div>
+    <div class="body">
+      <label>Conta
+        <select id="aj-conta"></select>
+      </label>
+      <label>Data
+        <input id="aj-data" type="date">
+      </label>
+      <label class="span-2">Saldo atual desejado (R$)
+        <input id="aj-saldo" type="number" step="0.01" inputmode="decimal" placeholder="0,00">
+      </label>
+      <label class="span-2">Descrição (fixa)
+        <input id="aj-desc" type="text" value="Atualização de saldo de conta" readonly>
+      </label>
+    </div>
+    <div class="foot">
+      <button id="ajusteSalvar" class="btn"><i data-lucide="check"></i> Confirmar</button>
+    </div>
+  </dialog>
+
+  <script>
+  (function ajusteDeSaldoInit(){
+    const $ = sel => document.querySelector(sel);
+    const FGKEY = 'financeiroGlobal';
+
+    function readFG(){
+      try{ return JSON.parse(localStorage.getItem(FGKEY)||'{}')||{}; }catch{return {}}
+    }
+    function writeFG(g){
+      try{
+        localStorage.setItem(FGKEY, JSON.stringify(g));
+        localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      }catch{}
+
+      // === AUTO-BACKUP M34 ===
+      try {
+        if (window.kgbBackup?.saveWithBackup) {
+          kgbBackup.saveWithBackup('financeiroGlobal', g);
+        } else {
+          localStorage.setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g));
+        }
+      } catch (e) {
+        console.warn('Auto-backup falhou:', e);
+      }
+    }
+    function moneyBR(v){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0)); }
+
+    // pega saldo atual por conta (recalcule se necessário)
+    function mapSaldos(){
+      const g = readFG();
+      const contas = Array.isArray(g.contas)? g.contas : [];
+      const movs   = Array.isArray(g.movimentos)? g.movimentos : [];
+      const byId = {};
+      for (const c of contas){
+        c.saldoInicial = Number(c.saldoInicial||0);
+        c.saldoAtual   = Number(c.saldoInicial);
+        byId[String(c.id)] = c;
+      }
+      for (const m of movs){
+        const c = byId[String(m.contaId)];
+        if (!c) continue;
+        const v = Number(m.valor||0);
+        if (String(m.tipo)==='credito') c.saldoAtual += v;
+        else if (String(m.tipo)==='debito') c.saldoAtual -= v;
+      }
+      return byId;
+    }
+
+    function fillContas(){
+      const g = readFG();
+      const cfg = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{}}})();
+      const contas = (Array.isArray(g.contas)? g.contas:[]);
+      const contasCfg = (Array.isArray(cfg.contas)? cfg.contas:[]);
+      // merge por id
+      const map = new Map();
+      for(const c of contas){ map.set(String(c.id), {id:String(c.id), nome:c.nome||''}); }
+      for(const c of contasCfg){ if(!map.has(String(c.id))) map.set(String(c.id), {id:String(c.id), nome:(c.nome||c.descricao||'')}); }
+      const saldos = mapSaldos();
+
+      const sel = $('#aj-conta');
+      sel.innerHTML = Array.from(map.values()).map(c => {
+        const s = saldos[String(c.id)]?.saldoAtual ?? 0;
+        return `<option value="${c.id}">${(c.nome||'Sem nome')} — saldo: ${moneyBR(s)}</option>`;
+      }).join('') || '<option value="">(Nenhuma conta)</option>';
+    }
+
+    // abre o dialog
+    $('#ajusteSaldoBtn')?.addEventListener('click', ()=>{
+      fillContas();
+     $('#aj-data').value = ymdLocal(new Date());
+
+      $('#aj-saldo').value = '';
+      document.getElementById('dlg-ajuste').showModal();
+      try{ window.lucide?.createIcons?.(); }catch{}
+    });
+
+    $('#ajusteClose')?.addEventListener('click', ()=> document.getElementById('dlg-ajuste').close());
+    document.getElementById('dlg-ajuste')?.addEventListener('click', (e)=>{ if(e.target.id==='dlg-ajuste') document.getElementById('dlg-ajuste').close(); });
+
+    // salva ajuste
+    $('#ajusteSalvar')?.addEventListener('click', ()=>{
+      const contaId = $('#aj-conta')?.value || '';
+     const dataISO = $('#aj-data')?.value || ymdLocal(new Date());
+      const alvo    = Number($('#aj-saldo')?.value || 0);
+      const desc    = $('#aj-desc')?.value || 'Atualização de saldo de conta';
+      if (!contaId){ alert('Selecione a conta.'); return; }
+
+      const g = readFG();
+      const saldos = mapSaldos();
+      const saldoAtual = Number(saldos[String(contaId)]?.saldoAtual || 0);
+      const delta = alvo - saldoAtual;
+      if (Math.abs(delta) < 0.00001){
+        alert('O saldo informado é igual ao saldo atual. Nada a ajustar.');
+        return;
+      }
+
+      const nomeConta = (Array.isArray(g.contas)? g.contas:[]).find(c => String(c.id)===String(contaId))?.nome
+                      || (function(){ try{ const cfg=JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; return (cfg.contas||[]).find(c=>String(c.id)===String(contaId))?.nome || ''; }catch{return ''} })();
+
+      // lançamento especial (ignorado pelas análises)
+      const lancId = 'ajuste_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      const lanc = {
+        id: lancId,
+        escopo: 'ambas',
+        tipo: (delta>=0 ? 'entrada' : 'saida'),
+        descricao: desc,
+        categoriaId: '_ajuste_saldo_',
+        subcategoriaId: null,
+        formaPagamento: 'ajuste',
+        formaDescricao: 'Ajuste de saldo',
+        contaId: String(contaId),
+        contaNome: nomeConta || '',
+        eventoId: null,
+        fornecedor: null,
+        dataCompetencia: dataISO,
+        vencimentoISO: dataISO,
+        valorTotal: Math.abs(delta),
+        status: 'pago',
+        dataPagamentoISO: dataISO,
+        origem: 'ajuste_saldo',
+        isSaldoAjuste: true,
+        criadoEm: new Date().toISOString()
+      };
+
+      (g.lancamentos ||= []).unshift(lanc);
+
+      (g.movimentos ||= []).push({
+        id: 'mov_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        refKey: `lanc:${lancId}:full`,
+        origem: 'lancamento',
+        lancamentoId: String(lancId),
+        parcelaId: '',
+        contaId: String(contaId),
+        contaNome: nomeConta || '',
+        tipo: (delta>=0 ? 'credito' : 'debito'),
+        valor: Math.abs(delta),
+        dataISO
+      });
+
+      // Recalcula e espelha saldoPorConta (cache usado por outras telas)
+      (function recomputeSaldoPorConta(){
+        const contas = Array.isArray(g.contas) ? g.contas : [];
+        const movs   = Array.isArray(g.movimentos) ? g.movimentos : [];
+        const cfg    = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}} })();
+        const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
+
+        const byId = {};
+         const norm = s => String(s || '').trim().toLowerCase();
+
+        // base: config (traz também o nome)
+        for (const ct of contasCfg){
+          const id = String(ct.id);
+          byId[id] = {
+            id,
+            nome: String(ct.nome || ct.descricao || ''),
+            saldoInicial: Number(ct.saldo || ct.saldoInicial || 0),
+            saldoAtual:   Number(ct.saldo || ct.saldoInicial || 0),
+          };
+        }
+
+        // completa com g.contas (preserva nome quando existir)
+        for (const c of contas){
+          const id = String(c.id);
+          if (!byId[id]){
+            byId[id] = {
+              id,
+              nome: String(c.nome || ''),
+              saldoInicial: Number(c.saldoInicial || 0),
+              saldoAtual:   Number(c.saldoInicial || 0),
+            };
+          } else if (!byId[id].nome){
+            byId[id].nome = String(c.nome || '');
+          }
+        }
+
+        // aplica movimentos (1º por ID; se faltar, tenta por NOME)
+        for (const m of movs){
+          let conta = null;
+
+          const idMov = String(m.contaId || '');
+          if (idMov && byId[idMov]) {
+            conta = byId[idMov];
+          } else if (m && m.contaNome){
+            const alvo = norm(m.contaNome);
+            conta = Object.values(byId).find(c => norm(c.nome) === alvo) || null;
+          }
+
+          if (!conta) continue;
+
+          const v = Number(m.valor || 0);
+          if (String(m.tipo) === 'credito') conta.saldoAtual += v;
+          else if (String(m.tipo) === 'debito') conta.saldoAtual -= v;
+        }
+
+        g.saldoPorConta = {};
+        Object.values(byId).forEach(c => g.saldoPorConta[c.id] = Number(c.saldoAtual||0));
+        // (opcional) espelho por nome:
+        // g._saldoPorContaNome = {};
+        // Object.values(byId).forEach(c => g._saldoPorContaNome[c.id] = c.nome || '');
+      })(); // ← fecha a IIFE recomputeSaldoPorConta()
+
+      writeFG(g);
+      try { if (typeof renderTudo==='function') renderTudo(); } catch {}
+
+      try{ window.dispatchEvent(new CustomEvent('finmodal:confirm', { detail:{ reason:'ajuste_saldo', lancId } })); }catch{}
+      alert('Saldo ajustado com sucesso.');
+      document.getElementById('dlg-ajuste').close();
+    });
+  })();
+
+  function parcelasDaFatura(cartaoId, ym){
+    const g = getFG();
+    const out = [];
+    for (const p of g.parcelas){
+      const l = g.lancamentos.find(x => String(x.id)===String(p.lancamentoId));
+      if (!l) continue;
+      // pertence ao cartão e é SAÍDA
+      const contaDoLanc = String(p.contaId ?? l.contaId ?? '');
+      if (contaDoLanc !== String(cartaoId)) continue;
+      if (String(l.tipo||'').toLowerCase() !== 'saida') continue;
+      // está neste mês pela data de vencimento
+      const vcto = p.vencimentoISO || p.vencimento;
+      if (String(vcto||'').slice(0,7) !== ym) continue;
+      out.push({ p, l });
+    }
+    // mais previsível pagar na ordem do vencimento, depois valor
+    out.sort((a,b)=>
+      String(a.p.vencimentoISO||'').localeCompare(String(b.p.vencimentoISO||'')) ||
+      Number(a.p.valor||0) - Number(b.p.valor||0)
+    );
+    return out;
+  }
+// Mostra no drilldown os itens (parcelas) que compõem a fatura daquele cartão e mês
+function renderDrillFatura(cartaoId, ym){
+  const cfg = getCfg();
+  const g   = getFG();
+  const itens = parcelasDaFatura(cartaoId, ym); // [{p,l}]
+
+  const titulo = (cfg.cartoes||[]).find(c => String(c.id)===String(cartaoId))?.nome || `Cartão ${cartaoId}`;
+  const tbody  = document.getElementById('drill-body');
+
+  const rows = itens.map(({p,l}) => {
+    const iso = p.vencimentoISO || p.vencimento || '';
+    const br  = iso ? iso.split('-').reverse().join('/') : '';
+    const desc = l?.descricao || '(sem descrição)';
+    const valor = Number(p.valor||0);
+    const pago  = Number(p.totalPago||0);
+    const aberto = Math.max(0, valor - pago);
+    const status = String(p.status || 'pendente').toLowerCase();
+
+    return `<tr>
+      <td>${br}</td>
+      <td>${desc}</td>
+      <td class="num ${aberto>0?'red':'green'}">${money(aberto>0 ? -aberto : -valor)}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('drill-title').innerHTML =
+    `<i data-lucide="credit-card"></i> ${titulo} — ${ym}`;
+  document.getElementById('drill-sub').textContent =
+    'Itens que compõem a fatura (considerando vencimento no mês selecionado).';
+
+  tbody.innerHTML = rows || `<tr><td colspan="4" class="muted">Nada encontrado para o mês selecionado.</td></tr>`;
+  document.getElementById('drill').showModal();
+  try{ window.lucide?.createIcons?.(); }catch{}
+}
+
+  // Bind único do botão "Pagar fatura" (Meus cartões)
+  (() => {
+    if (window.__bindPagarFaturaResumo) return;
+    window.__bindPagarFaturaResumo = true;
+
+    // abre o dialog de pagamento de fatura (RESUMO)
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target.closest?.('[data-action="pagar-fatura"]');
+      if (!btn) return;
+
+      const cartaoId = btn.getAttribute('data-cartao');
+      const ymSel = document.querySelector('#f-mes')?.value;
+     const ym = (ymSel && /^\d{4}-\d{2}$/.test(ymSel)) ? ymSel : todayYM();
+
+      const cfg = getCfg();
+      const cartao = (cfg.cartoes||[]).find(c => String(c.id)===String(cartaoId));
+
+      // usa a fatura "restante"
+      const fatura = Number(faturaCartaoMes(cartaoId, ym) || 0);
+
+      // preenche o modal
+      document.getElementById('pg-cartao-id').value = cartaoId; // <- NOVO
+      document.getElementById('pg-cartao-nome').value = cartao?.nome || `Cartão ${cartaoId}`;
+      document.getElementById('pg-ym').value = ym;
+      document.getElementById('pg-fatura').value = money(fatura);
+      document.getElementById('pg-valor').value = fatura.toFixed(2).replace('.', ',');
+     document.getElementById('pg-data').value = ymdLocal(new Date());
+
+      // contas
+     // contas com saldo atual no texto do option
+const sel = document.getElementById('pg-conta');
+const saldosMap = saldoAtualPorConta(); // Map(id => saldoAtual)
+sel.innerHTML = (cfg.contas||[]).map(c => {
+  const s = Number(saldosMap.get(String(c.id)) || 0);
+  return `<option value="${c.id}">${c.nome} — saldo: ${money(s)}</option>`;
+}).join('');
+
+// exibe saldo da conta selecionada (abaixo do select)
+(function bindSaldoDaConta(){
+  const out = document.getElementById('pg-conta-saldo');
+  const upd = () => {
+    const id = String(sel.value||'');
+    const s  = Number(saldosMap.get(id)||0);
+    out.textContent = id ? `Saldo atual da conta selecionada: ${money(s)}` : '';
+  };
+  sel.removeEventListener?.('change', sel.__onSaldoChange);
+  sel.__onSaldoChange = upd;
+  sel.addEventListener('change', upd);
+  upd(); // inicial
+})();
+
+      const dlg = document.getElementById('dlg-pagar');
+      if (dlg?.showModal) dlg.showModal(); else dlg.hidden = false;
+      try { window.lucide?.createIcons?.(); } catch {}
+    });
+  })();
+  </script>
+
+  <dialog id="dlg-pagar">
+    <div class="dlgh">
+      <div><i data-lucide="credit-card"></i> Pagar fatura</div>
+      <button class="btn" onclick="document.getElementById('dlg-pagar').close()">Fechar</button>
+    </div>
+    <div class="dlgb">
+      <div class="toolbar" style="gap:10px;flex-wrap:wrap">
+        <!-- ID oculto do cartão para salvar corretamente -->
+        <input id="pg-cartao-id" type="hidden">
+
+        <label>Cartão<br>
+          <input id="pg-cartao-nome" class="pill" type="text" disabled>
+        </label>
+        <label>Mês da fatura<br>
+          <input id="pg-ym" class="pill" type="month" disabled>
+        </label>
+        <label>Valor da fatura<br>
+          <input id="pg-fatura" class="pill" type="text" disabled>
+        </label>
+        <label>Valor a pagar (R$)<br>
+          <input id="pg-valor" class="pill" type="number" step="0.01" min="0">
+        </label>
+        <label>Data do pagamento<br>
+          <input id="pg-data" class="pill" type="date">
+        </label>
+       <label>Conta de débito<br>
+  <select id="pg-conta" class="pill"></select>
+  <div id="pg-conta-saldo" class="muted" style="margin-top:4px;font-size:12px;"></div>
+</label>
+
+
+        <label style="flex:1 1 100%">Observação (opcional)<br>
+          <input id="pg-obs" class="pill" type="text" placeholder="Ex.: pagamento parcial, comprovante em...">
+        </label>
+      </div>
+    <div class="foot" style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+  <button id="pg-ver-itens" class="btn pill">
+    <i data-lucide="list"></i> Ver itens desta fatura
+  </button>
+  <button id="pg-salvar" class="btn">
+    <i data-lucide="check"></i> Salvar
+  </button>
+</div>
+
+    </div>
+  </dialog>
+
+  <script>
+    
+// Bind único para "Ver itens desta fatura"
+(function bindVerItensFatura(){
+  if (window.__bindPgVerItens) return;
+  window.__bindPgVerItens = true;
+
+  document.getElementById('pg-ver-itens')?.addEventListener('click', () => {
+    // lê dos campos do próprio modal
+    const cartaoId = document.getElementById('pg-cartao-id')?.value || '';
+    const ym       = (document.getElementById('pg-ym')?.value || '').slice(0,7); // "AAAA-MM"
+    if (!cartaoId || !ym) { console.warn('pg-ver-itens: cartaoId/ym ausentes'); return; }
+
+    try {
+      renderDrillFatura(cartaoId, ym); // já existe no arquivo
+    } catch (e) {
+      console.error('renderDrillFatura falhou:', e);
+    }
+  });
+})();
+
+
+// ===== PAGAR FATURA — handler do botão Salvar =====
+(() => {
+  // evita duplo-bind se o arquivo for carregado mais de uma vez
+  if (window.__bindPgSalvar) return;
+  window.__bindPgSalvar = true;
+
+  const btn = document.getElementById('pg-salvar');
+  if (!btn) return;
+
+  const money = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
+  // Aceita "1234,56", "1234.56" e "1.234,56"
+  const parseNumberBR = (s) => {
+    const t = String(s ?? '').trim();
+    if (!t) return 0;
+    const hasComma = t.includes(',');
+    const hasDot   = t.includes('.');
+    if (hasComma && !hasDot){
+      // vírgula é decimal
+      return Number(t.replace(/\./g,'').replace(',','.')) || 0;
+    }
+    if (hasDot && !hasComma){
+      // ponto é decimal
+      return Number(t) || 0;
+    }
+    // tem os dois → vírgula decimal, pontos de milhar
+    return Number(t.replace(/\./g,'').replace(',','.')) || 0;
+  };
+
+
+  btn.addEventListener('click', () => {
+    // normalizações e leituras
+    const ym       = (document.getElementById('pg-ym').value || '').slice(0,7);
+    const cartaoId = document.getElementById('pg-cartao-id').value; // vem do hidden
+  const data     = document.getElementById('pg-data').value || ymdLocal(new Date());
+    const conta    = document.getElementById('pg-conta').value;
+    const obs      = document.getElementById('pg-obs').value || '';
+
+    // aceita tanto "1234.56" quanto "1.234,56"
+    const pagarStr = document.getElementById('pg-valor').value || '0';
+    let pagar      = parseNumberBR(pagarStr);
+
+    // validações básicas
+    if (!/^\d{4}-\d{2}$/.test(ym)) {
+      alert('Mês da fatura inválido.');
+      return;
+    }
+    if (!data) {
+      alert('Informe a data de pagamento.');
+      return;
+    }
+    if (!conta) {
+      alert('Selecione a conta para débito.');
+      return;
+    }
+    if (!(pagar > 0)) {
+      alert('Informe um valor positivo para pagar.');
+      return;
+    }
+
+    const cfg    = getCfg();
+    const cartao = (cfg.cartoes || []).find(c => String(c.id) === String(cartaoId));
+    if (!cartao) { alert('Cartão não encontrado.'); return; }
+
+    // 1) pega as parcelas que compõem a fatura desse mês
+    const itens = parcelasDaFatura(cartao.id, ym); // [{p,l},...]
+    if (!itens.length) {
+      alert('Não há itens nesta fatura para baixar.');
+      return;
+    }
+
+    // === Guard-rails: evitar pagar acima do devido e valores inválidos ===
+    const devidoTotal = itens.reduce((acc, { p }) => {
+      const valor = Number(p.valor || 0);
+      const pago  = Number(p.totalPago || 0);
+      return acc + Math.max(0, valor - pago);
+    }, 0);
+
+    // fatura restante calculada pela regra da página (somatório por vencimento no mês)
+    const faturaRestante = Number(faturaCartaoMes(cartao.id, ym) || 0);
+
+    // teto de segurança
+    const teto = Math.min(devidoTotal, faturaRestante);
+    if (!(teto > 0)) {
+      alert('Não há valor em aberto nesta fatura para o mês selecionado.');
+      return;
+    }
+
+    if (pagar > teto) {
+      const ok = confirm(
+        `O valor informado (${money(pagar)}) é maior que o devido (${money(teto)}).\n` +
+        `Deseja limitar automaticamente ao devido?`
+      );
+      if (!ok) return;
+      pagar = teto;
+    }
+
+    // 2) lança o débito único na CONTA (origem: fatura)
+    try {
+      const contaNome = (cfg.contas || []).find(c => String(c.id) === String(conta))?.nome || '';
+
+      if (typeof upsertMovement === 'function') {
+        // caminho "oficial" se o seu sistema expõe essa função
+        upsertMovement({
+          refKey:  `fatura:${cartao.id}:${ym}:${Date.now()}`,
+          origem:  'fatura',
+          lancamentoId: '', parcelaId: '',
+          contaId: String(conta), contaNome,
+          tipo: 'debito',
+          valor: Number(pagar) || 0,
+          dataISO: data,
+          obs
+        });
+      } else {
+        // fallback: registra diretamente no FG.movimentos
+        const g2 = getFG();
+        (g2.movimentos ||= []).push({
+          id: 'mov_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),
+          refKey: `fatura:${cartao.id}:${ym}:${Date.now()}`,
+          origem: 'fatura',
+          lancamentoId: '', parcelaId: '',
+          contaId: String(conta), contaNome,
+          tipo: 'debito',
+          valor: Number(pagar) || 0,
+          dataISO: data,
+          obs
+        });
+        localStorage.setItem('financeiroGlobal', JSON.stringify(g2));
+        localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      }
+    } catch (e) {
+      console.warn('Falha ao registrar movimento da fatura (conta):', e);
+    }
+
+    // 3) baixa (parcial ou total) nas parcelas na ordem
+    const g = getFG();
+    let restante = pagar;
+
+    for (const { p, l } of itens) {
+      if (restante <= 0) break;
+      const idx = g.parcelas.findIndex(x => String(x.id) === String(p.id));
+      if (idx < 0) continue;
+
+      const jaPago = Number(g.parcelas[idx].totalPago || 0);
+      const valorP = Number(g.parcelas[idx].valor || 0);
+      const falta  = Math.max(0, valorP - jaPago);
+      if (falta <= 0) continue;
+
+      const baixa    = Math.min(restante, falta);
+      const novoPago = jaPago + baixa;
+
+      g.parcelas[idx].totalPago        = novoPago;
+      g.parcelas[idx].dataPagamentoISO = data;
+      g.parcelas[idx].status           = (novoPago >= valorP - 1e-6) ? 'pago' : 'parcial';
+
+      // === AGENDA UNIFICADA: marcar DONE quando a parcela foi quitada de vez ===
+      try {
+        if (novoPago >= valorP - 1e-6) {
+          window.__agendaBridge?.setUnifiedDone(`fin:parcela:${p.id}`);
+          const desc = (typeof l?.descricao === 'string' && l.descricao) ? l.descricao : 'Parcela';
+          window.__agendaBridge?.publishNotificationFeed?.({
+            id: `feed:fin:parcela:${p.id}`,
+            title: `Baixa registrada: ${desc}`,
+            level: 'info',
+            createdAtISO: new Date().toISOString(),
+            audience: 'financeiro'
+          });
+        }
+      } catch {}
+
+      restante -= baixa;
+
+      // (opcional) se houver sincronizador por parcela
+      try {
+        if (typeof syncAccountMovementForParcela === 'function') {
+          syncAccountMovementForParcela(g.parcelas[idx].id);
+        }
+      } catch {}
+    }
+
+    // 4) persiste e recalcula saldos (inclui espelho saldoPorConta)
+    try {
+      // Recalcula e espelha saldoPorConta (cache usado por outras telas)
+      (function recomputeSaldoPorContaLocal(gref){
+        const cfg    = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}} })();
+        const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
+        const contas = Array.isArray(gref.contas) ? gref.contas : [];
+        const movs   = Array.isArray(gref.movimentos) ? gref.movimentos : [];
+
+        const byId = {};
+             const norm = s => String(s || '').trim().toLowerCase();
+
+        // base: config (traz também o nome)
+        for (const ct of contasCfg){
+          const id = String(ct.id);
+          byId[id] = {
+            id,
+            nome: String(ct.nome || ct.descricao || ''),
+            saldoInicial: Number(ct.saldo || ct.saldoInicial || 0),
+            saldoAtual:   Number(ct.saldo || ct.saldoInicial || 0),
+          };
+        }
+
+        // completa com gref.contas (preserva nome quando existir)
+        for (const c of contas){
+          const id = String(c.id);
+          if (!byId[id]){
+            byId[id] = {
+              id,
+              nome: String(c.nome || ''),
+              saldoInicial: Number(c.saldoInicial || 0),
+              saldoAtual:   Number(c.saldoInicial || 0),
+            };
+          } else if (!byId[id].nome){
+            byId[id].nome = String(c.nome || '');
+          }
+        }
+
+        // aplica movimentos (1º por ID; se faltar, tenta por NOME)
+        for (const m of movs){
+          let conta = null;
+
+          const idMov = String(m.contaId || '');
+          if (idMov && byId[idMov]) {
+            conta = byId[idMov];
+          } else if (m && m.contaNome){
+            const alvo = norm(m.contaNome);
+            conta = Object.values(byId).find(c => norm(c.nome) === alvo) || null;
+          }
+
+          if (!conta) continue;
+
+          const v = Number(m.valor || 0);
+          if (String(m.tipo) === 'credito') conta.saldoAtual += v;
+          else if (String(m.tipo) === 'debito') conta.saldoAtual -= v;
+        }
+
+        gref.saldoPorConta = {};
+        Object.values(byId).forEach(c => gref.saldoPorConta[c.id] = Number(c.saldoAtual||0));
+        // (opcional) espelho por nome:
+        // gref._saldoPorContaNome = {};
+        // Object.values(byId).forEach(c => gref._saldoPorContaNome[c.id] = c.nome || '');
+      })(g); // ← fecha a IIFE recomputeSaldoPorContaLocal passando g
+
+
+      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      try { if (typeof recomputeAllAccountBalances === 'function') recomputeAllAccountBalances(); } catch {}
+      try { window.dispatchEvent(new CustomEvent('fin-store-changed')); } catch {}
+    } catch (e) {
+      console.error('Erro ao persistir alterações do pagamento de fatura:', e);
+    }
+
+// 5) fecha, re-render e feedback visual
+document.getElementById('dlg-pagar').close();
+renderTudo();
+try{
+  const cfg = getCfg();
+  const cartName = (cfg.cartoes || []).find(c => String(c.id) === String(cartaoId))?.nome || 'Cartão';
+  showToast(`Pagamento registrado: ${money(pagar)}`, `${cartName} • ${ym.split('-').reverse().join('/')}`);
+}catch{}
+
+  });
+})();
+
+
+
+  </script>
+  <script>
+(function(){
+  // [C3 - Resumo] Pendente do mês nos cards desta página
+  const GKEY = 'financeiroGlobal';
+  function parseG(){ try { return JSON.parse(localStorage.getItem(GKEY)||'{}')||{}; } catch { return {}; } }
+
+  function isQuitado(st){ st=String(st||'').toLowerCase(); return ['pago','recebido','baixado','quitado','liquidado'].includes(st); }
+  function normTipo(t){ t=String(t||'').toLowerCase(); if(['entrada','receita','receber'].includes(t)) return 'entrada'; if(['saida','despesa','pagar'].includes(t)) return 'saida'; return ''; }
+
+  function updateResumoPendentesMes(){
+    const g=parseG();
+    const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
+    const parcs = Array.isArray(g.parcelas)    ? g.parcelas    : [];
+
+    const today = new Date();
+    const y = today.getFullYear(), m = today.getMonth();
+   const firstISO = ymdLocal(new Date(y, m, 1));
+const lastISO  = ymdLocal(new Date(y, m+1, 0));
+
+
+    const byLanc = new Map();
+    for (const p of parcs){
+      const lid = String(p.lancamentoId || '');
+      if (!byLanc.has(lid)) byLanc.set(lid, []);
+      byLanc.get(lid).push(p);
+    }
+
+    let pendEnt=0, pendSai=0;
+
+    for (const l of lancs){
+      const tipo = normTipo(l?.tipo);
+      const partes = byLanc.get(String(l.id)) || [];
+
+      if (partes.length){
+        for (const p of partes){
+          const vencISO = String(p.vencimentoISO || p.vencimento || '').slice(0,10);
+          if (!vencISO || vencISO < firstISO || vencISO > lastISO) continue;
+          if (isQuitado(p.status)) continue;
+
+          const valor = Number(p.valor || 0);
+          const pago  = Number(p.totalPago || 0);
+          const resto = Math.max(0, valor - pago);
+          if (resto <= 0) continue;
+
+          if (tipo==='entrada') pendEnt += resto;
+          else if (tipo==='saida') pendSai += resto;
+        }
+      } else {
+        const dataISO = String(l.dataCompetencia || l.data || l.dataISO || '').slice(0,10);
+        if (!dataISO || dataISO < firstISO || dataISO > lastISO) continue;
+        if (isQuitado(l.status)) continue;
+
+        const v = Number(l.valor ?? l.valorTotal ?? 0) || 0;
+        if (v <= 0) continue;
+
+        if (tipo==='entrada') pendEnt += v;
+        else if (tipo==='saida') pendSai += v;
+      }
+    }
+
+    const fmt = (n)=> (window.fmtBRL ? window.fmtBRL.format(n) : (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}));
+    function setPend(id, n){
+      const el = document.getElementById(id);
+      if (!el) return;
+      const h = el.querySelector('h3, h4, .kpi-title, .card-title') || el;
+      let span = h.querySelector('.pendente-mes');
+      if (!span){
+        span = document.createElement('span');
+        span.className = 'pendente-mes';
+        span.style.fontWeight = '500';
+        span.style.marginLeft = '8px';
+        h.appendChild(span);
+      }
+      span.textContent = '— Pendente: ' + fmt(n);
+    }
+    setPend('cardReceberMes', pendEnt);
+    setPend('cardPagarMes',   pendSai);
+  }
+
+  // roda agora e quando pingar o FG
+  try { updateResumoPendentesMes(); } catch {}
+  window.addEventListener('storage', (e)=>{
+    if (e && e.key && e.key.startsWith('financeiroGlobal')) {
+      try { updateResumoPendentesMes(); } catch {}
+    }
+  });
+})();
+</script>
+
+
+  <!-- manter para ouvir o finmodal:confirm mesmo se o modal estiver em outra aba -->
+  <script type="module" src="financeiro-modal.js"></script>
+  <div id="toastHost" aria-live="polite"></div>
+
+<script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) {
+          fechar();
+        } else {
+          abrir();
+        }
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+  })();
+
+  // Garante os ícones da Lucide
+  document.addEventListener("DOMContentLoaded", () => {
+    try { window.lucide?.createIcons?.(); } catch {}
+  });
+</script>
+</body>
+</html>
+
+

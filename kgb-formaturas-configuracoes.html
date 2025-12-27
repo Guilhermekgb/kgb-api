@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Configurações</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+
+    .card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+      margin-bottom:16px;
+    }
+    .card h2{
+      font-size:18px;
+      margin:0 0 8px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+
+    .texto-suporte{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:2px;
+      margin-bottom:6px;
+    }
+
+    .grid-config{
+      display:grid;
+      grid-template-columns:minmax(0, 1.2fr) minmax(0, 1.1fr);
+      gap:18px;
+      align-items:flex-start;
+    }
+    @media (max-width:1000px){
+      .grid-config{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+      margin-bottom:8px;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo small{
+      font-size:11px;
+      color:#9a7b58;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+    textarea{
+      min-height:70px;
+      resize:vertical;
+    }
+    input:focus,
+    select:focus,
+    textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .linha-check{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color:#7a5a3c;
+      margin-bottom:6px;
+    }
+    .linha-check input{
+      width:16px; height:16px;
+    }
+
+    .grid-2{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+    }
+    @media (max-width:900px){
+      .grid-2{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .chips-info{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin-top:6px;
+      font-size:11px;
+    }
+    .chip{
+      padding:3px 8px;
+      border-radius:999px;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .chip i{
+      width:12px; height:12px;
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .linha-botoes{
+      display:flex;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+    }
+
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="settings-2"></i> Configurações – Módulo de Formaturas</h1>
+        <p class="subtitulo">
+          Ajuste as regras gerais de numeração de convites, alterações, metas mínimas e mensagens padrão usadas em todo o módulo de formaturas.
+        </p>
+
+        <div class="grid-config">
+
+          <!-- LADO ESQUERDO -->
+          <div>
+            <section class="card">
+              <h2><i data-lucide="ticket-percent"></i> Numeração de convites</h2>
+              <p class="texto-suporte">
+                Define como os convites serão numerados por ano e por tipo de evento.
+              </p>
+
+              <div class="linha-check">
+                <input id="cfgReiniciarAno" type="checkbox" checked>
+                <label for="cfgReiniciarAno">Reiniciar numeração a cada ano (ex.: C-0001-2025, C-0001-2026...)</label>
+              </div>
+
+              <div class="campo">
+                <label for="cfgMascaraConvite">
+                  Máscara padrão de numeração
+                </label>
+                <input id="cfgMascaraConvite" type="text" value="{LETRA_EVENTO}-{SEQUENCIA}-{ANO}">
+                <small>
+                  Use variáveis: {LETRA_EVENTO}, {SEQUENCIA}, {ANO}. A letra do evento veio do cadastro de Tipo de Evento.
+                </small>
+              </div>
+
+              <div class="campo">
+                <label for="cfgSequenciaInicial">
+                  Sequência inicial por ano
+                </label>
+                <input id="cfgSequenciaInicial" type="number" value="1" min="1">
+              </div>
+
+              <div class="chips-info">
+                <span class="chip">
+                  <i data-lucide="info"></i>
+                  Exemplo: Baile (letra B) em 2025 → B-0001-2025, B-0002-2025 ...
+                </span>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2><i data-lucide="shield-check"></i> Regras de alteração e cancelamento</h2>
+              <p class="texto-suporte">
+                Controle como o sistema se comporta quando você muda escola do aluno, remove eventos ou cancela convites.
+              </p>
+
+              <div class="campo">
+                <label for="cfgPrazoAlteracao">
+                  Prazo padrão para alterações (dias antes do evento)
+                </label>
+                <input id="cfgPrazoAlteracao" type="number" value="15" min="0">
+                <small>Serve apenas como referência interna e alerta, não bloqueia a alteração.</small>
+              </div>
+
+              <div class="linha-check">
+                <input id="cfgCancelarConvite" type="checkbox" checked>
+                <label for="cfgCancelarConvite">
+                  Quando um evento for removido do aluno, marcar convites daquele evento como “Cancelado”
+                  e liberar nova numeração se precisar reemitir.
+                </label>
+              </div>
+
+              <div class="linha-check">
+                <input id="cfgBloquearEmAtraso" type="checkbox">
+                <label for="cfgBloquearEmAtraso">
+                  Exibir alerta vermelho na emissão de convites se o financeiro do aluno tiver valor em atraso.
+                </label>
+              </div>
+
+              <div class="campo">
+                <label for="cfgTextoAlertaEmissao">Mensagem de alerta ao tentar emitir com pendência</label>
+                <textarea id="cfgTextoAlertaEmissao">Este aluno ainda possui valores pendentes para este evento. Verifique o financeiro antes de emitir os convites.</textarea>
+              </div>
+            </section>
+          </div>
+
+          <!-- LADO DIREITO -->
+          <div>
+            <section class="card">
+              <h2><i data-lucide="wallet-cards"></i> Dados financeiros padrão</h2>
+              <p class="texto-suporte">
+                Essas informações aparecerão nos contratos, boletos e mensagens automáticas de cobrança.
+              </p>
+
+              <div class="campo">
+                <label for="cfgNomeEmpresa">Nome do favorecido</label>
+                <input id="cfgNomeEmpresa" type="text" placeholder="Nome da empresa / buffet">
+              </div>
+
+              <div class="campo">
+                <label for="cfgPixChave">Chave PIX principal</label>
+                <input id="cfgPixChave" type="text" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
+              </div>
+
+              <div class="grid-2">
+                <div class="campo">
+                  <label for="cfgBancoNome">Banco</label>
+                  <input id="cfgBancoNome" type="text" placeholder="Nome do banco">
+                </div>
+                <div class="campo">
+                  <label for="cfgBancoConta">Agência / Conta</label>
+                  <input id="cfgBancoConta" type="text" placeholder="Agência / Conta">
+                </div>
+              </div>
+
+              <div class="campo">
+                <label for="cfgObsPagamento">Observação padrão de pagamento</label>
+                <textarea id="cfgObsPagamento">Envie o comprovante pelo WhatsApp informando o nome completo do aluno e a escola.</textarea>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2><i data-lucide="messages-square"></i> Mensagens padrão (WhatsApp)</h2>
+              <p class="texto-suporte">
+                Textos que o sistema pode usar como base para as mensagens quando você clicar em “Cobrar no WhatsApp”, “Enviar contrato” etc.
+              </p>
+
+              <div class="campo">
+                <label for="cfgMsgContrato">
+                  Mensagem padrão – envio de contrato
+                </label>
+                <textarea id="cfgMsgContrato">Olá {RESPONSAVEL}, tudo bem? 😊&#10;Segue o contrato da formatura de {NOME_ALUNO}, da {ESCOLA}, para conferência e assinatura. Qualquer dúvida, estou à disposição!</textarea>
+              </div>
+
+              <div class="campo">
+                <label for="cfgMsgCobranca">
+                  Mensagem padrão – cobrança / lembrete
+                </label>
+                <textarea id="cfgMsgCobranca">Olá {RESPONSAVEL}, tudo bem? &#10;Verificamos aqui que ainda consta um valor em aberto referente à formatura de {NOME_ALUNO} ({EVENTOS_CONTRATADOS}). &#10;Poderia verificar para nós, por favor? Se já tiver feito o pagamento, pode desconsiderar esta mensagem e, se possível, enviar o comprovante. 💛</textarea>
+              </div>
+
+              <div class="campo">
+                <label for="cfgMsgConvites">
+                  Mensagem padrão – envio de convites
+                </label>
+                <textarea id="cfgMsgConvites">Olá {RESPONSAVEL}, tudo bem? 🎓&#10;Segue em anexo os convites digitais da formatura de {NOME_ALUNO}. Cada convite possui um QR Code único para o check-in no dia do evento. &#10;Por favor, encaminhe aos convidados e oriente para que levem o convite no celular no dia.</textarea>
+              </div>
+
+              <div class="chips-info">
+                <span class="chip">
+                  <i data-lucide="info"></i>
+                  Variáveis disponíveis: {NOME_ALUNO}, {RESPONSAVEL}, {ESCOLA}, {EVENTOS_CONTRATADOS}, {VALOR_TOTAL}, {LINK_CONTRATO}.
+                </span>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <section class="card">
+          <h2><i data-lucide="save-all"></i> Salvar configurações</h2>
+          <p class="texto-suporte">
+            Essas configurações serão aplicadas em todas as telas do módulo de formaturas: emissão de convites, contratos, financeiro, relatórios e check-in.
+          </p>
+
+          <div class="linha-botoes">
+            <button type="button" class="btn-secundario" id="btnRestaurarPadrao">
+              <i data-lucide="rotate-ccw"></i>
+              Restaurar padrão
+            </button>
+            <button type="button" class="btn-primario" id="btnSalvarConfig">
+              <i data-lucide="save"></i>
+              Salvar configurações
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      (function initHamburguer(){
+        const btn   = document.getElementById('hamburguer');
+        const aside = document.getElementById('menuLateral');
+        const back  = document.getElementById('menuBackdrop');
+
+        if (!btn || !aside || !back) return;
+
+        function setOpened(open){
+          const opened = !!open;
+          aside.classList.toggle('aberto', opened);
+          back.hidden = !opened;
+          document.body.classList.toggle('no-scroll', opened);
+
+          const icon = btn.querySelector('i[data-lucide]');
+          if (icon){
+            icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+            try { window.lucide?.createIcons?.(); } catch(e){}
+          }
+        }
+
+        function isMobile(){ return window.innerWidth <= 768; }
+
+        function syncVisibility(){
+          const mob = isMobile();
+          btn.style.display = mob ? 'block' : 'none';
+          if (!mob){
+            setOpened(false);
+          }
+        }
+
+        if (!btn.hasAttribute('data-bound')){
+          btn.setAttribute('data-bound','1');
+          btn.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            setOpened(!aside.classList.contains('aberto'));
+          });
+        }
+
+        if (!back.hasAttribute('data-bound')){
+          back.setAttribute('data-bound','1');
+          back.addEventListener('click', ()=> setOpened(false));
+        }
+
+        document.addEventListener('click', (e)=>{
+          if (!aside.classList.contains('aberto')) return;
+          if (!aside.contains(e.target) && !btn.contains(e.target)){
+            setOpened(false);
+          }
+        });
+
+        syncVisibility();
+        window.addEventListener('resize', syncVisibility);
+      })();
+
+      // ---------- LÓGICA DE SALVAR / CARREGAR CONFIGURAÇÕES ----------
+      const STORAGE_KEY = 'kgb-formaturas-configuracoes';
+
+      const defaults = {
+        cfgReiniciarAno: true,
+        cfgMascaraConvite: '{LETRA_EVENTO}-{SEQUENCIA}-{ANO}',
+        cfgSequenciaInicial: 1,
+        cfgPrazoAlteracao: 15,
+        cfgCancelarConvite: true,
+        cfgBloquearEmAtraso: false,
+        cfgTextoAlertaEmissao: 'Este aluno ainda possui valores pendentes para este evento. Verifique o financeiro antes de emitir os convites.',
+        cfgNomeEmpresa: '',
+        cfgPixChave: '',
+        cfgBancoNome: '',
+        cfgBancoConta: '',
+        cfgObsPagamento: 'Envie o comprovante pelo WhatsApp informando o nome completo do aluno e a escola.',
+        cfgMsgContrato: 'Olá {RESPONSAVEL}, tudo bem? 😊\nSegue o contrato da formatura de {NOME_ALUNO}, da {ESCOLA}, para conferência e assinatura. Qualquer dúvida, estou à disposição!',
+        cfgMsgCobranca: 'Olá {RESPONSAVEL}, tudo bem? \nVerificamos aqui que ainda consta um valor em aberto referente à formatura de {NOME_ALUNO} ({EVENTOS_CONTRATADOS}). \nPoderia verificar para nós, por favor? Se já tiver feito o pagamento, pode desconsiderar esta mensagem e, se possível, enviar o comprovante. 💛',
+        cfgMsgConvites: 'Olá {RESPONSAVEL}, tudo bem? 🎓\nSegue em anexo os convites digitais da formatura de {NOME_ALUNO}. Cada convite possui um QR Code único para o check-in no dia do evento. \nPor favor, encaminhe aos convidados e oriente para que levem o convite no celular no dia.'
+      };
+
+      function aplicarConfigNaTela(cfg) {
+        const config = { ...defaults, ...(cfg || {}) };
+
+        const camposTexto = [
+          'cfgMascaraConvite',
+          'cfgSequenciaInicial',
+          'cfgPrazoAlteracao',
+          'cfgTextoAlertaEmissao',
+          'cfgNomeEmpresa',
+          'cfgPixChave',
+          'cfgBancoNome',
+          'cfgBancoConta',
+          'cfgObsPagamento',
+          'cfgMsgContrato',
+          'cfgMsgCobranca',
+          'cfgMsgConvites'
+        ];
+
+        const camposCheck = [
+          'cfgReiniciarAno',
+          'cfgCancelarConvite',
+          'cfgBloquearEmAtraso'
+        ];
+
+        camposTexto.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const value = config[id] ?? '';
+          el.value = value;
+        });
+
+        camposCheck.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.checked = !!config[id];
+        });
+      }
+
+      function lerConfigDaTela() {
+        const camposTexto = [
+          'cfgMascaraConvite',
+          'cfgSequenciaInicial',
+          'cfgPrazoAlteracao',
+          'cfgTextoAlertaEmissao',
+          'cfgNomeEmpresa',
+          'cfgPixChave',
+          'cfgBancoNome',
+          'cfgBancoConta',
+          'cfgObsPagamento',
+          'cfgMsgContrato',
+          'cfgMsgCobranca',
+          'cfgMsgConvites'
+        ];
+
+        const camposCheck = [
+          'cfgReiniciarAno',
+          'cfgCancelarConvite',
+          'cfgBloquearEmAtraso'
+        ];
+
+        const cfg = {};
+
+        camposTexto.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          cfg[id] = el.value;
+        });
+
+        camposCheck.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          cfg[id] = el.checked;
+        });
+
+        // garantir números
+        cfg.cfgSequenciaInicial = Number(cfg.cfgSequenciaInicial || 1);
+        cfg.cfgPrazoAlteracao = Number(cfg.cfgPrazoAlteracao || 0);
+
+        return cfg;
+      }
+
+      function salvarConfig() {
+        const cfg = lerConfigDaTela();
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+          alert('Configurações salvas com sucesso!');
+        } catch (e) {
+          console.error(e);
+          alert('Não foi possível salvar as configurações (erro de armazenamento).');
+        }
+      }
+
+      function carregarConfig() {
+        try {
+          const salvo = localStorage.getItem(STORAGE_KEY);
+          if (!salvo) {
+            aplicarConfigNaTela(defaults);
+            return;
+          }
+          const cfg = JSON.parse(salvo);
+          aplicarConfigNaTela(cfg);
+        } catch (e) {
+          console.error(e);
+          aplicarConfigNaTela(defaults);
+        }
+      }
+
+      function restaurarPadrao() {
+        aplicarConfigNaTela(defaults);
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+          console.error(e);
+        }
+        alert('As configurações foram restauradas para o padrão inicial. Clique em "Salvar configurações" para confirmar.');
+      }
+
+      // Botões
+      document.getElementById('btnSalvarConfig')?.addEventListener('click', salvarConfig);
+
+      document.getElementById('btnRestaurarPadrao')?.addEventListener('click', () => {
+        const confirmar = confirm('Deseja realmente restaurar as configurações padrão do módulo de formaturas?');
+        if (!confirmar) return;
+        restaurarPadrao();
+      });
+
+      // Carrega configurações ao abrir a página
+      carregarConfig();
+      // ---------- FIM LÓGICA SALVAR / CARREGAR ----------
+    });
+  </script>
+</body>
+</html>

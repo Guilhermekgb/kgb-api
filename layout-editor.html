@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:layout-editor.html">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<title>Editor de Layout — Ingressos & Fichas</title>
+
+<!-- Ativa o sync (usado pelos hooks do firebase-stub) -->
+<script>
+  window.firebaseSync = window.firebaseSync || {};
+  window.firebaseSync.enabled = true;
+</script>
+
+<link rel="stylesheet" href="./kgb-common.css"/>
+<link rel="stylesheet" href="./menu-lateral.css"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module" src="./kgb-common.js"></script>
+<style>
+  :root{ --sidebar-w:260px; }
+  body{ background:#f5ecdf; }
+  .app{ position: relative; }
+
+  /* Menu lateral – desktop padrão: fixo à esquerda */
+  #menuLateral{
+    position:fixed;
+    left:0;
+    top:0;
+    bottom:0;
+    width:var(--sidebar-w);
+    z-index:1000;
+  }
+
+  .kgb-content{
+    margin-left:var(--sidebar-w);
+  }
+
+  /* Botão hambúrguer (mobile) */
+  #hamburguer{
+    position:fixed;
+    top:12px;
+    left:12px;
+    background:#c29a5d;
+    color:#fff;
+    border:none;
+    font-size:22px;
+    padding:6px 12px;
+    border-radius:8px;
+    z-index:1100;
+    display:none; /* só aparece no mobile */
+  }
+
+  /* Backdrop do menu no mobile */
+  #menuBackdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.35);
+    z-index:900;
+  }
+
+  /* Travar scroll quando o menu está aberto */
+  body.no-scroll{
+    overflow:hidden;
+  }
+
+  @media (max-width:1024px){
+    /* Menu vira off-canvas */
+    #menuLateral{
+      top:0;
+      left:0;
+      bottom:0;
+      width:var(--sidebar-w);
+      transform:translateX(-100%);
+      transition:transform .3s ease;
+    }
+    #menuLateral.aberto{
+      transform:translateX(0);
+    }
+
+    .kgb-content{
+      margin-left:0;
+    }
+
+    /* Mostra o hambúrguer */
+    #hamburguer{
+      display:block;
+    }
+  }
+
+
+  .toolbar{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .toolbar .spacer{ flex:1; }
+
+  /* canvas */
+  .canvas-wrap{ padding:12px; overflow:auto; }
+  .paper{
+    position:relative;
+    margin:12px 0;
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 10px 28px rgba(0,0,0,.12);
+    overflow:hidden;
+    transform-origin: top left;
+  }
+  .paper::before{
+    content:""; position:absolute; inset:0;
+    background:
+      linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px) 0 0/var(--grid,25px) var(--grid,25px),
+      linear-gradient(0deg,  rgba(0,0,0,.04) 1px, transparent 1px) 0 0/var(--grid,25px) var(--grid,25px);
+    pointer-events:none;
+  }
+
+  .el{
+    position:absolute; min-width:40px; min-height:24px; padding:6px 10px; border-radius:8px;
+    background:#fff; outline:1px dashed rgba(0,0,0,.2); cursor:move; user-select:none;
+  }
+  .el.sel{ outline:2px solid #8f5b2e; box-shadow:0 6px 16px rgba(0,0,0,.15); }
+  .el[data-type="qr"]{ width:120px; height:120px; display:flex; align-items:center; justify-content:center; }
+  .el[data-type="img"]{ padding:0; background:transparent; }
+  .el[data-type="img"] img{ width:100%; height:100%; object-fit:contain; pointer-events:none; border-radius:8px; }
+
+  /* Formas (retângulos) */
+  .el[data-type="shape"]{ background: transparent; }
+  .el[data-type="shape"] .shape{ width:100%; height:100%; border-radius: var(--r, 0px);
+    border: var(--sw,0px) solid var(--sc,#000); background: var(--fc, transparent); }
+
+  .ghost-note{ font-size:12px; color:#7a5a3c; }
+  .panel{ display:grid; gap:8px; grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+  @media (max-width:900px){ .panel{ grid-template-columns: 1fr 1fr; } }
+
+  .toast{ position:fixed; right:18px; bottom:18px; z-index:2000; background:#2e7d32; color:#fff;
+          padding:10px 14px; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.18);
+          opacity:0; transform:translateY(10px); transition:.25s; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.warn{ background:#a56b00; } .toast.bad{ background:#b3261e; }
+</style>
+</head>
+<body>
+
+<!-- Botão Mobile para abrir o menu -->
+<button id="hamburguer" class="no-print" aria-label="Abrir menu">
+  <i data-lucide="menu"></i>
+</button>
+
+<div class="app">
+  <aside id="menuLateral" class="no-print"></aside>
+  <!-- Backdrop usado pelo menu no mobile -->
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="kgb-content">
+    <div class="container">
+
+      <div class="h h1">Editor de Layout</div>
+
+      <div class="card">
+        <div class="toolbar">
+          <label>Evento
+            <select id="selEvento" class="input" style="min-width:320px"></select>
+          </label>
+
+          <label>Tipo
+            <select id="selTipo" class="input">
+              <option value="ingresso-20x7">Ingresso (20 × 7 cm)</option>
+              <option value="ficha">Ficha (5 × 5 cm)</option>
+            </select>
+          </label>
+
+          <!-- NOVO: Zoom -->
+          <label>Zoom
+            <select id="selZoom" class="input">
+              <option value="0.5">50%</option>
+              <option value="0.75">75%</option>
+              <option value="1" selected>100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.5">150%</option>
+              <option value="2">200%</option>
+            </select>
+          </label>
+
+          <div class="spacer"></div>
+          <button id="btnSaveEvent" class="btn">Salvar para este evento</button>
+          <button id="btnLoad" class="btn ghost">Carregar</button>
+          <button id="btnSaveDefault" class="btn ghost">Salvar como padrão</button>
+        </div>
+        <div class="ghost-note">
+          Placeholders: <b>{{QR}}</b>, <b>{{NUMERO}}</b>, <b>{{TIPO}}</b>, <b>{{PRECO}}</b>,
+          <b>{{EVENTO_NOME}}</b>, <b>{{EVENTO_DATA}}</b>, <b>{{EVENTO_LOCAL}}</b>.
+        </div>
+      </div>
+
+      <div class="card canvas-wrap">
+        <div id="paper" class="paper"></div>
+      </div>
+
+      <div class="card">
+        <div class="h h2">Ferramentas</div>
+        <div class="panel">
+          <!-- Ações principais -->
+          <button id="btnAddText" class="btn">Adicionar texto</button>
+          <button id="btnAddImg" class="btn ghost">Adicionar / Trocar imagem</button>
+          <input id="imgUpload" type="file" accept="image/*" style="display:none"/>
+          <button id="btnDel" class="btn bad">Remover selecionado</button>
+
+          <!-- Posição e tamanho -->
+          <label>X (mm)<input id="propX" class="input" type="number" step="1"></label>
+          <label>Y (mm)<input id="propY" class="input" type="number" step="1"></label>
+          <label>Largura (mm)<input id="propW" class="input" type="number" step="1"></label>
+          <label>Altura (mm)<input id="propH" class="input" type="number" step="1"></label>
+
+          <!-- Texto -->
+          <label>Fonte (px)<input id="propFS" class="input" type="number" step="1"></label>
+          <label>Peso
+            <select id="propFW" class="input">
+              <option>400</option><option>500</option><option>600</option><option>700</option><option>800</option>
+            </select>
+          </label>
+          <label>Alinhamento
+            <select id="propAlign" class="input"><option>left</option><option>center</option><option>right</option></select>
+          </label>
+          <label>Texto/Placeholder
+            <input id="propText" class="input" placeholder="Ex.: {{EVENTO_NOME}} ou texto livre">
+          </label>
+
+          <!-- Controles gerais -->
+          <label>Cor do fundo (layout)
+            <input id="propPaperBg" class="input" type="color" value="#ffffff">
+          </label>
+
+          <!-- Texto extra -->
+          <label>Cor do texto
+            <input id="propColor" class="input" type="color" value="#111111">
+          </label>
+          <label>Família da fonte
+            <select id="propFF" class="input">
+              <option value="Inter, system-ui, Arial, sans-serif">Inter / Sans</option>
+              <option value="'Times New Roman', Times, serif">Times</option>
+              <option value="'Georgia', serif">Georgia</option>
+              <option value="'Courier New', monospace">Courier</option>
+            </select>
+          </label>
+
+          <!-- Imagem -->
+          <label>Ajuste da imagem
+            <select id="propObjFit" class="input">
+              <option value="contain">contain</option>
+              <option value="cover">cover</option>
+            </select>
+          </label>
+          <label>Borda (raio, px)
+            <input id="propRadius" class="input" type="number" min="0" step="1" value="8">
+          </label>
+          <label>Opacidade (0–1)
+            <input id="propOpacity" class="input" type="number" min="0" max="1" step="0.05" value="1">
+          </label>
+
+          <!-- Formas -->
+          <button id="btnAddRect" class="btn ghost">Adicionar retângulo</button>
+          <label>Cor do retângulo
+            <input id="propRectFill" class="input" type="color" value="#ffffff">
+          </label>
+          <label>Borda do retângulo
+            <input id="propRectStroke" class="input" type="color" value="#000000">
+          </label>
+          <label>Largura da borda
+            <input id="propRectSW" class="input" type="number" min="0" step="1" value="0">
+          </label>
+
+          <!-- Utilidades -->
+          <label class="k-pill"><input id="propSnap" type="checkbox" checked> Snap à grade (5 mm)</label>
+          <button id="btnExport" class="btn">Exportar PNG</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast">Salvo!</div>
+
+<!-- Carrega o menu lateral dinâmico (hamburguer/backdrop/ativo, etc.) -->
+<script type="module" src="menu-lateral.js"></script>
+
+<script>
+/* ===== helpers/fallbacks ===== */
+if(!window.$)  window.$  = (s,el=document)=> el.querySelector(s);
+if(!window.$$) window.$$ = (s,el=document)=> Array.from(el.querySelectorAll(s));
+if(!window.readLS)  window.readLS  = (k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} };
+if(!window.writeLS) window.writeLS = (k,v)=> localStorage.setItem(k, JSON.stringify(v));
+if(!window.uid) window.uid = (p='id_')=> p + Math.random().toString(36).slice(2,9);
+
+// INÍCIO PATCH — chaves e leitura de eventos (compat nova/antiga)
+const K = {
+  EVENTOS_NEW:   (window.K_KEYS?.EVENTOS || 'm30.eventos'),
+  EVENTOS_OLD:   'eventos',
+  LAYOUTS_BY_EVENT: 'layoutsByEvent',
+  LAYOUTS_DEFAULT:  'layoutsDefault'
+};
+
+function listEventosSafe(){
+  try{
+    if (typeof listEventos === 'function') return listEventos() || [];
+  }catch(e){}
+  const a = readLS(K.EVENTOS_NEW, []) || [];
+  const b = readLS(K.EVENTOS_OLD, []) || [];
+  const map = new Map();
+  [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
+  return Array.from(map.values());
+}
+// FIM PATCH
+
+/* ===== toast ===== */
+function toast(msg,type='ok'){ const t=$('#toast'); t.textContent=msg;
+  t.classList.remove('warn','bad'); if(type==='warn')t.classList.add('warn'); if(type==='bad')t.classList.add('bad');
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600); }
+
+/* ===== medidas ===== */
+const PX_PER_MM=5;
+const mm2px=n=>Math.round(n*PX_PER_MM);
+const px2mm=n=>Math.round(n/PX_PER_MM);
+
+/* ===== estado ===== */
+let currentEventoId=null, currentTipo='ingresso-20x7', selectedEl=null;
+
+/* ===== ZOOM ===== */
+let ZOOM = Number(localStorage.getItem('layout.zoom') || '1') || 1;
+function applyZoom(){
+  const paper = document.getElementById('paper');
+  if (!paper) return;
+  paper.style.transform = `scale(${ZOOM})`;
+  const sel = document.getElementById('selZoom');
+  if (sel) sel.value = String(ZOOM);
+}
+document.getElementById('selZoom')?.addEventListener('change',(e)=>{
+  ZOOM = Number(e.target.value) || 1;
+  localStorage.setItem('layout.zoom', String(ZOOM));
+  applyZoom();
+});
+
+/* ===== canvas: define tamanho do “papel” por tipo e grade (5mm) ===== */
+function setPaperForTipo(tipo){
+  const paper = document.getElementById('paper');
+  if(!paper) return;
+  paper.style.setProperty('--grid', mm2px(5)+'px');
+
+  if (tipo === 'ficha'){
+    paper.style.width  = mm2px(50) + 'px';
+    paper.style.height = mm2px(50) + 'px';
+  } else {
+    paper.style.width  = mm2px(200) + 'px';
+    paper.style.height = mm2px(70)  + 'px';
+  }
+  applyZoom();
+}
+
+/* ===== elementos do canvas ===== */
+function createEl({
+  type='text', x=0, y=0, w=40, h=20,
+  fs=18, fw='600', align='left', color='#111111', ff="Inter, system-ui, Arial, sans-serif",
+  text='',
+  src=null, objFit='contain', radius=8, opacity=1,
+  fill='#ffffff', stroke='#000000', strokeW=0, corner=0
+}){
+  const el=document.createElement('div');
+  el.className='el'; el.dataset.type=type;
+  Object.assign(el.style,{ left:mm2px(x)+'px', top:mm2px(y)+'px', width:mm2px(w)+'px', height:mm2px(h)+'px' });
+
+  if(type==='img'){
+    const img=document.createElement('img');
+    img.alt='imagem'; img.src=src || '';
+    img.style.objectFit=objFit;
+    el.appendChild(img);
+    el.dataset.src = src || '';
+    el.dataset.objFit = objFit;
+    el.style.borderRadius = (radius||0)+'px';
+    el.style.opacity = (opacity==null?1:opacity);
+  }else if(type==='qr'){
+    el.textContent='{{QR}}';
+    Object.assign(el.style,{ fontSize:'16px', fontWeight:'600', textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center' });
+  }else if(type==='shape'){
+    const s=document.createElement('div');
+    s.className='shape';
+    s.style.setProperty('--fc', fill);
+    s.style.setProperty('--sc', stroke);
+    s.style.setProperty('--sw', strokeW+'px');
+    s.style.setProperty('--r', corner+'px');
+    el.appendChild(s);
+    el.dataset.fill=fill; el.dataset.stroke=stroke; el.dataset.sw=String(strokeW); el.dataset.corner=String(corner);
+  }else{
+    el.contentEditable=true;
+    el.innerText=text || 'Texto';
+    Object.assign(el.style,{ fontSize:fs+'px', fontWeight:fw, textAlign:align, color, fontFamily:ff });
+    el.dataset.color=color; el.dataset.ff=ff;
+  }
+
+  el.addEventListener('mousedown',(ev)=>{ selectEl(el); startDrag(ev,el); });
+  $('#paper').appendChild(el); return el;
+}
+
+function selectEl(el){ if(selectedEl) selectedEl.classList.remove('sel'); selectedEl=el; if(el){ el.classList.add('sel'); fillProps(el);} }
+function removeSelected(){ if(!selectedEl) return; selectedEl.remove(); selectedEl=null; clearProps(); }
+
+/* Drag com SNAP */
+function startDrag(ev,el){
+  ev.preventDefault();
+  const rect=$('#paper').getBoundingClientRect();
+  const sx=ev.clientX, sy=ev.clientY, ix=parseInt(el.style.left), iy=parseInt(el.style.top);
+  const step=mm2px(5); const snap=()=> $('#propSnap')?.checked;
+  const quantize=n=> snap()? Math.round(n/step)*step : n;
+
+  function move(e){
+    let nx=ix+(e.clientX-sx), ny=iy+(e.clientY-sy);
+    nx=Math.max(0,Math.min(nx, rect.width-el.offsetWidth));
+    ny=Math.max(0,Math.min(ny, rect.height-el.offsetHeight));
+    el.style.left=quantize(nx)+'px'; el.style.top=quantize(ny)+'px'; fillProps(el);
+  }
+  function up(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); }
+  window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+}
+
+/* ===== propriedades ===== */
+function fillProps(el){
+  $('#propX').value=px2mm(parseInt(el.style.left)||0);
+  $('#propY').value=px2mm(parseInt(el.style.top)||0);
+  $('#propW').value=px2mm(parseInt(el.style.width)||40);
+  $('#propH').value=px2mm(parseInt(el.style.height)||20);
+
+  const t=el.dataset.type, isText=t==='text', isImg=t==='img', isShape=t==='shape';
+
+  $('#propFS').disabled= !(isText);
+  $('#propFW').disabled= !(isText);
+  $('#propAlign').disabled= !(isText);
+  $('#propText').disabled= !(isText);
+  $('#propColor').disabled= !(isText);
+  $('#propFF').disabled   = !(isText);
+
+  $('#propObjFit').disabled = !(isImg);
+  $('#propRadius').disabled = !(isImg);
+  $('#propOpacity').disabled= !(isImg);
+
+  $('#propRectFill').disabled   = !(isShape);
+  $('#propRectStroke').disabled = !(isShape);
+  $('#propRectSW').disabled     = !(isShape);
+
+  if(isText){
+    $('#propFS').value=parseInt(el.style.fontSize)||18;
+    $('#propFW').value=String(el.style.fontWeight||'600');
+    $('#propAlign').value=el.style.textAlign||'left';
+    $('#propText').value=el.innerText||'';
+    $('#propColor').value= el.dataset.color || '#111111';
+    $('#propFF').value= el.dataset.ff || "Inter, system-ui, Arial, sans-serif";
+  }else if(isImg){
+    $('#propObjFit').value = el.dataset.objFit || 'contain';
+    $('#propRadius').value = parseInt(el.style.borderRadius)||8;
+    $('#propOpacity').value= Number(el.style.opacity||1);
+  }else if(isShape){
+    $('#propRectFill').value   = el.dataset.fill   || '#ffffff';
+    $('#propRectStroke').value = el.dataset.stroke || '#000000';
+    $('#propRectSW').value     = Number(el.dataset.sw||0);
+  }else{
+    ['propFS','propFW','propAlign','propText'].forEach(id=>$('#'+id).value='');
+  }
+}
+function clearProps(){
+  ['propX','propY','propW','propH','propFS','propFW','propAlign','propText','propColor','propFF','propObjFit','propRadius','propOpacity','propRectFill','propRectStroke','propRectSW']
+    .forEach(id=>{ const el=$('#'+id); if(el) el.value=''; });
+}
+function applyProps(){
+  if(!selectedEl) return;
+  const x=Number($('#propX').value||0), y=Number($('#propY').value||0),
+        w=Number($('#propW').value||40), h=Number($('#propH').value||20);
+  Object.assign(selectedEl.style,{ left:mm2px(x)+'px', top:mm2px(y)+'px', width:mm2px(w)+'px', height:mm2px(h)+'px' });
+
+  const t=selectedEl.dataset.type;
+
+  if(t==='text'){
+    const fs=Number($('#propFS').value||18),
+          fw=$('#propFW').value||'600',
+          al=$('#propAlign').value||'left',
+          tx=$('#propText').value||'',
+          color=$('#propColor').value||'#111111',
+          ff=$('#propFF').value||"Inter, system-ui, Arial, sans-serif";
+    Object.assign(selectedEl.style,{ fontSize:fs+'px', fontWeight:fw, textAlign:al, color, fontFamily:ff });
+    selectedEl.innerText=tx; selectedEl.dataset.color=color; selectedEl.dataset.ff=ff;
+  }
+  if(t==='img'){
+    const objFit=$('#propObjFit').value||'contain';
+    const radius=parseInt($('#propRadius').value||8);
+    const opacity=Number($('#propOpacity').value||1);
+    const img=selectedEl.querySelector('img');
+    if(img) img.style.objectFit=objFit;
+    selectedEl.dataset.objFit=objFit;
+    selectedEl.style.borderRadius=radius+'px';
+    selectedEl.style.opacity=opacity;
+  }
+  if(t==='shape'){
+    const fill=$('#propRectFill').value||'#ffffff';
+    const stroke=$('#propRectStroke').value||'#000000';
+    const sw=Number($('#propRectSW').value||0);
+    const s=selectedEl.querySelector('.shape');
+    if(s){
+      s.style.setProperty('--fc', fill);
+      s.style.setProperty('--sc', stroke);
+      s.style.setProperty('--sw', sw+'px');
+    }
+    selectedEl.dataset.fill=fill; selectedEl.dataset.stroke=stroke; selectedEl.dataset.sw=String(sw);
+  }
+}
+['propX','propY','propW','propH','propFS','propFW','propAlign','propText','propColor','propFF','propObjFit','propRadius','propOpacity','propRectFill','propRectStroke','propRectSW']
+  .forEach(id=>{ const el=document.getElementById(id); if(el){ el.addEventListener('input',applyProps); el.addEventListener('change',applyProps);} });
+
+/* ===== salvar / carregar ===== */
+const keyFor=(evtId,tipo)=>`${evtId}:${tipo}`;
+const snapshot=()=> $$('.el',$('#paper')).map(el=>{
+  const t=el.dataset.type;
+  const base={ type:t,
+    x:px2mm(parseInt(el.style.left)||0),
+    y:px2mm(parseInt(el.style.top)||0),
+    w:px2mm(parseInt(el.style.width)||40),
+    h:px2mm(parseInt(el.style.height)||20),
+  };
+  if(t==='text'){
+    base.fs=parseInt(el.style.fontSize)||18;
+    base.fw=String(el.style.fontWeight||'600');
+    base.align=el.style.textAlign||'left';
+    base.text=el.innerText||'';
+    base.color=el.dataset.color||'#111111';
+    base.ff=el.dataset.ff||"Inter, system-ui, Arial, sans-serif";
+  }else if(t==='img'){
+    base.src=el.dataset.src||'';
+    base.objFit=el.dataset.objFit||'contain';
+    base.radius=parseInt(el.style.borderRadius)||8;
+    base.opacity=Number(el.style.opacity||1);
+  }else if(t==='shape'){
+    base.fill=el.dataset.fill||'#ffffff';
+    base.stroke=el.dataset.stroke||'#000000';
+    base.strokeW=Number(el.dataset.sw||0);
+    base.corner=Number(el.dataset.corner||0);
+  }
+  return base;
+});
+function render(arr){
+  $('#paper').innerHTML='';
+  (arr||[]).forEach(c=>{
+    if(c.type==='img'){ createEl({type:'img', x:c.x,y:c.y,w:c.w,h:c.h, src:c.src||'', objFit:c.objFit||'contain', radius:c.radius||8, opacity:(c.opacity==null?1:c.opacity)}); }
+    else if(c.type==='qr'){ createEl({type:'qr', x:c.x,y:c.y,w:c.w,h:c.h}); }
+    else if(c.type==='shape'){ createEl({type:'shape', x:c.x,y:c.y,w:c.w,h:c.h, fill:c.fill||'#ffffff', stroke:c.stroke||'#000000', strokeW:c.strokeW||0, corner:c.corner||0}); }
+    else { createEl({type:'text', x:c.x,y:c.y,w:c.w,h:c.h, fs:c.fs||18, fw:c.fw||'600', align:c.align||'left', color:c.color||'#111111', ff:c.ff||"Inter, system-ui, Arial, sans-serif", text:c.text||''}); }
+  });
+  applyZoom();
+}
+
+function saveForEvent(){
+  if(!currentEventoId){ toast('Selecione um evento','warn'); return; }
+  const db=readLS(K.LAYOUTS_BY_EVENT,{});
+  db[keyFor(currentEventoId,currentTipo)]=snapshot();
+  // salva cor de fundo junto
+  db[keyFor(currentEventoId,currentTipo)+':paperBg'] =
+    document.getElementById('paper').style.background || '#ffffff';
+
+  writeLS(K.LAYOUTS_BY_EVENT,db);
+  toast('Layout salvo para este evento ✅');
+}
+function loadForEvent(){
+  if(!currentEventoId){ toast('Selecione um evento','warn'); return; }
+  const db=readLS(K.LAYOUTS_BY_EVENT,{}), def=readLS(K.LAYOUTS_DEFAULT,{});
+  const arr=db[keyFor(currentEventoId,currentTipo)] || def[currentTipo];
+  if(arr && arr.length){ render(arr); toast('Layout carregado'); }
+  else{ applyRightTemplate(); toast('Aplicado template base'); }
+}
+function saveDefault(){
+  const def=readLS(K.LAYOUTS_DEFAULT,{});
+  def[currentTipo]=snapshot();
+  writeLS(K.LAYOUTS_DEFAULT,def);
+  toast('Salvo como padrão ✅');
+}
+
+/* ===== template base ===== */
+function applyRightTemplate(){
+  $('#paper').innerHTML='';
+  if (currentTipo === 'ficha'){
+    createEl({type:'text', x:5, y:6,  w:40, h:12, fs:14, fw:'700', align:'left', text:'{{EVENTO_NOME}}'});
+    createEl({type:'qr',   x:28, y:18, w:20, h:20});
+    createEl({type:'text', x:5, y:40, w:40, h:10, fs:12, fw:'600', align:'left', text:'Nº {{NUMERO}}'});
+  } else {
+    const colX=100, colW=90;
+    createEl({type:'text', x:colX, y:8,  w:colW, h:16, fs:24, fw:'800', align:'right', text:'Nº {{NUMERO}}'});
+    createEl({type:'qr',   x:colX+colW-35, y:24, w:35, h:35});
+    createEl({type:'text', x:colX, y:64, w:colW, h:14, fs:18, fw:'700', align:'right', text:'{{EVENTO_NOME}}'});
+    createEl({type:'text', x:colX, y:80, w:colW, h:12, fs:16, fw:'600', align:'right', text:'{{EVENTO_DATA}}'});
+    createEl({type:'text', x:colX, y:94, w:colW, h:12, fs:16, fw:'500', align:'right', text:'{{EVENTO_LOCAL}}'});
+    createEl({type:'img', x:6, y:20, w:85, h:65, src:''});
+  }
+  applyZoom();
+}
+
+/* ===== eventos ===== */
+function hydrateEventos(){
+  const sel=$('#selEvento'); sel.innerHTML='';
+  const xs=(listEventosSafe()||[]).filter(e=> e.modulo==='eventos-pagos');
+  if(!xs.length){ sel.innerHTML='<option value="">— Nenhum evento pago —</option>'; currentEventoId=null; return; }
+  xs.forEach(e=>{ const o=document.createElement('option'); o.value=e.id; o.textContent=`${e.nome||'(sem nome)'} — ${e.data||''}`; sel.appendChild(o); });
+  const hashEvt=new URLSearchParams(location.hash.replace('#','')).get('evento');
+  if(hashEvt && xs.some(e=>String(e.id)===String(hashEvt))) currentEventoId=hashEvt;
+  if(!currentEventoId) currentEventoId=xs[0].id;
+  sel.value=currentEventoId;
+}
+$('#selEvento').addEventListener('change',e=>{ currentEventoId=e.target.value; loadForEvent(); });
+
+$('#selTipo').addEventListener('change',e=>{
+  currentTipo=e.target.value;
+  setPaperForTipo(currentTipo);
+  loadForEvent();
+});
+
+/* ===== botões ===== */
+$('#btnSaveEvent').addEventListener('click',saveForEvent);
+$('#btnLoad').addEventListener('click',loadForEvent);
+$('#btnSaveDefault').addEventListener('click',saveDefault);
+
+$('#btnAddText').addEventListener('click',()=> selectEl(createEl({type:'text',x:10,y:10,w:60,h:14,fs:16,fw:'600',align:'left',text:'Texto'})));
+
+$('#btnAddRect').addEventListener('click', ()=>{
+  const fill=$('#propRectFill').value||'#ffffff';
+  const stroke=$('#propRectStroke').value||'#000000';
+  const sw=Number($('#propRectSW').value||0);
+  selectEl(createEl({type:'shape', x:6, y:6, w:60, h:20, fill, stroke, strokeW:sw, corner:0}));
+});
+
+$('#propPaperBg').addEventListener('input', e=>{
+  document.getElementById('paper').style.background = e.target.value || '#ffffff';
+});
+
+/* Exportar PNG */
+$('#btnExport').addEventListener('click', async ()=>{
+  if(!window.html2canvas){
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    document.body.appendChild(s);
+    await new Promise(r=> s.onload=r);
+  }
+  const paper=document.getElementById('paper');
+  const canvas=await html2canvas(paper,{backgroundColor:null, scale:2});
+  const url=canvas.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.href=url; a.download='layout.png'; a.click();
+  toast('PNG exportado');
+});
+
+/* upload / troca de imagem */
+const fileInput = $('#imgUpload');
+$('#btnAddImg').addEventListener('click',()=> fileInput.click());
+fileInput.addEventListener('change', (e)=>{
+  const file=e.target.files?.[0]; if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=> {
+    const src=String(fr.result||'');
+    if(selectedEl && selectedEl.dataset.type==='img'){
+      selectedEl.dataset.src=src;
+      const img=selectedEl.querySelector('img'); if(img) img.src=src;
+      toast('Imagem atualizada');
+    }else{
+      selectEl(createEl({type:'img', x:6, y:20, w:85, h:65, src}));
+      toast('Imagem adicionada');
+    }
+    e.target.value='';
+  };
+  fr.readAsDataURL(file);
+});
+
+$('#btnDel').addEventListener('click',removeSelected);
+
+/* ===== init ===== */
+(function init(){
+  hydrateEventos();
+  const sp=new URLSearchParams(location.hash.replace('#',''));
+  const t=sp.get('tipo'); if(t) currentTipo=t; $('#selTipo').value=currentTipo;
+
+  setPaperForTipo(currentTipo);
+  const byEvt=readLS(K.LAYOUTS_BY_EVENT,{})[keyFor(currentEventoId,currentTipo)];
+  const def=readLS(K.LAYOUTS_DEFAULT,{})[currentTipo];
+  if(byEvt && byEvt.length) render(byEvt);
+  else if(def && def.length) render(def);
+  else applyRightTemplate();
+
+  applyZoom();
+})();
+</script>
+<script type="module" src="menu-lateral.js"></script>
+
+<script>
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 1024; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob){
+        setOpened(false);
+      }
+    }
+
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+</body>
+</html>
+
+

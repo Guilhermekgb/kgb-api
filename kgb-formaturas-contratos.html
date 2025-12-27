@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Contratos</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+
+    .card{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+
+    .grid-contratos{
+      display:grid;
+      grid-template-columns:minmax(0, 1.1fr) minmax(0, 1.1fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:20px;
+    }
+    @media (max-width:1000px){
+      .grid-contratos{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .tabela-simples{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+      margin-top:6px;
+    }
+    .tabela-simples thead{
+      background:#f5e7d8;
+    }
+    .tabela-simples th,
+    .tabela-simples td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-simples th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-simples tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .badge-ativo{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      background:#e4f7ec;
+      color:#1f6b3b;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .badge-ativo i{
+      width:12px; height:12px;
+    }
+
+    .btn-acao-mini{
+      border:none;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:11px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      margin-bottom:4px;
+    }
+    .btn-acao-mini i{
+      width:13px; height:13px;
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+      margin-bottom:8px;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo small{
+      font-size:11px;
+      color:#9a7b58;
+    }
+
+      .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+    textarea{
+      min-height:200px;
+      resize:vertical;
+    }
+    input:focus,
+    select:focus,
+    textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    textarea{
+      min-height:200px;
+      resize:vertical;
+    }
+    input:focus,
+    select:focus,
+    textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario{
+      background:#c29a5d;
+      color:#fff;
+    }
+    .btn-secundario{
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .linha-botoes{
+      display:flex;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .texto-suporte{
+      font-size:11px;
+      color:#9a7b58;
+      margin-top:4px;
+    }
+
+    /* PRÉVIA CONTRATO */
+    .preview-contrato{
+      border-radius:14px;
+      border:1px solid #ead5be;
+      background:#fdf7f0;
+      padding:12px 14px;
+      max-height:420px;
+      overflow:auto;
+      font-size:13px;
+      line-height:1.5;
+      white-space:pre-wrap;
+      margin-top:10px;
+    }
+    .preview-titulo{
+      font-weight:600;
+      text-align:center;
+      margin-bottom:6px;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+    }
+    .preview-meta{
+      font-size:11px;
+      color:#9a7b58;
+      margin-bottom:6px;
+      border-bottom:1px dashed #ead5be;
+      padding-bottom:4px;
+    }
+
+    /* MODAL VISUALIZAÇÃO */
+    .backdrop-modal{
+      position:fixed;
+      inset:0;
+      background:rgba(15,10,5,0.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1100;
+    }
+    .backdrop-modal[hidden]{
+      display:none;
+    }
+    .janela-modal{
+      background:#fff;
+      border-radius:16px;
+      padding:16px 18px 14px;
+      width:min(700px, 96vw);
+      max-height:90vh;
+      box-shadow:0 20px 45px rgba(0,0,0,.25);
+      display:flex;
+      flex-direction:column;
+    }
+    .janela-modal header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+    }
+    .janela-modal header h2{
+      font-size:16px;
+      margin:0;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .janela-modal header h2 i{
+      width:16px; height:16px;
+    }
+    .janela-modal header button{
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      padding:4px;
+      border-radius:999px;
+    }
+    .janela-modal header button:hover{
+      background:#f5e7d8;
+    }
+    .janela-modal .corpo-modal{
+      flex:1;
+      overflow:auto;
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="file-text"></i> Contratos – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Cadastre e organize seus modelos de contrato. Depois eles serão usados nas telas de escola, turma e aluno para gerar contratos individuais.
+        </p>
+
+        <div class="grid-contratos">
+          <!-- LISTA DE MODELOS -->
+          <section class="card" aria-label="Modelos de contrato">
+            <h2><i data-lucide="library"></i> Modelos de contrato</h2>
+            <p class="texto-suporte">
+              Você pode ter diferentes modelos para colação, baile, churrasco ou formatos especiais.
+            </p>
+
+            <table class="tabela-simples">
+              <thead>
+                <tr>
+                  <th>Nome do modelo</th>
+                  <th>Uso principal</th>
+                  <th>Status</th>
+                  <th style="width:210px;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyModelosContrato">
+                <!-- preenchido via JS -->
+              </tbody>
+            </table>
+
+            <div class="linha-botoes" style="justify-content:flex-start; margin-top:10px;">
+              <button type="button" class="btn-secundario" id="btnNovoModeloContrato">
+                <i data-lucide="plus"></i> Novo modelo
+              </button>
+            </div>
+          </section>
+
+          <!-- FORM / EDIÇÃO + PRÉVIA -->
+          <section class="card" aria-label="Cadastro e edição de modelo de contrato">
+            <h2><i data-lucide="file-pen-line"></i> Cadastro / edição de modelo</h2>
+
+            <div class="campo">
+              <label for="contratoNome">Nome do modelo</label>
+              <input id="contratoNome" type="text" placeholder="Ex.: Contrato padrão – Formando">
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 180px;">
+                <label for="contratoTipoUso">Uso principal</label>
+                <select id="contratoTipoUso">
+                  <option value="">Selecione...</option>
+                  <option>Pacotes individuais (aluno)</option>
+                  <option>Parceria com escola</option>
+                  <option>Outros formatos</option>
+                </select>
+              </div>
+              <div class="campo" style="flex:1 1 180px;">
+                <label for="contratoTipoEventoPadrao">Tipo de evento padrão</label>
+                <select id="contratoTipoEventoPadrao">
+                  <option value="">Qualquer</option>
+                  <option>Colação de Grau</option>
+                  <option>Baile de Formatura</option>
+                  <option>Churrasco de Formatura</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="campo">
+              <label for="contratoTexto">
+                Texto do contrato (modelo)
+              </label>
+              <textarea id="contratoTexto" placeholder="Use variáveis como {NOME_ALUNO}, {RESPONSAVEL}, {ESCOLA}, {EVENTOS_CONTRATADOS}, {VALOR_TOTAL}, {FORMA_PAGAMENTO}, {DATA_EVENTO}, {CIDADE}, {CPF_RESPONSAVEL}..."></textarea>
+              <small>
+                No momento de gerar o contrato, o sistema vai substituir as variáveis pelos dados da escola, do responsável e do aluno.
+              </small>
+            </div>
+
+            <div class="linha-botoes">
+              <button type="button" class="btn-secundario" id="btnLimparContrato">
+                <i data-lucide="eraser"></i> Limpar
+              </button>
+              <button type="button" class="btn-primario" id="btnSalvarContrato">
+                <i data-lucide="save"></i> Salvar modelo
+              </button>
+            </div>
+
+          <div class="texto-suporte">
+  Pré-visualização do próprio modelo de contrato. Os dados reais (nome do aluno, responsável, escola, valores, datas)
+  só aparecem na emissão do contrato para um aluno específico.
+</div>
+
+          <div class="preview-contrato" id="previewContrato">
+  <div class="preview-titulo">CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE FORMATURA</div>
+  <div class="preview-meta">
+    Esta é apenas a pré-visualização do modelo. Na emissão do contrato para um aluno, o sistema irá substituir
+    as variáveis pelos dados reais da formatura.
+  </div>
+  <div>
+    Pelo presente instrumento particular, {NOME_ALUNO}, representado(a) por {RESPONSAVEL}, firma o presente contrato
+    de prestação de serviços de formatura junto à KGB FORMATURAS, referente à turma da {ESCOLA}, totalizando
+    {VALOR_TOTAL}, conforme condições e valores ajustados nas cláusulas a seguir.
+  </div>
+</div>
+
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL VISUALIZAR CONTRATO -->
+  <div id="modalVisualizarContrato" class="backdrop-modal" hidden>
+    <div class="janela-modal" role="dialog" aria-modal="true" aria-labelledby="tituloModalContrato">
+      <header>
+        <h2 id="tituloModalContrato">
+          <i data-lucide="eye"></i>
+          Visualizar contrato
+        </h2>
+        <button type="button" id="btnFecharVisualizarContrato" aria-label="Fechar">
+          <i data-lucide="x"></i>
+        </button>
+      </header>
+      <div class="corpo-modal">
+        <div id="conteudoVisualizarContrato" class="preview-contrato"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      /* ---------- MENU LATERAL / MOBILE ---------- */
+      const menu = document.getElementById('menuLateral');
+      const btn = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (btn && menu && backdrop) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+        btn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+
+      /* ---------- LOCALSTORAGE ---------- */
+      const LS_KEY_MODELOS = 'kgb_formaturas_modelos_contrato';
+
+      function criarId(prefixo){
+        return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      }
+
+      function carregarModelosContrato(){
+        try{
+          const raw = localStorage.getItem(LS_KEY_MODELOS);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+
+          if (!arr.length){
+            const agora = Date.now();
+            arr = [
+              {
+                id: criarId('mdl_'),
+                nome: 'Contrato padrão – Formando',
+                tipoUso: 'Pacotes individuais (aluno)',
+                tipoEventoPadrao: 'Colação de Grau',
+                texto:
+                  'Pelo presente instrumento particular, {NOME_ALUNO}, representado(a) por {RESPONSAVEL}, ' +
+                  'contrata os serviços de formatura junto à KGB FORMATURAS, referente à turma da {ESCOLA}, ' +
+                  'totalizando {VALOR_TOTAL}, conforme condições descritas nas cláusulas seguintes.',
+                ativo: true,
+                criadoEm: agora,
+                atualizadoEm: agora
+              },
+              {
+                id: criarId('mdl_'),
+                nome: 'Contrato escola-parceria',
+                tipoUso: 'Parceria com escola',
+                tipoEventoPadrao: '',
+                texto:
+                  'Pelo presente instrumento particular, a instituição de ensino {ESCOLA} e KGB FORMATURAS ' +
+                  'firmam parceria para realização dos eventos de formatura da turma {ANO_FORMATURA}, ' +
+                  'conforme condições comerciais e responsabilidades previstas neste contrato.',
+                ativo: true,
+                criadoEm: agora,
+                atualizadoEm: agora
+              }
+            ];
+            localStorage.setItem(LS_KEY_MODELOS, JSON.stringify(arr));
+          }
+          return arr;
+        }catch(e){
+          console.error('Erro ao carregar modelos de contrato', e);
+          return [];
+        }
+      }
+
+      function salvarModelosContrato(lista){
+        try{
+          localStorage.setItem(LS_KEY_MODELOS, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro ao salvar modelos de contrato', e);
+        }
+      }
+
+      /* ---------- ESTADO DA TELA ---------- */
+      let modelosContrato = carregarModelosContrato();
+      let modeloEmEdicaoId = null;
+
+      /* ---------- CONTROLES ---------- */
+      const tbodyModelosContrato     = document.getElementById('tbodyModelosContrato');
+
+      const contratoNome             = document.getElementById('contratoNome');
+      const contratoTipoUso          = document.getElementById('contratoTipoUso');
+      const contratoTipoEventoPadrao = document.getElementById('contratoTipoEventoPadrao');
+      const contratoTexto            = document.getElementById('contratoTexto');
+      const previewContrato          = document.getElementById('previewContrato');
+
+      const btnNovoModeloContrato    = document.getElementById('btnNovoModeloContrato');
+      const btnLimparContrato        = document.getElementById('btnLimparContrato');
+      const btnSalvarContrato        = document.getElementById('btnSalvarContrato');
+
+      // modal visualizar
+      const modalVisualizar          = document.getElementById('modalVisualizarContrato');
+      const conteudoVisualizar       = document.getElementById('conteudoVisualizarContrato');
+      const btnFecharVisualizar      = document.getElementById('btnFecharVisualizarContrato');
+
+      /* ---------- FUNÇÕES DE PRÉVIA (compartilhadas) ---------- */
+     function gerarPreviewHtml(nomeModeloRaw, textoBaseRaw){
+  const nomeModelo = (nomeModeloRaw || '').trim()
+    || 'Contrato de prestação de serviços de formatura';
+
+  const textoBase = (textoBaseRaw || '').trim()
+    || (
+      'Pelo presente instrumento particular, {NOME_ALUNO}, representado(a) por {RESPONSAVEL}, ' +
+      'contrata os serviços de formatura junto à KGB FORMATURAS, referente à turma da {ESCOLA}, ' +
+      'totalizando {VALOR_TOTAL}, conforme condições descritas nas cláusulas seguintes.'
+    );
+
+  const textoMeta =
+    'Pré-visualização do modelo. Na emissão do contrato para um aluno, as variáveis serão substituídas ' +
+    'pelos dados reais da formatura.';
+
+  return (
+    `<div class="preview-titulo">${nomeModelo.toUpperCase()}</div>` +
+    `<div class="preview-meta">${textoMeta}</div>` +
+    `<div>${textoBase}</div>`
+  );
+}
+
+
+      /* ---------- RENDER DA TABELA ---------- */
+      function renderTabelaModelos(){
+        if (!tbodyModelosContrato) return;
+        tbodyModelosContrato.innerHTML = '';
+
+        modelosContrato.forEach(mod => {
+          const tr = document.createElement('tr');
+          tr.setAttribute('data-id', mod.id);
+
+          const statusHtml = `
+            <span class="badge-ativo">
+              <i data-lucide="check-circle-2"></i> Ativo
+            </span>
+          `;
+
+          tr.innerHTML = `
+            <td>${mod.nome || '-'}</td>
+            <td>${mod.tipoUso || '-'}</td>
+            <td>${statusHtml}</td>
+            <td>
+              <button class="btn-acao-mini btn-visualizar-modelo">
+                <i data-lucide="eye"></i> Visualizar
+              </button>
+              <button class="btn-acao-mini btn-editar-modelo">
+                <i data-lucide="edit-3"></i> Editar
+              </button>
+              <button class="btn-acao-mini btn-duplicar-modelo">
+                <i data-lucide="copy"></i> Duplicar
+              </button>
+              <button class="btn-acao-mini btn-excluir-modelo">
+                <i data-lucide="trash-2"></i> Excluir
+              </button>
+            </td>
+          `;
+
+          tbodyModelosContrato.appendChild(tr);
+        });
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      /* ---------- FORM / EDIÇÃO ---------- */
+      function limparFormulario(){
+        modeloEmEdicaoId = null;
+        if (contratoNome)             contratoNome.value = '';
+        if (contratoTipoUso)          contratoTipoUso.value = '';
+        if (contratoTipoEventoPadrao) contratoTipoEventoPadrao.value = '';
+        if (contratoTexto)            contratoTexto.value = '';
+        atualizarPreview();
+      }
+
+      function carregarModeloNoFormulario(id){
+        const mod = modelosContrato.find(m => m.id === id);
+        if (!mod) return;
+
+        modeloEmEdicaoId = id;
+
+        if (contratoNome)             contratoNome.value = mod.nome || '';
+        if (contratoTipoUso)          contratoTipoUso.value = mod.tipoUso || '';
+        if (contratoTipoEventoPadrao) contratoTipoEventoPadrao.value = mod.tipoEventoPadrao || '';
+        if (contratoTexto)            contratoTexto.value = mod.texto || '';
+
+        atualizarPreview();
+        if (contratoNome) contratoNome.focus();
+      }
+
+      function salvarModeloAtual(){
+        const nome   = (contratoNome?.value || '').trim();
+        const tipoUso= contratoTipoUso?.value || '';
+        const tipoEv = contratoTipoEventoPadrao?.value || '';
+        const texto  = contratoTexto?.value || '';
+
+        if (!nome){
+          alert('Informe o nome do modelo de contrato.');
+          contratoNome?.focus();
+          return;
+        }
+        if (!texto.trim()){
+          if (!confirm('O texto do contrato está em branco. Deseja salvar mesmo assim?')){
+            contratoTexto?.focus();
+            return;
+          }
+        }
+
+        const agora = Date.now();
+
+        if (!modeloEmEdicaoId){
+          // novo
+          const novo = {
+            id: criarId('mdl_'),
+            nome,
+            tipoUso,
+            tipoEventoPadrao: tipoEv,
+            texto,
+            ativo: true,
+            criadoEm: agora,
+            atualizadoEm: agora
+          };
+          modelosContrato.push(novo);
+          modeloEmEdicaoId = novo.id;
+        }else{
+          // atualizar existente
+          const idx = modelosContrato.findIndex(m => m.id === modeloEmEdicaoId);
+          if (idx >= 0){
+            const antigo = modelosContrato[idx];
+            modelosContrato[idx] = {
+              ...antigo,
+              nome,
+              tipoUso,
+              tipoEventoPadrao: tipoEv,
+              texto,
+              ativo: antigo.ativo !== undefined ? antigo.ativo : true,
+              atualizadoEm: agora
+            };
+          }else{
+            // se por algum motivo não encontrar, trata como novo
+            const novo = {
+              id: modeloEmEdicaoId,
+              nome,
+              tipoUso,
+              tipoEventoPadrao: tipoEv,
+              texto,
+              ativo: true,
+              criadoEm: agora,
+              atualizadoEm: agora
+            };
+            modelosContrato.push(novo);
+          }
+        }
+
+        salvarModelosContrato(modelosContrato);
+        renderTabelaModelos();
+        atualizarPreview();
+
+        alert('Modelo de contrato salvo com sucesso.');
+      }
+
+      /* ---------- PRÉVIA DO CONTRATO (lateral) ---------- */
+      function atualizarPreview(){
+        if (!previewContrato) return;
+
+        const nomeModelo = (contratoNome?.value || '').trim();
+        const textoBase  = (contratoTexto?.value || '').trim();
+
+        previewContrato.innerHTML = gerarPreviewHtml(nomeModelo, textoBase);
+      }
+
+      /* ---------- VISUALIZAÇÃO EM MODAL ---------- */
+      function abrirModalVisualizar(mod){
+        if (!modalVisualizar || !conteudoVisualizar) return;
+
+        conteudoVisualizar.innerHTML = gerarPreviewHtml(mod.nome, mod.texto);
+        modalVisualizar.hidden = false;
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      function fecharModalVisualizar(){
+        if (!modalVisualizar) return;
+        modalVisualizar.hidden = true;
+      }
+
+      /* ---------- LISTENERS ---------- */
+      if (btnNovoModeloContrato){
+        btnNovoModeloContrato.addEventListener('click', () => {
+          limparFormulario();
+          contratoNome?.focus();
+        });
+      }
+
+      if (btnLimparContrato){
+        btnLimparContrato.addEventListener('click', () => {
+          limparFormulario();
+        });
+      }
+
+      if (btnSalvarContrato){
+        btnSalvarContrato.addEventListener('click', () => {
+          salvarModeloAtual();
+        });
+      }
+
+      if (contratoNome){
+        contratoNome.addEventListener('input', atualizarPreview);
+      }
+      if (contratoTexto){
+        contratoTexto.addEventListener('input', atualizarPreview);
+      }
+
+      if (tbodyModelosContrato){
+        tbodyModelosContrato.addEventListener('click', (ev) => {
+          const btnAcao = ev.target.closest('button');
+          if (!btnAcao) return;
+          const tr = btnAcao.closest('tr');
+          if (!tr) return;
+          const id = tr.getAttribute('data-id');
+          if (!id) return;
+
+          const mod = modelosContrato.find(m => m.id === id);
+          if (!mod) return;
+
+          if (btnAcao.classList.contains('btn-visualizar-modelo')){
+            abrirModalVisualizar(mod);
+          }
+
+          if (btnAcao.classList.contains('btn-editar-modelo')){
+            carregarModeloNoFormulario(id);
+          }
+
+          if (btnAcao.classList.contains('btn-duplicar-modelo')){
+            const agora = Date.now();
+            const copia = {
+              ...mod,
+              id: criarId('mdl_'),
+              nome: mod.nome + ' (cópia)',
+              criadoEm: agora,
+              atualizadoEm: agora
+            };
+            modelosContrato.push(copia);
+            salvarModelosContrato(modelosContrato);
+            renderTabelaModelos();
+            carregarModeloNoFormulario(copia.id);
+          }
+
+          if (btnAcao.classList.contains('btn-excluir-modelo')){
+            const ok = confirm(`Deseja realmente excluir o modelo "${mod.nome}"?`);
+            if (!ok) return;
+
+            modelosContrato = modelosContrato.filter(m => m.id !== id);
+            salvarModelosContrato(modelosContrato);
+
+            if (modeloEmEdicaoId === id){
+              limparFormulario();
+            }
+
+            renderTabelaModelos();
+          }
+        });
+      }
+
+      if (btnFecharVisualizar){
+        btnFecharVisualizar.addEventListener('click', () => {
+          fecharModalVisualizar();
+        });
+      }
+      if (modalVisualizar){
+        modalVisualizar.addEventListener('click', (ev) => {
+          if (ev.target === modalVisualizar){
+            fecharModalVisualizar();
+          }
+        });
+      }
+
+      /* ---------- PRIMEIRO RENDER ---------- */
+      renderTabelaModelos();
+      atualizarPreview();
+
+      if (window.lucide) window.lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

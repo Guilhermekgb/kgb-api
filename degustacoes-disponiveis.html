@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:degustacoes-disponiveis.html">
+
+  <meta charset="UTF-8" />
+  <title>Degustações Disponíveis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH PASSO 3 (common + guard) === -->
+<!-- 3.1 Helpers globais (sempre antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- 3.2 Guard: usa a meta page-permission -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim();
+  if (permissao) guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+<!-- (opcional) favicon vazio para evitar 404 -->
+<link rel="icon" href="data:," />
+<!-- === FIM PATCH PASSO 3 (common + guard) === -->
+
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    main.conteudo-principal,
+    input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 { font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif; }
+
+    h1{
+      font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px;
+      letter-spacing:.2px; margin:0 0 10px;
+    }
+
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    .card{
+      background:#fff; padding:24px; border-radius:12px;
+      border:1px solid #eadfce; box-shadow:0 8px 24px rgba(0,0,0,.04);
+    }
+    .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    @media (max-width: 680px){ .grid2{ grid-template-columns:1fr; } }
+
+    .input{
+      width:100%; background:#fff; border:1px solid #e6ded2; border-radius:10px;
+      padding:10px 12px; outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    .input:focus{ border-color:#d9c4a3; box-shadow:0 0 0 4px rgba(194,154,93,.18); }
+
+    .botao-dourado{
+      background:#c29a5d; color:#fff; border:none; padding:10px 16px; border-radius:10px;
+      display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    }
+    .botao-dourado:hover{ background:#a87f51; }
+
+    .lista{ list-style:none; padding:0; margin:0; }
+    .item{
+      background:#fff; border:1px solid #e6ded2; border-radius:10px;
+      padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; gap:12px; align-items:center;
+      box-shadow:0 4px 14px rgba(0,0,0,.06);
+    }
+    .item strong{ color:#5a3e2b; }
+    .btn-outline-danger{
+      background:#fff5f5; color:#a94442; border:1px solid #f0cccc; border-radius:8px;
+      padding:6px 12px; cursor:pointer;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:1001; display:none;
+      background:#c29a5d; color:#fff; border:none; font-size:24px; padding:6px 12px; border-radius:8px;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* === Garantir modais visíveis acima de tudo === */
+    .modal-backdrop{
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .modal-box{
+      background:#fff; border-radius:12px; padding:20px;
+      max-width:800px; width: calc(100% - 40px);
+      box-shadow:0 10px 30px rgba(0,0,0,.15);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="coffee"></i> Degustações Disponíveis</h1>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="grid2">
+            <div>
+              <label>Data:</label>
+              <input id="dataDeg" type="date" class="input" />
+            </div>
+            <div>
+              <label>Hora:</label>
+              <input id="horaDeg" type="time" class="input" />
+            </div>
+            <div>
+              <label>Cardápio:</label>
+              <input id="cardapioDeg" type="text" class="input" placeholder="Ex: Finger Food" />
+            </div>
+            <div>
+              <label>Local:</label>
+              <input id="localDeg" type="text" class="input" placeholder="Ex: Salão Principal" />
+            </div>
+          </div>
+          <div style="text-align:right; margin-top:18px;">
+            <!-- removido onclick para evitar execução dupla -->
+            <button id="btnSalvar" type="button" class="botao-dourado">
+              <i data-lucide="save"></i> Salvar
+            </button>
+          </div>
+        </div>
+
+        <!-- Apenas o botão Agendar degustação -->
+        <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+          <!-- removido onclick para evitar execução dupla -->
+          <button id="btnAgendarNovo" type="button" class="botao-dourado">
+            <i data-lucide="calendar-plus"></i> Agendar degustação
+          </button>
+        </div>
+
+        <div style="margin-top: 28px;">
+          <h2 style="margin-bottom:8px;">📋 Lista de Datas Cadastradas</h2>
+          <ul id="listaDegustacoes" class="lista"></ul>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu (módulo) -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="./agenda-bridge.js"></script>
+
+  <!-- Ícones + ajuste de margem -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.lucide && window.lucide.createIcons) lucide.createIcons();
+    });
+
+    (function ajustaEspacoConteudo(){
+      var menu = document.getElementById('menuLateral');
+      var main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        var desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          var w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      try {
+        var obs = new MutationObserver(function(){
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch (e) {}
+
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+  </script>
+
+  <!-- Lógica da página -->
+  <script>
+    (function(){
+      var LS_KEY = 'degustacoesDisponiveis';
+
+      // —— Helper para escapar (XSS-safe)
+      function esc(s){
+        return String(s ?? '').replace(/[&<>"']/g, m => (
+          {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]
+        ));
+      }
+
+      function lerSlots() {
+        try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; }
+      }
+      function salvarSlots(arr) {
+        localStorage.setItem(LS_KEY, JSON.stringify(arr));
+      }
+
+      // agenda (casais)
+      function lerAgenda(){
+        try{ return JSON.parse(localStorage.getItem('agenda') || '[]'); }catch(e){ return []; }
+      }
+      function salvarAgenda(arr){
+        localStorage.setItem('agenda', JSON.stringify(arr));
+      }
+
+      function salvarDegustacao() {
+        try{
+          var data = document.getElementById("dataDeg").value;
+          var hora = document.getElementById("horaDeg").value;
+          var cardapio = (document.getElementById("cardapioDeg").value || '').trim();
+          var local = (document.getElementById("localDeg").value || '').trim();
+
+          if (!data || !hora || !cardapio || !local) {
+            alert("Preencha todos os campos.");
+            return;
+          }
+
+          var degustacoes = lerSlots();
+          degustacoes.push({ data: data, hora: hora, cardapio: cardapio, local: local });
+
+          // ordena por data/hora para manter lista organizada
+          degustacoes.sort(function(a,b){
+            var A = (a.data||'') + ' ' + (a.hora||'');
+            var B = (b.data||'') + ' ' + (b.hora||'');
+            return A.localeCompare(B);
+          });
+
+          salvarSlots(degustacoes);
+
+          document.getElementById("dataDeg").value = "";
+          document.getElementById("horaDeg").value = "";
+          document.getElementById("cardapioDeg").value = "";
+          document.getElementById("localDeg").value = "";
+
+          listarDegustacoes();
+        }catch(err){ console.error('salvarDegustacao:', err); }
+      }
+
+      function removerDegustacao(index) {
+        try{
+          if (!confirm("Deseja remover esta degustação?")) return;
+          var degustacoes = lerSlots();
+          var removida = degustacoes[index];
+          degustacoes.splice(index, 1);
+          salvarSlots(degustacoes);
+
+          // (opcional) limpar agendados do slot — manter comentado se não desejar
+          /*
+          var agenda = lerAgenda().filter(function(a){
+            return !(a.tipo==="degustacao" && a.data===removida.data && a.hora===removida.hora && a.local===removida.local);
+          });
+          salvarAgenda(agenda);
+          */
+
+          listarDegustacoes();
+        }catch(err){ console.error('removerDegustacao:', err); }
+      }
+
+      function formatBR(d){
+        var s = String(d||'');
+        var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) return m[3]+'/'+m[2]+'/'+m[1];
+        var n = new Date(s);
+        if (!isNaN(n)) return String(n.getDate()).padStart(2,'0')+'/'+String(n.getMonth()+1).padStart(2,'0')+'/'+n.getFullYear();
+        return s;
+      }
+
+      function listarDegustacoes() {
+        try{
+          var lista = document.getElementById("listaDegustacoes");
+          var degustacoes = lerSlots();
+          if (!lista) return;
+
+          if (!degustacoes.length) {
+            lista.innerHTML = "<li class='info-secundaria' style='color:#777;'>Nenhuma data cadastrada.</li>";
+            return;
+          }
+
+          lista.innerHTML = "";
+          degustacoes.forEach(function(d, i){
+            var li = document.createElement("li");
+            li.className = "item";
+            var dataTxt = esc(formatBR(d.data));
+            var horaTxt = esc(d.hora);
+            var localTxt = esc(d.local);
+            var cardTxt = esc(d.cardapio);
+
+            li.innerHTML =
+              '<div>' +
+                '<strong>'+dataTxt+'</strong> / '+horaTxt+' / '+localTxt+' / '+cardTxt +
+              '</div>' +
+              '<div style="display:flex; gap:8px;">' +
+                '<button type="button" class="botao-dourado" onclick="abrirModalAgendados('+i+')">' +
+                  '<i data-lucide="users"></i> Ver confirmados' +
+                '</button>' +
+                '<button type="button" class="btn-outline-danger" onclick="removerDegustacao('+i+')">' +
+                  '<i data-lucide="trash-2"></i> Remover slot' +
+                '</button>' +
+              '</div>';
+            lista.appendChild(li);
+          });
+
+          if (window.lucide && window.lucide.createIcons) lucide.createIcons();
+        }catch(err){ console.error('listarDegustacoes:', err); }
+      }
+
+      // Modal: confirmados
+      function abrirModalAgendados(idxSlot){
+        try{
+          var modal = document.getElementById('modalAgendados');
+          var wrap = document.getElementById('listaAgendados');
+          if (!modal || !wrap) return;
+
+          var slots = lerSlots();
+          var agendaAll = lerAgenda().filter(function(a){ return a && a.tipo === "degustacao"; });
+
+          // agrupar e, se vier de um slot, filtrar por ele
+          var grupos = {};
+          for (var k=0;k<agendaAll.length;k++){
+            var a = agendaAll[k];
+            var key = (a.data||'')+'|'+(a.hora||'')+'|'+(a.local||'');
+            if (typeof idxSlot === 'number' && idxSlot !== null){
+              var s = slots[idxSlot];
+              if (!s) continue;
+              var keySlot = (s.data||'')+'|'+(s.hora||'')+'|'+(s.local||'');
+              if (key !== keySlot) continue;
+            }
+            if (!grupos[key]) grupos[key] = [];
+            grupos[key].push(a);
+          }
+
+          var keys = Object.keys(grupos).sort();
+          wrap.innerHTML = keys.length ? "" : "<em>Nenhum agendado.</em>";
+
+          var totalPessoas = 0;
+
+          for (var j=0;j<keys.length;j++){
+            var key = keys[j];
+            var parts = key.split("|");
+            var data = parts[0], hora = parts[1], local = parts[2];
+            var cardapio = (grupos[key][0] && grupos[key][0].cardapio) || "-";
+            var box = document.createElement("div");
+            box.style.cssText = "border:1px solid #eadfce; border-radius:12px; padding:12px; background:#fff;";
+
+            var titulo = document.createElement("div");
+            titulo.innerHTML = "<strong>"+esc(formatBR(data))+"</strong> • "+esc(hora)+" • "+esc(cardapio)+" • "+esc(local);
+            box.appendChild(titulo);
+
+            var ul = document.createElement("ul");
+            ul.style.cssText = "list-style:none; padding:0; margin:10px 0 0; display:grid; gap:8px;";
+
+            var arr = grupos[key];
+            for (var t=0;t<arr.length;t++){
+              var item = arr[t];
+              var li = document.createElement("li");
+              li.style.cssText = "display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center;";
+              var qtdExtras = Number(item.acompanhantes||0);
+              var pessoas = 2 + qtdExtras; // casal + extras
+              totalPessoas += pessoas;
+
+              var whatsLink = item.casalWhats
+                ? '<a target="_blank" href="https://wa.me/'+(String(item.casalWhats).length<=11?'55':'')+esc(item.casalWhats)+'">Whats</a>'
+                : '<span class="muted">sem whats</span>';
+
+              var obsTxt = item.observacoes ? '<div class="muted">Obs: '+esc(item.observacoes)+'</div>' : '';
+
+              li.innerHTML =
+                '<div>' +
+                  '<div><b>'+esc(item.casalNome||'Sem nome')+'</b> — '+whatsLink+'</div>' +
+                  '<div class="muted">Acompanhantes: ' +
+                    '<input data-edit-acomp="'+esc(item.id)+'" type="number" min="0" value="'+qtdExtras+'" style="width:80px;padding:6px;border:1px solid #ddd;border-radius:8px;" oninput="editarAcomp(\''+String(item.id).replace(/'/g,"\\'")+'\', this.value)">' +
+                    ' • Compareceu: ' +
+                    '<select data-edit-comp="'+esc(item.id)+'" style="padding:6px;border:1px solid #ddd;border-radius:8px;" onchange="editarCompareceu(\''+String(item.id).replace(/'/g,"\\'")+'\', this.value)">' +
+                      '<option value="pendente" '+(item.compareceu==='pendente'?'selected':'')+'>Pendente</option>' +
+                      '<option value="sim" '+(item.compareceu==='sim'?'selected':'')+'>Sim</option>' +
+                      '<option value="nao" '+(item.compareceu==='nao'?'selected':'')+'>Não</option>' +
+                    '</select>' +
+                  '</div>' +
+                  obsTxt +
+                '</div>' +
+                '<div>' +
+                  '<button type="button" class="btn-outline-danger" onclick="removerAgendado(\''+String(item.id).replace(/'/g,"\\'")+'\', '+(typeof idxSlot==='number'?idxSlot:'null')+')">' +
+                    '<i data-lucide="trash-2"></i> Remover' +
+                  '</button>' +
+                '</div>';
+              ul.appendChild(li);
+            }
+
+            box.appendChild(ul);
+            wrap.appendChild(box);
+          }
+
+          // total de pessoas
+          var sum = document.getElementById('sumAgendados');
+          if (!sum){
+            sum = document.createElement('div');
+            sum.id = 'sumAgendados';
+            sum.className = 'muted';
+            sum.style.cssText = "margin-top:10px; font-weight:600;";
+            var boxModal = modal.querySelector('.modal-box');
+            var actions = modal.querySelector('.modal-actions');
+            if (boxModal && actions) boxModal.insertBefore(sum, actions);
+          }
+          sum.textContent = "Total previsto: " + totalPessoas + " pessoas";
+
+          modal.style.display = "flex";
+          if (window.lucide && window.lucide.createIcons) lucide.createIcons();
+        }catch(err){ console.error('abrirModalAgendados:', err); }
+      }
+
+      function fecharModalAgendados(){
+        var m = document.getElementById('modalAgendados');
+        if (m) m.style.display = 'none';
+      }
+
+      // helpers de edição no modal (globais)
+      function editarAcomp(id, val){
+        try{
+          var agenda = lerAgenda();
+          var idx = -1;
+          for (var i=0;i<agenda.length;i++) if (agenda[i].id === id){ idx = i; break; }
+          if (idx>-1){
+            var v = Math.max(0, parseInt(val||"0",10) || 0);
+            agenda[idx].acompanhantes = v;
+            agenda[idx].pessoasTotal = 2 + v;
+            salvarAgenda(agenda);
+          }
+        }catch(err){ console.error('editarAcomp:', err); }
+      }
+      function editarCompareceu(id, val){
+        try{
+          var agenda = lerAgenda();
+          var idx = -1;
+          for (var i=0;i<agenda.length;i++) if (agenda[i].id === id){ idx = i; break; }
+          if (idx>-1){
+            agenda[idx].compareceu = val;
+            salvarAgenda(agenda);
+          }
+        }catch(err){ console.error('editarCompareceu:', err); }
+      }
+      function removerAgendado(id, idxSlot){
+        try{
+          if (!confirm("Remover este agendado?")) return;
+          var agenda = lerAgenda().filter(function(a){ return a.id !== id; });
+          salvarAgenda(agenda);
+          abrirModalAgendados(idxSlot);
+        }catch(err){ console.error('removerAgendado:', err); }
+      }
+
+      // Modal: Agendar nesta tela
+      function abrirModalNovoAgendamento(){
+        try{
+          var sel = document.getElementById('selSlotNovo');
+          var m   = document.getElementById('modalNovoAg');
+          if(!sel || !m) return;
+
+          var slots = lerSlots();
+          if (slots.length){
+            var html = '';
+            for (var i=0;i<slots.length;i++){
+              var s = slots[i];
+              html += '<option value="'+i+'">'+esc(formatBR(s.data))+' • '+esc(s.hora)+' • '+esc(s.local)+' • '+esc(s.cardapio)+'</option>';
+            }
+            sel.innerHTML = html;
+          } else {
+            sel.innerHTML = '<option value="">— não há slots cadastrados —</option>';
+            alert('Cadastre pelo menos uma data/horário antes.');
+            return;
+          }
+
+          document.getElementById('nomCasalNovo').value = '';
+          document.getElementById('zapNovo').value = '';
+          document.getElementById('acompNovo').value = '0';
+          document.getElementById('obsNovo').value = '';
+
+          m.style.display = 'flex';
+        }catch(err){ console.error('abrirModalNovoAgendamento:', err); }
+      }
+      function fecharModalNovoAg(){
+        var m = document.getElementById('modalNovoAg');
+        if (m) m.style.display = 'none';
+      }
+      function salvarNovoAgendamento(){
+        try{
+          var sel   = document.getElementById('selSlotNovo');
+          var nome  = (document.getElementById('nomCasalNovo').value || '').trim();
+          var zap   = (document.getElementById('zapNovo').value || '').replace(/\D/g,'');
+          var acomp = Math.max(0, parseInt(document.getElementById('acompNovo').value||'0',10) || 0);
+          var obs   = (document.getElementById('obsNovo').value || '').trim();
+
+          if(!sel || sel.value==='' || !nome){ alert('Selecione um slot e informe o nome do casal.'); return; }
+
+          var slots = lerSlots();
+          var s = slots[Number(sel.value)];
+          if (!s){ alert('Slot inválido.'); return; }
+
+          var agenda = lerAgenda();
+          var newItem = {
+            id: "agd_"+Date.now().toString(36),
+            tipo: "degustacao",
+            titulo: "Degustação – " + nome,
+            data: s.data, hora: s.hora, local: s.local, cardapio: s.cardapio,
+            criadoEm: new Date().toISOString(),
+            status: "pendente",
+            casalNome: nome,
+            casalWhats: zap,
+            acompanhantes: acomp,
+            pessoasTotal: 2 + acomp,
+            compareceu: "pendente",
+            observacoes: obs
+          };
+          agenda.push(newItem);
+          salvarAgenda(agenda);
+
+          // M33: publicar agenda + feed (slot agendado)
+          try { notifyDegustacaoAgendada(newItem); } catch(e){ console.warn('M33: notifyDegustacaoAgendada falhou', e); }
+
+          fecharModalNovoAg();
+          alert('Agendamento salvo!');
+        }catch(err){ console.error('salvarNovoAgendamento:', err); }
+      }
+
+      // Expor no global (garante onclick em itens listados/modais)
+      window.salvarDegustacao = salvarDegustacao;
+      window.abrirModalAgendados = abrirModalAgendados;
+      window.fecharModalAgendados = fecharModalAgendados;
+      window.editarAcomp = editarAcomp;
+      window.editarCompareceu = editarCompareceu;
+      window.removerAgendado = removerAgendado;
+      window.abrirModalNovoAgendamento = abrirModalNovoAgendamento;
+      window.fecharModalNovoAg = fecharModalNovoAg;
+      window.salvarNovoAgendamento = salvarNovoAgendamento;
+      window.removerDegustacao = removerDegustacao;
+
+      // Inicialização
+      window.addEventListener('load', function(){
+        // deep-link (?dataDeg=YYYY-MM-DD&hora=HH:MM&local=...)
+        (function applyURLFiltersDegustacoes(){
+          try{
+            var q = new URLSearchParams(location.search);
+            var dataURL  = q.get('dataDeg') || q.get('data') || '';
+            var horaURL  = q.get('hora') || '';
+            var localURL = q.get('local') || '';
+            if (dataURL && /^\d{4}-\d{2}-\d{2}$/.test(dataURL)) document.getElementById('dataDeg').value = dataURL.slice(0,10);
+            if (horaURL)  document.getElementById('horaDeg').value = horaURL.slice(0,5);
+            if (localURL) document.getElementById('localDeg').value = localURL;
+          }catch{}
+        })();
+
+        // bind único de botões principais
+        if (!window.__bindDegSalvar) {
+          window.__bindDegSalvar = true;
+          var bSalvar = document.getElementById("btnSalvar");
+          var bNovo   = document.getElementById("btnAgendarNovo");
+          if (bSalvar) bSalvar.addEventListener("click", function(e){ e.preventDefault(); salvarDegustacao(); });
+          if (bNovo)   bNovo.addEventListener("click", function(e){ e.preventDefault(); abrirModalNovoAgendamento(); });
+        }
+
+        listarDegustacoes();
+      });
+    })();
+  </script>
+
+  <!-- Modal: Agendar degustação (tela de Degustações) -->
+  <div id="modalNovoAg" class="modal-backdrop" style="display:none;">
+    <div class="modal-box" role="dialog" aria-modal="true" style="max-width:560px;">
+      <h3 style="margin-top:0;">Agendar degustação</h3>
+
+      <div class="form-group">
+        <label for="selSlotNovo">Escolha a data / hora / local</label>
+        <select id="selSlotNovo" class="input"></select>
+      </div>
+
+      <div class="form-group">
+        <label for="nomCasalNovo">Nome do casal</label>
+        <input id="nomCasalNovo" class="input" placeholder="Ex: Ana & Pedro">
+      </div>
+
+      <div class="grid2">
+        <div class="form-group">
+          <label for="zapNovo">Telefone/WhatsApp</label>
+          <input id="zapNovo" class="input" inputmode="numeric" placeholder="Somente números">
+        </div>
+        <div class="form-group">
+          <label for="acompNovo">Acompanhantes (extras)</label>
+          <input id="acompNovo" class="input" type="number" min="0" value="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="obsNovo">Observações</label>
+        <textarea id="obsNovo" class="input" rows="3" placeholder="Anotações para a equipe..."></textarea>
+      </div>
+
+      <div class="modal-actions" style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-cancel" onclick="fecharModalNovoAg()">Cancelar</button>
+        <button type="button" class="btn btn-save" onclick="salvarNovoAgendamento()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Degustações Agendadas (aberto via “Ver confirmados” de cada linha) -->
+  <div id="modalAgendados" class="modal-backdrop" style="display:none;">
+    <div class="modal-box" role="dialog" aria-modal="true" style="max-width:800px;">
+      <h3 style="margin-top:0;">Degustações Agendadas</h3>
+      <div id="listaAgendados" style="display:grid; gap:10px; max-height:60vh; overflow:auto;"></div>
+      <div class="modal-actions" style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn btn-cancel" onclick="fecharModalAgendados()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+
+

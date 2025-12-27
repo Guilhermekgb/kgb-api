@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Painel de Leads (Local)</title>
+  <!-- Identidade RBAC da página -->
+<meta name="page-permission" content="page:painel-leads.html|Administrador|Vendedor|Maitre|Responsável por Evento">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#f8f1e8; --brown:#5a3e2b; --gold:#c29a5d; --line:#e7dfd6;
+    }
+    html, body { margin:0; padding:0; background:var(--bg); }
+
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    /* Tipografia SÓ da área principal (menu tem as fontes dele) */
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1, .conteudo-principal h2, .conteudo-principal h3{
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{ font-size:28px; color:var(--brown); display:flex; align-items:center; gap:10px; }
+
+    /* Botão hambúrguer só no mobile */
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:var(--gold); color:#fff; border:none;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:bold;
+    }
+
+    .bloco{
+      background:#fff; border:1px solid var(--line);
+      border-radius:16px; padding:18px; margin:18px 0;
+      box-shadow:0 8px 24px rgba(0,0,0,.04);
+    }
+    .bloco h3{ margin-top:0; color:var(--brown); }
+
+    .form-grid{
+      display:grid; gap:12px;
+      grid-template-columns: 1.4fr 1.2fr 0.8fr auto;
+      align-items:end;
+    }
+    @media (max-width:768px){
+      .form-grid{ grid-template-columns: 1fr; }
+    }
+    .campo label{ font-size:12px; color:#7b5e46; display:block; margin-bottom:6px; }
+    .campo input{
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e6ded2; outline:none;
+    }
+    .campo input:focus{ border-color:#d9c4a3; box-shadow:0 0 0 4px rgba(194,154,93,.18); }
+
+    .btn{
+      background:var(--gold); color:#fff; border:none;
+      padding:10px 14px; border-radius:10px; cursor:pointer;
+      display:inline-flex; gap:8px; align-items:center;
+    }
+    .btn:hover{ filter:brightness(.95); }
+    .btn.ghost{
+      background:#fff; color:#5a3e2b; border:1px solid #e6ded2;
+    }
+
+    /* Lista de leads */
+    .lista{
+      display:grid; gap:12px;
+    }
+    .lead{
+      background:#fff; border:1px solid var(--line);
+      border-radius:12px; padding:14px;
+      display:grid; gap:8px;
+    }
+    .lead h4{ margin:0; color:#3f2c20; font-size:16px; }
+    .lead .linha{
+      display:flex; flex-wrap:wrap; gap:8px 16px; color:#6b5545; font-size:14px;
+    }
+    .lead .acoes{ display:flex; gap:8px; }
+
+    .muted{ color:#7b5e46; font-size:13px; }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado via JS) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="kanban-square"></i> Painel de Leads (Local)</h1>
+
+        <div class="bloco">
+          <h3>Novo / Editar Lead</h3>
+          <form id="leadForm" autocomplete="off">
+            <!-- id oculto para edição -->
+            <input type="hidden" id="leadId" />
+
+            <div class="form-grid">
+              <div class="campo">
+                <label for="nome">Nome do cliente</label>
+                <input id="nome" placeholder="Ex.: Maria Silva" required />
+              </div>
+              <div class="campo">
+                <label for="evento">Local do evento</label>
+                <input id="evento" placeholder="Ex.: Salão Jardins" required />
+              </div>
+              <div class="campo">
+                <label for="data">Data do evento</label>
+                <input id="data" type="date" required />
+              </div>
+              <div>
+                <button class="btn" type="submit">
+                  <i data-lucide="save"></i> Salvar
+                </button>
+                <button class="btn ghost" type="button" id="btnLimpar">
+                  <i data-lucide="eraser"></i> Limpar
+                </button>
+              </div>
+            </div>
+          </form>
+          <p class="muted" style="margin-top:8px">
+            Este painel grava em <code>localStorage.leads</code> no formato compatível com o Funil
+            (<code>local</code>, <code>dataEvento</code>, <code>status</code>).
+          </p>
+        </div>
+
+        <div class="bloco">
+          <h3>Leads cadastrados</h3>
+          <div id="listaLeads" class="lista"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu como módulo -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+    // ========= Ajuste de margem no desktop para não ficar sob o menu =========
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // ========= Mini util =========
+    const STORAGE_KEY = 'leads';
+    const uid = () => 'lead_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+
+    function getLeads(){
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') || []; }
+      catch { return []; }
+    }
+    function setLeads(arr){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr || []));
+    }
+
+    // Normaliza leitura do form para o modelo do Funil
+    function readForm(){
+      const id     = document.getElementById('leadId').value.trim();
+      const nome   = document.getElementById('nome').value.trim();
+      const local  = document.getElementById('evento').value.trim(); // mapeia "evento" -> local
+      const dataEv = document.getElementById('data').value.trim();   // mapeia "data"   -> dataEvento
+
+      if (!nome || !local || !dataEv) {
+        alert('Preencha nome, local e data.');
+        return null;
+      }
+      return {
+        id: id || uid(),
+        nome,
+        local,
+        dataEvento: dataEv,
+        status: 'Novo Lead',
+        proximoContato: '' // opcional
+      };
+    }
+
+    // Render seguro (sem injetar HTML de dados do usuário)
+    function renderLeads(){
+      const container = document.getElementById('listaLeads');
+      container.innerHTML = '';
+
+      const leads = getLeads();
+      if (!leads.length){
+        const p = document.createElement('p');
+        p.className = 'muted';
+        p.textContent = 'Nenhum lead cadastrado.';
+        container.appendChild(p);
+        try { window.lucide?.createIcons?.(); } catch {}
+        return;
+      }
+
+      leads.forEach(ld => {
+        // compat com dados antigos (evento/data)
+        const local = ld.local ?? ld.evento ?? '–';
+        const data  = ld.dataEvento ?? ld.data ?? '';
+
+        const card = document.createElement('div');
+        card.className = 'lead';
+
+        const h4 = document.createElement('h4');
+        h4.textContent = ld.nome || 'Sem nome';
+
+        const l1 = document.createElement('div');
+        l1.className = 'linha';
+        const a1 = document.createElement('span');
+        a1.innerHTML = '<strong>Local:</strong> ';
+        const s1 = document.createElement('span'); s1.textContent = local;
+        a1.appendChild(s1); l1.appendChild(a1);
+
+        const l2 = document.createElement('div');
+        l2.className = 'linha';
+        const a2 = document.createElement('span');
+        a2.innerHTML = '<strong>Data do evento:</strong> ';
+        const s2 = document.createElement('span'); s2.textContent = data || '–';
+        a2.appendChild(s2); l2.appendChild(a2);
+
+        const actions = document.createElement('div');
+        actions.className = 'acoes';
+
+        const bEdit = document.createElement('button');
+        bEdit.className = 'btn ghost';
+        bEdit.innerHTML = '<i data-lucide="pencil"></i> Editar';
+        bEdit.addEventListener('click', () => editarLead(ld.id));
+
+        const bDel = document.createElement('button');
+        bDel.className = 'btn ghost';
+        bDel.innerHTML = '<i data-lucide="trash-2"></i> Excluir';
+        bDel.addEventListener('click', () => excluirLead(ld.id));
+
+        actions.append(bEdit, bDel);
+
+        card.append(h4, l1, l2, actions);
+        container.appendChild(card);
+      });
+
+      try { window.lucide?.createIcons?.(); } catch {}
+    }
+// --- destacar o lead recém-criado (se houver) ---
+if (window.__FUNIL_FOCUS_ID__) {
+  const alvo = document.querySelector(`[data-lead-id="${window.__FUNIL_FOCUS_ID__}"]`);
+  if (alvo) {
+    alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    alvo.classList.add('hl-novo-lead');
+    // remove o destaque após alguns segundos
+    setTimeout(() => alvo.classList.remove('hl-novo-lead'), 3000);
+  }
+  window.__FUNIL_FOCUS_ID__ = null;
+}
+
+    function salvarLead(ev){
+      ev.preventDefault();
+      const novo = readForm();
+      if (!novo) return;
+
+      const arr = getLeads();
+      const i = arr.findIndex(x => String(x.id) === String(novo.id));
+      if (i >= 0) arr[i] = { ...arr[i], ...novo };
+      else arr.push(novo);
+
+      setLeads(arr);
+      document.getElementById('leadForm').reset();
+      document.getElementById('leadId').value = '';
+      renderLeads();
+    }
+
+    function editarLead(id){
+      const ld = getLeads().find(x => String(x.id) === String(id));
+      if (!ld) return;
+      // compat com antigos
+      document.getElementById('leadId').value = ld.id || '';
+      document.getElementById('nome').value   = ld.nome || '';
+      document.getElementById('evento').value = ld.local ?? ld.evento ?? '';
+      document.getElementById('data').value   = ld.dataEvento ?? ld.data ?? '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function excluirLead(id){
+      if (!confirm('Excluir este lead?')) return;
+      const arr = getLeads().filter(x => String(x.id) !== String(id));
+      setLeads(arr);
+      renderLeads();
+    }
+
+    // ===== Boot =====
+    document.addEventListener('DOMContentLoaded', () => {
+      // Ícones
+      try { window.lucide?.createIcons?.(); } catch {}
+
+      // Form
+      document.getElementById('leadForm').addEventListener('submit', salvarLead);
+      document.getElementById('btnLimpar').addEventListener('click', () => {
+        document.getElementById('leadForm').reset();
+        document.getElementById('leadId').value = '';
+      });
+
+      // Render inicial
+      renderLeads();
+    });
+
+    // Recria ícones quando o menu terminar de injetar (garantia extra)
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((m, o) => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+</body>
+</html>

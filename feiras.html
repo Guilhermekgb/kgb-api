@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:feiras.html">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH HEAD (common + guard) === -->
+<meta name="page-permission" content="page:feiras.html">
+
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- (Opcional) ativar enforcement do guard uma vez -->
+<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+
+<!-- Guard (usa helpers do common) -->
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH HEAD (common + guard) === -->
+
+  <title>Feiras & Captação – KGB Buffet</title>
+
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="menu-lateral.css"/>
+  <link rel="stylesheet" href="feiras.css"/>
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+
+      <!-- TOPBAR -->
+      <header class="fr-topbar">
+        <div class="fr-title">
+          <i data-lucide="sparkles"></i>
+          <h1>Feiras & Captação</h1>
+        </div>
+
+        <div class="fr-actions">
+          <select id="selFeira" class="input">
+            <option value="">— selecione uma feira —</option>
+          </select>
+
+          <button id="btnNovaFeira" class="btn primario">
+            <i data-lucide="plus"></i> Nova Feira
+          </button>
+        </div>
+      </header>
+
+      <!-- FILTROS -->
+      <section class="fr-filtros">
+        <input id="busca" type="search" placeholder="Buscar por nome, telefone, local, tipo..." />
+        <div class="filtros-dir">
+          <label class="lbl">Cardápio:</label>
+          <select id="filtroEnvio" class="input">
+            <option value="todos">Todos</option>
+            <option value="SIM">Enviado</option>
+            <option value="NÃO">Não enviado</option>
+          </select>
+
+          <div id="wrapFiltroVendedor" class="adm-only">
+            <label class="lbl">Vendedor:</label>
+            <select id="filtroVendedor" class="input">
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+          <div class="filtros-dir">
+  <!-- ... seus filtros já existentes ... -->
+  <button id="btnExportFeiraCSV" class="btn sec btn-sm">
+    <i data-lucide="download"></i> Exportar lista (CSV)
+  </button>
+  <button id="btnExportFeiraXLS" class="btn sec btn-sm">
+    <i data-lucide="table"></i> Exportar lista (Excel)
+  </button>
+</div>
+
+        </div>
+      </section>
+
+      <!-- INDICADORES -->
+    <section class="fr-indicadores">
+  <div class="ind"><div class="k">Captados</div><div class="v" id="indCaptados">–</div></div>
+  <div class="ind"><div class="k">Cardápio Enviado</div><div class="v" id="indEnviados">–</div></div>
+  <div class="ind"><div class="k">Pendentes</div><div class="v" id="indPendentes">–</div></div>
+  <div class="ind"><div class="k">% Enviados</div><div class="v" id="indPerc">–</div></div>
+
+  <!-- === MINI-PAINEL: Analytics por Feira === -->
+<section id="feira-analytics" class="fr-card fr-analytics hidden">
+  <div class="fa-head">
+    <h2>Relatórios desta feira</h2>
+    <div class="fa-actions">
+      <button id="btnExportAnalytics" class="btn sec btn-sm">
+        <i data-lucide="download"></i> Exportar CSV
+      </button>
+    </div>
+  </div>
+
+  <div class="fa-grid">
+
+
+    <!-- Conversão -->
+    <div class="fa-box">
+      <div class="fa-k">Taxa de conversão</div>
+      <div class="fa-v"><span id="faConv">–</span></div>
+      <div class="fa-progress">
+        <div class="fa-progress-bar"><span id="faConvBar" style="width:0%"></span></div>
+        <div class="fa-progress-meta">
+          <span><b id="faFechadosMini">0</b> fechados</span>
+          <span><b id="faCaptadosMini">0</b> captados</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ticket médio -->
+    <div class="fa-box">
+      <div class="fa-k">Ticket médio</div>
+      <div class="fa-v" id="faTicket">–</div>
+      <div class="fa-hint">considera apenas leads fechados</div>
+    </div>
+
+    <!-- Fechados -->
+    <div class="fa-box">
+      <div class="fa-k">Fechamentos</div>
+      <div class="fa-v" id="faFechados">–</div>
+      <div class="fa-hint">status: Fechado/Ganho/Contrato assinado</div>
+    </div>
+
+    <!-- Envios por dia (mini chart) -->
+    <div class="fa-box fa-wide">
+      <div class="fa-k">Envios por dia (últimos 14 dias)</div>
+      <div id="faChartWrap" class="fa-chart">
+        <!-- SVG será injetado via JS -->
+      </div>
+      <div class="fa-legend">
+        <span class="dot"></span> soma de envios (cardápio/orçamento)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- === DASHBOARD DE RETORNO POR FEIRA === -->
+<section id="feira-retorno" class="fr-card fr-retorno hidden">
+  <div class="fr-retorno-head">
+    <h2>Retorno financeiro desta feira</h2>
+    <div class="fr-retorno-actions">
+      <div class="ctrl" style="padding-left:12px;min-height:44px;">
+        <input id="inpCustoFeira" type="text" inputmode="decimal" placeholder="Custo da feira (R$)">
+      </div>
+      <button id="btnSalvarCustoFeira" class="btn primario btn-sm">
+        <i data-lucide="save"></i> Salvar custo
+      </button>
+    </div>
+  </div>
+
+  <div class="fr-retorno-grid">
+    <div class="box">
+      <div class="k">Fechados</div>
+      <div class="v" id="retFechados">–</div>
+    </div>
+    <div class="box">
+      <div class="k">% Conversão</div>
+      <div class="v" id="retConv">–</div>
+    </div>
+    <div class="box">
+      <div class="k">Receita (fechados)</div>
+      <div class="v" id="retReceita">–</div>
+    </div>
+    <div class="box">
+      <div class="k">Custo da feira</div>
+      <div class="v" id="retCusto">–</div>
+    </div>
+    <div class="box">
+      <div class="k">Retorno (Receita − Custo)</div>
+      <div class="v" id="retROI">–</div>
+      <div class="hint" id="retROAS">ROAS: –</div>
+    </div>
+  </div>
+
+  <div class="roi-bar">
+    <div class="roi-legend">
+      <span>0</span><span id="lblMax">Meta</span>
+    </div>
+    <div class="roi-track">
+      <span id="roiFill" style="width:0%"></span>
+    </div>
+    <div class="roi-meta">
+      <span>Comparando receita vs. custo</span>
+    </div>
+  </div>
+</section>
+
+
+  <!-- NOVOS -->
+  <div class="ind"><div class="k">Fechados</div><div class="v" id="indFechados">–</div></div>
+  <div class="ind"><div class="k">% Conversão</div><div class="v" id="indConv">–</div></div>
+  <div class="ind"><div class="k">Ticket médio</div><div class="v" id="indTicket">–</div></div>
+</section>
+
+
+      <!-- CAPTAÇÃO RÁPIDA -->
+      <section class="fr-card fr-captacao">
+        <div class="fr-card-header">
+          <h2><i data-lucide="scan-line"></i> Captação Rápida</h2>
+          <div class="hint">No calor da feira: mínimo só <strong>Nome</strong> já salva ✅</div>
+        </div>
+
+        <form id="formCaptura" class="grid-captacao">
+          <!-- NOME -->
+          <div class="field area-nome">
+            <label>Nome</label>
+            <div class="ctrl">
+              <i data-lucide="user-2"></i>
+              <input type="text" id="c_nome" placeholder="Ex.: Ana Paula"/>
+            </div>
+          </div>
+
+          <!-- TELEFONE -->
+          <div class="field area-tel">
+            <label>Telefone/WhatsApp</label>
+            <div class="ctrl">
+              <i data-lucide="phone"></i>
+              <input type="tel" id="c_tel" placeholder="(11) 9 9999-9999"/>
+            </div>
+          </div>
+
+          <!-- DATA EVENTO -->
+          <div class="field area-data">
+            <label>Data do evento</label>
+            <div class="ctrl">
+              <i data-lucide="calendar"></i>
+              <input type="date" id="c_data"/>
+            </div>
+            <div id="alertaData" class="alerta" style="display:none"></div>
+          </div>
+
+          <!-- TIPO EVENTO (input simples) -->
+          <div class="field area-tipo">
+            <label>Tipo do evento</label>
+            <div class="ctrl">
+              <i data-lucide="party-popper"></i>
+              <input type="text" id="c_tipo" placeholder="Casamento, 15 anos, Corporativo..."/>
+            </div>
+          </div>
+
+          <!-- QTD -->
+          <div class="field area-qtd">
+            <label>Qtd. convidados</label>
+            <div class="ctrl">
+              <i data-lucide="users"></i>
+              <input type="number" id="c_qtd" min="0" step="1" placeholder="ex.: 150"/>
+            </div>
+          </div>
+
+          <!-- LOCAL -->
+          <div class="field area-local">
+            <label>Local</label>
+            <div class="ctrl">
+              <i data-lucide="map-pin"></i>
+              <input type="text" id="c_local" placeholder="Ex.: Chácara Paris / Salão KGB"/>
+            </div>
+          </div>
+
+          <!-- TIPO DE CARDÁPIO -->
+          <div class="field area-cardapio">
+            <label>Tipo de cardápio</label>
+            <div class="ctrl">
+              <i data-lucide="utensils"></i>
+              <input type="text" id="c_cardapio" placeholder="Ex.: Churrasco Premium / Finger Food / Massas"/>
+            </div>
+          </div>
+
+          <!-- VENDEDOR -->
+          <div class="field area-vend">
+            <label>Vendedor responsável</label>
+            <div class="ctrl">
+              <i data-lucide="badge-check"></i>
+              <input type="text" id="c_vendedor" placeholder="Auto: usuário logado"/>
+            </div>
+          </div>
+
+          <!-- OBS -->
+          <div class="field area-obs">
+            <label>Observações</label>
+            <div class="ctrl textarea">
+              <i data-lucide="sticky-note"></i>
+              <textarea id="c_obs" rows="2" placeholder="Preferências, restrições, detalhes rápidos..."></textarea>
+            </div>
+          </div>
+
+          <!-- AÇÃO -->
+          <div class="area-acao">
+            <button type="submit" class="btn primario">
+              <i data-lucide="send"></i> Salvar & Mandar pro Funil
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- LISTA DE LEADS DA FEIRA -->
+      <section class="fr-card">
+        <div class="fr-card-header">
+          <h2><i data-lucide="users"></i> Leads desta feira</h2>
+          <div class="muted" id="infoFeira">—</div>
+        </div>
+
+        <div class="tabela">
+          <div class="thead">
+            <div>Nome</div>
+            <div>Telefone</div>
+            <div>Data</div>
+            <div>Tipo</div>
+            <div>Convid.</div>
+            <div>Local</div>
+            <div>Tipo cardápio</div>
+            <div>Observações</div>
+            <div>Vendedor</div>
+            <div>Cardápio</div>
+            <div class="c">Ações</div>
+          </div>
+          <div id="tbody" class="tbody"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL: Nova Feira -->
+<dialog id="dlgFeira" class="dlg">
+  <form method="dialog" id="formFeira" class="dlg-content">
+    <h3><i data-lucide="plus"></i> Nova Feira</h3>
+    <label>Nome da feira</label>
+    <input type="text" id="f_nome" required/>
+    <label>Data da feira</label>
+    <input type="date" id="f_data"/>
+    <div class="dlg-actions">
+      <button value="cancel" class="btn sec">Cancelar</button>
+      <button id="btnSalvarFeira" value="default" class="btn primario"><i data-lucide="save"></i> Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL: O que já temos nesta data -->
+<dialog id="dlgData" class="dlg dlg-data">
+  <div class="dlg-content">
+    <div class="dlg-head">
+      <h3><i data-lucide="calendar-search"></i> O que já temos nesta data</h3>
+      <button class="btn sec btn-sm" id="btnFecharData" aria-label="Fechar">
+        <i data-lucide="x"></i> Fechar
+      </button>
+    </div>
+
+    <div id="dataResumo" class="resumo-data">—</div>
+
+    <!-- Tabela compacta em grid -->
+    <div class="data-grid">
+      <div class="data-grid__head">
+        <div>Origem</div>
+        <div>Nome</div>
+        <div>Convidados</div>
+        <div>Local</div>
+        <div class="c">Ação</div>
+      </div>
+      <div id="dataGridBody" class="data-grid__body"><!-- via JS --></div>
+    </div>
+  </div>
+</dialog>
+
+
+<script type="module" src="menu-lateral.js"></script>
+<script type="module" src="feiras.js"></script>
+<script>
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+    if (!btn || !aside || !back) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob){
+        setOpened(false);
+      }
+    }
+
+    // clique no hambúrguer
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    // clique no fundo escuro
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    // clique fora do menu fecha também
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+
+</body>
+</html>
+
+
