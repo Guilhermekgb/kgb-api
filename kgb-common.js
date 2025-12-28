@@ -17,6 +17,22 @@ window.__kgbAuthHeaders = function () {
   if (!token) return {};
   return { Authorization: "Bearer " + token };
 };
+// Forçar API de teste em sites Netlify (ambiente de preview/deploy rápido)
+try{
+  if (typeof window !== 'undefined'){
+    try{
+      const host = String(location.hostname || '').toLowerCase();
+      if (/\.netlify\.app$/.test(host)){
+        // força o uso da API v2 para ambientes Netlify (mais adequada para testes)
+        window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+        try{ localStorage.setItem('API_BASE', window.__API_BASE__); } catch(e){}
+      } else {
+        // mantém qualquer configuração existente no localStorage
+        window.__API_BASE__ = window.__API_BASE__ || localStorage.getItem('API_BASE') || window.__API_BASE__ || '';
+      }
+    }catch(e){}
+  }
+}catch(e){}
 /* ===== Utils base ===== */
 const has = (fn) => typeof fn === 'function';
 
@@ -33,82 +49,93 @@ const fmtBRL = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL'
 const toNum = v => (typeof v === 'number') ? v
   : (parseFloat(String(v ?? '').replace(/\./g,'').replace(',','.')) || 0);
 
-const readLS = (k, fb=null) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+// Keys relacionadas a orçamentos/leads que vamos sincronizar com a API
+const ORC_KEYS = new Set(['leads','propostasIndex','notificacoes','propostaLogs','orcamentos','produtosBuffet','usuarios']);
 
-// Shim: quando `window.storageAdapter.patchFotos` existir, espelha chamadas
-// que escrevem a key `fotosClientes` para o backend via `patchFotos`.
-// Isso permite migrar incrementalmente sem alterar centenas de arquivos.
-(function(){
-  try{
-    if (typeof window === 'undefined') return;
-    const sa = window.storageAdapter;
-    if (!sa || typeof sa.patchFotos !== 'function') return;
-    const nativeSet = window.localStorage.setItem.bind(window.localStorage);
-    window.localStorage.setItem = function(k, v){
-      try{
-        if (String(k) === 'fotosClientes'){
-          try{
-            const obj = JSON.parse(String(v || '{}')) || {};
-            // envia cada chave individualmente (patch) — não bloqueante
-            for (const kk of Object.keys(obj)){
-              try{ sa.patchFotos(kk, obj[kk]); } catch(e){ /* ignore */ }
-            }
-          } catch(e){ /* ignore malformed payload */ }
+// Leitura resiliente: por padrão usa localStorage, mas para chaves de orçamentos
+// usa sessionStorage como cache e tenta atualizar em background via API.
+const readLS = (k, fb=null) => {
+  try {
+    // se for chave de orçamentos, preferir sessionStorage (cache temporário)
+    if (ORC_KEYS.has(k)) {
+      try { const s = sessionStorage.getItem(k); if (s) return JSON.parse(s); } catch {}
+      // disparar atualização em background (não bloqueante)
+      try {
+        if (window.__API_BASE__) {
+          (async ()=>{
+            try {
+              const base = window.__API_BASE__;
+              if (k === 'leads' || k === 'propostasIndex') {
+                const r = await fetch(base + '/leads', { credentials: 'same-origin', headers: __kgbAuthHeaders() });
+                if (r.ok) {
+                  const d = await r.json();
+                  sessionStorage.setItem('leads', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
+                  // propostasIndex pode ser derivado no cliente, mas gravamos o mesmo payload
+                  sessionStorage.setItem('propostasIndex', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
+                }
+              } else if (k === 'orcamentos') {
+                const r = await fetch(base + '/orcamentos', { credentials: 'same-origin', headers: __kgbAuthHeaders() });
+                if (r.ok) {
+                  const d = await r.json();
+                  sessionStorage.setItem('orcamentos', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
+                }
+              }
+            } catch(e){}
+          })();
         }
-      } catch(e){ /* ignore shim errors */ }
-      return nativeSet(k, v);
-    };
-  } catch(e){ /* gagal silently */ }
-})();
+      } catch(e){}
+      return fb;
+    }
+    return JSON.parse(localStorage.getItem(k)) ?? fb;
+  } catch { return fb; }
+};
 
-// === Loader dinâmico para `storage-adapter` + `fotos-shim` ===
-// Carrega os scripts no bootstrap para evitar editar muitos HTML.
-// Não bloqueante: tenta `preload()` assim que o adapter estiver disponível.
-(function(){
-  try{
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
-    // Se já existe, não recarrega
-    if (window.storageAdapter && typeof window.storageAdapter.patchFotos === 'function'){
-      try{ if (typeof window.storageAdapter.preload === 'function') window.storageAdapter.preload().catch(()=>{}); }catch(e){}
+// Escrita resiliente: para chaves de orçamentos tentamos enviar para a API,
+// com fallback para sessionStorage/localStorage quando offline.
+const writeLS = (k,v)=> {
+  try {
+    if (ORC_KEYS.has(k)) {
+      // persistir em sessionStorage imediatamente
+      try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {}
+      // tentar enviar para API (fire-and-forget)
+      try {
+        if (window.__API_BASE__) {
+          const base = window.__API_BASE__;
+          if (k === 'leads') {
+            (async ()=>{
+              try {
+                // se v for array, enviar cada item via POST
+                if (Array.isArray(v)) {
+                  for (const it of v) {
+                    await fetch(base + '/leads', { method: 'POST', headers: { 'Content-Type':'application/json', ...__kgbAuthHeaders() }, body: JSON.stringify(it) });
+                  }
+                } else {
+                  await fetch(base + '/leads', { method: 'POST', headers: { 'Content-Type':'application/json', ...__kgbAuthHeaders() }, body: JSON.stringify(v) });
+                }
+              } catch(e){}
+            })();
+          } else if (k === 'orcamentos') {
+            (async ()=>{
+              try {
+                if (Array.isArray(v)) {
+                  for (const it of v) {
+                    await fetch(base + '/orcamentos', { method: 'POST', headers: { 'Content-Type':'application/json', ...__kgbAuthHeaders() }, body: JSON.stringify(it) });
+                  }
+                } else {
+                  await fetch(base + '/orcamentos', { method: 'POST', headers: { 'Content-Type':'application/json', ...__kgbAuthHeaders() }, body: JSON.stringify(v) });
+                }
+              } catch(e){}
+            })();
+          } else {
+            // outros: gravar em session e tentar um endpoint genérico se houver
+            (async ()=>{ try { await fetch(base + '/sync/storage', { method:'POST', headers: { 'Content-Type':'application/json', ...__kgbAuthHeaders() }, body: JSON.stringify({ key:k, value:v }) }); } catch(e){} })();
+          }
+        }
+      } catch(e){}
       return;
     }
-
-    const origin = (location && location.origin && location.origin !== 'null') ? location.origin : '';
-    const adapterUrl = origin ? `${origin}/kgb-api/public/api/storage-adapter.js` : './kgb-api/public/api/storage-adapter.js';
-    const shimUrl    = origin ? `${origin}/kgb-api/public/js/fotos-shim.js` : './kgb-api/public/js/fotos-shim.js';
-
-    function insertScript(src, opts={async:false, timeout:8000}){
-      return new Promise((resolve)=>{
-        try{
-          const s = document.createElement('script');
-          s.src = src;
-          s.async = !!opts.async; // prefer ordered execution
-          s.onload = () => resolve(true);
-          s.onerror = () => resolve(false);
-          // append early so browser can start fetching
-          (document.head || document.documentElement).appendChild(s);
-          // safety timeout: resolve even se não carregar
-          setTimeout(()=> resolve(false), opts.timeout || 8000);
-        }catch(e){ resolve(false); }
-      });
-    }
-
-    // Injeta o shim síncrono primeiro para garantir que páginas que dependem
-    // de leituras síncronas (`getFotosClientesSync` / `localStorage.fotosClientes`)
-    // tenham acesso imediato ao mapa, minimizando flash-of-empty-state.
-    insertScript(shimUrl, { async: false, timeout: 3000 }).then(()=>{
-      // shim carregado (ou timeout) — prossegue para tentar carregar o adapter
-    }).catch(()=>{});
-
-    // Tenta carregar adapter em seguida; quando pronto, chama preload.
-    insertScript(adapterUrl, { async: false, timeout: 8000 }).then((ok)=>{
-      try{ if (window.storageAdapter && typeof window.storageAdapter.preload === 'function') window.storageAdapter.preload().catch(()=>{}); }catch(e){}
-    }).catch(()=>{
-      // adapter não disponível — shim ainda oferece fallback local
-    });
-  }catch(e){ /* ignore */ }
-})();
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {} };
 
 /* ===== Storage Keys (padrão M30/M31) ===== */
 const K_KEYS = {
@@ -123,6 +150,67 @@ const K_KEYS = {
   FIN_CONTAS: 'fin.contas',           // [{id,nome,descricao}]  << já existe no seu Financeiro
   FIN_GLOBAL: 'financeiroGlobal'      // integração: entradas por forma na conta do evento
 };
+
+// Expor helpers globais para compatibilidade com scripts antigos
+try{
+  if (typeof window !== 'undefined') {
+    window.readLS = window.readLS || readLS;
+    window.writeLS = window.writeLS || writeLS;
+  }
+} catch(e) {}
+
+// Shim rápido: intercepta acessos diretos a localStorage para chaves de
+// orçamentos/propostas e delega para readLS/writeLS (API-first). Isso permite
+// que arquivos antigos que usam localStorage continuem funcionando sem editar
+// dezenas de arquivos agora.
+try{
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const nativeGet = window.localStorage.getItem.bind(window.localStorage);
+    const nativeSet = window.localStorage.setItem.bind(window.localStorage);
+    const nativeRemove = window.localStorage.removeItem.bind(window.localStorage);
+
+    const isOrcKey = (k) => {
+      if (!k) return false;
+      if (ORC_KEYS.has(k)) return true;
+      // prefixes commonly used in the app
+      const lower = String(k).toLowerCase();
+      if (lower.startsWith('proposta') || lower.startsWith('propostas') || lower.startsWith('orcamento') || lower.startsWith('proposta_')) return true;
+      return false;
+    };
+
+    window.localStorage.getItem = function(k){
+      try{
+        if (isOrcKey(k)){
+          const v = readLS(k, null);
+          return v === null || typeof v === 'undefined' ? null : (typeof v === 'string' ? v : JSON.stringify(v));
+        }
+      } catch(e){}
+      return nativeGet(k);
+    };
+
+    window.localStorage.setItem = function(k, v){
+      try{
+        if (isOrcKey(k)){
+          let parsed = v;
+          try { parsed = JSON.parse(v); } catch(e) { parsed = v; }
+          try { writeLS(k, parsed); return; } catch(e){}
+        }
+      } catch(e){}
+      return nativeSet(k, v);
+    };
+
+    window.localStorage.removeItem = function(k){
+      try{
+        if (isOrcKey(k)){
+          try { writeLS(k, null); } catch(e){}
+          try { sessionStorage.removeItem(k); } catch(e){}
+          return nativeRemove(k);
+        }
+      } catch(e){}
+      return nativeRemove(k);
+    };
+  }
+} catch(e){}
 
 // === Permissões: helpers de pós-render ===
 import { aplicarPermissoesNaTela, aplicarPermissoesNoMenu } from './api/proteger-pagina.js';
@@ -399,7 +487,7 @@ const isLocalhost =
   (typeof location !== 'undefined') &&
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
-// 1) Se já veio definido por config.env.js, respeita
+// 1) Se já veio definido por config.env.js, respeita (mas preferimos override salvo no localStorage)
 let base = '';
 try { base = (window.__API_BASE__ || '').trim(); } catch (e) {}
 
@@ -413,10 +501,12 @@ if (!isLocalhost && saved && (saved.includes('localhost') || saved.includes('127
   saved = '';
 }
 
-// Regra final:
-// - Online: usa config.env.js (se houver) ou DEFAULT_PROD_API
-// - Localhost: permite override salvo no localStorage (se você quiser)
-if (!base) {
+// Regra final (prioriza `saved` se disponível):
+// - Se houver `saved` explícito (ex.: via api-config.js ou localStorage), usamos ele.
+// - Caso contrário, usamos `base` (vindo de window.__API_BASE__ ou DEFAULT_PROD_API).
+if (saved) {
+  base = saved;
+} else if (!base) {
   base = (isLocalhost && saved) ? saved : DEFAULT_PROD_API;
 }
 
