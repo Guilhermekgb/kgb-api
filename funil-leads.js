@@ -37,17 +37,16 @@ function setLeadsInCache(leads) {
   const arr = Array.isArray(leads) ? leads : [];
   window.__LEADS_CACHE__ = arr;
 
-  // Cache opcional no navegador – se falhar, não quebra o sistema
+  // Mantemos apenas cache em memória; não persistir os dados dos leads no localStorage.
   try {
-    sessionStorage.setItem("leads", JSON.stringify(arr));
-    sessionStorage.setItem("leads:ping", String(Date.now()));
+    // sinaliza outras abas/janelas se suportado
     try {
       new BroadcastChannel("mrubuffet").postMessage({ type: "leads:ping", at: Date.now() });
     } catch (e) {
       // alguns navegadores não suportam BroadcastChannel, tudo bem
     }
   } catch (e) {
-    console.warn("[FUNIL] Não foi possível salvar cache de leads no localStorage (tudo bem):", e);
+    // noop
   }
 }
 
@@ -169,6 +168,47 @@ function filterLeadsByUser(leads){
 
 // Base da API (vem do patch do HTML ou do localStorage)
 const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+// --- Compat wrapper: handleRequest / apiFetch fallback
+if (!window.handleRequest) {
+  window.handleRequest = async function(path, method = 'GET', body) {
+    try {
+      // prefer window.apiFetch if available
+      if (typeof window.apiFetch === 'function') {
+        const opts = { method };
+        if (body) opts.body = body;
+        const r = await window.apiFetch(path, opts).catch(e => { throw e; });
+        return { status: r && r.status ? r.status : 200, data: r && (r.data || r) };
+      }
+
+      // fallback fetch using credentials include
+      const url = (API_BASE ? API_BASE.replace(/\/+$/, '') : '') + path;
+      const resp = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      let data = null;
+      try { data = await resp.json(); } catch(e){ data = null; }
+      return { status: resp.status, data };
+    } catch (err) {
+      return { status: err && err.status ? err.status : 0, data: err && (err.payload || { error: err.message || String(err) }) };
+    }
+  };
+}
+
+// getLeadsAll helper: always returns an array (never throws)
+if (!window.getLeadsAll) {
+  window.getLeadsAll = async function(){
+    try {
+      // use handleRequest above
+      const r = await window.handleRequest('/leads', 'GET');
+      if (r && Array.isArray(r.data)) return r.data;
+      if (r && r.data && Array.isArray(r.data.data)) return r.data.data;
+      return [];
+    } catch (e) { return []; }
+  };
+}
 /* ------------------ API: Listas Auxiliares ------------------ */
 
 // Mapeia as chaves do localStorage para os endpoints da API

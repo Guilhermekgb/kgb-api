@@ -607,7 +607,7 @@ const CHECKLIST_LINKS_FILE = 'checklist-links.json';
 
 
 // === GET /leads/:id — retorna um lead específico (por ID) ===
-app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.get('/leads/:id', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const leadId   = String(req.params.id || '').trim();
@@ -634,7 +634,7 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
   }
 });
 // === POST /leads — cria ou atualiza um lead (Módulo 7) ===
-app.post('/leads', express.json({ limit: '50mb' }), verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
 
   try {
     const tenantId = String(req.user?.tenantId || 'default');
@@ -694,6 +694,50 @@ app.post('/leads', express.json({ limit: '50mb' }), verifyFirebaseToken, ensureA
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
+  }
+});
+
+// === POST /public/leads — rota pública para criação de leads sem autenticação ===
+app.post('/public/leads', express.json({ limit: '50mb' }), (req, res) => {
+  try {
+    const body = req.body || {};
+    const tenantId = String(body.tenantId || 'default');
+
+    // validações mínimas
+    const nome = String(body.nome || '').trim();
+    const whatsapp = String(body.whatsapp || '').trim();
+    const email = String(body.email || '').trim();
+    if (!nome || (!whatsapp && !email)) {
+      return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome e (whatsapp ou email)' });
+    }
+
+    // id do lead
+    let id = String(body.id || '').trim();
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads = Array.isArray(allLeads) ? allLeads : [];
+
+    const leadBase = {
+      ...body,
+      id,
+      tenantId,
+      status: body.status || 'Novo Lead'
+    };
+
+    if (!leadBase.token) {
+      leadBase.token = (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36))) + '-' + Math.random().toString(36).slice(2, 6);
+    }
+
+    leads.push(leadBase);
+    saveJSON(LEADS_FILE, leads);
+
+    return res.status(201).json({ ok: true, lead: leadBase });
+  } catch (e) {
+    console.error('[POST /public/leads] erro:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar lead' });
   }
 });
 // ========================= CLIENTES (MÓDULO 10) =========================
@@ -1237,7 +1281,7 @@ app.post('/webhooks/assinaturas', rawJson, (req, res) => {
 // ========================= M6 – Funil de Leads: API básica =========================
 
 // GET /leads → lista leads do funil (usado no sync inicial)
-app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.get('/leads', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
 
@@ -1264,7 +1308,7 @@ app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 });
 
 // PUT /leads/:id → chamado quando você arrasta o card de coluna
-app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.put('/leads/:id', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const id = String(req.params.id || '').trim();
@@ -1302,7 +1346,7 @@ app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
 });
 
 // GET /leads/metrics → indicadores do funil (usado pelo funil-leads.js)
-app.get('/leads/metrics', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.get('/leads/metrics', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const body = req.body || {};
@@ -1614,7 +1658,7 @@ app.get('/proposta/:token', (req, res) => {
 });
 
 // POST /leads/historico → adiciona item de histórico na timeline do lead
-app.post('/leads/historico', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+app.post('/leads/historico', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const body = req.body || {};

@@ -177,14 +177,14 @@
     // utils para fallback local
     const getArr = (k) => {
       try {
-        const v = JSON.parse(localStorage.getItem(k) || '[]');
+        const v = JSON.parse(sessionStorage.getItem(k) || '[]');
         return Array.isArray(v) ? v : [];
       } catch {
         return [];
       }
     };
     const setArr = (k, v) => {
-      try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+      try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {}
     };
 
     function buildApiHeaders() {
@@ -254,8 +254,8 @@
 
       const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || '';
       const url = API_BASE ? API_BASE.replace(/\/+$/, '') + '/leads' : '';
-      let criadoNaApi = false;
-
+        const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || '';
+        const url = API_BASE ? API_BASE.replace(/\/+$, '') + '/public/leads' : '';
       if (url) {
         try {
           const resp = await fetch(url, {
