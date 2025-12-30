@@ -13,7 +13,7 @@
     // Produção (Netlify) -> API (usar mesma origem por padrão)
     var PROD_API = window.location.origin;
 
-    // Desenvolvimento local — usar same-origin (ex.: http://localhost:3333)
+    // Desenvolvimento local — usar same-origin (ex.: mesmo host/porta do navegador)
     var DEV_API  = window.location.origin;
 
     var base = (/\.netlify\.app$/.test(host)) ? PROD_API

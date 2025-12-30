@@ -7,7 +7,9 @@ function resolveApiBase(){
 
   if (window.__API_BASE__) return window.__API_BASE__;
   const host = String(location.hostname||"").toLowerCase();
-  if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3333';
+  if (host === 'localhost' || host === '127.0.0.1') {
+    try { if (window.location && window.location.origin) return window.location.origin; } catch(e) {}
+  }
   return '';
 }
 

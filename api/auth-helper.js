@@ -5,21 +5,29 @@ export function getApiBase() {
     const port = String(location.port || '');
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
 
-    if (isLocal && port === '5500') return 'http://localhost:3333';
+      // If running on local API port 3333, always use same-origin and ignore saved API_BASE
+      try {
+        const orig = (window.location && window.location.origin) ? String(window.location.origin) : '';
+        const port = (window.location && window.location.port) ? String(window.location.port) : '';
+        const hostWithPort = (window.location && window.location.hostname ? window.location.hostname : '') + (port ? ':' + port : '');
+        if (port === '3333' || orig.indexOf('localhost:3333') !== -1 || orig.indexOf('127.0.0.1:3333') !== -1 || hostWithPort === 'localhost:3333' || hostWithPort === '127.0.0.1:3333') {
+          return (window.location && window.location.origin) || '';
+        }
+      } catch (e) { /* ignore and continue */ }
 
-    if (window.__API_BASE__) return window.__API_BASE__;
-    if (window.API_BASE) return window.API_BASE;
+      // Prefer explicit runtime config or saved value
+      if (window.__API_BASE__) return window.__API_BASE__;
+      if (window.API_BASE) return window.API_BASE;
+      try {
+        const ls = localStorage.getItem('API_BASE') || '';
+        if (ls) return ls;
+      } catch (e) { /* ignore */ }
 
-    try {
-      const ls = localStorage.getItem('API_BASE') || '';
-      if (ls.includes('127.0.0.1:3333')) return 'http://localhost:3333';
-      if (ls) return ls;
-    } catch (e) { /* ignore */ }
-
-    // padrão seguro para dev local
-    return 'http://localhost:3333';
+      // Fallback to same-origin when running in browser
+      try { if (window.location && window.location.origin) return window.location.origin; } catch(e) {}
+      return '';
   } catch (e) {
-    return 'http://localhost:3333';
+    try { return (window.location && window.location.origin) || ''; } catch(err) { return ''; }
   }
 }
 

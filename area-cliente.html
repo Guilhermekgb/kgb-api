@@ -10,7 +10,7 @@
 
     // Produção (Netlify) -> API na Render
  var PROD_API = window.location.origin;
-var DEV_API  = "http://127.0.0.1:3333";
+var DEV_API = (window.__API_BASE__ || window.location.origin);
 
 
 

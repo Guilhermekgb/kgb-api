@@ -16,7 +16,7 @@
     function criarLead() {
       document.getElementById('status').textContent = 'Enviando...';
 
-      fetch("http://localhost:3333/leads", {
+      fetch((window.__API_BASE__ || window.location.origin) + "/leads", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

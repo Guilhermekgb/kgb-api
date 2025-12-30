@@ -2,19 +2,20 @@
 // Define a base da API que o frontend lê em runtime
 (function(){
   try {
-    // For tests prefer the public Render deployment. Change here if you
-    // want to override to localhost for local API testing.
-    const forced = window.location.origin;
-    try {
-      // Define as propriedade não-writable para evitar sobrescritas acidentais
-      Object.defineProperty(window, '__API_BASE__', { value: forced, writable: false, configurable: false, enumerable: true });
-      try { localStorage.setItem('API_BASE', forced); } catch (e) {}
-      console.log('[KGB] api-config loaded, forced __API_BASE__ =', window.__API_BASE__);
-    } catch (e) {
-      // Fallback: assign normally se defineProperty falhar
-      try { localStorage.setItem('API_BASE', forced); } catch (e2) {}
-      window.__API_BASE__ = forced;
-      console.log('[KGB] api-config loaded (fallback assign), __API_BASE__ =', window.__API_BASE__);
+    // If user has manually saved an API_BASE (via set-api.html), respect it.
+    // Otherwise do not force an API base here — runtime code should fall back to same-origin.
+    var saved = null;
+    try { saved = localStorage.getItem('API_BASE'); } catch (e) { saved = null; }
+    if (saved) {
+      try {
+        Object.defineProperty(window, '__API_BASE__', { value: saved, writable: false, configurable: false, enumerable: true });
+      } catch (e) {
+        window.__API_BASE__ = saved;
+      }
+      console.log('[KGB] api-config loaded, __API_BASE__ =', window.__API_BASE__);
+    } else {
+      // No saved API_BASE — leave runtime to use window.location.origin when needed.
+      console.log('[KGB] api-config loaded, no saved API_BASE; using same-origin at runtime');
     }
   } catch(e) {
     console.error('[KGB] erro ao carregar api-config.js', e);

@@ -13,7 +13,7 @@
       // Em DEV, preferimos usar location.origin quando o backend roda em :3333
       var DEV_API = (location.port === '3333')
         ? location.origin
-        : 'http://localhost:3333';
+        : (window.__API_BASE__ || window.location.origin);
 
       // Exporta helper consistente para o restante do app
       window.__getApiBase = function () {
@@ -194,7 +194,7 @@
         try {
           const maybe = (localStorage.getItem && localStorage.getItem('API_BASE')) || '';
           if (maybe && maybe.indexOf('127.0.0.1') !== -1) {
-            localStorage.setItem('API_BASE', 'http://localhost:3333');
+            // do not auto-set API_BASE from login; keep manual via set-api.html
           }
         } catch (e) { /* ignore */ }
 
