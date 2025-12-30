@@ -7,7 +7,7 @@ const puppeteer = require('puppeteer');
   const browser = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] });
   const page = await browser.newPage();
   // Ensure pages see the forced API base before any script runs
-  const forced = process.env.FORCED_API_BASE || 'https://kgb-api-v2.onrender.com';
+  const forced = process.env.FORCED_API_BASE || process.env.API_BASE || 'http://127.0.0.1:3333';
   await page.evaluateOnNewDocument((f) => {
     try { localStorage.setItem('API_BASE', f); } catch(e) {}
     try { window.__API_BASE__ = f; } catch(e) {}

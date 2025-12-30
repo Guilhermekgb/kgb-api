@@ -1,5 +1,5 @@
 (async()=>{
-  const base = process.env.API_BASE || 'https://kgb-api-v2.onrender.com';
+  const base = process.env.API_BASE || 'http://127.0.0.1:3333';
   console.log('API_BASE=', base);
   try {
     let r = await fetch(base + '/leads');

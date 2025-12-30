@@ -10,8 +10,8 @@
   var is3333 = String(location.port || '') === '3333';
   var host = String(location.hostname||"").toLowerCase();
 
-  var PROD_API = "https://kgb-api.onrender.com";
-  var DEV_API  = "http://localhost:3333";
+  var PROD_API = window.location.origin;
+  var DEV_API  = window.location.origin;
 
   var base = is3333 ? location.origin
            : (/\.netlify\.app$/.test(host)) ? PROD_API

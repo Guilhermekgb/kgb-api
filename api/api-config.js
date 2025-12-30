@@ -4,7 +4,7 @@
   try {
     // For tests prefer the public Render deployment. Change here if you
     // want to override to localhost for local API testing.
-    const forced = 'https://kgb-api-v2.onrender.com';
+    const forced = window.location.origin;
     try {
       // Define as propriedade não-writable para evitar sobrescritas acidentais
       Object.defineProperty(window, '__API_BASE__', { value: forced, writable: false, configurable: false, enumerable: true });

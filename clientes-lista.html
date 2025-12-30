@@ -18,10 +18,10 @@
     var host = String(location.hostname||"").toLowerCase();
 
     // Produção (Netlify) -> API na Render
-    var PROD_API = "https://kgb-api.onrender.com";
+    var PROD_API = window.location.origin;
 
    // Desenvolvimento local (vamos usar a mesma API da Render)
-var DEV_API  = "https://kgb-api.onrender.com";
+var DEV_API  = window.location.origin;
 
 
     var base = (/\.netlify\.app$/.test(host)) ? PROD_API

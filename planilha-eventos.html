@@ -276,7 +276,7 @@
     // Se mudar o endereço do servidor no futuro (ex: em produção),
     // basta trocar essa linha:
     // se quiser, use direto assim:
-    const API_BASE = 'https://kgb-api.onrender.com';
+    const API_BASE = window.__API_BASE__ || window.location.origin;
 
 
     // ===== Helpers =====

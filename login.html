@@ -7,8 +7,8 @@
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
   <script>
     (function(){
-      // Produção (Netlify) -> API na Render
-      var PROD_API = "https://kgb-api.onrender.com";
+      // Produção (Netlify) -> API na Render (usar mesma origem por padrão)
+      var PROD_API = window.location.origin;
 
       // Em DEV, preferimos usar location.origin quando o backend roda em :3333
       var DEV_API = (location.port === '3333')

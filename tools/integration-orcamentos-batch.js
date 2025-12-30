@@ -1,5 +1,5 @@
 (async()=>{
-  const base = 'https://kgb-api-v2.onrender.com';
+  const base = process.env.API_BASE || 'http://127.0.0.1:3333';
   const results = { created:0, updated:0, errors:[] };
   const wait = ms => new Promise(r=>setTimeout(r,ms));
   for(let i=0;i<10;i++){

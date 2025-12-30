@@ -11,10 +11,10 @@
     var host = String(location.hostname||"").toLowerCase();
 
     // Produção (Netlify) -> API na Render
-    var PROD_API = "https://kgb-api.onrender.com";
+    var PROD_API = window.location.origin;
 
     // Desenvolvimento local
-    var DEV_API  = "http://127.0.0.1:3333";
+    var DEV_API  = window.location.origin;
 
     var base = (/\.netlify\.app$/.test(host)) ? PROD_API
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
@@ -35,7 +35,7 @@
 
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="stylesheet" href="/menu-lateral.css" />
   <style>
     :root{
       --bg:#f6f1e9; --surface:#fff; --line:#eadfd1; --ink:#2f2a25; --muted:#7a7066;
@@ -161,7 +161,8 @@
   </style>
 </head>
 <body>
-<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+  <div id="menuLateralMount"></div>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
 <div class="wrapper">
   <aside id="menuLateral"></aside>
   <main>
@@ -441,5 +442,11 @@ try{
 
 
   <script src="/api/api-fetch.js"></script>
+  <script src="/menu-lateral.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.initMenuLateral) window.initMenuLateral({ mountId: 'menuLateralMount' });
+    });
+  </script>
 </body>
 </html>

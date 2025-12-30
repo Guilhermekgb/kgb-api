@@ -84,7 +84,7 @@
   };
 
   // === Base do microserviço de contratos + sender ===
-  window.CONTRACTS_BASE = window.__CONTRACTS_BASE__ || window.CONTRACTS_BASE || 'https://kgb-contracts.onrender.com';
+  window.CONTRACTS_BASE = window.__CONTRACTS_BASE__ || window.CONTRACTS_BASE || window.location.origin;
 
   async function sendToZapSign(payload){
     const base = (typeof window.CONTRACTS_BASE === 'string' && window.CONTRACTS_BASE) ? window.CONTRACTS_BASE : '';

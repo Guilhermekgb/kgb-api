@@ -38,7 +38,7 @@
 
   // Chama a API para criar a cobrança
   async function apiCriarCobrancaOnline(body) {
-    const base = getApiBase();          // ex.: https://kgb-api.onrender.com
+    const base = getApiBase();          // ex.: same-origin (window.__API_BASE__)
     const url  = base + '/api/integracoes/payments/cobranca';
 
     // Se o projeto estiver usando handleRequest, aproveita

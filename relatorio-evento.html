@@ -14,10 +14,10 @@
       var host = String(location.hostname||"").toLowerCase();
 
       // Produção (Netlify) -> API na Render
-      var PROD_API = "https://kgb-api.onrender.com";
+      var PROD_API = window.location.origin;
 
       // Desenvolvimento local
-      var DEV_API  = "http://127.0.0.1:3333";
+      var DEV_API  = window.location.origin;
 
       var base = (/\.netlify\.app$/.test(host)) ? PROD_API
                : (host === "localhost" || host === "127.0.0.1") ? DEV_API

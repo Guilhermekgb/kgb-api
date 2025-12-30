@@ -392,7 +392,7 @@ export function fecharSessao(sessaoId){
 /* === INÍCIO PATCH FASE F — API BASE + apiFetch (fica no final do arquivo) === */
 (function(){
   // 1) Define e expõe a base da API (Render em produção)
-const DEFAULT_PROD_API = 'https://kgb-api.onrender.com';
+const DEFAULT_PROD_API = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'http://127.0.0.1:3333';
 
 // Detecta se está rodando local (VS Code/Live Server) ou online (Netlify)
 const isLocalhost =

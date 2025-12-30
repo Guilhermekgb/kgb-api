@@ -62,56 +62,66 @@ function persistLead(l){ persistLeadsArray([l]); }
 const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
 
 async function salvarLeadNaApi(novoLead) {
-  if (!API_BASE) return null; // se não tiver API configurada, não faz nada
+  const base = window.__API_BASE__ || API_BASE || "";
+  if (!base) return null;
 
   try {
-    const resp = await fetch(`${API_BASE}/leads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    // usa window.apiFetch quando disponível (serializa body automaticamente)
+    if (window.apiFetch) {
+      const payload = await window.apiFetch(base + '/leads', { method: 'POST', body: novoLead });
+      return payload?.data || payload || null;
+    }
+
+    // fallback: fetch com credentials para enviar cookie httpOnly
+    const resp = await fetch(base + '/leads', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(novoLead)
     });
 
     if (!resp.ok) {
-      console.warn("[ORÇAMENTO] Erro ao salvar lead na API:", resp.status);
+      console.warn('[ORÇAMENTO] Erro ao salvar lead na API:', resp.status);
       return null;
     }
 
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-
-    // sua API provavelmente devolve algo tipo { data: { id, token, ... } }
     return data?.data || data || null;
   } catch (e) {
-    console.warn("[ORÇAMENTO] Falha ao chamar /leads:", e);
+    console.warn('[ORÇAMENTO] Falha ao chamar /leads:', e);
     return null;
   }
 }
+
 // === API – salvar orçamento no backend ===
 async function salvarOrcamentoNaApi(leadId, dadosOrcamento) {
-  if (!API_BASE || !leadId) return null;
+  const base = window.__API_BASE__ || API_BASE || "";
+  if (!base || !leadId) return null;
 
   try {
-    const resp = await fetch(`${API_BASE}/orcamentos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        leadId: String(leadId),
-        dados: dadosOrcamento
-      })
+    if (window.apiFetch) {
+      const payload = await window.apiFetch(base + '/orcamentos', { method: 'POST', body: { leadId: String(leadId), dados: dadosOrcamento } });
+      return payload?.orcamento || payload || null;
+    }
+
+    const resp = await fetch(base + '/orcamentos', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId: String(leadId), dados: dadosOrcamento })
     });
 
     if (!resp.ok) {
-      console.warn("[ORÇAMENTO] Erro ao salvar orçamento na API:", resp.status);
+      console.warn('[ORÇAMENTO] Erro ao salvar orçamento na API:', resp.status);
       return null;
     }
 
     let data = null;
     try { data = await resp.json(); } catch { data = null; }
-
-    // nossa API de /orcamentos devolve algo tipo { ok:true, orcamento:{...} }
     return data?.orcamento || data || null;
   } catch (e) {
-    console.warn("[ORÇAMENTO] Falha ao chamar /orcamentos:", e);
+    console.warn('[ORÇAMENTO] Falha ao chamar /orcamentos:', e);
     return null;
   }
 }

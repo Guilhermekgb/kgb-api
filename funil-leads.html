@@ -4,7 +4,7 @@
   <meta name="page-permission" content="page:funil-leads.html">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="api-base" content="https://kgb-api.onrender.com">
+<meta name="api-base" content="">
 
 
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
@@ -12,11 +12,11 @@
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
-    // Produção (Netlify) -> API na Render
-    var PROD_API = "https://kgb-api.onrender.com";
+    // Produção (Netlify) -> API (usar mesma origem por padrão)
+    var PROD_API = window.location.origin;
 
     // Desenvolvimento local
-   var DEV_API  = "https://kgb-api.onrender.com"; // usar sempre a nuvem
+  var DEV_API  = window.location.origin; // use same-origin during local development
 
 
     var base = (/\.netlify\.app$/.test(host)) ? PROD_API

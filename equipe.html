@@ -10,8 +10,8 @@
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
-    // Produção (Netlify) -> API na Render
-    var PROD_API = "https://kgb-api.onrender.com";
+    // Produção (Netlify) -> API (usar mesma origem por padrão)
+    var PROD_API = window.location.origin;
 
     // Desenvolvimento local
     var DEV_API  = "http://127.0.0.1:3333";

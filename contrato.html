@@ -9,7 +9,7 @@
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
-    var PROD_API = "https://kgb-api.onrender.com";
+    var PROD_API = window.location.origin;
    var DEV_API  = "http://127.0.0.1:3333";
 
 
@@ -306,7 +306,9 @@
     if (typeof apiFetch === 'function') {
       ev = await apiFetch(`/api/eventos/${eventId}`);
     } else {
-      const r = await fetch(`https://kgb-api.onrender.com/api/eventos/${eventId}`);
+      const base = (window.__API_BASE__ || '').replace(/\/+$/,'');
+      const url = (base || '') + `/api/eventos/${eventId}`;
+      const r = await fetch(url, { credentials: 'same-origin' });
       ev = await r.json();
     }
 
