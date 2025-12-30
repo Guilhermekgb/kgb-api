@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  kgb-api:
+    build: .
+    ports:
+      - "3333:3333"
+    environment:
+      - NODE_ENV=production
+      - PORT=3333
+    volumes:
+      - ./data:/usr/src/app/data
+    restart: unless-stopped

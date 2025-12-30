@@ -1,0 +1,33 @@
+feat: S3 presign uploads + local fallback for fotosClientes
+
+Resumo
+- Adiciona suporte opcional a uploads via presigned S3 URLs.
+- Endpoint: `POST /fotos-clientes/presign` -> retorna `{ presignUrl, publicUrl }` quando as variáveis AWS estiverem configuradas.
+- Fallback local: `POST /fotos-clientes/upload` grava em `public/uploads/<tenant>/...` e retorna URL local.
+- Cliente: `public/api/storage-adapter.js` tenta presign -> PUT direto no S3; se falhar, faz upload ao endpoint local.
+- Quando o frontend enviar `PATCH /fotos-clientes` com `value: null`, o servidor remove o arquivo local (se apontava para `public/uploads/...`) e dispara exclusão assíncrona no S3 se a URL pertencer ao bucket configurado.
+
+Files changed (principais):
+- `server.js` (novos endpoints `/fotos-clientes/presign` e lógica para remoção de arquivos em null)
+- `public/api/storage-adapter.js` (fluxo presign + fallback upload)
+- `package.json` (dependências AWS SDK adicionadas)
+- `docs/cloud-poc.md` (documentação atualizada)
+- `tests/delete-local-file-test.js` (novo teste que valida remoção local)
+
+Checklist antes de mesclar / deploy
+- [ ] Adicionar GitHub Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET`, `AWS_REGION` (se quiser habilitar S3 em CI/produção).
+- [ ] Verificar IAM policy mínima para PUT/Delete no bucket (recomendado: role com acesso restrito ao prefix).
+- [ ] Rodar `npm ci` no CI (atualizei `package.json`; lockfile local já atualizado).
+- [ ] Executar `scripts/run-tests-clean.ps1` em dev (use `DISABLE_AUTH=1` para testes locais).
+- [ ] (Opcional) Habilitar CDN/CloudFront para servir imagens em produção.
+
+Notas técnicas
+- A exclusão S3 é fire-and-forget e loga falhas no servidor; o mapa é atualizado para `null` mesmo se a deleção falhar.
+- O fluxo é incremental e backward-compatible: o frontend continua funcionando com `localStorage` enquanto o adapter tenta sincronizar para o backend.
+
+Como criar o PR
+1. Abra: https://github.com/Guilhermekgb/kgb-api/pull/new/feat/s3-presign
+2. Cole o título e o corpo acima (ou use `PR_BODY.txt` neste branch) e clique em "Create pull request".
+
+--
+Gerado automaticamente pela rotina de migração para uploads em nuvem (POC -> S3 presign).

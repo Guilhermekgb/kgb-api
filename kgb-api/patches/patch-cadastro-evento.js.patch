@@ -1,0 +1,25 @@
+*** Patch: cadastro-evento.js — Avoid synchronous localStorage reads for fotosClientes
+
+Resumo:
+- Removida a leitura direta de `localStorage.getItem('fotosClientes')` do runtime.
+- `getFotosMap()` agora prefere, em ordem: `getFotosClientesSync()`, `window.__FOTOS_CLIENTES_PRELOAD__`, `storageAdapter.getRaw('fotosClientes')` e, por fim, retorna um `{}` vazio para evitar leituras síncronas e flashes de UI.
+
+Nova implementação (trecho a ser aplicado manualmente no arquivo raiz `cadastro-evento.js`):
+
+function getFotosMap() {
+  try {
+    if (typeof getFotosClientesSync === 'function') return getFotosClientesSync();
+    if (window.__FOTOS_CLIENTES_PRELOAD__) return window.__FOTOS_CLIENTES_PRELOAD__;
+    if (typeof storageAdapter !== 'undefined' && storageAdapter.getRaw) {
+      const raw = storageAdapter.getRaw('fotosClientes');
+      try { return raw && typeof raw === 'string' ? JSON.parse(raw) : (raw || {}); } catch { /* fallthrough */ }
+    }
+    // Avoid synchronous localStorage fallback; return empty map instead
+    return {};
+  }
+  catch { return {}; }
+}
+
+Notas:
+- Isto preserva o comportamento do shim (`getFotosClientesSync`) e do adapter em memória.
+- Se desejar que eu aplique este patch diretamente ao repositório raiz eu posso (mas o arquivo original está fora do repo `kgb-api`).

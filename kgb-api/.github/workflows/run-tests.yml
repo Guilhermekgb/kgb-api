@@ -1,0 +1,33 @@
+name: Run tests (Windows PowerShell)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-tests-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        shell: pwsh
+
+      - name: Show Node version
+        run: node -v
+
+      - name: Run tests (PowerShell)
+        shell: pwsh
+        run: |
+          Write-Host "Running run-tests-clean.ps1"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-tests-clean.ps1

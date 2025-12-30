@@ -1,0 +1,80 @@
+name: Cloud Migration (dry run)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  dry-run:
+    name: Dry-run on chore/cloud-migration-ready
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/chore/cloud-migration-ready'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install optional deps
+        run: |
+          cd kgb-api || exit 0
+          if [ -f package.json ]; then npm ci; fi
+
+      - name: Dry-run codemod
+        run: |
+          cd kgb-api
+          node scripts/replace-fotos-urls.js
+        shell: bash
+
+      - name: Run smoke tests (dry)
+        run: |
+          cd kgb-api || exit 0
+          if [ -f tests/headless-inject-and-checks.js ]; then
+            # run tests without secrets; they will act in dry mode
+            node tests/headless-inject-and-checks.js || true
+          else
+            echo "No smoke tests found"
+          fi
+        shell: bash
+
+      - name: Upload reports artifact (if any)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-migration-dry-reports
+          path: |
+            kgb-api/reports/**
+            kgb-api/data/fotos-clientes-cloud-ready.json
+
+      - name: Finish
+        run: echo "Migration dry-run complete (no uploads performed)"
+name: Cloud Migration (dry run)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install optional deps
+        run: |
+          cd kgb-api || exit 0
+          if [ -f package.json ]; then npm ci; fi
+      - name: Dry-run codemod
+        run: |
+          cd kgb-api
+          node scripts/replace-fotos-urls.js
+        shell: bash
+      - name: Prepare migration artifact (no secrets used)
+        run: |
+          echo "Migration dry-run complete"

@@ -1,0 +1,22 @@
+*** Patch: lista-evento.html — Prefer shim/preload/adapter for fotosClientes
+
+Resumo:
+- Simplifica a função que resolve o mapa `fotosClientes` para seguir esta ordem:
+  1) `getFotosClientesSync()` (shim) — acesso síncrono imediato quando disponível
+  2) `window.__FOTOS_CLIENTES_PRELOAD__` — preload feito pelo shim
+  3) `window.storageAdapter.getRaw('fotosClientes')` — leitura do cache em memória
+  4) fallback: `{}` (evita leituras síncronas do `localStorage`)
+
+Trecho sugerido (já aplicado localmente):
+
+const map = (function(){
+  try{
+    if (typeof getFotosClientesSync === 'function') return getFotosClientesSync();
+    if (window.__FOTOS_CLIENTES_PRELOAD__ && typeof window.__FOTOS_CLIENTES_PRELOAD__ === 'object') return window.__FOTOS_CLIENTES_PRELOAD__;
+    if (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function'){
+      const r = window.storageAdapter.getRaw('fotosClientes');
+      return r ? (typeof r === 'string' ? JSON.parse(r) : r) : {};
+    }
+  }catch(e){ }
+  return {};
+})();

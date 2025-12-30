@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  
+<meta name="page-permission" content="page:lista-evento.html">
+
+  <meta charset="UTF-8" />
+  <title>Lista de Eventos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais (precisa vir antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard / RBAC -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  if (meta?.content) guard({ permissao: meta.content });
+  aplicarPermissoesNaTela();
+</script>
+
+  <!-- Favicon inline para evitar 404 -->
+  <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%23fff8f0"/><path d="M32 11a9 9 0 1 1 0 18a9 9 0 0 1 0-18Zm0 21c10 0 18 8 18 18H14c0-10 8-18 18-18Z" fill="%23c29a5d"/></svg>' />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Seus CSS globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#faf7f2; --surface:#fff; --ink:#2f2a25; --muted:#7a7066; --line:#eadfd1;
+      --brand:#c29a5d; --brand-900:#9f7b45; --danger:#c94b4b;
+      --radius:12px; --shadow:0 3px 12px rgba(0,0,0,.05);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; height:100%; background:var(--bg); color:var(--ink);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; background:#5C4033; height:100vh; overflow:auto; }
+    main.conteudo-principal{ flex:1; height:100vh; overflow:auto; padding:28px; }
+    .conteudo-central{ max-width:1100px; margin:0 auto; }
+
+    h1{
+      font-family:"Playfair Display", Georgia, serif;
+      font-weight:600; color:#3f3024; letter-spacing:.2px;
+      display:flex; align-items:center; gap:10px; margin:0 0 14px;
+    }
+
+    /* Busca + chips por ano */
+    .toolbar{ display:grid; grid-template-columns:1fr; gap:10px; margin-bottom:12px; }
+    .field{ position:relative; }
+    .field input{
+      width:100%; padding:10px 12px 10px 38px; font-size:14px; font-weight:400;
+      border:1px solid var(--line); border-radius:10px; background:#fff; outline:none;
+    }
+    .field input:focus{ border-color:var(--brand); box-shadow:0 0 0 3px rgba(194,154,93,.12); }
+    .field .icon{ position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#9a8a7d; }
+
+    .anos{ display:flex; flex-wrap:wrap; gap:8px; }
+    .pill{ background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 10px;
+      font-size:12px; color:#4a3c31; font-weight:400; }
+
+    /* LISTA */
+    .cardlist{ background:var(--surface); border:1px solid var(--line); border-radius:12px;
+      box-shadow:var(--shadow); overflow:hidden; }
+
+    .head{ display:grid; grid-template-columns: 72px 1.4fr 140px 1.2fr 120px 1fr; gap:8px;
+      padding:10px 14px; background:#fffdf7; color:#6b5c50; font-size:12px; border-bottom:1px solid var(--line); }
+    .head .h-actions{ text-align:right; }
+    .cardlist.no-pend .head .h-pend { display:none; }
+    .cardlist.no-pend .head{ grid-template-columns: 72px 1.6fr 140px 1.4fr 120px; }
+
+    .row{ padding:12px 14px; border-top:1px solid #f1e8da; }
+    .row:nth-child(odd){ background:#fff; } .row:nth-child(even){ background:#fffdfb; }
+    .row:hover{ background:#fffaf1; }
+
+    .row-main{
+      display:grid;
+      grid-template-columns: 72px 1.4fr 140px 1.2fr 120px 1fr; /* foto | nome | data | local | convidados | pendências */
+      align-items:center; gap:8px;
+    }
+    .cardlist.no-pend .row-main{ grid-template-columns: 72px 1.6fr 140px 1.4fr 120px; }
+
+    .media{ width:72px; height:72px; border-radius:12px; overflow:hidden; border:1px solid var(--line);
+      display:grid; place-items:center; background:#fff; }
+    .media img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .media .ph i{ opacity:.55; }
+
+    .title{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.name{ color:#2f2a25; font-size:15px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.meta{ color:var(--muted); font-size:12px; }
+
+
+    .cell{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:400; }
+    .cell i{ margin-right:6px; }
+
+    .pend{ display:flex; gap:6px; align-items:center; justify-self:start; flex-wrap:wrap; }
+    .tag{
+      display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:4px 8px; border-radius:999px;
+      background:#fff; border:1px dashed #e7d9c7; color:#6b5c50; cursor:pointer;
+    }
+    .tag:hover{ border-style:solid; }
+    .tag i{ width:14px; height:14px; }
+
+    .row-actions{
+      display:flex; gap:8px; justify-content:flex-end; align-items:center;
+      padding-top:10px; border-top:1px dashed #efe4d4; margin-top:10px; flex-wrap:wrap;
+    }
+    /* CHIP do responsável (NOVO) */
+    .resp-chip{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 10px; border:1px solid #e9dfd6; border-radius:999px;
+      background:#fffdfa; color:#6b5c50; font-size:12px;
+    }
+    .resp-chip i{ width:15px; height:15px; color:#8f7b6c; }
+
+    .btn{
+      display:inline-flex; align-items:center; gap:8px; border:none; cursor:pointer;
+      background:var(--brand); color:#fff; border-radius:10px; padding:8px 14px; font-size:13px; font-weight:500;
+    }
+    .btn:hover{ background:var(--brand-900); }
+    .btn.del{ background:var(--danger); }
+
+    /* Mobile */
+    #hamburguer{ display:none; }
+    @media (max-width: 900px){
+      #hamburguer{ display:block; position:fixed; top:12px; left:12px; z-index:1001;
+        background:var(--brand); color:#fff; border:none; font-size:22px; padding:6px 10px; border-radius:8px; }
+      #menuLateral{ position:fixed; transform:translateX(-100%); transition:.3s ease; z-index:999; width:260px; }
+      #menuLateral.aberto{ transform:translateX(0); }
+      main.conteudo-principal{ padding:20px; }
+
+      .head{ display:none; }
+      .row-main{ grid-template-columns: 56px 1fr; grid-template-areas:
+        "foto titulo"
+        "foto data"
+        "foto local"
+        "foto convidados"
+        "foto pend";
+      }
+      .media{ grid-area:foto; width:56px; height:56px; border-radius:10px; }
+      .title{ grid-area:titulo; }
+      .cell.date{ grid-area:data; }
+      .cell.local{ grid-area:local; }
+      .cell.guests{ grid-area:convidados; }
+      .pend{ grid-area:pend; }
+      .row-actions{ justify-content:flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="calendar"></i> Lista de Eventos</h1>
+
+        <div class="toolbar">
+          <label class="field">
+            <span class="icon"><i data-lucide="search"></i></span>
+            <input id="busca" type="text" placeholder="Buscar por nome, data (dd/mm/aaaa), local..." />
+          </label>
+          <!-- Chips por ano -->
+          <div id="resumoAnos" class="anos" aria-live="polite"></div>
+        </div>
+
+        <!-- LISTA -->
+        <section id="listContainer" class="cardlist" aria-live="polite">
+          <div class="head">
+            <div></div>
+            <div>Evento</div>
+            <div>Data</div>
+            <div>Local</div>
+            <div>Convidados</div>
+            <div class="h-pend">Pendências</div>
+          </div>
+          <div id="listaEventos"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+ <script>
+"use strict";
+
+/* ==== Config da API (igual aos outros módulos) ==== */
+const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
+
+function callApi(endpoint, method = 'GET', body = {}) {
+  return import('./api/routes.js').then(({ handleRequest }) =>
+    new Promise(resolve =>
+      handleRequest(endpoint, { method, body }, resolve)
+    )
+  );
+}
+
+/* ==== Fallback seguro para salvar eventos localmente ==== */
+if (typeof window.safeSaveEventos !== "function") {
+  window.safeSaveEventos = function (arr) {
+    try {
+      // tenta salvar completo
+      localStorage.setItem("eventos", JSON.stringify(arr));
+      try { localStorage.setItem("eventosBackup", JSON.stringify(arr)); } catch {}
+      try { localStorage.setItem("eventos:ping", String(Date.now())); } catch {}
+    } catch (e) {
+      try {
+        // salva versão “leve” se a quota estourar
+        const slim = (arr || []).map(ev => {
+          const c = { ...ev };
+          delete c.anexos; delete c.arquivos; delete c.fotos; delete c.imagens;
+          delete c.contratoHtml; delete c.contratoPdf;
+          return c;
+        });
+        localStorage.setItem("eventos", JSON.stringify(slim));
+        try { localStorage.setItem("eventosBackup", JSON.stringify(slim)); } catch {}
+        try { localStorage.setItem("eventos:ping", String(Date.now())); } catch {}
+      } catch (e2) {
+        console.warn("Falha ao persistir 'eventos':", e2);
+      }
+    }
+  };
+}
+
+/* === SANITIZADOR DE EVENTOS (com migração de IDs) === */
+function lerEventosSanitizados() {
+  let arr = [];
+  try { arr = JSON.parse(localStorage.getItem("eventos") || "[]"); } catch {}
+  if (!Array.isArray(arr)) arr = [];
+
+  // fallback: tenta backups “light”
+  try {
+    if (!arr.length) {
+      const light = JSON.parse(localStorage.getItem("eventos:light") || "[]");
+      const bak   = JSON.parse(localStorage.getItem("eventosBackup") || "[]");
+      arr = [].concat(Array.isArray(light) ? light : [], Array.isArray(bak) ? bak : []);
+    }
+  } catch {}
+
+  // MIGRAÇÃO: garante id para legados
+  let mudou = false;
+  arr = arr.map((e, i) => {
+    const temId = String(e?.id || "").trim().length > 0;
+    if (temId) return e;
+    const base = (e?.criadoEm || e?.data || e?.dataEvento || e?.dataDoEvento || Date.now())
+      .toString()
+      .replace(/\D/g, "")
+      .slice(0, 14);
+    const novo = { ...e, id: `legacy_${base}_${i}` };
+    mudou = true;
+    return novo;
+  });
+
+  // se migrou algo, persiste de volta
+  if (mudou) {
+    try {
+      localStorage.setItem("eventos", JSON.stringify(arr));
+      localStorage.setItem("eventosBackup", JSON.stringify(arr));
+      try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+    } catch {}
+  }
+
+  // dedup por id
+  const seen = new Set();
+  arr = arr.filter(e => {
+    const id = String(e?.id ?? "").trim();
+    if (!id) return false;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  return arr;
+}
+
+/* ===== Datas ===== */
+function parseDataBrOuIso(s) {
+  const v = String(s || "").trim();
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [Y, M, D] = v.split("-");
+    return new Date(+Y, +M - 1, +D);
+  }
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function dataDoEvento(ev) {
+  return parseDataBrOuIso(ev?.data || ev?.dataEvento || ev?.dataDoEvento || "");
+}
+
+function ddmmyyyy(s) {
+  const d = (s instanceof Date) ? s : parseDataBrOuIso(s);
+  if (!d) return "—";
+  return String(d.getDate()).padStart(2, '0') + "/" +
+         String(d.getMonth() + 1).padStart(2, '0') + "/" +
+         d.getFullYear();
+}
+
+/* ===== Foto salva no cadastro ===== */
+function getFotoURL(ev) {
+  try {
+    // 1) preferir a foto salva direto no evento
+    let url = ev?.fotoCliente || "";
+
+    // 2) senão, procurar no mapa 'fotosClientes'
+    if (!url) {
+      const map = (function(){
+        try{
+          if (typeof getFotosClientesSync === 'function') return getFotosClientesSync();
+          if (window.__FOTOS_CLIENTES_PRELOAD__ && typeof window.__FOTOS_CLIENTES_PRELOAD__ === 'object') return window.__FOTOS_CLIENTES_PRELOAD__;
+          if (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function'){
+            const r = window.storageAdapter.getRaw('fotosClientes');
+            return r ? (typeof r === 'string' ? JSON.parse(r) : r) : {};
+          }
+        }catch(e){ /* ignore and fallback */ }
+        return {};
+      })();
+      const keys = [];
+      if (ev?.fotoClienteKey) keys.push(ev.fotoClienteKey);
+      if (ev?.clienteId)      keys.push(`id:${ev.clienteId}`);
+      if (ev?.nomeCliente)    keys.push(`nome:${String(ev.nomeCliente).trim().toLowerCase()}`);
+      for (const k of keys) {
+        const rec = map[k];
+        if (!rec) continue;
+        url = (typeof rec === "string") ? rec : (rec.dataURL || rec.url || rec.data || "");
+        if (url) break;
+      }
+    }
+
+    // 3) sanear/validar
+    url = String(url || "").trim();
+    if (!url) return "";
+
+    // bloquear strings estranhas
+    const suspeita = /^(C:\\|file:|about:|javascript:)|omitido|^\w+$/i.test(url);
+    if (suspeita) return "";
+
+    // aceitar apenas: data:image, blob:, http(s)://, e caminhos absolutos do site (/imagens/...)
+    const okProto = /^(data:image\/|blob:|https?:\/\/|\/)/i.test(url);
+    if (!okProto) return "";
+
+    // se for http(s), exigir extensão típica de imagem (ou query sem extensão tudo bem)
+    if (/^https?:\/\//i.test(url)) {
+      const semQuery = url.split("?")[0].toLowerCase();
+      const temExt = /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(semQuery);
+      if (!temExt && !url.includes("?")) return "";
+    }
+
+    return url;
+  } catch {
+    return "";
+  }
+}
+
+function hojeZero() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/* ===== Pendências ===== */
+function getDateAny(x) {
+  if (!x) return null;
+  if (x instanceof Date) return isNaN(x) ? null : x;
+  const s = String(x).trim();
+  let m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?$/);
+  if (m) {
+    const [, dd, mm, yyyy, hh = "0", mi = "0"] = m;
+    return new Date(+yyyy, +mm - 1, +dd, +hh, +mi);
+  }
+  const iso = s.includes('T') ? s : s.replace(' ', 'T');
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function temPendenciaContrato(ev) {
+  try {
+    const st = String(ev.contratoStatus || ev.statusContrato || "").toLowerCase();
+    if (st && !["completo", "assinado", "assinado pelas partes", "finalizado", "concluido"].includes(st)) return true;
+
+    const docs = Array.isArray(ev.documentos) ? ev.documentos : [];
+    const doc = docs.find(d => String(d.categoria || d.tipo || "").toLowerCase().includes("contrato"));
+    if (doc) {
+      const stDoc = String(doc.status || doc.meta?.statusAssinatura || "").toLowerCase();
+      if (stDoc && !["assinado", "completo", "completa", "finalizado", "concluido"].includes(stDoc)) return true;
+
+      const faltas = +(doc.assinaturasPendentes || doc.pendentes || 0);
+      if (faltas > 0) return true;
+
+      if (Array.isArray(doc.assinaturas)) {
+        const allOk = doc.assinaturas.every(a => !!(a.assinado || a.ok || a.concluido));
+        if (!allOk) return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+function temPendenciaFinanceiro(ev) {
+  try {
+    const f = ev.financeiro || {};
+    const today = hojeZero();
+
+    const isPaid = (it) => {
+      const st = String(it.status || it.situacao || "").toLowerCase();
+      if (["pago", "quitado", "liquidado", "concluido"].includes(st)) return true;
+      return !!(it.pago || it.baixado || it.liquidado || it.quitado || it.baixaEfetuada);
+    };
+
+    const due = (it) => {
+      const keys = ["vencimento", "dataVencimento", "venc", "vencPrevisto", "dataPrevista", "data", "due", "dueDate"];
+      for (const k of keys) {
+        const d = getDateAny(it[k]);
+        if (d) return d;
+      }
+      return null;
+    };
+
+    const anyOverdue = (arr) => {
+      if (!Array.isArray(arr)) return false;
+      return arr.some(it => {
+        const dt = due(it);
+        return dt && dt < today && !isPaid(it);
+      });
+    };
+
+    if (
+      anyOverdue(f.lancamentos) ||
+      anyOverdue(f.receber) || anyOverdue(f.pagar) ||
+      anyOverdue(f.contasReceber) || anyOverdue(f.contasPagar) ||
+      anyOverdue(f.parcelas) || anyOverdue(f.recebimentos) || anyOverdue(f.pagamentos)
+    ) {
+      return true;
+    }
+
+    const agg = ["valorPendente", "totalPendente", "saldoPendente", "receberEmAtraso", "totalReceberEmAtraso"];
+    for (const k of agg) if ((+f[k] || 0) > 0) return true;
+
+  } catch {}
+  return false;
+}
+
+function temPendenciaChecklist(ev) {
+  try {
+    const hj = hojeZero();
+    const itens = Array.isArray(ev.checklist) ? ev.checklist : [];
+    return itens.some(i => {
+      const ok = !!(i.concluido || i.done || i.ok);
+      const prazo = getDateAny(i.prazo || i.dataLimite || i.data || i.vencimento);
+      return !ok && prazo && prazo < hj;
+    });
+  } catch {}
+  return false;
+}
+
+function temPendenciaEscala(ev) {
+  const resp = ev.responsavelEquipe || ev.responsavelEvento || ev.responsavel || ev.coordenador;
+  return !String(resp || "").trim();
+}
+
+function temPendenciaEquipe(ev) {
+  const grupos = [
+    ev.equipe, ev.equipeEscalada, ev.escalas, ev.escalados, ev.colaboradores, ev.staff, ev.equipePrincipal
+  ].filter(Array.isArray);
+  const total = grupos.reduce((s, arr) => s + (arr?.length || 0), 0);
+  return total === 0;
+}
+
+function pendenciasDoEvento(ev) {
+  const idStr = encodeURIComponent(String(ev.id));
+  const base = `evento-detalhado.html?id=${idStr}`;
+  const list = [];
+  if (temPendenciaContrato(ev))   list.push({ label: "CONTRATO",   icon: "file-text",    link: `${base}#contrato` });
+  if (temPendenciaFinanceiro(ev)) list.push({ label: "FINANCEIRO", icon: "wallet",       link: `${base}#financeiro` });
+  if (temPendenciaChecklist(ev))  list.push({ label: "CHECKLIST",  icon: "check-square", link: `${base}#checklist` });
+  if (temPendenciaEscala(ev))     list.push({ label: "ESCALA",     icon: "user-cog",     link: `${base}#escala` });
+  if (temPendenciaEquipe(ev))     list.push({ label: "EQUIPE",     icon: "users",        link: `${base}#equipe` });
+  return list;
+}
+
+/* ===== Ordenação e status ===== */
+function cmpProximosPrimeiro(a, b) {
+  const da = dataDoEvento(a) || new Date("2100-01-01");
+  const db = dataDoEvento(b) || new Date("2100-01-01");
+  const hoje = hojeZero();
+  const aFut = da >= hoje, bFut = db >= hoje;
+  if (aFut && !bFut) return -1;
+  if (!aFut && bFut) return 1;
+  return da - db;
+}
+
+function precisaEncerrar(ev) {
+  const d = dataDoEvento(ev);
+  if (!d) return false;
+  const hoje = hojeZero();
+  const diaSeguinte = new Date(d);
+  diaSeguinte.setDate(diaSeguinte.getDate() + 1);
+  const s = String(ev.status || '').toLowerCase();
+  return (s !== 'arquivado' && s !== 'encerrado' && hoje >= diaSeguinte);
+}
+
+function atualizarStatusEmLote(eventos) {
+  const alterados = [];
+  for (const ev of eventos) {
+    if (precisaEncerrar(ev)) {
+      ev.status = 'encerrado';
+      alterados.push(String(ev.id));
+    }
+  }
+  if (!alterados.length) return eventos;
+  try {
+    const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+    let mudou = false;
+    for (const ev of arr) {
+      if (alterados.includes(String(ev.id)) && String(ev.status).toLowerCase() !== 'encerrado') {
+        ev.status = 'encerrado';
+        mudou = true;
+      }
+    }
+    if (mudou) localStorage.setItem('eventos', JSON.stringify(arr));
+  } catch {}
+  return eventos;
+}
+
+/* ===== Resumo por ano ===== */
+function renderAnos(eventos) {
+  const box = document.getElementById('resumoAnos');
+  if (!box) return;
+
+  const map = {};
+  let semData = 0;
+  const total = eventos.length;
+
+  for (const e of eventos) {
+    const d = dataDoEvento(e);
+    if (!d) { semData++; continue; }
+    const y = String(d.getFullYear());
+    map[y] = (map[y] || 0) + 1;
+  }
+
+  const anos = Object.keys(map).sort((a, b) => a - b);
+  const chipsAnos = anos.map(y =>
+    `<span class="pill">${y}: <span style="font-weight:500">${map[y]}</span> evento${map[y] > 1 ? 's' : ''}</span>`
+  ).join("");
+
+  const chipSemData = `<span class="pill">Sem data: <span style="font-weight:500">${semData}</span></span>`;
+  const chipTotal   = `<span class="pill">Total: <span style="font-weight:600">${total}</span></span>`;
+
+  box.innerHTML = [chipsAnos, chipSemData, chipTotal].filter(Boolean).join(" ");
+}
+
+/* ===== Render de cada linha ===== */
+function rowEventoHTML(e) {
+  const idStr = encodeURIComponent(String(e.id));
+  const nome  = e.nomeEvento || e.nome || "—";
+  const data  = e.data || e.dataEvento || e.dataDoEvento || "";
+  const local = e.local || "—";
+  const qtd   = Number(e.quantidadeConvidados || e.qtdConvidados || 0) || 0;
+
+  const foto   = getFotoURL(e);
+  const criado = e.criadoEm ? ddmmyyyy(e.criadoEm) : "—";
+
+  const pend = (pendenciasDoEvento(e) || []);
+  const pendHTML = pend.map(p => `
+    <span class="tag" data-link="${p.link || ''}" title="${p.label || ''}">
+      <i data-lucide="${p.icon || 'info'}"></i>${p.label || ''}
+    </span>
+  `).join("");
+
+  // Fallback automático se a imagem falhar
+  const imgHTML = foto
+    ? `<img src="${foto}" alt="Foto do cliente"
+          onerror="this.onerror=null; this.replaceWith(document.createRange().createContextualFragment('<div class=&quot;ph&quot;><i data-lucide=&quot;user&quot;></i></div>')); if(window.lucide&&window.lucide.createIcons){window.lucide.createIcons();}">`
+    : `<div class="ph"><i data-lucide="user"></i></div>`;
+
+  // Responsável (Escala)
+  const resp = e.responsavelEquipe || e.responsavelEvento || e.responsavel || e.coordenador || "";
+
+  const dataFmt = data ? ddmmyyyy(data) : "—";
+
+  return `
+    <div class="row">
+      <div class="row-main">
+        <div class="media">
+          ${imgHTML}
+        </div>
+
+        <div class="title">
+          <div class="name">${nome}</div>
+          <div class="meta">Criado em ${criado}</div>
+        </div>
+
+        <div class="cell date"><i data-lucide="calendar"></i>${dataFmt}</div>
+        <div class="cell local"><i data-lucide="map-pin"></i>${local}</div>
+        <div class="cell guests"><i data-lucide="users"></i>${qtd > 0 ? `${qtd}` : "—"}</div>
+
+        <div class="cell pend">${pendHTML}</div>
+      </div>
+
+      <div class="row-actions">
+        ${resp ? `<div class="resp-chip" title="Responsável do evento"><i data-lucide="shield"></i>${resp}</div>` : ""}
+        <button class="btn" data-acao="ver" data-id="${idStr}"><i data-lucide="eye"></i> Ver evento</button>
+        <button class="btn del" data-acao="excluir" data-id="${idStr}"><i data-lucide="trash-2"></i> Excluir evento</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ===== Filtrar “eventos pagos” (não mostrar na lista principal) ===== */
+function shouldHideFromLista(e) {
+  const mod = String(e.modulo || e.moduloOrigem || e.origem || "").toLowerCase();
+  return (
+    e.ocultarNaListaEventos === true ||          // flag explícita
+    mod === "eventos-pagos" ||                   // origem marcada
+    mod === "pagos" ||                           // variações possíveis
+    mod === "ingressos" || mod === "tickets" ||  // se usar esses rótulos
+    String(e._origem || "").toLowerCase() === "eventos-pagos"
+  );
+}
+
+/* ===== Carregar eventos (já prontos para tela) ===== */
+function carregarEventos() {
+  const termo = (document.getElementById("busca")?.value || "").toLowerCase().trim();
+  const lista = document.getElementById("listaEventos");
+  const container = document.getElementById("listContainer");
+
+  // lê, normaliza e já remove os “pagos”
+  let eventos = lerEventosSanitizados();
+  eventos = eventos.filter(e => !shouldHideFromLista(e));
+
+  // fecha automaticamente o que já passou
+  eventos = atualizarStatusEmLote(eventos.slice());
+
+  // busca
+  let filtrados = eventos.filter(e => {
+    const dataFmt = ddmmyyyy(e.data || e.dataEvento || e.dataDoEvento || "");
+    const alvo = [e.nomeEvento, e.local, dataFmt]
+      .map(x => String(x || "").toLowerCase()).join(" | ");
+    return !termo || alvo.includes(termo);
+  });
+
+  // oculta arquivados
+  filtrados = filtrados.filter(e => String(e.status || '').toLowerCase() !== 'arquivado');
+
+  // ordena por proximidade
+  filtrados.sort(cmpProximosPrimeiro);
+
+  // resumo por ano
+  renderAnos(filtrados);
+
+  // esconde a coluna “Pendências” se ninguém tiver
+  const anyPend = filtrados.some(e => pendenciasDoEvento(e).length > 0);
+  if (container) container.classList.toggle('no-pend', !anyPend);
+
+  // render
+  if (lista) {
+    lista.innerHTML = filtrados.map(rowEventoHTML).join("") ||
+      `<div class="row" style="padding:12px">Nenhum evento encontrado.</div>`;
+  }
+  try { window.lucide?.createIcons?.(); } catch {}
+}
+
+/* ===== Ações ===== */
+async function excluirEvento(idFromButton) {
+  // Pega o ID:
+  // - se veio como parâmetro (lista), usa ele
+  // - se não, tenta pegar da URL/localStorage (detalhe do evento)
+  const id =
+    idFromButton ||
+    localStorage.getItem("eventoSelecionado") ||
+    new URLSearchParams(location.search).get("id");
+
+  if (!id) {
+    alert("Não consegui identificar o evento.");
+    return;
+  }
+
+  if (!confirm("Tem certeza que deseja excluir este evento? Essa ação não pode ser desfeita.")) return;
+
+  const idStr = String(id);
+
+  // 1) Tenta excluir na API (nuvem), se estiver configurada
+  try {
+    if (typeof IS_REMOTE !== "undefined" && IS_REMOTE && typeof callApi === "function") {
+      const endpoint = `/eventos/${encodeURIComponent(idStr)}`;
+      const resp = await callApi(endpoint, "DELETE");
+      console.log("[Eventos] DELETE na API:", endpoint, resp);
+    }
+  } catch (e) {
+    console.warn("[Eventos] Falha ao excluir evento na API, removendo só localmente.", e);
+  }
+
+  // 2) Remove também do localStorage para manter as telas sincronizadas
+  let eventos = [];
+  try {
+    eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  } catch {}
+
+  eventos = eventos.filter(ev => String(ev.id) !== idStr);
+
+  if (typeof window.safeSaveEventos === "function") {
+    window.safeSaveEventos(eventos);
+  } else {
+    try { localStorage.setItem("eventos", JSON.stringify(eventos)); } catch {}
+  }
+
+  // 3) Atualiza a tela
+  if (typeof carregarEventos === "function") {
+    carregarEventos();
+  } else {
+    // se estiver na tela de detalhe, manda para a lista
+    window.location.href = "lista-evento.html";
+  }
+}
+
+
+function verDetalhes(id) {
+  window.location.href = `evento-detalhado.html?id=${encodeURIComponent(id)}`;
+}
+
+/* Deep link de pendências + botões */
+document.addEventListener("click", (ev) => {
+  const tag = ev.target.closest(".tag[data-link]");
+  if (tag) { window.location.href = tag.dataset.link; return; }
+
+  const btn = ev.target.closest("button[data-acao]");
+  if (btn) {
+    const { acao, id } = btn.dataset;
+    if (acao === "ver") verDetalhes(id);
+    else if (acao === "excluir") excluirEvento(id);
+  }
+});
+
+/* Debounce da busca */
+let _debTimer = null;
+function debounceCarregar() {
+  clearTimeout(_debTimer);
+  _debTimer = setTimeout(carregarEventos, 140);
+}
+
+/* ===== Quando a página carregar ===== */
+document.addEventListener("DOMContentLoaded", async () => {
+  try { window.lucide?.createIcons?.(); } catch {}
+
+  // Se tiver API configurada, tentar buscar da nuvem e atualizar o localStorage
+  if (IS_REMOTE) {
+    try {
+      const resp = await callApi('/eventos', 'GET', {});
+      if ((resp?.status === 200 || resp?.status === 201 || resp?.ok) && Array.isArray(resp.data)) {
+        window.safeSaveEventos(resp.data);
+      }
+    } catch (e) {
+      console.warn('[KGB] Falha ao carregar eventos da API; usando apenas dados locais.', e);
+    }
+  }
+
+  carregarEventos();
+  document.getElementById("busca")?.addEventListener("input", debounceCarregar);
+});
+
+/* Continua ouvindo mudanças em outras abas/janelas */
+window.addEventListener("storage", (e) => {
+  if (e.key === "eventos") carregarEventos();
+});
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>
+
+

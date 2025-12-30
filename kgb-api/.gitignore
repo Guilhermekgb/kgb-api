@@ -1,0 +1,8 @@
+﻿reports/
+node_modules/
+.env
+.env.*
+data.db*
+data/
+uploads/
+*.log

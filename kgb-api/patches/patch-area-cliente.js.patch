@@ -1,0 +1,19 @@
+*** Patch: area-cliente.js — Prefer shim/preload/adapter for fotosClientes
+
+Resumo:
+- Normaliza a leitura do mapa `fotosClientes` para priorizar o shim síncrono e depois o preload/adapter.
+- Remove caminhos redundantes e evita leitura direta de `localStorage`.
+
+Trecho aplicável (já aplicado localmente):
+
+const map = (function(){
+  try{
+    if (typeof getFotosClientesSync === 'function') return getFotosClientesSync();
+    if (window.__FOTOS_CLIENTES_PRELOAD__ && typeof window.__FOTOS_CLIENTES_PRELOAD__ === 'object') return window.__FOTOS_CLIENTES_PRELOAD__;
+    if (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function'){
+      const r = window.storageAdapter.getRaw('fotosClientes');
+      return r ? (typeof r === 'string' ? JSON.parse(r) : r) : {};
+    }
+  }catch(e){ }
+  return {};
+})();

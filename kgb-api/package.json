@@ -1,0 +1,33 @@
+{
+  "name": "kgb-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test:orcamentos": "node ./tests/test-orcamentos.js",
+    "test:orcamentos:clean": "node ./tests/test-orcamentos-clean.js || true",
+    "contracts": "node contracts.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "better-sqlite3": "^12.4.1",
+    "cloudinary": "^2.8.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "fast-csv": "^5.0.5",
+    "firebase-admin": "^13.6.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "puppeteer": "^24.33.0"
+  }
+}

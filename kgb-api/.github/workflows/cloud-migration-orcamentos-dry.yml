@@ -1,0 +1,57 @@
+name: Cloud Migration — Orçamentos (dry-run)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  dry-run:
+    name: Dry-run Orçamentos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install kgb-api deps
+        working-directory: kgb-api
+        run: npm ci
+
+      - name: Start dev-server
+        working-directory: kgb-api
+        run: |
+          nohup node dev-server.js --port 3333 > dev-server.log 2>&1 &
+          # wait a bit more for the server to be ready
+          sleep 6
+
+      - name: Run headless orçamentos smoke test
+        working-directory: kgb-api
+        env:
+          BASE_URL: http://localhost:3333
+        run: |
+          # capture stdout to a file so we can upload as artifact
+          node tests/headless-orcamentos.js > headless-output.json || true
+
+      - name: Upload dev-server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-log
+          path: kgb-api/dev-server.log
+
+      - name: Upload headless test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-orcamentos-output
+          path: kgb-api/headless-output.json
+
+      - name: Upload test reports (fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-orcamentos-reports
+          path: kgb-api/reports
