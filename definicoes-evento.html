@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Definições do Evento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Identidade RBAC desta página -->
+  <meta name="page-permission" content="Administrador|Maître|Responsável por Evento">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais (devem vir antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+
+  <!-- (Opcional: deixe só Administrador se preferir) -->
+  <script src="js/auth-helper.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- html2canvas p/ exportar PNG do A4 -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <!-- Estilos base do seu projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --dourado:#c29a5d;
+      --dourado-escuro:#a67c37;
+      --marrom:#5a3e2b;
+      --muted:#6b7280;
+      --bg:#f8f1e8;
+      --card:#ffffff;
+      --line:#ece6dd;
+    }
+    html,body{ margin:0; background:var(--bg); }
+    .wrapper{ display:flex; min-height:100vh; }
+    #menuLateral{ position:fixed; inset:0 auto 0 0; width:260px; background:var(--marrom); z-index:1000; overflow-y:auto; }
+    main.conteudo-principal{
+      margin-left:260px; padding:32px; width:calc(100% - 260px);
+      min-height:100vh; overflow-y:auto;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    @media (max-width: 1024px){
+      #menuLateral{ transform:translateX(-100%); transition:transform .3s ease; width:240px; }
+      #menuLateral.aberto{ transform:translateX(0); }
+      main.conteudo-principal{ margin-left:0; width:100%; padding:20px; }
+    }
+
+    h1,h2,h3{ font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif; color:var(--marrom); }
+    h1{ font-size:28px; display:flex; align-items:center; gap:10px; margin:0 0 16px 0; }
+    .conteudo-central{ max-width:1200px; margin:0 auto; }
+    .card{
+      background:var(--card); border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.08);
+      padding:20px; border:1px solid var(--line);
+    }
+    .input{ padding:8px 12px; border:1px solid #eadfd1; border-radius:8px; background:#fff; font-size:14px; }
+    .botao{ display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; cursor:pointer; }
+    .botao-dourado{ background:var(--dourado); color:#fff; padding:10px 14px; font-weight:700; }
+    .botao-dourado:hover{ background:var(--dourado-escuro); }
+    .botao-ghost{ background:#fff; color:#5a3e2b; padding:8px 12px; border:1px solid var(--line); }
+    .muted{ color:var(--muted); }
+
+    .abas{ display:flex; gap:10px; margin-bottom:14px; }
+    .aba{ padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; font-weight:700; color:#5a3e2b; }
+    .aba.ativa{ background:var(--dourado); color:#fff; border-color:var(--dourado); }
+
+    .grid-topo{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr .8fr .8fr .8fr;
+      gap:12px; align-items:end;
+    }
+    @media (max-width: 900px){
+      .grid-topo{ grid-template-columns: 1fr 1fr; }
+    }
+
+    .categoria-card{ margin-top:14px; }
+    .categoria-header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;
+    }
+    .categoria-header .limite{
+      display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted);
+    }
+    .lista-itens{ list-style:none; padding:0; margin:0; }
+    .lista-itens li{
+      display:grid; grid-template-columns: auto 1fr minmax(160px, 260px);
+      gap:10px; align-items:center; padding:8px 0; border-bottom:1px dashed #eee;
+    }
+    .lista-itens li:last-child{ border-bottom:none; }
+    .obs-input{ width:100%; padding:6px 8px; border:1px solid #eadfd1; border-radius:8px; background:#fff; }
+    .obs-input:disabled{ background:#f7f3ee; color:#8a8178; }
+
+    .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+    .extras-grid{
+      margin-top:12px;
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .extras-grid .span-3{ grid-column: 1 / -1; }
+    @media (max-width: 900px){
+      .extras-grid{ grid-template-columns: 1fr; }
+    }
+
+    /* ===== Área A4 ===== */
+    .a4-wrap{ margin-top:16px; }
+    .a4-toolbar{ display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:8px; }
+    .a4-paper{
+      width:210mm; min-height:297mm; background:#fff; border:1px solid #e6e0d6; border-radius:8px;
+      box-shadow:0 2px 10px rgba(0,0,0,.08); padding:18mm 16mm; margin:0 auto;
+      color:#2f2a25;
+    }
+    .a4-title { font-size: 22px; font-weight: 700; color:#5a3e2b; margin: 0 0 10mm 0; }
+    .a4-paper h3{ margin:10px 0 6px 0; border-bottom:1px solid #eee; padding-bottom:4px; font-size:18px; }
+    .a4-meta{ font-size:14px; color:#6b5c50; display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; margin:0 0 10px 0; }
+    .a4-head {
+      display:grid; grid-template-columns: 1fr 1fr; gap: 6px 18px;
+      font-size: 14px; color:#53483f; margin: 0 0 8mm 0;
+    }
+    .a4-head .label { color:#6b5c50; font-weight:600; margin-right:4px; }
+    .a4-head .row { display:flex; gap:8px; }
+    .a4-list { margin: 0 0 4mm 6mm; padding:0; }
+    .a4-list li { margin: 2px 0; font-size: 15px; }
+    .a4-grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+    .a4-kv { display:flex; gap:8px; }
+    .a4-kv .k { font-weight:600; color:#6b5c50; min-width: 140px; }
+    .a4-kv .v { flex:1; }
+    .a4-lines, .a4-notearea { border:1px dashed #e3d6c8; border-radius:8px; padding:10px; margin-top:6px; }
+    .a4-lines .line, .a4-notearea .line { height:24px; border-bottom:1px dotted #e3d6c8; }
+    .a4-lines .line:last-child, .a4-notearea .line:last-child{ border-bottom:none; }
+
+    .sign-row{
+      display:grid; grid-template-columns: 1fr 1fr; gap:18mm; margin-top:10mm;
+    }
+    .sign-box{ text-align:center; }
+    .sign-box .line{ margin-top:22mm; border-top:1px solid #cfc6bb; }
+    .sign-box .label{ font-size:13px; color:#6b5c50; margin-top:4px; }
+
+    @media print{
+      body{ background:#fff; }
+      #menuLateral, .no-print, #boxSelecao{ display:none !important; }
+      main.conteudo-principal{ margin:0; padding:0; width:auto; }
+      .a4-paper{ box-shadow:none; border:none; width:210mm; min-height:297mm; padding:18mm 16mm; }
+      .a4-paper *{ page-break-inside: avoid; }
+    }
+
+    /* ===== LAYOUT (A4 canvas) ===== */
+    .layout-toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+    .layout-canvas-wrap{ background:#fff; border:1px solid #e6e0d6; border-radius:10px; padding:10px; }
+    canvas#layoutCanvas{ width: 992px; height: 1403px; max-width:100%; display:block; background:#fff; border-radius:8px; }
+
+    /* === Definições do Evento · Máximo de escolhas (UI) === */
+    .categoria { margin-bottom: 16px; }
+    .categoria .secao-head{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;
+    }
+    .categoria .secao-head h3{ margin:0; font-size:18px; color:var(--marrom, #5a3e2b); }
+    .categoria .max-escolhas, .categoria .limite-ui{
+      margin-left:auto; display:inline-flex; align-items:center; gap:6px;
+      font-size:12px; color:var(--muted, #6b7280);
+      background:#fff; border:1px solid #eadfd1; border-radius:999px; padding:2px 8px;
+    }
+    .categoria .max-escolhas input[type="number"],
+    .categoria .limite-ui input[type="number"]{
+      width:68px; min-width:68px; text-align:center; padding:4px 6px; border:1px solid #eadfd1; border-radius:6px; font-size:12px; background:#fff;
+    }
+    .categoria .restam, .categoria .contagem-restantes{ font-size:12px; color:#8a7a6d; }
+    @media (max-width: 640px){
+      .categoria .max-escolhas, .categoria .limite-ui{ margin-left:0; }
+    }
+ /* Botão hamburguer (mobile) */
+#hamburguer{
+  position:fixed;
+  top:12px;
+  left:12px;
+  background:#c29a5d;
+  border:none;
+  color:#fff;
+  font-size:24px;
+  padding:6px 12px;
+  border-radius:8px;
+  z-index:1100;
+  display:none;
+}
+
+@media (max-width:1024px){
+  #hamburguer{ display:block; }
+}
+
+/* Backdrop do menu mobile */
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:999;
+}
+
+/* Travar scroll quando menu aberto */
+body.no-scroll{
+  overflow:hidden;
+}
+ </style>
+</head>
+<body>
+    <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="book-open-check"></i> Definições do Evento — <span id="nomeCardapioDefs">—</span></h1>
+
+        <!-- Abas -->
+        <div class="abas no-print">
+          <button class="aba ativa" data-aba="cardapio"><i data-lucide="list"></i> Cardápio</button>
+          <button class="aba" data-aba="layout"><i data-lucide="layout-template"></i> Layout da Planta</button>
+        </div>
+
+        <!-- PAINEL: CARDÁPIO -->
+        <section data-aba-painel="cardapio">
+          <!-- TOPO / DADOS DO EVENTO -->
+          <div class="card">
+            <div class="grid-topo">
+              <div>
+                <label class="muted">Cardápio contratado</label>
+                <select id="selCardapio" class="input" style="width:100%;">
+                  <option value="">(Selecione)</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">Nome do evento</label>
+                <input id="inpNomeEvento" class="input" placeholder="—" />
+              </div>
+              <div>
+                <label class="muted">Data</label>
+                <input id="inpDataEvento" type="date" class="input" />
+              </div>
+              <div>
+                <label class="muted">Local</label>
+                <input id="inpLocalEvento" class="input" placeholder="—" />
+              </div>
+              <div>
+                <label class="muted">Convidados</label>
+                <input id="inpConvidados" type="number" min="0" class="input" />
+              </div>
+              <div>
+                <label class="muted">Cerimônia no local?</label>
+                <select id="inpCerimoniaLocal" class="input">
+                  <option value="">—</option>
+                  <option value="Sim">Sim</option>
+                  <option value="Não">Não</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">Horário cerimônia</label>
+                <input id="inpHoraCerimonia" type="time" class="input" step="60" />
+              </div>
+              <div>
+                <label class="muted">Horário início festa</label>
+                <input id="inpHoraEvento" type="time" class="input" step="60" />
+              </div>
+              <div>
+                <label class="muted">Horário jantar</label>
+                <input id="inpHoraJantar" type="time" class="input" step="60" />
+              </div>
+            </div>
+
+            <div class="toolbar" style="margin-top:12px;">
+              <button id="btnSalvarSessao" class="botao botao-dourado" type="button">
+                <i data-lucide="save"></i> Salvar
+              </button>
+              <label class="muted" style="display:inline-flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="toggleAutosave" checked />
+                Auto-salvar
+              </label>
+              <span id="saveStatus" class="muted">—</span>
+            </div>
+          </div>
+
+          <!-- SELEÇÃO POR CATEGORIA -->
+          <div id="boxSelecao" class="card">
+            <div class="toolbar" style="justify-content:space-between; margin-bottom:6px;">
+              <h2 style="margin:0;">Escolha do que será servido</h2>
+              <div style="display:flex; gap:8px;">
+                <button id="btnGerar" class="botao botao-dourado" type="button">
+                  <i data-lucide="wand-2"></i> Gerar Cardápio
+                </button>
+                <button id="btnLimpar" class="botao botao-ghost" type="button" title="Desmarca tudo">
+                  <i data-lucide="eraser"></i> Limpar seleção
+                </button>
+              </div>
+            </div>
+
+            <label style="display:inline-flex;gap:6px;align-items:center;margin:6px 0 12px 0;">
+              <input type="checkbox" id="preselectSugeridos" />
+              Pré-selecionar itens sugeridos (os que estavam ativos na Montagem)
+            </label>
+
+            <div id="categoriasContainer"></div>
+
+            <div style="margin-top:12px;">
+              <label class="muted" for="obsGerais">Observações gerais (aparecem no A4)</label>
+              <textarea id="obsGerais" class="input" rows="4" style="width:100%;"></textarea>
+            </div>
+
+            <div class="extras-grid">
+              <div>
+                <label class="muted">Sabor do bolo</label>
+                <input id="extraSaborBolo" class="input" placeholder="Ex.: Chocolate, Ninho..." />
+              </div>
+              <div>
+                <label class="muted">Cor da toalha</label>
+                <input id="extraCorToalha" class="input" placeholder="Ex.: Branca, Off-white..." />
+              </div>
+              <div>
+                <label class="muted">Cor do guardanapo</label>
+                <input id="extraCorGuardanapo" class="input" placeholder="Ex.: Nude, Verde..." />
+              </div>
+              <div>
+                <label class="muted">Entradas — modo de serviço</label>
+                <select id="extraEntradasModo" class="input">
+                  <option value="">—</option>
+                  <option>Ilha</option>
+                  <option>Volante</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">Mesa posta?</label>
+                <select id="extraMesaPosta" class="input">
+                  <option value="">—</option>
+                  <option>Sim</option>
+                  <option>Não</option>
+                </select>
+              </div>
+              <div>
+                <label class="muted">Quantidade de mesas</label>
+                <input id="extraQtdMesa" type="number" min="0" class="input" placeholder="0" />
+              </div>
+              <div class="span-3">
+                <label class="muted">Anotações operacionais</label>
+                <textarea id="extraAnotacoes" class="input" rows="4" placeholder="Observações adicionais para a operação..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- PREVIEW A4 -->
+          <div id="boxPreview" class="a4-wrap card" style="display:none;">
+            <div class="no-print a4-toolbar">
+              <button id="btnEditar" class="botao botao-ghost" type="button">
+                <i data-lucide="pencil"></i> Editar definição
+              </button>
+              <button id="btnPrint" class="botao botao-ghost" type="button">
+                <i data-lucide="printer"></i> Imprimir / PDF
+              </button>
+              <button id="btnPNG" class="botao botao-dourado" type="button">
+                <i data-lucide="image-down"></i> Exportar PNG
+              </button>
+            </div>
+
+            <div id="a4Paper" class="a4-paper">
+              <!-- conteúdo gerado via JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- PAINEL: LAYOUT -->
+        <section data-aba-painel="layout" style="display:none;">
+          <div class="card">
+            <h2 style="margin-top:0;">Layout do Salão (A4)</h2>
+
+            <div class="layout-toolbar">
+              <button id="btnUploadLayout" class="botao botao-ghost"><i data-lucide="upload"></i> Upload imagem</button>
+              <input id="inpUploadLayout" type="file" accept="image/*" style="display:none">
+              <button id="btnNovoLayout" class="botao botao-ghost"><i data-lucide="file-plus-2"></i> Novo layout</button>
+
+              <button class="botao" data-tool="select"><i data-lucide="mouse-pointer-2"></i></button>
+              <button class="botao" data-tool="pencil"><i data-lucide="pencil"></i></button>
+              <button class="botao" data-tool="eraser"><i data-lucide="eraser"></i></button>
+              <button class="botao" data-tool="rect"><i data-lucide="square"></i></button>
+              <button class="botao" data-tool="circle"><i data-lucide="circle"></i></button>
+              <button class="botao" data-tool="text"><i data-lucide="type"></i></button>
+
+              <div style="flex:1"></div>
+              <label class="muted">Cor</label>
+              <input id="strokeColor" type="color" value="#2f2a25" class="input" style="width:52px; padding:4px;">
+              <label class="muted">Espessura</label>
+              <input id="strokeWidth" type="number" value="3" min="1" max="40" class="input" style="width:80px;">
+
+              <button id="btnLimparDesenho" class="botao botao-ghost"><i data-lucide="trash-2"></i> Limpar</button>
+              <button id="btnExportarPNGLayout" class="botao botao-ghost"><i data-lucide="image"></i> Exportar PNG</button>
+              <button id="btnSalvarLayout" class="botao botao-dourado"><i data-lucide="save"></i> Salvar Layout</button>
+            </div>
+
+            <div class="layout-canvas-wrap">
+              <canvas id="layoutCanvas" width="992" height="1403"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Menu lateral do projeto -->
+  <script type="module" src="menu-lateral.js"></script>
+  <!-- Lógica específica desta página -->
+  <script src="definicoes-evento.js" defer></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>{ lucide.createIcons(); });</script>
+<script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    if (!btn.hasAttribute('data-bound')) {
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) fechar();
+        else abrir();
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')) {
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+  })();
+</script>
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

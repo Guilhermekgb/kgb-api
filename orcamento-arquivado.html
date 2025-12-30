@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:orcamento-arquivado.html">
+
+  <meta charset="UTF-8" />
+  <title>Orçamentos Arquivados</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- Ícones + Gráficos -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Estilos base -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    .etiqueta-motivo {
+      display: inline-block;
+      background-color: #f5e4c3;
+      color: #5C4033;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+    .grafico-container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 30px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    #graficoPizza {
+      max-width: 300px;
+      max-height: 300px;
+      margin: 0 auto;
+      display: block;
+    }
+    /* cards */
+    #listaArquivados {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 40px;
+    }
+    .card-arq {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      width: 300px;
+    }
+    .card-arq h3 { margin: 0 0 8px; color: #5C4033; }
+    .card-arq p { margin: 4px 0; }
+    .card-arq .btn {
+      background: #c29a5d;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .card-arq .btn.alt {
+      background: #5C4033;
+      color: #fff;
+      margin-left: 8px;
+    }
+
+    /* botão hambúrguer (mobile) */
+    #hamburguer{
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1100;      /* MAIS ALTO, pra ficar sempre por cima do menu */
+      display: none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+    }
+
+    /* fundo escuro atrás do menu quando aberto */
+    #menuBackdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 1000;      /* abaixo do botão (1100) e no mesmo “nível” do menu */
+    }
+
+    /* trava o scroll do fundo quando o menu estiver aberto */
+    body.no-scroll{
+      overflow: hidden;
+    }
+/* MENU MOBILE */
+#menuBackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: none;
+  z-index: 900;
+}
+#menuBackdrop.visivel{ display:block; }
+body.no-scroll{ overflow:hidden; }
+
+@media (max-width:768px){
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .3s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{ transform: translateX(0); }
+}
+
+  </style>
+</head>
+<body>
+
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+      <h2 style="color: #5C4033; font-size: 24px; display: flex; align-items: center; gap: 10px;">
+        <i data-lucide="archive"></i> Orçamentos Arquivados
+      </h2>
+
+      <div id="resumoArquivados" style="margin-top: 8px; font-weight: bold; color: #5C4033;"></div>
+
+      <!-- Filtros -->
+      <div style="margin: 20px 0;">
+        <label for="filtroMes" style="font-weight: bold; color: #5C4033;">Filtrar por mês:</label>
+        <select id="filtroMes" onchange="atualizarGraficos()" style="margin-left: 10px; padding: 6px 10px; border-radius: 8px;">
+          <option value="">Todos</option>
+        </select>
+
+        <label for="filtroMotivo" style="margin-left: 30px; font-weight: bold; color: #5C4033;">Motivo:</label>
+        <select id="filtroMotivo" onchange="atualizarGraficos()" style="margin-left: 10px; padding: 6px 10px; border-radius: 8px;">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <!-- Busca por nome -->
+      <div style="margin-bottom: 20px;">
+        <label for="buscaNome" style="font-weight: bold; color: #5C4033;">Buscar por nome:</label>
+        <input type="text" id="buscaNome" placeholder="Digite o nome..." oninput="atualizarGraficos()" style="margin-left: 10px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ccc;">
+      </div>
+
+      <!-- Gráficos -->
+      <div class="grafico-container">
+        <h3 style="color:#5C4033;">📊 Arquivamentos por Motivo</h3>
+        <canvas id="graficoMotivos" height="70"></canvas>
+      </div>
+
+      <div class="grafico-container">
+        <h3 style="color:#5C4033;">🥧 Proporção dos Motivos (mês selecionado)</h3>
+        <canvas id="graficoPizza" height="60"></canvas>
+      </div>
+
+      <div class="grafico-container">
+        <h3 style="color:#5C4033;">👤 Arquivamentos por Responsável</h3>
+        <canvas id="graficoResponsaveis" height="60"></canvas>
+      </div>
+
+      <!-- Lista -->
+      <div id="listaArquivados"></div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  // ===== Helpers =====
+  const norm = (s) => String(s || '').toLowerCase().trim();
+
+  function formatDateBR(v){
+    if (!v) return '-';
+    const s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const [y,m,d] = s.split('T')[0].split('-');
+      return `${d}/${m}/${y}`;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+    const d = new Date(s);
+    if (isNaN(d)) return s;
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yy = d.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  function arrayFromAny(val){
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'object') return Object.values(val);
+    return [];
+  }
+
+  function isArquivadoRegistro(r){
+    const s1 = norm(r?.status);
+    const s2 = norm(r?.situacao || r?.situação);
+    return !!(
+      r?.arquivamento ||
+      r?.arquivado === true ||
+      r?.motivoArquivamento ||
+      r?.dataArquivamento ||
+      s1.includes('arquiv') || s2.includes('arquiv') ||
+      s1.includes('cancel') || s2.includes('cancel') ||
+      s1.includes('perdid') || s2.includes('perdid') ||
+      s1.includes('fechad') || s2.includes('fechad')
+    );
+  }
+
+  function normalizeRegistro(r){
+    const status = String(r?.status || r?.situacao || '').toLowerCase();
+    const motivo = r?.motivoArquivamento ||
+                   r?.arquivamento?.classificacaoLabel ||
+                   r?.arquivamento?.motivo ||
+                   r?.arquivado?.motivo ||
+                   (status.includes('cancel') ? 'Cancelado' :
+                    status.includes('perdid') ? 'Perdido' :
+                    status.includes('fechad') ? 'Fechado' :
+                    status.includes('arquiv') ? 'Arquivado' : 'Motivo não informado');
+
+    const dtArq = r?.dataArquivamento ||
+                  r?.arquivamento?.dataISO ||
+                  r?.arquivado?.data ||
+                  r?.dataFechamento ||
+                  r?.atualizadoEm ||
+                  r?.criadoEm || null;
+
+    return {
+      id: r.id ?? r.orcamentoId ?? r.leadId ?? r._id ?? r.uuid ?? String(Math.random()).slice(2),
+      nome: r.nome || r.nomeCliente || r.titulo || r.eventoNome || 'Sem nome',
+      dataEvento: r.dataEvento || r.data || r.eventoData || null,
+      local: r.local || r.localEvento || r.endereco || '-',
+      convidados: r.convidados || r.qtd || r.quantidadeConvidados || '-',
+      motivo,
+      responsavel: r.responsavel || r.responsavelNome || r.usuario || r.vendedor || '—',
+      dataArquivamento: dtArq,
+      _raw: r
+    };
+  }
+
+  function uniqueBy(arr, keyFn){
+    const map = new Map();
+    arr.forEach(it => {
+      const k = keyFn(it);
+      if (!map.has(k)) map.set(k, it);
+    });
+    return Array.from(map.values());
+  }
+
+  // Coleta robusta de arquivados (arrays, mapas e fallback varrendo localStorage)
+  function coletarArquivados(){
+    const preferidas = [
+      'orcamentos','orçamentos','orcamentosArquivados','orçamentosArquivados',
+      'leads'
+    ];
+    let out = [];
+
+    // 1) chaves preferidas (arrays ou objetos)
+    preferidas.forEach(k=>{
+      try{
+        let val = (typeof readLS === 'function') ? readLS(k, null) : null;
+        if (val == null) {
+          const raw = localStorage.getItem(k);
+          if (!raw) return;
+          val = JSON.parse(raw);
+        }
+        arrayFromAny(val).forEach(r => { if (isArquivadoRegistro(r)) out.push(normalizeRegistro(r)); });
+      }catch{}
+    });
+
+    // 2) fallback: varre todas as chaves procurando coleções plausíveis
+    try{
+      for (let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if (!key) continue;
+        // ignora o que já lemos
+        if (preferidas.includes(key)) continue;
+        // só tenta em chaves relacionadas
+        if (!/orc|orç|lead|budget|arquiv/i.test(key)) continue;
+
+        try{
+          const val = JSON.parse(localStorage.getItem(key));
+          const arr = arrayFromAny(val);
+          if (arr.length){
+            arr.forEach(r => { if (isArquivadoRegistro(r)) out.push(normalizeRegistro(r)); });
+          } else if (val && typeof val === 'object' && isArquivadoRegistro(val)) {
+            out.push(normalizeRegistro(val));
+          }
+        }catch{}
+      }
+    }catch{}
+
+    // 3) dedupe por id (caso o mesmo registro apareça em mais de uma chave)
+    out = uniqueBy(out, it => String(it.id));
+    return out;
+  }
+
+  // ===== Estado =====
+  let registrosArquivados = [];
+
+  // ===== Lista =====
+  function gerarCards(items) {
+    const lista = document.getElementById('listaArquivados');
+    lista.innerHTML = "";
+
+    if (!items.length) {
+      lista.innerHTML = `<div style="padding: 30px; background: #fff8e6; border-radius: 8px; color: #5C4033; font-size: 16px;">
+        Nenhum orçamento arquivado encontrado.
+      </div>`;
+      return;
+    }
+
+    // Ordena por data de arquivamento (desc), caindo para criado/atualizado quando faltar
+    items.sort((a,b)=> new Date(b.dataArquivamento||b._raw?.criadoEm||b._raw?.atualizadoEm||0) - new Date(a.dataArquivamento||a._raw?.criadoEm||a._raw?.atualizadoEm||0));
+
+    const frag = document.createDocumentFragment();
+    items.forEach(reg => {
+      const card = document.createElement('div');
+      card.className = 'card-arq';
+      card.innerHTML = `
+        <h3>${reg.nome || 'Sem nome'}</h3>
+        <p>📅 <span>${formatDateBR(reg.dataEvento)}</span> – 📍 <span>${reg.local || '-'}</span></p>
+        <p>👥 Convidados: <span>${reg.convidados || '-'}</span></p>
+        <div class="etiqueta-motivo">${reg.motivo || 'Motivo não informado'}</div>
+        <div style="margin-top:12px;">
+          <button class="btn" data-detalhes>Ver detalhes</button>
+          <button class="btn alt" data-recuperar>Recuperar Lead</button>
+        </div>
+      `;
+      // Detalhes
+      card.querySelector('[data-detalhes]').addEventListener('click', () => {
+        const id = encodeURIComponent(reg.id);
+        const alvos = [
+          `orcamento-detalhado.html?id=${id}`,
+          `orcamento.html?id=${id}`,
+          `orcamentos.html?id=${id}`,
+          `funil-leads.html`
+        ];
+        window.location.href = alvos[0];
+      });
+      // Recuperar
+      card.querySelector('[data-recuperar]').addEventListener('click', () => {
+        if (!confirm("Deseja realmente recuperar este registro para o funil?")) return;
+
+        let mudou = false;
+        // tenta em orçamentos/leads
+        ['orcamentos','orçamentos','leads'].forEach(k=>{
+          try{
+            // tenta ler via helper (pode ser sessionStorage/API) antes do localStorage
+            let val = (typeof readLS === 'function') ? readLS(k, null) : null;
+            let raw = null;
+            if (val == null) {
+              raw = localStorage.getItem(k);
+              if (!raw) return;
+              val = JSON.parse(raw);
+            }
+            const arr = arrayFromAny(val);
+            if (!arr.length) return;
+            const i = arr.findIndex(x => String(x.id) === String(reg.id));
+            if (i > -1) {
+              arr[i].status = "Novo Lead";
+              delete arr[i].motivoArquivamento;
+              delete arr[i].dataArquivamento;
+              if (arr[i].arquivamento) delete arr[i].arquivamento;
+              if (arr[i].arquivado) delete arr[i].arquivado;
+
+              // salva de volta: prioriza writeLS se disponível
+              try {
+                if (typeof writeLS === 'function') {
+                  writeLS(k, Array.isArray(val) ? arr : (raw ? JSON.parse(raw) : arr));
+                } else {
+                  if (Array.isArray(val)) {
+                    localStorage.setItem(k, JSON.stringify(arr));
+                  } else if (val && typeof val === 'object') {
+                    const novoObj = {};
+                    Object.keys(val).forEach(origKey => {
+                      const item = val[origKey];
+                      if (item && String(item.id) === String(reg.id)) {
+                        novoObj[origKey] = arr[i];
+                      } else {
+                        novoObj[origKey] = item;
+                      }
+                    });
+                    localStorage.setItem(k, JSON.stringify(novoObj));
+                  }
+                }
+              } catch {}
+
+              mudou = true;
+            }
+          }catch{}
+        });
+
+        alert(mudou ? "Registro recuperado com sucesso!" : "Não foi possível recuperar este registro.");
+        window.location.href = "funil-leads.html";
+      });
+
+      frag.appendChild(card);
+    });
+    lista.appendChild(frag);
+
+    try { window.lucide?.createIcons?.(); } catch {}
+  }
+
+  // ===== Gráficos =====
+  function atualizarGraficos() {
+    const filtroMes = document.getElementById("filtroMes").value;
+    const filtroMotivo = document.getElementById("filtroMotivo").value;
+    const filtroNome = (document.getElementById("buscaNome").value || '').toLowerCase();
+
+    const totais = {};
+    const doMes = {};
+    const respTotal = {};
+    const respMes = {};
+
+    registrosArquivados.forEach(r => {
+      const motivo = r.motivo || 'Motivo não informado';
+      const resp = r.responsavel || 'Desconhecido';
+      const baseData = r.dataArquivamento || r._raw?.dataFechamento || r._raw?.atualizadoEm || r._raw?.criadoEm || Date.now();
+      const d = new Date(baseData);
+      const chaveMes = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, "0")}`;
+
+      totais[motivo] = (totais[motivo] || 0) + 1;
+      respTotal[resp] = (respTotal[resp] || 0) + 1;
+      if (!filtroMes || chaveMes === filtroMes) {
+        doMes[motivo] = (doMes[motivo] || 0) + 1;
+        respMes[resp] = (respMes[resp] || 0) + 1;
+      }
+    });
+
+    const labelsMot = Object.keys(totais);
+    const dadosTotais = labelsMot.map(m => totais[m]);
+    const dadosMes = labelsMot.map(m => doMes[m] || 0);
+
+    // Barras (Motivos)
+    if (window.graficoBarras?.destroy) window.graficoBarras.destroy();
+    window.graficoBarras = new Chart(document.getElementById("graficoMotivos"), {
+      type: "bar",
+      data: {
+        labels: labelsMot,
+        datasets: [
+          { label: "Total", data: dadosTotais, backgroundColor: "#c29a5d" },
+          { label: filtroMes ? "Selecionado" : "Visível", data: dadosMes, backgroundColor: "#f4d9aa" }
+        ]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: { legend: { position: "top" } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: '#5C4033' } },
+          y: { ticks: { color: '#5C4033', font: { weight: 'bold' } } }
+        }
+      }
+    });
+
+    // Pizza (Proporção no mês)
+    if (window.graficoPizza?.destroy) window.graficoPizza.destroy();
+    const somaMes = dadosMes.reduce((a,b)=>a+b,0) || 1;
+    window.graficoPizza = new Chart(document.getElementById("graficoPizza"), {
+      type: "pie",
+      data: {
+        labels: labelsMot,
+        datasets: [{
+          data: dadosMes,
+          backgroundColor: ["#c29a5d", "#dab67b", "#ecd3a2", "#f9e8cd", "#ffeccb", "#f6d6a1"]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: "bottom", labels: { color: "#5C4033", boxWidth: 12, font: { size: 12 } } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} (${((ctx.raw / somaMes) * 100).toFixed(1)}%)` } }
+        }
+      }
+    });
+
+    // Barras (Responsáveis)
+    const labelsResp = Object.keys(respTotal);
+    const dadosRespTotais = labelsResp.map(r => respTotal[r]);
+    const dadosRespMes = labelsResp.map(r => respMes[r] || 0);
+
+    if (window.graficoResp?.destroy) window.graficoResp.destroy();
+    window.graficoResp = new Chart(document.getElementById("graficoResponsaveis"), {
+      type: "bar",
+      data: {
+        labels: labelsResp,
+        datasets: [
+          { label: "Total", data: dadosRespTotais, backgroundColor: "#c29a5d" },
+          { label: filtroMes ? "Selecionado" : "Visível", data: dadosRespMes, backgroundColor: "#f4d9aa" }
+        ]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        plugins: { legend: { position: "top" } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: '#5C4033' } },
+          y: { ticks: { color: '#5C4033', font: { weight: 'bold' } } }
+        }
+      }
+    });
+
+    // Filtragem visual da lista
+    const filtrados = registrosArquivados.filter(r => {
+      const baseData = r.dataArquivamento || r._raw?.dataFechamento || r._raw?.atualizadoEm || r._raw?.criadoEm || Date.now();
+      const d = new Date(baseData);
+      const mesStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, "0")}`;
+      const condMes = !filtroMes || mesStr === filtroMes;
+      const condMotivo = !filtroMotivo || r.motivo === filtroMotivo;
+      const condNome = !filtroNome || (r.nome || "").toLowerCase().includes(filtroNome);
+      return condMes && condMotivo && condNome;
+    }).sort((a,b)=> new Date(b.dataArquivamento||b._raw?.criadoEm||0) - new Date(a.dataArquivamento||a._raw?.criadoEm||0));
+
+    gerarCards(filtrados);
+
+    const resumoDiv = document.getElementById("resumoArquivados");
+    resumoDiv.textContent = `📦 ${registrosArquivados.length} arquivado${registrosArquivados.length !== 1 ? 's' : ''} | ${filtrados.length} visível${filtrados.length !== 1 ? 'eis' : ''} no filtro atual`;
+  }
+
+  // ===== Carregamento =====
+  document.addEventListener('DOMContentLoaded', () => {
+    // Base unificada
+    registrosArquivados = coletarArquivados();
+    console.debug('[ARQUIVADOS] itens carregados:', registrosArquivados.length);
+
+    // Motivos no select
+    const selectMotivo = document.getElementById("filtroMotivo");
+    selectMotivo.innerHTML = '<option value="">Todos</option>';
+    try {
+      const mv = JSON.parse(localStorage.getItem("motivosArquivamento") || "[]");
+      const motivos = Array.isArray(mv)
+        ? mv.map(x => typeof x === 'string' ? x : (x?.nome || x?.label || x?.titulo || '')).filter(Boolean)
+        : [];
+      const motivosBase = Array.from(new Set(registrosArquivados.map(r => r.motivo))).filter(Boolean);
+      const uniq = Array.from(new Set([...motivos, ...motivosBase]));
+      uniq.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        selectMotivo.appendChild(opt);
+      });
+    } catch {}
+
+    // Últimos 12 meses
+    const selectMes = document.getElementById("filtroMes");
+    const hoje = new Date();
+    for (let i = 0; i < 12; i++) {
+      const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const ano = data.getFullYear();
+      const mes = String(data.getMonth() + 1).padStart(2, "0");
+      const rot = data.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      const opt = document.createElement("option");
+      opt.value = `${ano}-${mes}`;
+      opt.textContent = rot.charAt(0).toUpperCase() + rot.slice(1);
+      selectMes.appendChild(opt);
+    }
+
+    // Primeira pintura
+    gerarCards(registrosArquivados);
+    atualizarGraficos();
+
+    // Ícones
+    window.lucide?.createIcons?.();
+
+    });
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn      = document.getElementById('hamburguer');
+    const menu     = document.getElementById('menuLateral');
+    const backdrop = document.getElementById('menuBackdrop');
+
+    if (!btn || !menu) {
+      console.warn('[menu-mobile] Botão ou menu não encontrados');
+      return;
+    }
+
+    function fecharMenu(){
+      menu.classList.remove('aberto');
+      btn.setAttribute('aria-expanded', 'false');
+      if (backdrop) backdrop.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    function toggleMenu(ev){
+      if (ev) ev.stopPropagation();
+      const aberto = menu.classList.toggle('aberto');
+      btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+
+      if (backdrop){
+        backdrop.hidden = !aberto;
+      }
+
+      document.body.classList.toggle('no-scroll', aberto);
+    }
+
+    // Clicar no hambúrguer ABRE/FECHA o menu
+    btn.addEventListener('click', toggleMenu);
+
+    // Clicar no fundo escuro fecha
+    backdrop?.addEventListener('click', fecharMenu);
+
+    // Clicar fora do menu fecha (no mobile)
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('aberto')) return;
+      if (!menu.contains(e.target) && !btn.contains(e.target)) {
+        fecharMenu();
+      }
+    });
+
+    // Se trocar pra tela grande, volta tudo ao normal
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        fecharMenu();
+      }
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const btn=document.getElementById("hamburguer");
+  const menu=document.getElementById("menuLateral");
+  const back=document.getElementById("menuBackdrop");
+
+  if(!btn||!menu) return;
+
+  function abrir(){
+    menu.classList.add("aberto");
+    if(back){ back.classList.add("visivel"); back.hidden=false; }
+    document.body.classList.add("no-scroll");
+  }
+
+  function fechar(){
+    menu.classList.remove("aberto");
+    if(back){ back.classList.remove("visivel"); back.hidden=true; }
+    document.body.classList.remove("no-scroll");
+  }
+
+  btn.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    menu.classList.contains("aberto") ? fechar() : abrir();
+  });
+
+  back?.addEventListener("click",fechar);
+});
+</script>
+
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+  <script type="module" src="/api/proteger-pagina.js"></script>
+</body>
+</html>
+

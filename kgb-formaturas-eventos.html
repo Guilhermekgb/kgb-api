@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Eventos</title>
+
+  <!-- Permissões da página -->
+  <meta name="page-permission" content="page:kgb-formaturas-eventos.html">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- ESTILO ESPECÍFICO: EVENTOS --------- */
+
+    .linha-topo-eventos{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo input,
+    .campo select,
+    .campo textarea{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+    .campo input,
+    .campo select{
+      min-width:150px;
+    }
+    .campo textarea{
+      min-height:60px;
+      resize:vertical;
+    }
+    .campo input:focus,
+    .campo select:focus,
+    .campo textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#c29a5d;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario i{
+      width:16px; height:16px;
+    }
+
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .box-evento-flex{
+      display:grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:18px;
+    }
+    @media (max-width:900px){
+      .box-evento-flex{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card-form-evento{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card-form-evento h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card-form-evento h2 i{
+      width:18px; height:18px;
+    }
+
+    .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .campo-menor{
+      max-width:180px;
+    }
+    .campo-menorzinho{
+      max-width:140px;
+    }
+
+    .campo-checkbox{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-top:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo-checkbox input{
+      width:16px; height:16px;
+      border-radius:4px;
+    }
+
+    .linha-botoes-form{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      margin-top:10px;
+      flex-wrap:wrap;
+    }
+
+    .card-dica{
+      background:#fff;
+      border-radius:14px;
+      padding:14px 16px;
+      box-shadow:0 8px 20px rgba(0,0,0,.04);
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .card-dica h3{
+      font-size:14px;
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      color:#5a3e2b;
+    }
+    .card-dica h3 i{
+      width:16px; height:16px;
+    }
+    .card-dica ul{
+      margin:6px 0 0;
+      padding-left:17px;
+    }
+    .card-dica li{
+      margin-bottom:4px;
+    }
+
+    .lista-escolas-evento{
+      margin-top:6px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .lista-escolas-evento strong{
+      color:#4b2d16;
+    }
+
+    .box-tabela-eventos{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+
+    .tabela-eventos{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-eventos thead{
+      background:#f5e7d8;
+    }
+    .tabela-eventos th,
+    .tabela-eventos td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-eventos th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-eventos tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .col-evento-nome{
+      font-weight:500;
+      color:#4b2d16;
+    }
+    .col-evento-tipo{
+      font-size:12px;
+      color:#7c5a3a;
+    }
+
+    .tag-tipo-evento{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3e8da;
+      color:#6c4b30;
+      margin-right:4px;
+    }
+
+    .status-meta{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .status-meta i{
+      width:12px; height:12px;
+    }
+    .status-meta-ok{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .status-meta-pendente{
+      background:#fff8e2;
+      color:#7a5a00;
+    }
+
+    .resumo-financeiro-evento{
+      font-size:11px;
+      color:#7a5a3c;
+      line-height:1.4;
+    }
+    .resumo-financeiro-evento strong{
+      font-size:12px;
+      color:#4b2d16;
+    }
+
+    .acoes-evento{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .btn-acao{
+      border:none;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-acao i{
+      width:13px; height:13px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .paginacao{
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .paginacao button{
+      border:none;
+      background:#f3e8da;
+      color:#6c4b30;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .paginacao button[disabled]{
+      opacity:.4;
+      cursor:default;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="calendar-heart"></i> Eventos – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Cadastre os eventos de formatura com data, local e escolas participantes. Aqui você também junta turmas e acompanha meta mínima.
+        </p>
+
+        <div class="linha-topo-eventos">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="filtroAnoEvento">Ano da formatura</label>
+              <select id="filtroAnoEvento">
+                <!-- opções preenchidas via JS a partir dos eventos salvos -->
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroTipoEventoLista">Tipo de evento</label>
+              <select id="filtroTipoEventoLista">
+                <option value="">Todos</option>
+                <!-- preenchido via JS com tipos cadastrados reais -->
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroEscolaEvento">Escola</label>
+              <select id="filtroEscolaEvento">
+                <option value="">Todas</option>
+                <!-- preenchido via JS com escolas cadastradas reais -->
+              </select>
+            </div>
+            <div class="campo">
+              <label for="filtroSomenteFuturos">
+                <input type="checkbox" id="filtroSomenteFuturos">
+                Mostrar só eventos futuros
+              </label>
+            </div>
+          </div>
+
+          <button type="button" class="btn-primario" id="btnNovoEvento">
+            <i data-lucide="plus"></i>
+            Criar novo evento
+          </button>
+        </div>
+
+        <div class="box-evento-flex">
+          <!-- FORMULÁRIO DO EVENTO -->
+          <section class="card-form-evento" aria-label="Cadastro de evento">
+            <h2><i data-lucide="calendar-plus"></i> Cadastro / edição de evento</h2>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 220px;">
+                <label for="campoTipoEvento">Tipo de evento</label>
+                <select id="campoTipoEvento">
+                  <option value="">Selecione...</option>
+                  <!-- preenchido via JS com tipos cadastrados reais -->
+                </select>
+              </div>
+              <div class="campo campo-menorzinho">
+                <label for="campoAnoFormatura">Ano formatura</label>
+                <input id="campoAnoFormatura" type="number" min="1900" max="2100" placeholder="Ex.: 2025">
+              </div>
+              <div class="campo campo-menorzinho">
+                <label for="campoDataEvento">Data</label>
+                <input id="campoDataEvento" type="date">
+              </div>
+              <div class="campo campo-menorzinho">
+                <label for="campoHoraEvento">Horário</label>
+                <input id="campoHoraEvento" type="time">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 260px;">
+                <label for="campoNomeEvento">Nome interno do evento (opcional)</label>
+                <input id="campoNomeEvento" type="text" placeholder="Ex.: Colação 3º ano – Escola X + Escola Y">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 260px;">
+                <label for="campoLocalEvento">Local</label>
+                <input id="campoLocalEvento" type="text" placeholder="Nome do salão, auditório, endereço resumido...">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 260px;">
+                <label for="campoEscolasParticipantes">Escolas participantes</label>
+                <select id="campoEscolasParticipantes" multiple size="3">
+                  <!-- preenchido via JS com escolas cadastradas reais -->
+                </select>
+                <small style="font-size:11px; color:#9a7b58; margin-top:3px;">
+                  Selecione uma ou mais escolas. Os alunos participantes virão do cadastro, conforme marcaram esse tipo de evento.
+                </small>
+              </div>
+              <div class="campo campo-menor">
+                <label for="campoMetaMinima">Meta mínima de alunos (anotação)</label>
+                <input id="campoMetaMinima" type="number" min="0" placeholder="Ex.: 30">
+              </div>
+              <div class="campo campo-menor">
+                <label for="campoCapacidade">Capacidade estimada</label>
+                <input id="campoCapacidade" type="number" min="0" placeholder="Ex.: 300">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 260px;">
+                <label for="campoObsEstrategicas">Observações estratégicas</label>
+                <textarea id="campoObsEstrategicas" placeholder="Ex.: Priorizar fotos com pais, atenção ao tempo de discursos, dividir turmas A/B, etc."></textarea>
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox" for="campoEventoConjunto">
+                <input id="campoEventoConjunto" type="checkbox" checked>
+                Este é um evento conjunto (junção de turmas/escolas).
+              </label>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox" for="campoAtivoEvento">
+                <input id="campoAtivoEvento" type="checkbox" checked>
+                Evento ativo (aparece para emissão de convites e check-in).
+              </label>
+            </div>
+
+            <div class="linha-botoes-form">
+              <button type="button" class="btn-secundario" id="btnLimparEvento">
+                <i data-lucide="eraser"></i>
+                Limpar
+              </button>
+              <button type="button" class="btn-primario" id="btnSalvarEvento">
+                <i data-lucide="save"></i>
+                Salvar evento
+              </button>
+            </div>
+          </section>
+
+          <!-- DICAS / RESUMO -->
+          <aside class="card-dica" aria-label="Dicas de uso da tela de eventos">
+            <h3><i data-lucide="info"></i> Como o evento conversa com o resto do sistema</h3>
+            <ul>
+              <li>Primeiro você define o <strong>tipo de evento</strong> (colação, baile, churrasco...).</li>
+              <li>Depois junta as <strong>escolas participantes</strong> e o sistema vai buscar apenas os alunos que contrataram esse tipo de evento.</li>
+              <li>A <strong>meta mínima</strong> aqui é só uma anotação, para ajudar você a saber se o evento “se pagou”. Nada trava se não bater.</li>
+              <li>Esse evento será usado na emissão de convites e na tela de <strong>check-in</strong> com leitura de QR Code.</li>
+              <li>Mais tarde você poderá anexar documentos (contrato do local, riders, etc.) e histórico de comunicação.</li>
+            </ul>
+          </aside>
+        </div>
+
+        <!-- LISTA DE EVENTOS -->
+        <section class="box-tabela-eventos" aria-label="Lista de eventos cadastrados">
+          <table class="tabela-eventos">
+            <thead>
+              <tr>
+                <th>Evento / Tipo</th>
+                <th>Data / Local</th>
+                <th>Escolas e alunos</th>
+                <th>Meta mínima</th>
+                <th>Financeiro</th>
+                <th style="width:260px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyEventos">
+              <!-- preenchido via JS com eventos do localStorage -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoEventos">Exibindo 0 eventos.</span>
+            <div class="paginacao">
+              <button disabled>&laquo;</button>
+              <button disabled>1</button>
+              <button disabled>&raquo;</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script type="module" src="kgb-formaturas-eventos.js"></script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

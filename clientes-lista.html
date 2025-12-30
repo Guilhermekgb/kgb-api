@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <!-- Metas essenciais primeiro -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="./config.env.js"></script>
+
+  <!-- Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard de permissões (depende do kgb-common) -->
+<!--<script type="module" src="./api/proteger-pagina.js"></script> -->
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+   // Desenvolvimento local (vamos usar a mesma API da Render)
+var DEV_API  = "https://kgb-api.onrender.com";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Lista de Clientes</title>
+
+  <!-- Evita 404 do favicon -->
+  <link rel="icon" href="data:," />
+
+  <!-- Identidade RBAC da página -->
+  <meta name="page-permission" content="Administrador|Vendedor">
+
+
+ 
+  <!-- Guard precisa carregar cedo para ler o meta acima -->
+  <script src="js/auth-helper.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Ícones (CDN) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    body { margin: 0; background-color: #f8f1e8; }
+
+    /* Tipografia só da área principal (menu preservado) */
+    main.conteudo-principal,
+    input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper { display: flex; min-height: 100vh; overflow: hidden; }
+    /* margin-left aplicada via JS no desktop para não ficar sob o menu */
+    main.conteudo-principal { flex: 1; padding: 40px; overflow-y: auto; transition: margin-left .2s ease; }
+    .conteudo-central { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 28px; color: #5a3e2b; display: flex; align-items: center; gap: 10px; margin: 0 0 20px; }
+
+    .filtros { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+    .filtros select, .filtros input {
+      padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background:#fff;
+    }
+    .filtros select{ min-width: 180px; }
+    #filtroBusca{ flex: 1 1 260px; min-width: 260px; }
+
+    .cliente-box {
+      background: white; padding: 20px; border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 16px; border:1px solid #e9e0d6;
+    }
+    .cliente-box.inativo { background-color: #eee; opacity: 0.7; }
+    .cliente-box h3 { margin: 0 0 6px 0; color: #5a3e2b; line-height: 1.2; }
+
+    .info-secundaria{
+      font-size: 14px; color: #7b5e46;
+      margin-top: 4px; margin-bottom: 10px;
+    }
+    .acoes { margin-top: 10px; }
+    .acoes button, .acoes a {
+      margin-right: 10px; background-color: #c29a5d; border: none; color: white;
+      padding: 8px 12px; border-radius: 6px; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .acoes button:hover, .acoes a:hover { background-color: #a87f51; }
+
+    .botao-novo-cliente {
+      background-color: #c09765; color: white; padding: 10px 18px; border-radius: 8px;
+      text-decoration: none; font-weight: bold; display: inline-flex;
+      align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    .botao-novo-cliente:hover { background-color: #a87f51; }
+
+    .etiqueta.inativo {
+      background-color: gray; color: white; padding: 2px 8px;
+      border-radius: 12px; font-size: 12px;
+    }
+    .chip{
+      display:inline-flex; align-items:center; gap:6px;
+      background:#fff; border:1px solid #ddd; border-radius:999px;
+      padding:2px 8px; font-size:12px; color:#5a3e2b; margin-left:8px;
+    }
+    .chip i{ width:14px; height:14px; }
+
+    #hamburguer {
+      position: fixed; top: 12px; left: 12px; background: #c29a5d;
+      border: none; color: white; font-size: 24px; padding: 6px 12px;
+      border-radius: 8px; z-index: 1001; display: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+    @media (max-width: 768px) {
+      #hamburguer { display: block; }
+      main.conteudo-principal { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu" aria-hidden="true"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral" aria-label="Menu lateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+
+  <main class="conteudo-principal" role="main">
+    <div class="conteudo-central">
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+        <a href="cadastro-cliente.html" class="botao-novo-cliente" aria-label="Criar novo cliente">
+          <i data-lucide="plus" aria-hidden="true"></i> Novo Cliente
+        </a>
+      </div>
+
+      <h1><i data-lucide="users" aria-hidden="true"></i> Lista de Clientes</h1>
+
+      <div class="filtros">
+        <label class="sr-only" for="filtroTipoEvento">Tipo de Evento</label>
+        <select id="filtroTipoEvento" aria-label="Tipo de Evento"><option value="">Tipo de Evento</option></select>
+
+        <label class="sr-only" for="filtroBusca">Buscar</label>
+        <input type="text" id="filtroBusca" placeholder="Buscar por nome, cidade ou WhatsApp" aria-label="Buscar por nome, cidade ou WhatsApp">
+
+        <label class="sr-only" for="filtroData">Data</label>
+        <input type="date" id="filtroData" aria-label="Data">
+
+        <label class="sr-only" for="filtroResponsavel">Responsável</label>
+        <select id="filtroResponsavel" aria-label="Responsável">
+          <option value="">Responsável</option>
+        </select>
+      </div>
+
+      <div id="listaClientes" aria-live="polite"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Menu precisa ser módulo (usa import/export) -->
+<script type="module" src="menu-lateral.js"></script>
+
+<!-- Lógica da página -->
+<script type="module" src="clientes-lista.js"></script>
+ 
+
+<!-- Ícones + ajuste de margem no desktop + recriação de ícones após injeção do menu -->
+<script>
+  // Ícones (protege caso o CDN falhe)
+  document.addEventListener('DOMContentLoaded', () => { try { window.lucide?.createIcons?.(); } catch {} });
+
+  // Margem do conteúdo no DESKTOP (>=1024px) para não ficar sob o menu
+  (function ajustaEspacoConteudo(){
+    const menu = document.getElementById('menuLateral');
+    const main = document.querySelector('main.conteudo-principal');
+
+    function aplicar() {
+      if (!menu || !main) return;
+      const desktop = window.innerWidth >= 1024;
+      if (desktop) {
+        const w = menu.getBoundingClientRect().width || 0;
+        main.style.marginLeft = w ? (w + 'px') : '0px';
+      } else {
+        main.style.marginLeft = '0px';
+      }
+    }
+
+    try {
+      const obs = new MutationObserver(() => {
+        if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+      });
+      obs.observe(menu, { childList: true });
+    } catch {}
+
+    window.addEventListener('resize', aplicar);
+    window.addEventListener('orientationchange', aplicar);
+    aplicar();
+  })();
+
+  // Recria ícones quando o menu terminar de injetar
+  try {
+    const alvo = document.getElementById('menuLateral');
+    if (alvo) {
+      const obs = new MutationObserver((muts, o) => {
+        if (alvo.firstElementChild && window.lucide?.createIcons) {
+          window.lucide.createIcons(); o.disconnect();
+        }
+      });
+      obs.observe(alvo, { childList: true });
+    }
+  } catch {}
+</script>
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

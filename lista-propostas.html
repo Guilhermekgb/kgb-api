@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:lista-propostas.html">
+  <meta charset="UTF-8" />
+  <title>Lista de Propostas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard / RBAC (usa helpers do common) -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    :root{
+      --bg:#f6f1e9; --surface:#fff; --line:#eadfd1; --ink:#2f2a25; --muted:#7a7066;
+      --brand:#c29a5d; --brand-900:#9f7b45; --danger:#c94b4b;
+      --radius:12px; --shadow:0 4px 14px rgba(0,0,0,.06);
+      --sidebar-w:260px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+    .wrapper{display:flex;min-height:100vh}
+    #menuLateral{flex-shrink:0}
+    main{flex:1;min-width:0;padding:28px}
+    .center{max-width:1200px;margin:0 auto}
+
+    h1{margin:0 0 14px;display:flex;gap:10px;align-items:center;font-family:"Playfair Display",Georgia,serif}
+
+    /* busca */
+    .toolbar{display:grid;gap:10px;margin:10px 0 16px}
+    .field{position:relative}
+    .field input{
+      width:100%;padding:12px 14px 12px 40px;background:#fff;border:1px solid var(--line);border-radius:10px;
+    }
+    .field .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9a8a7d}
+
+    /* lista */
+    .list{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+
+    /* Cabeçalho: 1ª linha (Cliente | Data | Local | Convidados | Status) */
+    .head{
+      display:grid;gap:10px;align-items:center;
+      grid-template-columns: 1.5fr 130px 1.2fr 130px 150px;
+      padding:12px 14px;background:#fffdf7;border-bottom:1px solid var(--line);font-size:12px;color:#6b5c50
+    }
+
+    /* Cada item em 2 linhas no desktop */
+    .row{border-top:1px solid #f1e8da;background:#fff}
+    .row:nth-child(even){background:#fffdfb}
+    .row-top{
+      display:grid;gap:10px;align-items:center;
+      grid-template-columns: 1.5fr 130px 1.2fr 130px 150px; /* MESMA grade do cabeçalho */
+      padding:12px 14px 8px 14px;
+    }
+    .row-bottom{
+      display:grid;gap:10px;align-items:center;
+      grid-template-columns: 1.2fr 1.2fr 130px auto;   /* Resp | Última | Visualizações | Ações */
+      padding:0 14px 12px 14px;
+    }
+    .cell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .meta-label{color:var(--muted);font-size:12px;margin-right:6px}
+
+    .actions{display:flex;gap:8px;justify-content:flex-end}
+    .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:10px;padding:8px 12px;font-weight:600;color:#fff;background:var(--brand);cursor:pointer}
+    .btn:hover{background:var(--brand-900)}
+    .btn.del{background:var(--danger)}
+
+    /* chips de status (fortes) */
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px;border:1px solid transparent}
+    .st-novo{background:#fff3e0;color:#8a4b00;border-color:#ffddaf}
+    .st-enviada{background:#e3f2fd;color:#0b5aa9;border-color:#bbdefb}
+    .st-vista{background:#fff7d6;color:#7a5a00;border-color:#f0c36d}
+    .st-aceita{background:#e8f5e9;color:#1b5e20;border-color:#c8e6c9}
+    .st-recusada{background:#fdecea;color:#b71c1c;border-color:#ffcdc7}
+    .st-vencida{background:#fff3cd;color:#7a5f00;border-color:#ffe69c}
+    .st-arquivada{background:#f3f4f6;color:#374151;border-color:#e5e7eb}
+
+    /* menu lateral fixo/overlay */
+    @media (min-width: 1024px){
+      #menuLateral{ width: var(--sidebar-w); }
+      main{ margin-left: var(--sidebar-w); }
+    }
+    @media (max-width: 1023px){
+      #menuLateral{
+        position: fixed; left: 0; top: 0; height: 100vh;
+        width: var(--sidebar-w);
+        transform: translateX(-100%); transition: .25s ease; z-index: 999;
+      }
+      #menuLateral.aberto{ transform: none; }
+      main{ margin-left: 0; padding:20px; }
+      #hamburguer{display:block;position:fixed;top:12px;left:12px;z-index:1001;background:var(--brand);color:#fff;border:none;padding:6px 10px;border-radius:8px}
+      .head{display:none}
+      .row{margin:10px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+      .row-top{grid-template-columns: 1fr 1fr;grid-template-areas:
+        "cliente cliente"
+        "data    local"
+        "qtd     status";
+      }
+      .row-bottom{grid-template-columns: 1fr 1fr;grid-template-areas:
+        "resp last"
+        "views actions";
+      }
+    }
+   @media (min-width: 1024px){
+  #hamburguer{display:none;}
+}
+
+    /* AJUSTE de colunas largas para status (não vazar) */
+    .head{
+      grid-template-columns: 1.5fr 130px 1.2fr 130px minmax(160px, 240px);
+    }
+    .row-top{
+      grid-template-columns: 1.5fr 130px 1.2fr 130px minmax(160px, 240px);
+    }
+    .badge{ max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    @media (max-width: 1023px){
+      .row-top .cliente { grid-area: cliente; }
+      .row-top .data    { grid-area: data; }
+      .row-top .local   { grid-area: local; }
+      .row-top .qtd     { grid-area: qtd; }
+      .row-top .status  { grid-area: status; }
+
+      .row-bottom .resp    { grid-area: resp; }
+      .row-bottom .last    { grid-area: last; }
+      .row-bottom .views   { grid-area: views; }
+      .row-bottom .actions { grid-area: actions; justify-content:flex-start; }
+    }
+
+    /* Oculta o badge de notificações no menu lateral apenas nesta página */
+    #menuLateral #badgeNotificacoes,
+    #menuLateral .badge-notificacoes {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <main>
+    <div class="center">
+      <h1><i data-lucide="file-text"></i> Lista de Propostas</h1>
+
+      <div class="toolbar">
+        <label class="field">
+          <span class="icon"><i data-lucide="search"></i></span>
+          <input id="busca" type="text" placeholder="Buscar por cliente, data (dd/mm/aaaa), local ou status..." />
+        </label>
+      </div>
+
+      <section class="list" aria-live="polite">
+        <!-- Cabeçalho alinhado com a 1ª linha -->
+        <div class="head">
+          <div>Nome do cliente</div>
+          <div>Data</div>
+          <div>Local</div>
+          <div>Convidados</div>
+          <div>Status</div>
+        </div>
+        <div id="listaPropostas"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="menu-lateral.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("badgeNotificacoes")?.remove();
+  });
+</script>
+
+<script>
+"use strict";
+
+/* ===== helpers ===== */
+const $ = (id)=>document.getElementById(id);
+// Busca propostas/leads da API. Requer `window.__API_BASE__` configurado.
+async function fetchLeadsFromApi(){
+  const base = window.__API_BASE__ || '';
+  if(!base) return [];
+  try{
+    const r = await fetch(base + '/leads', { credentials: 'same-origin' });
+    if(!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data) ? data : [];
+  }catch(e){ console.warn('[Propostas] Erro ao buscar leads da API', e); return []; }
+}
+const asStr = v => (v==null) ? "" : String(v);
+
+/* parse datas para ordenar (suporta DD/MM/AAAA e ISO YYYY-MM-DD) */
+function parseDateAny(v){
+  if (!v) return NaN;
+  const s = String(v).trim();
+  // ISO YYYY-MM-DD[...]
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const [y,m,d] = s.split("T")[0].split("-").map(Number);
+    return new Date(y, m-1, d).getTime();
+  }
+  // BR DD/MM/AAAA
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) {
+    return new Date(+m[3], +m[2]-1, +m[1]).getTime();
+  }
+  const t = new Date(s).getTime();
+  return isNaN(t) ? NaN : t;
+}
+
+/* tenta achar a coluna do funil para um lead (por id) */
+function getFunilColuna(leadId){
+  const idS = String(leadId);
+  const cand = [
+    "funil", "funilLeads", "funilQuadro", "quadroFunil",
+    "kanbanLeads", "pipeline", "boardLeads", "quadroLeads"
+  ];
+
+  for(const key of cand){
+    let data = null;
+    try{ data = JSON.parse(localStorage.getItem(key)||"null"); }catch{}
+    if(!data) continue;
+
+    const cols = data.colunas || data.columns || data.listas || data.boards || data;
+    if(!cols || typeof cols !== "object") continue;
+
+    const arr = Array.isArray(cols) ? cols : (Array.isArray(cols.items) ? cols.items : null);
+    if(!arr) continue;
+
+    for(const col of arr){
+      const nome = col.nome || col.titulo || col.name || col.label || "";
+      const items = col.itens || col.items || col.cards || col.leads || [];
+      for(const it of items){
+        if(typeof it === "string" || typeof it === "number"){
+          if(String(it) === idS) return nome;
+        }else if(it && (String(it.id)===idS || String(it.leadId)===idS)){
+          return nome;
+        }
+      }
+    }
+  }
+  return "";
+}
+
+function toDateBR(d){
+  if(!d) return "—";
+  if(d instanceof Date){
+    return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+  }
+  if(/^\d{4}-\d{2}-\d{2}/.test(String(d))){
+    const [y,m,da]=String(d).split("T")[0].split("-");
+    return `${da}/${m}/${y}`;
+  }
+  const m = String(d).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(m) return d;
+  const t=new Date(d);
+  return isNaN(t)? "—": toDateBR(t);
+}
+function toDateTimeBR(iso){
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return toDateBR(iso);
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+}
+
+function statusBadge(stRaw){
+  const s=(stRaw||"").toString().toLowerCase();
+  const map = {
+    "novo lead":"st-novo","novo":"st-novo",
+    "enviada":"st-enviada","enviado":"st-enviada","proposta enviada":"st-enviada",
+    "vista":"st-vista","visualizada":"st-vista","visualizado":"st-vista",
+    "aceita":"st-aceita","aprovada":"st-aceita","aprovado":"st-aceita",
+    "recusada":"st-recusada","recusado":"st-recusada",
+    "vencida":"st-vencida","vencido":"st-vencida",
+    "arquivada":"st-arquivada","arquivado":"st-arquivada","arquivado(a)":"st-arquivada"
+  };
+  const cls = map[s] || "st-enviada";
+  const label = s ? s[0].toUpperCase()+s.slice(1) : "—";
+  return `<span class="badge ${cls}"><i data-lucide="circle-dot"></i>${label}</span>`;
+}
+
+/* ===== fonte + filtro ===== */
+async function getPropostas(){
+  const leads = await fetchLeadsFromApi();
+
+  const arr = Array.isArray(leads) ? leads : [];
+  return arr.filter(l=>{
+    const st1 = asStr(l.status).toLowerCase();
+    const st2 = asStr(getFunilColuna(l.id)).toLowerCase();
+    const arquivado = l.arquivado === true || st1.includes("arquiv") || st2.includes("arquiv");
+    return !arquivado;
+  });
+}
+
+/* ===== render ===== */
+function rowHTML(p){
+  const nome   = p.nome || p.nomeCliente || "—";
+  const data   = p.dataEvento || p.data_evento || p.dataISO || "";
+  const local  = p.local || p.local_evento || "—";
+  const qtd    = p.qtd || p.quantidade || p.convidados || "";
+  const statusTexto = p._statusFunil || p.status || "Novo lead";
+  const resp   = p.responsavel || p.responsavel_nome || "—";
+  const last   = p.stats?.lastView || p.ultimaVisualizacao || p.lastView || "";
+  const lastOut = last ? toDateTimeBR(last) : "—";
+  const views  = p.stats?.views ?? p.visualizacoes ?? 0;
+
+  return `
+    <div class="row">
+      <div class="row-top">
+        <div class="cell cliente">${nome}</div>
+        <div class="cell data">${toDateBR(data)}</div>
+        <div class="cell local">${local || "—"}</div>
+        <div class="cell qtd">${qtd || "—"}</div>
+        <div class="cell status">${statusBadge(statusTexto)}</div>
+      </div>
+      <div class="row-bottom">
+        <div class="cell resp"><span class="meta-label">Responsável:</span>${resp}</div>
+        <div class="cell last"><span class="meta-label">Última visualização:</span>${lastOut}</div>
+        <div class="cell views"><span class="meta-label">Visualizações:</span>${views}</div>
+        <div class="actions">
+          <button class="btn" data-acao="ver" data-id="${p.id}"><i data-lucide="eye"></i>Ver</button>
+          <button class="btn del" data-acao="excluir" data-id="${p.id}"><i data-lucide="trash-2"></i>Excluir</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function carregar(){
+  const termo = ( $("busca")?.value || "" ).toLowerCase().trim();
+  let dados = await getPropostas();
+
+  dados = dados.map(p => ({ ...p, _statusFunil: getFunilColuna(p.id) }));
+
+  if (termo){
+    dados = dados.filter(p=>{
+      const alvo = [
+        p.nome, p.nomeCliente,
+        toDateBR(p.dataEvento||p.data_evento||p.dataISO||""),
+        p.local||p.local_evento,
+        p._statusFunil || p.status
+      ].map(v=>String(v||"").toLowerCase()).join(" | ");
+      return alvo.includes(termo);
+    });
+  }
+
+  dados.sort((a,b)=>{
+    const da = parseDateAny(a.dataEvento||a.data_evento||a.dataISO||a.criadoEm||a.dataCriacao||0) || 0;
+    const db = parseDateAny(b.dataEvento||b.data_evento||b.dataISO||b.criadoEm||b.dataCriacao||0) || 0;
+    return db - da;
+  });
+
+  $("listaPropostas").innerHTML = dados.map(rowHTML).join("") ||
+    `<div class="row"><div class="row-top"><div class="cell">Nenhuma proposta encontrada.</div></div></div>`;
+  try{ window.lucide?.createIcons?.(); }catch{}
+}
+
+/* ===== actions ===== */
+function verProposta(id){
+  window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(id)}`;
+}
+async function excluirProposta(id){
+  if(!confirm("Marcar esta proposta como arquivada? Essa ação pode ser desfeita.")) return;
+  const base = window.__API_BASE__ || '';
+  if(!base){ alert('API não configurada para arquivar propostas.'); return; }
+  try{
+    const r = await fetch(base + '/leads/' + encodeURIComponent(id), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'arquivado' })
+    });
+    if(!r.ok) throw new Error('Falha ao atualizar lead');
+  }catch(e){ console.warn('Erro ao arquivar proposta:', e); alert('Não foi possível arquivar a proposta.'); }
+  carregar();
+}
+
+/* ===== boot (quando a página termina de carregar) ===== */
+document.addEventListener("DOMContentLoaded", ()=>{
+  carregar(); // monta a lista logo que abre
+
+  $("busca")?.addEventListener("input", carregar);
+
+  // delegação dos botões Ver / Excluir
+  document.addEventListener("click",(ev)=>{
+    const b = ev.target.closest("button[data-acao]");
+    if(!b) return;
+    const id = b.dataset.id;
+    if(b.dataset.acao==="ver"){ verProposta(id); }
+    if(b.dataset.acao==="excluir"){ excluirProposta(id); }
+  });
+
+  // mobile começa com menu fechado
+  if (window.matchMedia("(max-width: 1023px)").matches) {
+    document.getElementById("menuLateral")?.classList.remove("aberto");
+  }
+});
+</script>
+
+
+<script>
+// quando mudar "leads" ou "propostasIndex" no localStorage, recarrega a lista
+window.addEventListener("storage", (e)=>{
+  if (e.key === "leads" || e.key === "propostasIndex") carregar();
+});
+// também escuta BroadcastChannel (usado por outras abas para sinalizar mudanças)
+try{
+  const ch = new BroadcastChannel('mrubuffet');
+  ch.onmessage = (m)=>{ if (m?.data?.type === 'leads:ping') carregar(); };
+}catch(e){}
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Esqueci Minha Senha | Sistema de Buffet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lucide@latest"></script>
+    <script type="module" src="./api/remote-adapter.js"></script>
+
+  <style>
+    /* === Correção principal: evita “vazar” do input (padding conta na largura) === */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root{
+      --bg: #4E342E;   /* marrom de fundo */
+      --brand: #c58c40;/* dourado */
+      --brand-700:#a3702f;
+      --line:#e6e6e6;
+      --muted:#6b6b6b;
+    }
+
+    html, body { height: 100%; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background-color: var(--bg);
+      display: grid;
+      place-items: center;
+      margin: 0;
+      padding: 24px; /* respiro nas telas menores */
+    }
+
+    .container {
+      width: 100%;
+      max-width: 420px;               /* um pouco mais largo pra respirar */
+      background-color: #fff;
+      padding: 32px 28px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      text-align: center;
+      animation: fadeIn .45s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    h2 {
+      color: #3e2a25;
+      margin: 0 0 8px;
+      font-size: 1.6rem;
+    }
+
+    p {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0 0 22px;
+      line-height: 1.45;
+    }
+
+    .form-group {
+      position: relative;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 12px 12px 42px;  /* espaço para o ícone */
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background-color: #f9f9f9;
+      font-size: 15px;
+      transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+
+    .form-group input:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px #f5e2c2;
+      outline: none;
+      background-color: #fff;
+    }
+
+    .icon-left {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      transform: translateY(-50%);
+      color: #bfae9c;
+      pointer-events: none;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--brand);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: filter .2s ease, transform .02s ease;
+    }
+    button:hover { filter: brightness(.97); }
+    button:active { transform: translateY(1px); }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: #3e2a25;
+      text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* Ajustes finos em telas muito pequenas */
+    @media (max-width: 380px){
+      .container { padding: 28px 20px; }
+      .form-group input{ font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Esqueceu sua Senha?</h2>
+    <p>Informe seu e-mail para iniciar o processo de recuperação.</p>
+
+<form id="form-esqueci">
+  <div class="form-group">
+    <i class="icon-left" data-lucide="mail"></i>
+    <input type="email" id="email" name="email" placeholder="Digite seu e-mail" required />
+  </div>
+  <button type="submit">Avançar</button>
+</form>
+
+<p id="mensagem" style="margin-top:10px; font-size:13px;"></p>
+
+
+    <a href="login.html" class="back-link">
+      <i data-lucide="arrow-left"></i> Voltar para o login
+    </a>
+  </div>
+
+<script>
+  const form = document.getElementById('form-esqueci');
+  const msg  = document.getElementById('mensagem');
+
+  form.addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const email = document.getElementById('email').value.trim();
+
+    if (!email) {
+      msg.textContent = 'Informe o e-mail.';
+      return;
+    }
+
+    msg.textContent = 'Enviando instruções...';
+
+    if (!window.handleRequest) {
+      msg.textContent = 'Erro interno: adaptador de API não carregado.';
+      return;
+    }
+
+    try {
+      const resp = await window.handleRequest('/auth/recover', {
+        method: 'POST',
+        body: { email }
+      });
+
+      if (resp && resp.status >= 200 && resp.status < 300) {
+        msg.textContent = 'Se o e-mail existir no sistema, você receberá um link para redefinir a senha em instantes.';
+      } else {
+        msg.textContent = 'Não foi possível iniciar a recuperação. Tente novamente em alguns minutos.';
+      }
+    } catch (e) {
+      console.error(e);
+      msg.textContent = 'Erro de conexão com o servidor.';
+    }
+  });
+
+  // Ícones
+  try { lucide.createIcons(); } catch {}
+</script>
+
+</body>
+</html>

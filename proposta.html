@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Proposta do Buffet</title>
+  <link rel="icon" href="data:;base64,=">
+
+  <style>
+    body { background-color:#f8f1e8; font-family:'Playfair Display', serif; color:#5a3e2b; margin:0; padding:30px; }
+    .container { max-width:900px; margin:auto; background:#fff; border-radius:16px; padding:40px; box-shadow:0 0 15px rgba(0,0,0,.05); }
+    h1 { color:#c29a5d; margin-bottom:10px; text-align:center; }
+    .cabecalho { text-align:center; margin-bottom:24px; }
+    .cabecalho .sub { color:#8e6b42; font-size:14px; }
+
+    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+    .card { background:#faf6f1; border:1px solid #eadfce; border-radius:12px; padding:16px; }
+    .card h3 { margin:0 0 8px 0; color:#8e6b42; }
+
+    .tabela { width:100%; border-collapse: collapse; }
+    .tabela th, .tabela td { border-bottom:1px solid #ecdcc8; padding:10px; }
+    .tabela th { text-align:left; color:#8e6b42; background:#fff7ee; }
+    .tabela td { color:#5a3e2b; }
+
+    .linha { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed #eddcc3; }
+    .linha:last-child { border-bottom:none; }
+    .linha .rotulo { color:#8e6b42; }
+    .linha .valor  { color:#5a3e2b; font-weight:bold; }
+    .total { text-align:right; font-size:18px; padding-top:10px; border-top:2px solid #eadfce; margin-top:10px; }
+    .total strong { color:#5a3e2b; }
+
+    .botoes { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    .botoes button { background:#c29a5d; color:#fff; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; }
+    .botoes button:hover { background:#a9864f; }
+
+    .rodape { text-align:center; color:#8e6b42; margin-top:30px; line-height:1.6em; }
+
+    .imagem-cardapio { max-width:100%; height:auto; border-radius:12px; margin:8px auto; display:block; object-fit:contain; box-shadow:0 0 6px rgba(0,0,0,0.06); }
+  </style>
+
+  <script>
+    // decode payload base64 (?p=)
+    const fromB64Json = function (b64) {
+      try { return JSON.parse(decodeURIComponent(escape(atob(b64)))); }
+      catch { return null; }
+    };
+  </script>
+
+  <!-- Engine de variáveis (mantida) -->
+  <script type="module">
+    import { replaceVars } from './template-utils.js';
+    window.replaceVars = replaceVars;
+  </script>
+</head>
+<body>
+
+  <div style="text-align:center; margin-bottom:30px;">
+    <img src="logo.png" alt="Logo do Buffet" style="max-width:180px; height:auto;">
+  </div>
+
+  <div class="container" id="conteudo">
+    <p style="text-align:center;">⏳ Carregando proposta...</p>
+  </div>
+
+  <div id="acoesCompartilhar" class="botoes" style="display:flex; gap:8px; justify-content:center; margin-top:16px;">
+    <button id="btnCopiarLink">Copiar link</button>
+    <button id="btnWhats">WhatsApp</button>
+    <button id="btnEmail">E-mail</button>
+    <button id="btnModelos">Modelos</button>
+  </div>
+<div id="modalModelos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#fff; padding:16px; border-radius:12px; width:min(720px, 92vw); max-height:85vh; overflow:auto;">
+    <h3 style="margin:0 0 8px 0; color:#8e6b42;">Modelos de Mensagem</h3>
+    <p style="margin-top:0; color:#7b6a57;">Edite abaixo e salve. Eles ficam no localStorage como <code>modelo_*</code>.</p>
+
+    <label>WhatsApp (proposta_whats)</label>
+    <textarea id="mdl_whats" rows="4" style="width:100%;"></textarea>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+      <div>
+        <label>Assunto E-mail (proposta_email_assunto)</label>
+        <input id="mdl_email_assunto" style="width:100%;" />
+      </div>
+      <div>
+        <label>Modelo E-mail (proposta_email)</label>
+        <textarea id="mdl_email_corpo" rows="4" style="width:100%;"></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+      <button id="mdlCancelar">Cancelar</button>
+      <button id="mdlSalvar" style="background:#c29a5d;color:#fff;border:none;border-radius:8px;padding:8px 14px;">Salvar</button>
+    </div>
+  </div>
+</div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    // ---------- Utils ----------
+    const esc = (s) => String(s ?? "")
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    const toNumber = (v) => {
+      if (typeof v === "number" && !isNaN(v)) return v;
+      if (v == null) return 0;
+      let s = String(v).trim();
+      if (/,/.test(s) && !/\.\d{1,2}$/.test(s)) s = s.replace(/\./g,"").replace(/,/g,".");
+      s = s.replace(/[^\d.-]/g,"");
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
+    const brl = (n) => Number(n || 0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+    const rmAcc = (s="") => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const norm = (s="") => rmAcc(String(s).trim().toLowerCase());
+    const safeArr = (a) => Array.isArray(a) ? a : [];
+
+    // Base da API (igual resto do sistema)
+    const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+
+    // ===== Imagens: normaliza e RESOLVE dbId =====
+    function toImgObj(img, idx){
+      const pickSrc = (o) => {
+        const keys = ["src","url","href","dataUrl","base64","conteudoBase64","conteudo","image","dataURI"];
+        for (const k of keys) {
+          const v = o?.[k];
+          if (typeof v === "string" && v) return v;
+        }
+        return "";
+      };
+      if (!img) return null;
+      if (typeof img === "string") {
+        return { src: img, tamanho: idx === 0 ? "grande" : "pequena" };
+      }
+      const src = pickSrc(img);
+      const tamanho = img?.tamanho || (idx === 0 ? "grande" : "pequena");
+      const dbId = img?.dbId || img?.id || img?.key || null;
+      if (src) return { src, tamanho };
+      if (dbId) return { dbId: String(dbId), tamanho };
+      return null;
+    }
+
+    // Busca uma imagem por dbId em localStorage e IndexedDB
+    async function findImageByDbId(dbId){
+      if (!dbId) return null;
+
+      // 1) localStorage: chaves diretas e dicionários comuns
+      const tryLsValue = (v) => {
+        if (!v) return null;
+        try {
+          // pode vir string dataURL
+          if (typeof v === "string" && v.startsWith("data:image")) return v;
+          // pode vir JSON com {src/base64/...}
+          const o = JSON.parse(v);
+          const s = o?.src || o?.dataUrl || o?.base64 || o?.conteudoBase64 || o?.conteudo || "";
+          if (typeof s === "string" && s) return s;
+        } catch {
+          if (typeof v === "string" && v.startsWith("data:image")) return v;
+        }
+        return null;
+      };
+
+      // candidatos de chave direta
+      const directKeys = [
+        `img:${dbId}`, `image:${dbId}`, `file:${dbId}`, `foto:${dbId}`, dbId
+      ];
+      for (const k of directKeys){
+        const hit = tryLsValue(localStorage.getItem(k));
+        if (hit) return hit;
+      }
+
+      // candidatos dicionários
+      const dictKeys = [
+        "imagesDB","imagensDB","uploadsDB","filesDB","buffetImages","kgbImages","imagesCache"
+      ];
+      for (const dk of dictKeys){
+        try{
+          const raw = localStorage.getItem(dk);
+          if (!raw) continue;
+          const obj = JSON.parse(raw);
+          const v = obj?.[dbId];
+          const out = tryLsValue(typeof v === "string" ? v : JSON.stringify(v||{}));
+          if (out) return out;
+        }catch{}
+      }
+
+      // varre todas as chaves do LS procurando um dicionário com o id
+      try{
+        for (let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if (!k) continue;
+          if (!/img|image|foto|file|upload|blob|cache/i.test(k)) continue;
+          try{
+            const raw = localStorage.getItem(k);
+            if (!raw || raw.length < 20) continue;
+            const obj = JSON.parse(raw);
+            if (obj && typeof obj === "object" && dbId in obj){
+              const v = obj[dbId];
+              const out = typeof v === "string" ? v : (v?.src || v?.base64 || v?.dataUrl || "");
+              if (typeof out === "string" && out) return out;
+            }
+          }catch{}
+        }
+      }catch{}
+
+      // 2) IndexedDB: tenta em todos bancos/lojas
+      try{
+        const list = (indexedDB.databases ? await indexedDB.databases() : []) || [];
+        const names = list.map(d=>d.name).filter(Boolean);
+        const guesses = ["buffetImages","images","files","uploads","buffet-files","kgb-images","app-db"];
+        const dbNames = Array.from(new Set([...names, ...guesses]));
+
+        for (const name of dbNames){
+          const db = await new Promise(res=>{
+            const req = indexedDB.open(name);
+            req.onerror = () => res(null);
+            req.onsuccess = () => res(req.result);
+          });
+          if (!db) continue;
+
+          const stores = Array.from(db.objectStoreNames || []);
+          for (const storeName of stores){
+            const value = await new Promise(r=>{
+              try{
+                const tx = db.transaction(storeName, "readonly");
+                const st = tx.objectStore(storeName);
+                let done = false;
+
+                // tenta chaves diretas
+                const tryKey = (key, cb) => {
+                  const req = st.get(key);
+                  req.onsuccess = () => cb(req.result);
+                  req.onerror = () => cb(null);
+                };
+
+                tryKey(dbId, v=>{
+                  if (done) return; done = true; r(v);
+                });
+
+                tx.oncomplete = () => { if (!done) r(null); };
+                tx.onerror = () => { if (!done) r(null); };
+              }catch{ r(null); }
+            });
+
+            const toUrl = async (val) => {
+              if (!val) return null;
+              if (typeof val === "string") {
+                if (val.startsWith("data:image")) return val;
+                // pode ser JSON com src/dataUrl
+                try{
+                  const o = JSON.parse(val);
+                  const s = o?.src || o?.dataUrl || o?.base64 || "";
+                  if (s) return s;
+                }catch{}
+              } else if (val instanceof Blob) {
+                return URL.createObjectURL(val);
+              } else if (typeof val === "object") {
+                const s = val?.src || val?.dataUrl || val?.base64 || val?.conteudoBase64 || "";
+                if (s) return s;
+                if (val?.blob instanceof Blob) return URL.createObjectURL(val.blob);
+              }
+              return null;
+            };
+
+            const url = await toUrl(value);
+            if (url) { try{ db.close(); }catch{} return url; }
+
+            // fallback pesado: varrer tudo procurando {id/dbId}
+            // (só tenta se a loja tiver getAll)
+            try{
+              const url2 = await new Promise(resolve=>{
+                let resolved = false;
+                const tx = db.transaction(storeName, "readonly");
+                const st = tx.objectStore(storeName);
+                const req = st.getAll ? st.getAll() : null;
+                if (!req) { resolve(null); return; }
+                req.onsuccess = async () => {
+                  const arr = req.result || [];
+                  for (const rec of arr){
+                    const candidateId = rec?.id || rec?.dbId || rec?.key;
+                    if (String(candidateId) === String(dbId)){
+                      const u = await toUrl(rec);
+                      resolved = true; resolve(u || null); return;
+                    }
+                    // também se for {id, data:{...}}
+                    if (rec?.data){
+                      const candidateId2 = rec.data?.id || rec.data?.dbId || rec.data?.key;
+                      if (String(candidateId2) === String(dbId)){
+                        const u2 = await toUrl(rec.data);
+                        resolved = true; resolve(u2 || null); return;
+                      }
+                    }
+                  }
+                  if (!resolved) resolve(null);
+                };
+                req.onerror = () => resolve(null);
+              });
+              if (url2) { try{ db.close(); }catch{} return url2; }
+            }catch{}
+          }
+          try{ db.close(); }catch{}
+        }
+      }catch{}
+
+      return null;
+    }
+
+       // Parâmetros da URL
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("t") || "";     // token público da proposta
+    const p = params.get("p") || "";     // payload extra (se existir)
+
+    // Função para buscar proposta pública na API
+    async function fetchPropostaPublica(token) {
+      if (!API_BASE || !token) return null;
+      try {
+        const resp = await fetch(`${API_BASE}/proposta/${encodeURIComponent(token)}`, {
+          method: "GET"
+          // rota pública, sem headers especiais
+        });
+
+        if (!resp.ok) {
+          console.warn("[PROPOSTA] /proposta/:token retornou status:", resp.status);
+          return null;
+        }
+
+        let data = null;
+        try { data = await resp.json(); } catch { data = null; }
+
+        // server.js responde { ok:true, data: safeLead }
+        return data?.data || data?.lead || data || null;
+      } catch (e) {
+        console.warn("[PROPOSTA] Erro ao chamar API /proposta/:token:", e);
+        return null;
+      }
+    }
+
+       // Obter lead (API primeiro, depois fallbacks antigos)
+    let lead = null;
+
+    // 1) API pública por token (?t=TOKEN)
+    if (t) {
+      lead = await fetchPropostaPublica(t);
+    }
+
+    // 2) Fallback: se algum dia o payload "p" vier com lead embutido
+    if (!lead && p && typeof fromB64Json === "function") {
+      try {
+        const decoded = fromB64Json(p);
+        if (decoded?.lead) lead = decoded.lead;
+      } catch {}
+    }
+
+    // 3) Preview: sessionStorage (quando abre logo depois de gerar proposta)
+    if (!lead && t) {
+      try {
+        const ss = sessionStorage.getItem(`proposta:${t}`);
+        if (ss) {
+          const obj = JSON.parse(ss);
+          if (obj?.lead) lead = obj.lead;
+        }
+      } catch {}
+    }
+
+    // 4) Último recurso: sessionStorage.leads (preview rápido) — evita depender de localStorage
+    if (!lead && t) {
+      try {
+        const leads = JSON.parse(sessionStorage.getItem("leads") || "[]");
+        lead = leads.find(x => x && x.token === t) || null;
+      } catch {}
+    }
+
+    const conteudo = document.getElementById("conteudo");
+    if (!lead) {
+      conteudo.innerHTML = `<div class="card">Não foi possível localizar a proposta. Verifique o link.</div>`;
+      return;
+    }
+
+
+    // Catálogo (para tentar achar imagens por nome/id)
+    function pickImageFields(o){
+      if (!o) return [];
+      if (Array.isArray(o.imagens)) return o.imagens.filter(Boolean);
+      if (Array.isArray(o.fotos)) return o.fotos.filter(Boolean);
+      if (o.imagem) return [o.imagem];
+      if (o.thumb) return [o.thumb];
+      return [];
+    }
+    function getCatalog(){
+      const out = [];
+      if (Array.isArray(window.cardapiosDisponiveis)) out.push(...window.cardapiosDisponiveis);
+
+      try {
+        const c = JSON.parse(localStorage.getItem("cardapiosBuffet") || "[]");
+        if (Array.isArray(c)) out.push(...c);
+      } catch {}
+
+      try {
+        const p = JSON.parse(localStorage.getItem("produtosBuffet") || "[]");
+        if (Array.isArray(p)) out.push(...p.filter(it => String(it?.tipo||"").toLowerCase()==="cardapio"));
+        else if (p && Array.isArray(p.cardapios)) out.push(...p.cardapios);
+        else if (p && Array.isArray(p.itens)) out.push(...p.itens.filter(it => /card(a|á)pio|menu|buffet/i.test(String(it?.categoria||it?.tipo||it?.grupo||""))));
+      } catch {}
+
+      try {
+        const cc = JSON.parse(localStorage.getItem("catalogoCardapios") || "[]");
+        if (Array.isArray(cc)) out.push(...cc);
+        else if (cc && Array.isArray(cc.itens)) out.push(...cc.itens);
+      } catch {}
+
+      return out;
+    }
+    const catalog = getCatalog();
+    const byId   = new Map();
+    const byNome = new Map();
+    catalog.forEach(item=>{
+      const id   = (item.id ?? item._id ?? item.codigo ?? "").toString();
+      const nome = (item.nome ?? item.titulo ?? item.name ?? "").toString();
+      if (id) byId.set(id, item);
+      if (nome) byNome.set(norm(nome), item);
+    });
+
+    function resolveImagesForCardapio(c){
+      // 1) imagens no item do lead
+      let imgs = pickImageFields(c);
+      if (!imgs.length){
+        // 2) procurar no catálogo por id ou nome
+        const id   = (c.id ?? c._id ?? c.codigo ?? "").toString();
+        const nome = (c.nome ?? c.titulo ?? "").toString();
+        let src = null;
+        if (id && byId.has(id)) src = byId.get(id);
+        else if (nome && byNome.has(norm(nome))) src = byNome.get(norm(nome));
+        if (src) imgs = pickImageFields(src);
+      }
+      return imgs.map((img, idx)=>toImgObj(img, idx)).filter(Boolean);
+    }
+
+    // Dados para cabeçalho
+    const qtdConvidados = toNumber(lead.qtd ?? lead.quantidade ?? lead.qtdConvidados ?? 0);
+    const dataEvento = lead.dataEvento ? new Date(lead.dataEvento).toLocaleDateString("pt-BR") : "—";
+    const localEvento = lead.local || lead.localEvento || "Local";
+    const nomeCliente = lead.nome || "Cliente";
+    const qtdFmt = qtdConvidados ? qtdConvidados.toLocaleString("pt-BR") : "—";
+
+    // Galeria de imagens (respeita grande/médio/pequena)
+const sizeToWidth = (t) => {
+  const k = String(t || "").toLowerCase();
+  if (k === "grande") return 760;   // ajuste aqui (ex.: 720, 760, 800…)
+  if (k === "medio" || k === "médio") return 400;
+  return 280; // pequena
+};
+
+    let cardapioImgsHtml = "";
+    const listaCardapios = Array.isArray(lead.cardapios_enviados) && lead.cardapios_enviados.length
+      ? lead.cardapios_enviados
+      : safeArr(lead.itensSelecionados).filter(i => /card(a|á)pio|menu|buffet/i.test((i?.categoria||i?.grupo||i?.tipo||"")));
+
+    listaCardapios.forEach(c => {
+      const nome = esc(c?.nome || c?.titulo || "Cardápio");
+      const normImgs = resolveImagesForCardapio(c);
+      if (normImgs.length){
+        cardapioImgsHtml += `
+          <div class="card">
+            <h3>${nome}</h3>
+            ${normImgs.map(({src, tamanho, dbId}) => {
+              const w = sizeToWidth(tamanho);
+              return src
+                ? `<img src="${esc(src)}" class="imagem-cardapio" alt="${nome}" style="width:${w}px;">`
+                : `<img data-dbid="${esc(dbId)}" class="imagem-cardapio" alt="${nome}" style="width:${w}px;">`;
+            }).join("")}
+          </div>`;
+      }
+    });
+
+    // Cabeçalho
+    const cabecalhoHtml = `
+      <div class="cabecalho">
+        <h1>PROPOSTA BUFFET KGB</h1>
+        <div class="sub">${esc(nomeCliente)} / ${esc(dataEvento)} / ${esc(localEvento)} / ${esc(qtdFmt)} convidados</div>
+      </div>
+    `;
+
+    // Tabelas
+    function isPerPerson(item){
+      const str = (item?.tipoCobranca||item?.cobranca||item?.unidade||item?.unidadeCobranca||item?.tipo||item?.categoria||item?.grupo||"").toString().toLowerCase();
+      if (str.includes("pessoa") || str === "pp" || str.includes("por pessoa") || str === "por_pessoa") return true;
+      if (item?.porPessoa || item?.cobrancaPorPessoa || item?.perPerson || item?.pp || item?.isPerPerson) return true;
+      if (item?.valorPorPessoa != null || item?.precoPorPessoa != null) return true;
+      const nome = (item?.nome || item?.titulo || item?.nomeItem || '').toString().toLowerCase();
+      return (nome.includes('por pessoa') || /\/\s*pessoa/.test(nome));
+    }
+    function numberFromItem(item){
+      const toNum = (v) => {
+        if (typeof v === "number" && !isNaN(v)) return v;
+        if (v == null) return 0;
+        let s = String(v).trim();
+        if (/,/.test(s) && !/\.\d{1,2}$/.test(s)) s = s.replace(/\./g,"").replace(/,/g,".");
+        s = s.replace(/[^\d.-]/g,"");
+        const n = parseFloat(s);
+        return isNaN(n) ? 0 : n;
+      };
+      const cand = [item?.valor, item?.preco, item?.precoUnitario, item?.valorUnitario, item?.valorPorPessoa, item?.precoPorPessoa, item?.total, item?.valorTotal];
+      for (const c of cand){ const n = toNum(c); if (!isNaN(n) && n !== 0) return n; }
+      return toNum(item?.valor || 0);
+    }
+    function linhasDe(arr){
+      const linhas = [];
+      safeArr(arr).forEach(it => {
+        const nome = esc(it?.nome || it?.titulo || it?.nomeItem || 'Item');
+        const unit = numberFromItem(it);
+        const pp = isPerPerson(it);
+        linhas.push(`
+          <tr>
+            <td>${nome} ${pp ? "(por pessoa)" : ""}</td>
+            <td style="text-align:right;">${brl(unit)}</td>
+          </tr>
+        `);
+      });
+      return linhas;
+    }
+
+    const linhasCardapio = [
+      ...linhasDe(lead.cardapios_enviados),
+      ...linhasDe(safeArr(lead.itensSelecionados).filter(i => /card(a|á)pio|menu|buffet/i.test((i?.categoria||i?.grupo||i?.tipo||""))))
+    ];
+    const linhasAdicionais = linhasDe(lead.adicionaisSelecionados);
+    const linhasServicos   = linhasDe(lead.servicosSelecionados);
+    const linhasProdutos   = linhasDe(lead.produtosSelecionados || lead.produtos);
+
+    const secCardapio = linhasCardapio.length ? `
+      <div class="card">
+        <h3>Cardápios / Itens</h3>
+        <table class="tabela">
+          <thead><tr><th>Descrição</th><th style="text-align:right;">Valor</th></tr></thead>
+          <tbody>${linhasCardapio.join("")}</tbody>
+        </table>
+      </div>` : "";
+
+    const secAdicionais = linhasAdicionais.length ? `
+      <div class="card"><h3>Adicionais</h3>
+        <table class="tabela"><thead><tr><th>Descrição</th><th style="text-align:right;">Valor</th></tr></thead>
+        <tbody>${linhasAdicionais.join("")}</tbody></table>
+      </div>` : "";
+
+    const secServicos = linhasServicos.length ? `
+      <div class="card"><h3>Serviços / Pacotes</h3>
+        <table class="tabela"><thead><tr><th>Descrição</th><th style="text-align:right;">Valor</th></tr></thead>
+        <tbody>${linhasServicos.join("")}</tbody></table>
+      </div>` : "";
+
+    const secProdutos = linhasProdutos.length ? `
+      <div class="card"><h3>Produtos</h3>
+        <table class="tabela"><thead><tr><th>Descrição</th><th style="text-align:right;">Valor</th></tr></thead>
+        <tbody>${linhasProdutos.join("")}</tbody></table>
+      </div>` : "";
+
+    // Observações
+    const obsTxt  = (lead?.observacoes || lead?.obs || "").trim();
+    const infoTxt = (lead?.informacoesAdicionais || lead?.informacoes_adicionais || "").trim();
+    const obsHtml = (obsTxt || infoTxt)
+      ? `<div class="card"><h3>Observações</h3><div style="white-space:pre-line">${esc([obsTxt, infoTxt].filter(Boolean).join('\n\n'))}</div></div>`
+      : "";
+
+    // Totais
+    const totaisHtml = `
+      <div class="card">
+        <h3>Totais</h3>
+        <div class="linha"><div class="rotulo">Subtotal</div><div class="valor" id="subtotal">—</div></div>
+        <div class="linha"><div class="rotulo">Desconto</div><div class="valor" id="desconto_exibicao">—</div></div>
+        <div class="total">Total: <strong id="total_final">—</strong></div>
+        <div style="font-size:14px; margin-top:6px;">Valor por pessoa: <strong id="valor_por_pessoa">—</strong></div>
+      </div>
+    `;
+
+    // Render
+   document.getElementById("conteudo").innerHTML = `
+  ${cabecalhoHtml}
+  <div class="grid">
+    ${cardapioImgsHtml}
+    ${obsHtml}
+    ${secCardapio}
+    <!-- NOVO: card comparativo (preenchido dinamicamente se houver 2+ cardápios) -->
+    <div class="card" id="comparativo_cardapios" style="display:none">
+      <h3>Comparativo de Cardápios</h3>
+      <table class="tabela">
+        <thead><tr><th>Cardápio</th><th style="text-align:right;">Total (qtd × valor)</th></tr></thead>
+        <tbody id="comparativo_cardapios_body"></tbody>
+      </table>
+      <div style="font-size:13px; color:#7a7a7a; margin-top:6px;">
+        Adicionais/Pacotes somam à parte e valem para qualquer opção.
+      </div>
+    </div>
+    ${secAdicionais}
+    ${secServicos}
+    ${secProdutos}
+    ${totaisHtml}
+  </div>
+  <div class="rodape">
+    <p>Obrigado por considerar nossos serviços! Estamos à disposição para qualquer dúvida ou ajuste na proposta.</p>
+    <p>Atenciosamente,<br/>Equipe do Buffet</p>
+  </div>
+`;
+
+
+    // Hidrata imagens que vieram só com dbId
+    (async function hydrateDbImgs(){
+      const els = Array.from(document.querySelectorAll('img[data-dbid]'));
+      for (const el of els){
+        const id = el.getAttribute('data-dbid');
+        try{
+          const url = await findImageByDbId(id);
+          if (url) {
+            el.src = url;
+          } else {
+            // se não achar, esconde a imagem vazia
+            el.style.display = "none";
+          }
+        }catch{
+          el.style.display = "none";
+        }
+      }
+    })();
+
+    // Totais
+    calcularTotaisDaProposta(lead, qtdConvidados);
+
+    // Compartilhar
+    const shareUrl = (() => { const u = new URL(location.href); u.searchParams.delete("preview"); return u.toString(); })();
+    const btnCopy = document.getElementById("btnCopiarLink");
+    const btnZap  = document.getElementById("btnWhats");
+    const btnMail = document.getElementById("btnEmail");
+    const _htmlToText = (s)=>{ const div=document.createElement('div'); div.innerHTML=s||""; return (div.textContent||div.innerText||"").trim(); };
+// === LOG LOCAL DA PROPOSTA (página pública) ===
+  function logPublicAction(entry){
+    try{
+      const arr = (typeof readLS === 'function') ? (readLS('propostaLogs',[])||[]) : (JSON.parse(localStorage.getItem('propostaLogs')||'[]')||[]);
+      arr.push({ ...entry, ts: Date.now() });
+      try { if (typeof writeLS === 'function') writeLS('propostaLogs', arr); else localStorage.setItem('propostaLogs', JSON.stringify(arr)); } catch {}
+    }catch{}
+  }
+    btnCopy?.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(shareUrl);
+      alert("Link copiado!");
+
+    });
+    function _getModeloBySlugOrName(preferredSlug, nomeIgual){
+      const direto = (localStorage.getItem(`modelo_${preferredSlug}`) || "").trim();
+      if (direto) return direto;
+      try {
+        const idx = JSON.parse(localStorage.getItem('modelos_index') || '[]');
+        const hit = idx.find(m => String(m.nome||"").trim().toLowerCase() === String(nomeIgual||"").trim().toLowerCase());
+        if (hit) {
+          const h = (localStorage.getItem(`modelo_${hit.slug}`) || "").trim();
+          if (h) return h;
+        }
+      } catch { }
+      return "";
+    }
+    // === Gerenciador de modelos (página pública) ===
+const _L = (k) => localStorage.getItem(k) || "";
+const _S = (k, v) => localStorage.setItem(k, v ?? "");
+
+const mdl = document.getElementById("modalModelos");
+document.getElementById("btnModelos")?.addEventListener("click", ()=>{
+  // carrega valores atuais
+  document.getElementById("mdl_whats").value         = _L('modelo_proposta_whats');
+  document.getElementById("mdl_email_assunto").value = _L('modelo_proposta_email_assunto');
+  document.getElementById("mdl_email_corpo").value   = _L('modelo_proposta_email');
+  mdl.style.display = 'flex';
+});
+document.getElementById("mdlCancelar")?.addEventListener("click", ()=> mdl.style.display='none');
+document.getElementById("mdlSalvar")?.addEventListener("click", ()=>{
+  _S('modelo_proposta_whats',          document.getElementById("mdl_whats").value);
+  _S('modelo_proposta_email_assunto',  document.getElementById("mdl_email_assunto").value);
+  _S('modelo_proposta_email',          document.getElementById("mdl_email_corpo").value);
+
+  // opcional: manter um índices amigável (modelos_index)
+  try{
+    const idx = JSON.parse(localStorage.getItem('modelos_index') || '[]') || [];
+    const add = (slug, nome)=>{ if(!idx.find(i=>i.slug===slug)){ idx.push({ slug, nome }); } };
+    add('proposta_whats', 'Proposta-whats');
+    add('proposta_email_assunto', 'Proposta-email-assunto');
+    add('proposta_email', 'Proposta-email');
+    localStorage.setItem('modelos_index', JSON.stringify(idx));
+  }catch{}
+
+  alert('Modelos salvos.');
+  mdl.style.display = 'none';
+});
+
+    function _valores(lead, shareUrl){
+      const t = sel => (document.querySelector(sel)?.textContent || "").trim();
+      const dataFmt = lead?.dataEvento ? new Date(lead.dataEvento).toLocaleDateString("pt-BR") : "";
+      return {
+        nomeCliente: lead?.nome || "",
+        emailCliente: lead?.email || "",
+        whatsappCliente: lead?.whatsapp || "",
+        dataEvento: dataFmt,
+        tipoEvento: lead?.tipoEvento || "",
+        localEvento: lead?.local || "",
+        qtdConvidados: String(qtdConvidados || lead?.qtd || ""),
+        valorTotal: t('#total_final') || "",
+        valorPorPessoa: t('#valor_por_pessoa') || "",
+        subtotal: t('#subtotal') || "",
+        linkProposta: shareUrl,
+        dataAtual: new Date().toLocaleDateString('pt-BR')
+      };
+    }
+    btnZap?.addEventListener("click", () => {
+      const values = _valores(lead || {}, shareUrl);
+      let modelo = _getModeloBySlugOrName('proposta_whats', 'Proposta-whats');
+      if (!modelo) modelo = 'Olá {{nomeCliente}}, segue sua proposta: {{linkProposta}}.\nTotal: {{valorTotal}}';
+      const base = /<[^>]+>/.test(modelo) ? _htmlToText(modelo) : modelo;
+      const msg = (window.replaceVars ? window.replaceVars(base, values, true) : base);
+      let tel = (values.whatsappCliente || "").replace(/\D/g,'');
+      if (tel && tel.length <= 11) tel = '55' + tel;
+      const url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`
+                      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+ logPublicAction({ tipo: 'click-whats', leadId: (lead?.id || null), token: (lead?.token || null), url: shareUrl });
+
+      window.open(url, "_blank");
+    
+    });
+    btnMail?.addEventListener("click", () => {
+      const values = _valores(lead || {}, shareUrl);
+      let assunto = _getModeloBySlugOrName('proposta_email_assunto', 'Proposta-email-assunto')
+                 || 'Proposta do Buffet - {{nomeCliente}}';
+      assunto = (window.replaceVars ? window.replaceVars(assunto, values, true) : assunto);
+
+      let modeloEmail = _getModeloBySlugOrName('proposta_email', 'Proposta-email');
+      if (!modeloEmail) modeloEmail = 'Olá {{nomeCliente}},\n\nSegue sua proposta:\n{{linkProposta}}\n\nTotal: {{valorTotal}}\nQualquer dúvida fico à disposição.';
+      const corpoBase = /<[^>]+>/.test(modeloEmail) ? _htmlToText(modeloEmail) : modeloEmail;
+      const corpo = (window.replaceVars ? window.replaceVars(corpoBase, values, true) : corpoBase);
+
+      const para = encodeURIComponent(values.emailCliente || "");
+      const href = `mailto:${para}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+      logPublicAction({ tipo: 'click-email', leadId: (lead?.id || null), token: (lead?.token || null), url: shareUrl });
+
+      window.location.href = href;
+       });
+  });
+
+  function calcularTotaisDaProposta(lead, qtdConvidados){
+  const toNum = (v)=>{ if(typeof v==='number' && !isNaN(v)) return v; if(v==null) return 0;
+    let s = String(v).trim(); if (/,/.test(s) && !/\.\d{1,2}$/.test(s)) s = s.replace(/\./g,"").replace(/,/g,".");
+    s = s.replace(/[^\d.-]/g,""); const n = parseFloat(s); return isNaN(n)?0:n; };
+  const brl = (n)=> Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const safeArr = a => Array.isArray(a) ? a : [];
+  const isPerPerson = (item)=>{
+    const str = (item?.tipoCobranca||item?.cobranca||item?.unidade||item?.unidadeCobranca||item?.tipo||item?.categoria||item?.grupo||"")
+      .toString().toLowerCase();
+    if (str.includes("pessoa") || str==="pp" || str.includes("por pessoa") || str==="por_pessoa") return true;
+    if (item?.porPessoa || item?.cobrancaPorPessoa || item?.perPerson || item?.pp || item?.isPerPerson) return true;
+    if (item?.valorPorPessoa!=null || item?.precoPorPessoa!=null) return true;
+    const nome = (item?.nome||item?.titulo||item?.nomeItem||'').toString().toLowerCase();
+    return (nome.includes('por pessoa') || /\/\s*pessoa/.test(nome));
+  };
+  const numberFromItem = (item)=>{
+    const cand = [item?.valor,item?.preco,item?.precoUnitario,item?.valorUnitario,item?.valorPorPessoa,item?.precoPorPessoa,item?.total,item?.valorTotal];
+    for(const c of cand){ const n = toNum(c); if(!isNaN(n) && n!==0) return n; }
+    return toNum(item?.valor||0);
+  };
+
+  const qtd = toNum(qtdConvidados)||0;
+const menusDiretos = safeArr(lead?.cardapios_enviados).map(c => ({
+  nome: (c?.nome || 'Cardápio'),
+  unit: numberFromItem(c),
+  total: isPerPerson(c) ? numberFromItem(c) * qtd : numberFromItem(c)
+}));
+const menusExtras = safeArr(lead?.itensSelecionados)
+  .filter(i => /card(a|á)pio|menu|buffet/i.test((i?.categoria || i?.grupo || i?.tipo || "")))
+  .map(i => ({
+    nome: (i?.nome || i?.titulo || 'Cardápio'),
+    unit: numberFromItem(i),
+    total: isPerPerson(i) ? numberFromItem(i) * qtd : numberFromItem(i)
+  }));
+
+  const menus = [...menusDiretos, ...menusExtras];
+
+  const adicionais = safeArr(lead?.adicionaisSelecionados).reduce((sum,a)=>{
+    const u = numberFromItem(a); return sum + ((isPerPerson(a))? u*qtd : u);
+  },0);
+  const servicos = safeArr(lead?.servicosSelecionados).reduce((sum,s)=>{
+    const u = numberFromItem(s); return sum + ((isPerPerson(s))? u*qtd : u);
+  },0);
+  const produtos = safeArr(lead?.produtosSelecionados||lead?.produtos).reduce((sum,p)=>{
+    const u = numberFromItem(p); return sum + ((isPerPerson(p))? u*qtd : u);
+  },0);
+
+  // Desconto
+  const dR = toNum(lead?.descontoReais||0);
+  const dP = Math.max(0, Math.min(100, toNum(lead?.descontoPorcentagem||0)));
+
+  // Branch: comparação x 1 cardápio
+  let subtotal = 0, totalFinal = 0, porPessoa = 0;
+
+  if (menus.length <= 1){
+    const menuTotal = menus[0]?.total || 0;
+    const bruto = menuTotal + adicionais + servicos + produtos;
+    const desc = (bruto * (dP/100)) + dR;
+    subtotal   = bruto;
+    totalFinal = Math.max(0, bruto - desc);
+    porPessoa  = (qtd>0) ? totalFinal / qtd : 0;
+
+    // esconde comparativo
+    const cmp = document.getElementById('comparativo_cardapios');
+    if (cmp) cmp.style.display = 'none';
+  } else {
+    // 2+ cardápios: não somar menus; mostrar comparativo e calcular total apenas dos extras
+    const extrasBruto = adicionais + servicos + produtos;
+    const desc = (extrasBruto * (dP/100)) + dR;
+    subtotal   = extrasBruto;
+    totalFinal = Math.max(0, extrasBruto - desc);
+    porPessoa  = 0; // não faz sentido "por pessoa" sem escolher o cardápio
+
+    // preenche comparativo
+    const cmp = document.getElementById('comparativo_cardapios');
+    const body = document.getElementById('comparativo_cardapios_body');
+    if (cmp && body){
+      body.innerHTML = menus.map(m=>`
+        <tr>
+          <td>${(m.nome||'Cardápio')}</td>
+          <td style="text-align:right;"><b>${brl(m.total)}</b></td>
+        </tr>
+      `).join('');
+      cmp.style.display = '';
+    }
+  }
+
+  // Preenche os campos da seção Totais
+  const descLinha = (dP>0 || dR>0)
+    ? `${dP>0 ? (dP.toFixed(0).replace('.0','')+'%') : ''}${(dP>0 && dR>0)?' + ':''}${dR>0? brl(dR):''}`
+    : '—';
+
+  document.getElementById('subtotal')?.replaceChildren(document.createTextNode(brl(subtotal)));
+  document.getElementById('desconto_exibicao')?.replaceChildren(document.createTextNode(descLinha));
+  document.getElementById('total_final')?.replaceChildren(document.createTextNode(brl(totalFinal)));
+  document.getElementById('valor_por_pessoa')?.replaceChildren(document.createTextNode(porPessoa? brl(porPessoa) : '—'));
+}
+
+  </script>
+
+  <script type="module" src="./api/api-config.js"></script>
+  <script>
+  (function trackProposalView(){
+    try{
+      const qs = new URLSearchParams(location.search);
+      if ((qs.get("preview") || "") === "1") return;
+
+      const token = qs.get("t") || "";
+      if (!token) return;
+
+      const debounceKey = `pv:${token}`;
+      const last = Number(sessionStorage.getItem(debounceKey) || 0);
+      if (Date.now() - last < 30_000) return;
+      sessionStorage.setItem(debounceKey, String(Date.now()));
+
+      let idFromParam = null;
+      try{
+        const p = qs.get("p");
+        if (p){
+          const dec = JSON.parse(decodeURIComponent(escape(atob(p))));
+          idFromParam = dec?.id || null;
+        }
+      }catch{}
+
+      const leads = JSON.parse(localStorage.getItem("leads") || "[]");
+      const idx = leads.findIndex(l =>
+        (idFromParam ? String(l.id) === String(idFromParam) : false) ||
+        (l.token && String(l.token) === String(token))
+      );
+      if (idx < 0) return;
+
+      const lead = leads[idx];
+      lead.stats = lead.stats || {};
+      lead.stats.views    = (Number(lead.stats.views) || 0) + 1;
+      lead.stats.lastView = new Date().toISOString();
+
+      try{
+        lead.viewLog = Array.isArray(lead.viewLog) ? lead.viewLog : [];
+        lead.viewLog.push({ at: new Date().toISOString(), ua: navigator.userAgent });
+      }catch{}
+
+      localStorage.setItem("leads", JSON.stringify(leads));
+    }catch(e){
+      console.warn("Falha ao rastrear visualização:", e);
+    }
+  })();
+  </script>
+<script src="agenda-bridge.js"></script>
+
+</body>
+</html>

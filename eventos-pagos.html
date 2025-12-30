@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:eventos-pagos.html">
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<title>Eventos Pagos — Admin</title>
+
+<link rel="stylesheet" href="./kgb-common.css"/>
+<link rel="stylesheet" href="style.css"><!-- igual ao modelo-base -->
+<link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard (RBAC) -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<script>
+  try{ localStorage.setItem('guard.enforce','1'); }catch(e){}
+</script>
+
+<style>
+  :root{ --sidebar-w:260px; }
+  html, body{ margin:0; padding:0; background:#f8f1e8; }
+  .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+  #menuLateral{ flex-shrink:0; }
+  @media (min-width:769px){
+    #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:999; }
+    .wrapper{ padding-left:var(--sidebar-w); }
+  }
+  @media (max-width:768px){
+    #menuLateral{ position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:999; width:var(--sidebar-w); }
+    #menuLateral.aberto{ transform:translateX(0); }
+    .wrapper{ padding-left:0; }
+  }
+  main.kgb-content{
+    flex:1; min-height:100vh; height:auto; overflow-y:auto; width:100%;
+    padding:24px clamp(16px, 3vw, 32px) 40px;
+  }
+  /* Botão hamburguer (padrão mobile) */
+  #hamburguer{
+    position:fixed;
+    top:12px;
+    left:12px;
+    z-index:1001;
+    background:#c29a5d;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:6px 12px;
+    font-size:24px;
+    box-shadow:0 6px 16px rgba(0,0,0,.18);
+    cursor:pointer;
+    display:none; /* não aparece no desktop */
+  }
+
+  @media (max-width:768px){
+    #hamburguer{
+      display:block; /* só mostra em telas pequenas */
+    }
+  }
+
+
+  .card .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .card .row .col{ flex:1; min-width:240px; }
+  .k-pill{ white-space:nowrap; }
+
+  .ev-topbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .ev-topbar .spacer{ flex:1; }
+
+  .pill-row{ margin-top:10px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+
+  .small .badge{ margin-right:8px; }
+  .badge.ok{ background:#dcfce7; color:#166534; }
+  .badge.warn{ background:#fee2e2; color:#991b1b; }
+  .badge.neutro{ background:#e5e7eb; color:#111827; }
+
+  .toast{ position:fixed; right:18px; bottom:18px; background:#2e7d32; color:#fff;
+          padding:10px 14px; border-radius:12px; box-shadow:0 8px 18px rgba(0,0,0,.18);
+          opacity:0; transform:translateY(10px); transition:.25s; z-index:9999; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.warn{ background:#a56b00; }
+  .toast.bad{ background:#b3261e; }
+  .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  /* === FORÇA LOCAL: espresso sólido #532b03 no modelo-base === */
+html body aside#menuLateral{
+  background-color:#532b03 !important;   /* cor lisa desejada */
+  background-image:none !important;       /* evita degradês antigos */
+  box-shadow:2px 0 14px rgba(0,0,0,.18);
+}
+/* nada pode “tampar” o fundo do aside */
+aside#menuLateral .menu-lateral,
+aside#menuLateral .submenu{
+  background:transparent !important;
+  background-color:transparent !important;
+}
+@media (max-width: 768px){
+  #menuLateral{
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px; height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{ transform: translateX(0); }
+}
+
+</style>
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+<div class="wrapper">
+  <aside id="menuLateral" class="no-print"></aside>
+<div id="menuBackdrop" hidden></div>
+
+<main class="kgb-content">
+  <div class="container">
+    <div class="h h1">Eventos Pagos — Admin</div>
+
+    <!-- TOPO: seletor de evento + ações -->
+    <div class="card">
+      <div class="ev-topbar k-toolbar">
+        <div class="col" style="flex:2">
+          <label>Selecionar evento
+            <select id="selEvento" class="input ev-select"></select>
+          </label>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" id="btnNovo" title="Cria um novo usando os dados atuais">Novo</button>
+        <button class="btn ghost" id="btnEditar">Editar</button>
+        <button class="btn bad" id="btnExcluir">Excluir</button>
+        <a class="btn ghost" href="./layout-editor.html" target="_blank" id="btnEditorLayout">Editor layout</a>
+        <button class="btn" id="btnGerenciarConvites">Gerenciar convites</button>
+        <button class="btn" id="btnCheckin" title="Abrir check-in do evento">Check-in</button>
+        <button class="btn" id="btnPDV" title="Abrir PDV do evento">PDV</button>
+      </div>
+    </div>
+
+    <!-- Cabeçalho do evento -->
+    <div class="card" id="boxCabecalho">
+      <div class="h h2">1) Cabeçalho</div>
+      <div class="row">
+        <div class="col"><label>Nome do evento<input class="input" id="evNome" placeholder="Ex.: Sunset Open Bar"></label></div>
+        <div class="col"><label>Data<input class="input" id="evData" type="date"></label></div>
+        <div class="col"><label>Local<input class="input" id="evLocal" placeholder="Ex.: Salão KGB"></label></div>
+        <div class="col"><label>Conta bancária<select class="input" id="evConta"></select></label></div>
+
+        <!-- Categoria padrão de ENTRADA (vale para ingressos e fichas no PDV) -->
+        <div class="field-row" id="boxEvCats" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <label style="display:flex; flex-direction:column; min-width:240px;">
+            Categoria (entrada)
+            <select id="evCatEntrada">
+              <option value="">(selecione)</option>
+            </select>
+          </label>
+          <label style="display:flex; flex-direction:column; min-width:240px;">
+            Subcategoria
+            <select id="evSubEntrada" disabled>
+              <option value="">(opcional)</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <label class="k-pill"><input type="checkbox" id="hasIngressos" checked> Tem Ingressos</label>
+        <label class="k-pill"><input type="checkbox" id="hasItens" checked> Tem Itens/Fichas</label>
+        <div class="spacer"></div>
+        <button class="btn" id="btnSalvarEv" disabled>Salvar/Atualizar</button>
+      </div>
+    </div>
+
+    <!-- Ingressos -->
+    <div class="card" id="boxIngressos">
+      <div class="h h2">2) Ingressos (pré-venda)</div>
+      <div class="row">
+        <div class="col"><input class="input" id="ingNome" placeholder="Ex.: Inteira / VIP / Meia" data-scope="ing"></div>
+        <div class="col"><input class="input" id="ingPreco" placeholder="Preço ex.: 100,00" data-scope="ing"></div>
+        <div class="col k-right"><button class="btn" id="btnAddIng">Adicionar tipo</button></div>
+      </div>
+      <table class="table" id="tabIng">
+        <thead><tr><th>Tipo</th><th class="k-right">Preço</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="hr"></div>
+      <div class="row">
+        <div class="col">
+          <label>Tipo para gerar lote
+            <select class="input" id="selTipoLote"></select>
+          </label>
+        </div>
+        <div class="col"><input class="input" id="loteQtd" placeholder="Qtd (ex.: 100)" value="100"></div>
+        <div class="col"><input class="input" id="loteDigits" placeholder="Dígitos (ex.: 4 → 0001)" value="4"></div>
+        <div class="col k-right"><button class="btn" id="btnGerarLote" disabled>Gerar Lote</button></div>
+      </div>
+      <div class="small">
+        Resumo:
+        <span class="badge neutro">Gerados: <b id="spGerados">0</b></span>
+        <span class="badge ok">Vendidos: <b id="spVendidos">0</b></span>
+        <span class="badge warn">Pendentes: <b id="spPendentes">0</b></span>
+      </div>
+      <div class="small">Ao gerar, os convites ficam como <b>pendentes</b> e aparecem em “Gerenciar Convites”.</div>
+    </div>
+
+    <!-- Itens/Fichas -->
+    <div class="card" id="boxItens">
+      <div class="h h2">3) Itens/Fichas (PDV)</div>
+      <div class="row">
+        <div class="col"><input class="input" id="itNome" placeholder="Ex.: Chopp 300ml" data-scope="it"></div>
+        <div class="col"><input class="input" id="itPreco" placeholder="Preço ex.: 10,00" data-scope="it"></div>
+        <div class="col"><input class="input" id="itEstoque" placeholder="Estoque inicial (opcional)" data-scope="it"></div>
+        <div class="col k-right"><button class="btn" id="btnAddItem">Adicionar item</button></div>
+      </div>
+      <table class="table" id="tabItens">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th class="k-right">Preço</th>
+            <th class="k-right">Estoque</th>
+            <th class="k-right">Ops</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+</div>
+
+<div id="toast" class="toast">Salvo!</div>
+
+<script>
+/* ===== Fallbacks ===== */
+window.$  = window.$  || ((s, el=document)=> el.querySelector(s));
+window.$$ = window.$$ || ((s, el=document)=> Array.from(el.querySelectorAll(s)));
+window.readLS  = window.readLS  || ((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
+window.writeLS = window.writeLS || ((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
+window.uid = window.uid || ((p='id_')=> p + Math.random().toString(36).slice(2,9));
+window.fmtBRL = window.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+
+window.toNum = window.toNum || (raw => {
+  if (raw == null) return 0;
+  let s = String(raw).trim();
+  s = s.replace(/[\sR$\u00A0]/gi, '');
+  if (s.includes(',')) s = s.replace(/\./g,'').replace(',', '.');
+  const n = Number(s);
+  if (isNaN(n)) return 0;
+  return Math.round(n * 100);
+});
+
+window.toCentsSafe = window.toCentsSafe || (x => {
+  const n = Number(x ?? 0);
+  if (isNaN(n) || n <= 0) return 0;
+  if (Number.isInteger(n) && n < 1000) return n * 100;
+  if (!Number.isInteger(n) && n < 1000) return Math.round(n * 100);
+  return Math.round(n);
+});
+
+// use as mesmas chaves do kgb-common.js
+window.K_KEYS = window.K_KEYS || {
+  EVENTOS: 'm30.eventos',
+  INGRESSO_TIPOS: 'm30.ingTipos',
+  INGRESSOS: 'm30.tickets',   // (no seu código antigo era 'ingressos')
+  ITENS: 'm31.itens',         // <- ESSENCIAL para o estoque
+  VENDAS: 'm31.vendas'
+};
+
+// MIGRA/DEDUPE: remove duplicados e garante somente uma chave
+(function migrateAndDedupeItens(){
+  const key = (window.K_KEYS?.ITENS) || 'm31.itens';
+  let xs = readLS(key, []) || readLS('itens', []) || [];
+  if (!Array.isArray(xs)) xs = [];
+
+  // 1ª passada: dedupe por id
+  const seenIds = new Set();
+  const stage1 = [];
+  xs.forEach(it => {
+    const id = String(it?.id ?? '');
+    if (!seenIds.has(id)){
+      seenIds.add(id);
+      stage1.push(it);
+    }
+  });
+
+  // 2ª passada: dedupe por (eventoId + nome + preco)
+  const seenComp = new Set();
+  const out = [];
+  stage1.forEach(it => {
+    const comp = `${it?.eventoId||''}::${(it?.nome||'').trim().toLowerCase()}::${it?.preco||0}`;
+    if (!seenComp.has(comp)){
+      seenComp.add(comp);
+      out.push(it);
+    }
+  });
+
+  // salva (nova e antiga iguais, por compat)
+  writeLS(key, out);
+  try{ writeLS('itens', out); }catch{}
+})();
+
+window.listEventos = window.listEventos || (()=> readLS(K_KEYS.EVENTOS,[])||[]);
+window.listTipos   = window.listTipos   || (evtId => (readLS(K_KEYS.INGRESSO_TIPOS,[])||[]).filter(t=>t.eventoId===evtId));
+window.listItens   = window.listItens   || (evtId => (readLS(K_KEYS.ITENS,[])||[]).filter(i=>i.eventoId===evtId));
+
+let currentEventoId = null;
+let snapshot = null;
+let headerLocked = false;
+/* ==== M33 · Notifier seguro (bridge + helpers) ==== */
+const __BR = ()=> window.__agendaBridge || null;
+const __ok = ()=> !!__BR();
+const __short = (s,n=80)=> String(s||'').trim().slice(0,n);
+const __uid   = (...p)=> p.filter(Boolean).map(String).join(':');
+const __iso   = (d)=>{ if(!d) return ''; const x=new Date(d);
+  if(!Number.isFinite(+x)) return ''; const z=new Date(x.getTime()-x.getTimezoneOffset()*60000);
+  return z.toISOString().slice(0,10);
+};
+/* ===== Gravação segura + compactação de tickets ===== */
+function __compactTicketsInPlace() {
+  const TKEY = (window.K_KEYS && window.K_KEYS.INGRESSOS) || 'm30.tickets';
+  let xs;
+  try { xs = JSON.parse(localStorage.getItem(TKEY) || '[]'); } catch { xs = []; }
+  if (!Array.isArray(xs) || !xs.length) return;
+
+  const toCents = (v)=>{
+    if (typeof toCentsSafe === 'function') return toCentsSafe(v);
+    const n = Number(v||0);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (Number.isInteger(n) && n < 1000) return n * 100;
+    if (!Number.isInteger(n) && n < 1000) return Math.round(n*100);
+    return Math.round(n);
+  };
+
+  const compact = xs.map(t => {
+    const seqNum = Number(t.seq) || parseInt(String(t.numero ?? t.seqStr ?? '').replace(/\D/g,''),10) || 0;
+    const numero = (t.numero ?? t.seqStr ?? String(seqNum || '')).toString();
+    return {
+      id: t.id,
+      ticketId: t.ticketId || t.id,
+      eventoId: String(t.eventoId || ''),
+      tipoId: t.tipoId,
+      tipoNome: t.tipoNome,
+      numero: numero,
+      seq: seqNum,
+      precoUnit: toCents(t.precoUnit),
+      status: t.status || 'pendente'
+    };
+  });
+
+  try { localStorage.setItem(TKEY, JSON.stringify(compact)); } catch {}
+}
+
+function safeWriteLS(key, value){
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+      try { __compactTicketsInPlace(); } catch {}
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+      } catch (e2) {
+        alert('Armazenamento local cheio. Reduza o tamanho do lote de ingressos ou apague lotes antigos em "Gerenciar Convites".');
+        return false;
+      }
+    }
+    return false;
+  }
+}
+function notifyEventoCriado(evento){
+  if (!__ok()) return;
+  const id   = String(evento.id);
+  const tit  = evento.nome || evento.nomeEvento || `Evento ${id}`;
+  const data = __iso(evento.data || evento.dataISO || new Date());
+  __BR()?.upsertUnifiedItem({
+    id: __uid('evento','created',id),
+    title: `Novo evento: ${__short(tit,56)}`,
+    date: data,
+    status: 'scheduled',
+    src: 'eventos',
+    entity: { type:'evento', id }
+  });
+  __BR()?.publishNotificationFeed({
+    id: __uid('notif','evento','created',id),
+    title: `Evento criado — ${__short(tit,60)}`,
+    level: 'info',
+    entity: { type:'evento', id },
+    meta: { data, pessoas: Number(evento.qtdPessoas || evento.quantidadeConvidados || 0) }
+  });
+}
+
+function notifyEventoAtualizado(evento, change={}){
+  if (!__ok()) return;
+  const id = String(evento.id);
+  if (change.dataISO){
+    __BR()?.upsertUnifiedItem({
+      id: __uid('evento','created', id),
+      title: `Evento: ${__short(evento.nome||evento.nomeEvento||id,56)}`,
+      date: __iso(change.dataISO),
+      status: 'scheduled',
+      src: 'eventos',
+      entity: { type:'evento', id }
+    });
+  }
+  __BR()?.publishNotificationFeed({
+    id: __uid('notif','evento','status', id, String(evento.status||'').toLowerCase() || 'atualizado'),
+    title: `Evento ${__short(evento.nome||evento.nomeEvento||id)} — ${change.dataISO?'data alterada':('status: '+String(evento.status||'').toUpperCase())}`,
+    level: (String(evento.status||'').toLowerCase()==='cancelado') ? 'warn' : 'info',
+    entity: { type:'evento', id }
+  });
+}
+
+
+/* ==== Helper de data (AAAA-MM-DD -> DD/MM/AAAA) ==== */
+function fmtDataBR(iso){
+  if(!iso) return '';
+  const s = String(iso).trim();
+  const m = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})$/);
+  if(!m) return s;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+// Reage a mudanças das categorias vindas de outras abas/janelas
+window.addEventListener('storage', (ev) => {
+  if (ev.key === 'configFinanceiro' || ev.key === 'configFinanceiro:ping') {
+    try {
+      const cur = (typeof getFormData === 'function') ? getFormData() : {};
+      hydrateEventoCategorias(cur);
+    } catch {}
+  }
+});
+
+/* ==== Categorias (Financeiro) ==== */
+function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}; } }
+function listarCategoriasEntrada(){
+  const cfg = _cfgFin();
+  const xs = Array.isArray(cfg.categorias) ? cfg.categorias : [];
+  return xs.filter(c => String(c.tipo).toLowerCase()==='entrada' && c.paiId==null)
+           .sort((a,b)=> String(a.descricao||'').localeCompare(String(b.descricao||'')));
+}
+function listarSubcats(paiId){
+  const cfg = _cfgFin();
+  const xs = Array.isArray(cfg.categorias) ? cfg.categorias : [];
+  return xs.filter(c => c.paiId===paiId)
+           .sort((a,b)=> String(a.descricao||'').localeCompare(String(b.descricao||'')));
+}
+
+function hydrateEventoCategorias(ev){
+  const sel = document.getElementById('evCatEntrada');
+  const selSub = document.getElementById('evSubEntrada');
+  if(!sel||!selSub) return;
+
+  const cats = listarCategoriasEntrada();
+  sel.innerHTML = `<option value="">(selecione)</option>` + cats.map(c=>`<option value="${c.id}">${c.descricao}</option>`).join('');
+
+  const catId = ev?.categoriaEntradaId || "";
+  const subId = ev?.subcategoriaEntradaId || "";
+
+  if (catId && cats.some(c=> String(c.id)===String(catId))){
+    sel.value = String(catId);
+    const subs = listarSubcats(catId);
+    selSub.innerHTML = `<option value="">(opcional)</option>` + subs.map(s=>`<option value="${s.id}">${s.descricao}</option>`).join('');
+    selSub.disabled = subs.length===0;
+    if (subId && subs.some(s=> String(s.id)===String(subId))) selSub.value = String(subId);
+  }else{
+    selSub.innerHTML = `<option value="">(opcional)</option>`;
+    selSub.disabled = true;
+  }
+}
+
+/* categoria mudou → atualiza subcats + habilita salvar */
+document.addEventListener('change', (ev)=>{
+  if (ev.target && ev.target.id === 'evCatEntrada'){
+    const pid = ev.target.value || null;
+    const selSub = document.getElementById('evSubEntrada');
+    if(!selSub) return;
+    if(!pid){
+      selSub.innerHTML = `<option value="">(opcional)</option>`;
+      selSub.disabled = true;
+      watchDirty();
+      return;
+    }
+    const subs = listarSubcats(pid);
+    selSub.innerHTML = `<option value="">(opcional)</option>` + subs.map(s=>`<option value="${s.id}">${s.descricao}</option>`).join('');
+    selSub.disabled = subs.length===0;
+    watchDirty();
+  }
+  if (ev.target && ev.target.id === 'evSubEntrada'){
+    watchDirty();
+  }
+});
+
+/* MIGRA preços antigos para centavos */
+(function fixPrecosAntigos_v2(){
+  try{
+    // roda uma única vez
+    if (localStorage.getItem('m30.fixPrecos:v1') === '1') return;
+
+    let mudouTipos = false;
+    const tipos = readLS(K_KEYS.INGRESSO_TIPOS,[])||[];
+    for (const t of tipos){
+      const n = toCentsSafe(t.preco);
+      if (n !== t.preco){ t.preco = n; mudouTipos = true; }
+    }
+    if (mudouTipos) writeLS(K_KEYS.INGRESSO_TIPOS, tipos);
+
+    // tickets podem ser gigantes → normaliza em memória e salva com safeWriteLS
+    let mudouIng = false;
+    let ing = readLS(K_KEYS.INGRESSOS,[])||[];
+    if (Array.isArray(ing) && ing.length){
+      ing = ing.map(t => {
+        const n = toCentsSafe(t.precoUnit);
+        if (n !== t.precoUnit){ mudouIng = true; }
+        return { ...t, precoUnit: n };
+      });
+
+      // usa escrita segura; se falhar, tenta compactar e tenta 1x de novo
+      if (!safeWriteLS(K_KEYS.INGRESSOS, ing)){          // safeWriteLS está definido neste arquivo
+        try { __compactTicketsInPlace(); } catch {}
+        if (!safeWriteLS(K_KEYS.INGRESSOS, ing)){
+          // sem espaço → não marca como concluído, para você poder apagar lotes antigos depois
+          console.warn('[MIGRA] Espaço insuficiente ao salvar m30.tickets (mantido original).');
+          return;
+        }
+      }
+    }
+
+    localStorage.setItem('m30.fixPrecos:v1','1');
+    console.log('[MIGRA] Preços normalizados (tipos:', mudouTipos, ', ingressos:', mudouIng, ')');
+  }catch(e){
+    console.warn('[MIGRA] falhou:', e);
+  }
+})();
+
+function showToast(text='Salvo!', type='ok'){
+  const t = $("#toast"); t.textContent = text;
+  t.classList.remove('warn','bad');
+  if(type==='warn') t.classList.add('warn');
+  if(type==='bad') t.classList.add('bad');
+  t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), 1800);
+}
+function same(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+
+/* Contas */
+function listContasCompat(){
+  const cfg = readLS('configFinanceiro', {}); const contas = Array.isArray(cfg?.contas) ? cfg.contas : [];
+  return contas.filter(c=>c && (c.nome||'').trim().length)
+               .map(c=>({id:String(c.id||c.uid||uid('ct_')), nome:c.nome.trim()}));
+}
+function listContasSafe(){
+  try{ const a = (typeof listContas==='function')? listContas():[]; if(Array.isArray(a)&&a.length) return a; }catch(e){}
+  return listContasCompat();
+}
+
+/* Tickets helpers */
+function readTickets(){ return readLS(K_KEYS.INGRESSOS,[])||[]; }
+function writeTickets(arr){
+  const key = (K_KEYS && K_KEYS.INGRESSOS) || 'm30.tickets';
+  if (!safeWriteLS(key, arr)) {
+    try {
+      let xs = Array.isArray(arr) ? arr.slice() : [];
+      xs.sort((a,b) =>
+        (String(a.status).toLowerCase()==='pendente'?0:1) -
+        (String(b.status).toLowerCase()==='pendente'?0:1)
+      );
+      while (xs.length > 0 && !safeWriteLS(key, xs)) xs.shift();
+    } catch {}
+  }
+}
+
+function nextNumeroSequencial(eventoId){
+  const all = readTickets().filter(t => t.eventoId === eventoId);
+  if(!all.length) return 1;
+  const maxN = all.reduce((acc, t) => {
+    const fromSeq = Number.isFinite(t.seq) ? t.seq : 0;
+    const fromNum = parseInt(String(t.numero||'').replace(/\D/g,''),10);
+    const n = Math.max(fromSeq || 0, isNaN(fromNum) ? 0 : fromNum);
+    return Math.max(acc, n);
+  }, 0);
+  return maxN + 1;
+}
+function gerarLoteIngressosLocal({ eventoId, tipoId, qtd, digits }) {
+  // --- sane defaults + normalização de tipos
+  var evKey   = String(eventoId || '');
+  var tipoKey = String(tipoId || '');
+  var total   = Math.max(1, parseInt(qtd, 10) || 0);
+
+  // Evita lotes enormes (ajuste se quiser)
+  if (total > 2000) {
+    alert('Quantidade muito alta para um único lote. Limitei para 2000 para evitar estouro de armazenamento.');
+    total = 2000;
+  }
+
+  var pad = Math.max(3, parseInt(digits, 10) || 4);
+
+  // --- encontra o tipo
+  var tipos = readLS(K_KEYS.INGRESSO_TIPOS, []) || [];
+  var tipo = null;
+  for (var i = 0; i < tipos.length; i++) {
+    var t = tipos[i];
+    if (String(t.id) === tipoKey && String(t.eventoId) === evKey) { tipo = t; break; }
+  }
+  if (!tipo) throw new Error('Tipo de ingresso não encontrado para este evento.');
+
+  // --- lê tickets existentes
+  var tickets = readTickets() || [];
+
+  // --- mapeia números já usados (seq OU numero) para evitar duplicatas
+  var usados = new Set();
+  for (var j = 0; j < tickets.length; j++) {
+    var tk = tickets[j];
+    if (String(tk.eventoId) !== evKey) continue;
+
+    // 1) preferir seq numérico
+    var s1 = Number(tk.seq);
+    if (Number.isFinite(s1) && s1 > 0) { usados.add(String(s1)); continue; }
+
+    // 2) cair para numero / seqStr
+    var raw = (tk.numero != null ? String(tk.numero) : (tk.seqStr != null ? String(tk.seqStr) : ''));
+    var s2 = parseInt(raw.replace(/\D/g, ''), 10);
+    if (Number.isFinite(s2) && s2 > 0) usados.add(String(s2));
+  }
+
+  // --- próxima sequência disponível (varre seq e numero)
+  function nextNumeroSequencialSafe() {
+    // Se existir helper global, tenta primeiro
+    try {
+      var n = nextNumeroSequencial(evKey);
+      if (Number.isFinite(n) && n > 0) return n;
+    } catch (e) {}
+
+    // Fallback: calcula manualmente
+    var maxSeq = 0;
+    for (var k = 0; k < tickets.length; k++) {
+      var tt = tickets[k];
+      if (String(tt.eventoId) !== evKey) continue;
+
+      var a = Number(tt.seq) || 0;
+      if (a > maxSeq) maxSeq = a;
+
+      var s = (tt.numero != null ? String(tt.numero) : (tt.seqStr != null ? String(tt.seqStr) : ''));
+      var b = parseInt(s.replace(/\D/g, ''), 10);
+      if (Number.isFinite(b) && b > maxSeq) maxSeq = b;
+    }
+    return maxSeq + 1;
+  }
+
+  var seq = nextNumeroSequencialSafe();
+  while (usados.has(String(seq))) seq++;
+  var from = seq;
+
+  // helper de preço (garante centavos mesmo se toCentsSafe não existir)
+  function _toCentsSafe(x) {
+    if (typeof toCentsSafe === 'function') return toCentsSafe(x);
+    var n = Number(x || 0);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (Number.isInteger(n) && n < 1000) return n * 100;
+    if (!Number.isInteger(n) && n < 1000) return Math.round(n * 100);
+    return Math.round(n);
+  }
+
+  // preço do tipo em centavos (normalizado 1x só)
+  var precoCents = _toCentsSafe(tipo.preco);
+
+  var created = 0;
+  for (var c = 0; c < total; c++) {
+    // pula qualquer número que já esteja em uso
+    while (usados.has(String(seq))) seq++;
+
+    var numero = String(seq).padStart(pad, '0');
+
+    // Objeto compacto (só o essencial)
+    var novo = {
+      id:           (typeof uid === 'function' ? uid('tk_') : ('tk_' + Math.random().toString(36).slice(2,9))),
+      ticketId:     undefined, // setado abaixo p/ compat
+      eventoId:     evKey,
+      tipoId:       tipoKey,
+      tipoNome:     (tipo.nome || tipo.descricao || tipo.label || undefined),
+      numero:       numero,  // "0007"
+      seq:          seq,     // 7
+      precoUnit:    precoCents,
+      status:       'pendente'
+    };
+    // compat: algumas telas usam ticketId === id
+    novo.ticketId = novo.id;
+
+    tickets.push(novo);
+    usados.add(String(seq));
+    seq++;
+    created++;
+  }
+
+  // --- persiste (tenta compactar antes, se houver utilitário)
+  try { if (typeof __compactTicketsInPlace === 'function') __compactTicketsInPlace(); } catch {}
+  writeTickets(tickets);
+  try { writeLS('ingressos', tickets); } catch(e) {}
+
+  var to = seq - 1;
+  return { from: from, to: to, created: created };
+}
+
+
+/* Eventos */
+function loadEventos(){ return listEventos() || []; }
+function saveEventos(xs){ writeLS(K_KEYS.EVENTOS, xs); }
+
+/* UI */
+function hydrateContas(){
+  const contas = listContasSafe();
+  const sel = $("#evConta"); sel.innerHTML='';
+  if(!contas.length) sel.innerHTML = '<option value="">— Nenhuma conta encontrada —</option>';
+  else contas.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.nome; sel.appendChild(o); });
+}
+function clearFormForNew(){
+  // entra em modo "novo": sem id e campos limpos
+  currentEventoId = null;
+
+  // limpa cabeçalho
+  $("#evNome").value = '';
+  $("#evData").value = '';
+  $("#evLocal").value = '';
+
+  // contas
+  hydrateContas();
+  $("#evConta").value = $("#evConta option")?.[0]?.value || '';
+
+  // preenche categorias de ENTRADA mesmo em modo "Novo"
+  try { hydrateEventoCategorias({}); } catch {}
+
+  // categorias
+  const selCat = $("#evCatEntrada");
+  const selSub = $("#evSubEntrada");
+  if (selCat) selCat.value = '';
+  if (selSub){
+    selSub.innerHTML = '<option value="">(opcional)</option>';
+    selSub.disabled = true;
+  }
+
+  // flags padrão
+  $("#hasIngressos").checked = true;
+  $("#hasItens").checked = true;
+
+  // tabelas vazias
+  $("#tabIng tbody").innerHTML = '';
+  $("#tabItens tbody").innerHTML = '';
+
+  // habilita edição e mostra seções
+  lockHeader(false);
+  toggleSections();
+  refreshLoteBtn();
+
+  // resumo zerado
+  $("#spGerados").textContent = '0';
+  $("#spVendidos").textContent = '0';
+  $("#spPendentes").textContent = '0';
+
+  // habilita salvar (vai criar um novo)
+  snapshot = JSON.stringify(getFormData());
+  $("#btnSalvarEv").disabled = false;
+}
+
+function renderEventosSelect(){
+  const sel = $("#selEvento"); sel.innerHTML='';
+  const xs = loadEventos().filter(e=> e.modulo==='eventos-pagos');
+
+  if(!xs.length){
+    sel.innerHTML='<option value="">— Nenhum evento pago —</option>';
+    disableForm(false);
+    currentEventoId = null;
+    lockHeader(false);
+    toggleSections();
+    updateResumo();
+    $("#btnGerenciarConvites").disabled = true;
+    $("#btnCheckin").disabled = true;
+    $("#btnPDV").disabled = true;
+    return;
+  }
+
+  xs.forEach(e=>{
+    const o=document.createElement('option');
+    o.value=e.id;
+    const dataBR = fmtDataBR(e.data);
+    o.textContent = `${e.nome || '(sem nome)'} — ${dataBR}`;
+    sel.appendChild(o);
+  });
+
+  if (currentEventoId === null){
+    let opt = document.createElement('option');
+    opt.value = '__novo__';
+    opt.textContent = '— Criando novo —';
+    sel.insertBefore(opt, sel.firstChild);
+    sel.value = '__novo__';
+    // preenche categorias mesmo sem evento carregado
+    try { hydrateEventoCategorias({}); } catch {}
+    return;
+  }
+
+
+  if(currentEventoId && xs.some(e=>e.id===currentEventoId)){
+    sel.value=currentEventoId;
+  }else{
+    currentEventoId = xs[0].id;
+    sel.value=currentEventoId;
+  }
+  loadEventoToForm(currentEventoId);
+  $("#btnGerenciarConvites").disabled = false;
+  $("#btnCheckin").disabled = false;
+  $("#btnPDV").disabled = false; 
+}
+
+function disableForm(flag){
+  $$("#boxCabecalho input, #boxCabecalho select").forEach(el=> el.disabled=!!flag);
+  $("#btnSalvarEv").disabled = !!flag;
+}
+
+/* Editar/lock */
+function lockHeader(lock){
+  headerLocked = !!lock;
+  $$("#boxCabecalho input, #boxCabecalho select").forEach(el=> el.disabled = headerLocked);
+  $("#btnSalvarEv").disabled = headerLocked;
+  $("#btnEditar").textContent = headerLocked ? 'Editar' : 'Concluir edição';
+}
+
+/* Form */
+function getFormData(){
+  return {
+    id: currentEventoId,
+    nome: $("#evNome").value.trim(),
+    data: $("#evData").value,
+    local: $("#evLocal").value.trim(),
+    contaId: $("#evConta").value,
+    categoriaEntradaId:   $("#evCatEntrada")?.value || null,
+    subcategoriaEntradaId:$("#evSubEntrada")?.value || null,
+    hasIngressos: $("#hasIngressos").checked,
+    hasItens: $("#hasItens").checked,
+    status: 'ativo'
+  };
+}
+function setFormData(e){
+  $("#evNome").value=e.nome||'';
+  $("#evData").value=e.data||'';
+  $("#evLocal").value=e.local||'';
+  hydrateContas(); $("#evConta").value = e.contaId || ($("#evConta option")?.[0]?.value || '');
+  hydrateEventoCategorias(e);
+  $("#hasIngressos").checked = (e.hasIngressos!==false);
+  $("#hasItens").checked = (e.hasItens!==false);
+  snapshot = JSON.stringify(getFormData());
+  $("#btnSalvarEv").disabled = true;
+  lockHeader(true);
+  renderTipos(); renderItens(); renderTiposLote(); updateResumo();
+  toggleSections();
+  refreshLoteBtn();
+}
+function loadEventoToForm(id){
+  const xs=loadEventos();
+  const e = xs.find(x=>x.id===id) || {id, status:'ativo'};
+  setFormData(e);
+}
+function salvarEvento(){
+  const data = getFormData();
+  if (!data.nome){
+    showToast('Informe o nome do evento','warn');
+    return;
+  }
+
+  // quando estiver criando novo, não haverá id → gera um
+  const isNovo = !data.id || data.id === '__novo__';
+  const payload = {
+    ...data,
+    id: isNovo ? uid('evt_') : data.id,
+    modulo: 'eventos-pagos',
+    status: 'ativo'
+  };
+
+  // >>> ADIÇÕES IMPORTANTES <<< (mantêm a origem e ocultam da lista geral)
+  payload.origem = 'eventos-pagos';
+  payload._origem = 'eventos-pagos';
+  payload.ocultarNaListaEventos = true;
+  // --- M33: captura o estado antigo (para comparar data) ---
+let oldDataISO = '';
+try {
+  const __all = loadEventos();
+  const __old = Array.isArray(__all) ? __all.find(e => String(e.id) === String(payload.id)) : null;
+  oldDataISO = __old?.data || '';
+} catch {}
+
+
+  // INÍCIO PATCH 1.1 — garante conta padrão de ENTRADA
+  const contaSelEl = document.getElementById('evConta');
+  const contaEntradaId = contaSelEl?.value ? String(contaSelEl.value) : '';
+  const contaEntradaNome = contaSelEl?.selectedOptions?.[0]?.textContent?.trim() || '';
+  payload.contaEntradaId = payload.contaEntradaId || contaEntradaId || payload.contaId || '';
+  payload.contaNome      = payload.contaNome      || contaEntradaNome;
+  // FIM PATCH 1.1
+
+  let xs = loadEventos();
+  const idx = xs.findIndex(e => e.id === payload.id);
+  if (idx >= 0) xs[idx] = { ...xs[idx], ...payload };
+  else xs.push(payload);
+
+  saveEventos(xs);
+  currentEventoId = payload.id;
+// --- M33: publicar criação/atualização ---
+// normaliza objeto final para enviar ao hub
+const __final = {
+  ...payload,
+  dataISO: payload.data
+};
+
+try {
+  if (isNovo) {
+    // Evento novo → cria card de agenda + feed
+    notifyEventoCriado(__final);
+  } else if (String(oldDataISO||'') !== String(payload.data||'')) {
+    // Evento existente → se mudou a data, atualiza agenda + feed “data alterada”
+    notifyEventoAtualizado(__final, { dataISO: payload.data });
+  }
+} catch (e) {
+  console.warn('M33 eventos-pagos: notify falhou', e);
+}
+
+  // volta para o modo "editando existente"
+  snapshot = JSON.stringify(getFormData());
+  $("#btnSalvarEv").disabled = true;
+  lockHeader(true);
+
+  // atualiza o seletor e carrega
+  renderEventosSelect();
+  showToast(isNovo ? 'Evento criado ✅' : 'Evento atualizado ✅');
+}
+
+
+function watchDirty(){ $("#btnSalvarEv").disabled = same(snapshot, JSON.stringify(getFormData())); }
+
+/* Mostrar/ocultar seções */
+function toggleSections(){
+  const showIng = $("#hasIngressos").checked;
+  const showIt  = $("#hasItens").checked;
+  $("#boxIngressos").style.display = showIng ? '' : 'none';
+  $("#boxItens").style.display      = showIt  ? '' : 'none';
+  $$('#boxIngressos input, #boxIngressos select, #boxIngressos button').forEach(el=>{ el.disabled = !showIng; });
+  $$('#boxItens input, #boxItens select, #boxItens button').forEach(el=>{ el.disabled = !showIt; });
+}
+
+/* Novo evento (copia também categoria/sub) */
+function novoEvento(){
+  clearFormForNew();
+
+  // opcional: mostra no seletor que você está criando um novo
+  const sel = $("#selEvento");
+  if (sel){
+    // insere uma opção temporária no topo
+    let opt = sel.querySelector('option[value="__novo__"]');
+    if (!opt){
+      opt = document.createElement('option');
+      opt.value = '__novo__';
+      opt.textContent = '— Criando novo —';
+      sel.insertBefore(opt, sel.firstChild);
+    }
+    sel.value = '__novo__';
+  }
+
+  showToast('Formulário limpo. Preencha e clique em Salvar ✅');
+}
+
+
+/* Ingressos (tipos) */
+function renderTipos(){
+  const tb=$("#tabIng tbody"); tb.innerHTML='';
+  const rows = (listTipos(currentEventoId)||[]);
+  rows.forEach(t=>{
+    const cents = toCentsSafe(t.preco);
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${t.nome}</td><td class="k-right">${fmtBRL.format(cents/100)}</td>
+                    <td class="k-right"><button class="btn ghost" data-del="${t.id}">Excluir</button></td>`;
+    tb.appendChild(tr);
+  });
+  refreshLoteBtn();
+}
+function renderTiposLote(){
+  const sel=$("#selTipoLote"); sel.innerHTML='';
+  (listTipos(currentEventoId)||[]).forEach(t=>{
+    const o=document.createElement('option'); o.value=t.id; o.textContent=t.nome; sel.appendChild(o);
+  });
+  refreshLoteBtn();
+}
+function refreshLoteBtn(){
+  const temTipos = (listTipos(currentEventoId)||[]).length > 0;
+  const btn = $("#btnGerarLote");
+  if (btn) btn.disabled = !temTipos || !$("#hasIngressos").checked;
+}
+function addTipo(){
+  if(!currentEventoId){ showToast('Crie ou selecione um evento','warn'); return; }
+  const nome = $("#ingNome").value.trim();
+  const precoInput = $("#ingPreco").value;
+  const precoCent = toNum(precoInput);
+  if(!nome || !precoCent){ showToast('Preencha nome e preço do ingresso','warn'); return; }
+  const xs = readLS(K_KEYS.INGRESSO_TIPOS,[])||[];
+  xs.push({ id:uid('tipo_'), eventoId:currentEventoId, nome, preco:precoCent, ativo:true });
+  writeLS(K_KEYS.INGRESSO_TIPOS, xs);
+  $("#ingNome").value=''; $("#ingPreco").value='';
+  renderTipos(); renderTiposLote(); showToast('Tipo adicionado');
+}
+document.addEventListener('click', ev=>{
+  const btn = ev.target.closest('button[data-del]');
+  if(!btn) return;
+  const id = btn.dataset.del;
+  if(!id) return;
+  if(!confirm('Excluir este tipo de ingresso?')) return;
+  const xs=readLS(K_KEYS.INGRESSO_TIPOS,[])||[]; writeLS(K_KEYS.INGRESSO_TIPOS, xs.filter(x=>x.id!==id));
+  renderTipos(); renderTiposLote(); showToast('Tipo excluído');
+});
+
+/* Itens */
+/* Itens */
+function renderItens(){
+  const tb = $("#tabItens tbody");
+  tb.innerHTML = '';
+
+  // helper: lê estoque sempre no campo correto (prioriza estoqueAtual)
+  const getStock = (it) => {
+    const prefer = ['estoqueAtual','estoque','saldo','qtdEstoque','quantidade','qtde','estoqueInicial'];
+    for (const k of prefer){
+      if (Object.prototype.hasOwnProperty.call(it, k) && Number.isFinite(Number(it[k]))){
+        return Number(it[k]);
+      }
+    }
+    return null;
+  };
+
+  (listItens(currentEventoId) || []).forEach(i => {
+    const cents = toCentsSafe(i.preco);
+    const stock = getStock(i);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i.nome}</td>
+      <td class="k-right">${fmtBRL.format((cents||0)/100)}</td>
+      <td class="k-right">${stock ?? ''}</td>
+      <td class="k-right" style="white-space:nowrap; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn ghost" data-edit-item="${i.id}">Editar</button>
+        <button class="btn" data-addstock="${i.id}" title="Adicionar estoque">+ estoque</button>
+        <button class="btn ghost bad" data-del-item="${i.id}">Excluir</button>
+      </td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+function addItem(){
+  if(!currentEventoId){ showToast('Crie ou selecione um evento','warn'); return; }
+  const nome = $("#itNome").value.trim();
+  const preco = toNum($("#itPreco").value);
+  const estRaw = $("#itEstoque").value;
+  if(!nome || !preco){ showToast('Preencha item e preço','warn'); return; }
+
+  const est = estRaw ? Math.max(0, parseInt(String(estRaw).replace(/\D/g,''),10)||0) : null;
+
+  const xs = readLS(K_KEYS.ITENS,[])||[];
+  const novo = {
+    id: uid('item_'),
+    eventoId: currentEventoId,
+    nome,
+    preco,                       // em centavos
+    estoqueInicial: est,         // mantém histórico
+    estoqueAtual: est,           // passa a ser o “em uso”
+    ativo: true
+  };
+  xs.push(novo);
+  writeLS(K_KEYS.ITENS, xs);
+  try{ writeLS('itens', xs); }catch{}
+
+  $("#itNome").value=''; $("#itPreco").value=''; $("#itEstoque").value='';
+  renderItens(); showToast('Item adicionado');
+}
+
+document.addEventListener('click', ev=>{
+  const btn = ev.target.closest('button[data-del-item]');
+  if(!btn) return;
+  const id = btn.dataset.delItem;
+  if(!id) return;
+  if(!confirm('Excluir este item?')) return;
+  const xs=readLS(K_KEYS.ITENS,[])||[]; writeLS(K_KEYS.ITENS, xs.filter(i=>i.id!==id));
+  renderItens(); showToast('Item excluído');
+});
+function editarItem(itemId){
+  const all = readLS(K_KEYS.ITENS,[]) || [];
+  const it  = all.find(x => String(x.id) === String(itemId));
+  if (!it){ alert('Item não encontrado.'); return; }
+
+  // nome
+  const novoNome = prompt('Nome do item:', it.nome || '');
+  if (novoNome == null) return;
+
+  // preço (aceita "10", "10,00", "10.50")
+  const precoDisplay = fmtBRL.format((toCentsSafe(it.preco)||0)/100).replace(/[^\d.,]/g, '');
+  const novoPrecoRaw = prompt('Preço (ex.: 10,00):', precoDisplay || '0,00');
+  if (novoPrecoRaw == null) return;
+  const novoPreco = toNum(novoPrecoRaw); // em centavos
+
+  // estoque (opcional)
+  const currentStock = (() => {
+    const ks = ['estoqueAtual','estoque','saldo','qtdEstoque','quantidade','qtde','estoqueInicial'];
+    for (const k of ks){
+      if (Object.prototype.hasOwnProperty.call(it, k) && Number.isFinite(Number(it[k]))){
+        return Number(it[k]);
+      }
+    }
+    return null;
+  })();
+  const stockPrompt = prompt(
+    'Estoque atual (deixe em branco para manter):',
+    currentStock==null ? '' : String(currentStock)
+  );
+  if (stockPrompt === null) return; // cancelou
+
+  // aplica alterações
+  it.nome  = (novoNome || '').trim();
+  it.preco = novoPreco;
+
+  if (stockPrompt !== ''){
+    // grava no primeiro campo válido, ou em estoqueAtual se não houver
+    const ks = ['estoqueAtual','estoque','saldo','qtdEstoque','quantidade','qtde','estoqueInicial'];
+    let key = ks.find(k => Object.prototype.hasOwnProperty.call(it, k));
+    if (!key) key = 'estoqueAtual';
+    it[key] = Math.max(0, parseInt(stockPrompt.replace(/\D/g,''), 10) || 0);
+  }
+
+  writeLS(K_KEYS.ITENS, all);
+  renderItens();
+  showToast('Item atualizado ✅');
+}
+
+/* Lote */
+function gerarLote(){
+  if(!currentEventoId){ showToast('Crie ou selecione um evento','warn'); return; }
+  const tipoId=$("#selTipoLote").value; if(!tipoId){ showToast('Selecione um tipo','warn'); return; }
+  const qtd=Math.max(1, parseInt($("#loteQtd").value||'0',10));
+  const digits=Math.max(3, parseInt($("#loteDigits").value||'4',10));
+  try{
+    const r = gerarLoteIngressosLocal({eventoId:currentEventoId, tipoId, qtd, digits});
+    showToast(`Lote: ${String(r.from).padStart(digits,'0')}–${String(r.to).padStart(digits,'0')} ✅`);
+    updateResumo();
+  }catch(e){ console.error(e); showToast('Falha ao gerar lote','bad'); }
+}
+
+/* Resumo */
+function updateResumo(){
+  if(!currentEventoId){ $("#spGerados").textContent='0'; $("#spVendidos").textContent='0'; $("#spPendentes").textContent='0'; return; }
+  const rows = readTickets().filter(t=>t.eventoId===currentEventoId);
+  const gerados = rows.length;
+  const vendidos = rows.filter(t=> String(t.status).toLowerCase()==='vendido').length;
+  const pendentes = rows.filter(t=> String(t.status).toLowerCase()==='pendente').length;
+  $("#spGerados").textContent = gerados;
+  $("#spVendidos").textContent = vendidos;
+  $("#spPendentes").textContent = pendentes;
+}
+
+/* Ações topo */
+$("#selEvento").addEventListener('change', e=>{ currentEventoId=e.target.value; loadEventoToForm(currentEventoId); });
+$("#btnNovo").addEventListener('click', novoEvento);
+$("#btnEditar").addEventListener('click', ()=> lockHeader(!headerLocked));
+$("#btnExcluir").addEventListener('click', ()=>{
+  if(!currentEventoId) return;
+  if(!confirm('Excluir este evento?')) return;
+  let xs = loadEventos().filter(e=>e.id!==currentEventoId); saveEventos(xs);
+  currentEventoId = (xs.find(e=>e.modulo==='eventos-pagos')?.id) || null;
+  renderEventosSelect();
+  showToast('Evento excluído');
+});
+$("#btnSalvarEv").addEventListener('click', salvarEvento);
+
+$("#evNome").addEventListener('input', watchDirty);
+$("#evData").addEventListener('change', watchDirty);
+$("#evLocal").addEventListener('input', watchDirty);
+$("#evConta").addEventListener('change', watchDirty);
+$("#hasIngressos").addEventListener('change', ()=>{ watchDirty(); toggleSections(); refreshLoteBtn(); });
+$("#hasItens").addEventListener('change', ()=>{ watchDirty(); toggleSections(); });
+
+$("#btnAddIng").addEventListener('click', addTipo);
+$("#btnGerarLote").addEventListener('click', gerarLote);
+$("#btnAddItem").addEventListener('click', addItem);
+
+$("#btnGerenciarConvites").addEventListener('click', ()=>{
+  if(!currentEventoId) return alert('Selecione um evento');
+  window.open(`gerenciar-convites.html#evento=${currentEventoId}`,'_blank');
+});
+$("#btnCheckin").addEventListener('click', ()=>{
+  if (!currentEventoId) return alert('Selecione um evento');
+  window.open(`checkin.html#evento=${currentEventoId}`, '_blank');
+});
+$("#btnPDV").addEventListener('click', ()=>{
+  if (!currentEventoId) return alert('Selecione um evento');
+  window.open(`pdv.html#evento=${currentEventoId}`, '_blank');
+});
+// INÍCIO PATCH — abrir Layout Editor no evento atual
+document.getElementById('btnEditorLayout').addEventListener('click', (ev)=>{
+  ev.preventDefault();
+  if (!currentEventoId) { alert('Selecione um evento'); return; }
+  window.open(`layout-editor.html#evento=${currentEventoId}`, '_blank');
+});
+// FIM PATCH
+
+/* Init */
+(function init(){
+  hydrateContas();
+  renderEventosSelect();
+  if(!loadEventos().some(e=>e.modulo==='eventos-pagos')){
+    lockHeader(false);
+  }
+})();
+</script>
+<script type="module">
+  // Reproduz o comportamento do modelo-base: aplica guard e reexecuta permissões quando o menu for injetado
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+  // 1) Enforce de permissão da página (usa sua meta já existente)
+  try{
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+  }catch{}
+
+  // 2) Reaplica permissões e ícones Lucide assim que o menu for injetado
+  try{
+    const alvo = document.getElementById('menuLateral');
+    if (alvo) {
+      const obs = new MutationObserver((muts, o) => {
+        if (alvo.firstElementChild) {
+          try { aplicarPermissoesNaTela(); } catch {}
+          try { window.lucide?.createIcons?.(); } catch {}
+          o.disconnect();
+        }
+      });
+      obs.observe(alvo, { childList: true });
+    }
+  }catch{}
+
+  // 3) Toggle mobile (hamburguer + backdrop), só se o menu-lateral.js não fizer
+  (function ensureHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+    if (!btn || !aside || !back) return;
+
+    if (!back.hasAttribute('data-bound')) {
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', () => {
+        aside.classList.remove('aberto');
+        back.hidden = true;
+      });
+    }
+    if (!btn.hasAttribute('data-bound')) {
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        const opened = aside.classList.toggle('aberto');
+        back.hidden = !opened;
+      });
+    }
+  })();
+</script>
+
+<script type="module" src="menu-lateral.js"></script>
+
+<script src="./agenda-bridge.js"></script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:custos-fixo.html">
+
+  <meta charset="UTF-8" />
+  <title>Custos Fixos (Catálogo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<!-- Helpers globais (precisa vir cedo para apiFetch/__API_BASE__) -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- Guard / RBAC -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    html, body { margin: 0; padding: 0; background-color: #f8f1e8; height: 100%; }
+    .wrapper { display: flex; min-height: 100vh; overflow: hidden; }
+
+    main.conteudo-principal {
+      flex-grow: 1; padding: 40px; height: 100vh; overflow-y: auto; transition: margin-left .2s ease;
+    }
+    .conteudo-central { max-width: 1100px; margin: 0 auto; }
+
+    main.conteudo-principal, input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 { font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif; }
+    h1 { font-size: 28px; color: #5a3e2b; display: flex; align-items: center; gap: 10px; }
+
+    #hamburguer{
+      position: fixed; top: 12px; left: 12px; background: #c29a5d; border: none; color: white;
+      font-size: 24px; padding: 6px 12px; border-radius: 8px; z-index: 1001; display: none; box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+    /* Botão hamburguer (mobile) */
+    #hamburguer{
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1001;
+      display: none;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+      cursor: pointer;
+    }
+
+    /* trava o scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow: hidden;
+    }
+
+    @media (max-width: 768px){
+      #hamburguer{
+        display: block;
+      }
+
+      /* menu lateral vira painel deslizante */
+      #menuLateral{
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 260px;
+        background: #5a3e2b;
+        transform: translateX(-100%);
+        transition: transform .3s ease;
+        z-index: 1000;
+      }
+
+      #menuLateral.aberto{
+        transform: translateX(0);
+      }
+
+      /* fundo escuro atrás do menu */
+      #menuBackdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.38);
+        z-index: 999;
+      }
+
+      main.conteudo-principal{
+        padding: 20px;
+      }
+    }
+
+
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background-color: #f3e8da; border-radius: 6px; font-weight: bold;
+    }
+
+    .card {
+      background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      padding: 20px; margin-top: 20px;
+    }
+    .muted { color: #6b7280; font-size: 13px; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #f3e8da; color: #5a3e2b; }
+
+    .form-grid-3 {
+      display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px;
+    }
+    .form-grid-2 {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .full { grid-column: 1 / -1; }
+
+    .input, select, textarea {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; background: #fff;
+    }
+    .botao-dourado, .btn {
+      background-color: #c29a5d; color: white; border: none; padding: 10px 16px;
+      border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      transition: background .2s ease;
+    }
+    .botao-dourado:hover, .btn:hover { background-color: #a67c37; }
+    .btn-ghost { background: transparent; color: #5a3e2b; border: 1px solid #e3d1b5; }
+    .btn-ghost:hover { background: #f3e8da; }
+
+    .acoes-inline { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .status-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 6px; }
+    .on { background:#16a34a; } .off{ background:#9ca3af; }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #c29a5d; color: #fff; text-align: left; padding: 12px; border-radius: 10px 10px 0 0;
+    }
+    tbody tr { background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+    td { padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
+    tfoot td { padding: 12px; }
+
+    .param-box { display: none; }
+    .param-box.active { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(160px, 1fr)); }
+    .param-box .full { grid-column: 1 / -1; }
+
+    .tools { display:flex; gap:8px; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="scale"></i> Custos Fixos (Catálogo)</h1>
+
+        <!-- Formulário -->
+        <div class="card">
+          <form id="formCustoFixo" autocomplete="off">
+            <div class="form-grid-3">
+              <div>
+                <label>Nome do Item</label>
+                <input type="text" id="nome" class="input" placeholder="Ex: Garçom, Churrasqueiro, Transporte" required>
+              </div>
+
+              <div>
+                <label>Categoria</label>
+                <select id="categoria" class="input" required>
+                  <option value="mao_obra">Mão de Obra</option>
+                  <option value="logistica">Logística</option>
+                  <option value="locacao">Locação</option>
+                  <option value="taxas">Taxas & Impostos</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+
+              <div>
+                <label>Unidade</label>
+                <select id="unidade" class="input" required>
+                  <option value="item">Item</option>
+                  <option value="pessoa">Pessoa</option>
+                  <option value="hora">Hora</option>
+                  <option value="diaria">Diária</option>
+                  <option value="km">Km</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-grid-3" style="margin-top:12px;">
+              <div>
+                <label>Regra de Aplicação</label>
+                <select id="regra" class="input" required>
+                  <option value="fixo_evento">Fixo por evento</option>
+                  <option value="por_pessoa">Por pessoa</option>
+                  <option value="por_equipe">Por equipe (ex: 1/25 convidados)</option>
+                  <option value="por_hora">Por hora (ex: 2 pessoas × horas)</option>
+                  <option value="por_km">Por km (ex: km × viagens)</option>
+                </select>
+              </div>
+
+              <div>
+                <label>Valor Unitário (R$)</label>
+                <input type="number" step="0.01" id="valorUnitario" class="input" required>
+              </div>
+
+              <div>
+                <label>Status</label><br>
+                <label class="pill" style="cursor:pointer;">
+                  <input type="checkbox" id="ativo" checked style="margin-right:6px;"> Ativo
+                </label>
+              </div>
+            </div>
+
+            <!-- Parâmetros por regra -->
+            <div class="card" style="margin-top:12px; background:#fffdf9;">
+              <h3 style="margin-top:0;">Parâmetros padrão da regra</h3>
+
+              <!-- FIXO POR EVENTO -->
+              <div class="param-box" data-regra="fixo_evento">
+                <div>
+                  <label>Quantidade fixa</label>
+                  <input type="number" id="p_qtdFixa" class="input" min="0" step="0.01" placeholder="ex: 1">
+                </div>
+              </div>
+
+              <!-- POR PESSOA -->
+              <div class="param-box" data-regra="por_pessoa">
+                <div>
+                  <label>Coeficiente por pessoa</label>
+                  <input type="number" id="p_coef" class="input" min="0" step="0.01" placeholder="ex: 1 (um por pessoa)">
+                </div>
+              </div>
+
+              <!-- POR EQUIPE -->
+              <div class="param-box" data-regra="por_equipe">
+                <div>
+                  <label>Razão convidados (1 a cada)</label>
+                  <input type="number" id="p_razao" class="input" min="1" step="1" placeholder="ex: 25 (1 para cada 25)">
+                </div>
+                <div>
+                  <label>Mínimo de unidades</label>
+                  <input type="number" id="p_min" class="input" min="0" step="1" placeholder="ex: 2">
+                </div>
+                <div>
+                  <label>Horas padrão (se aplicar)</label>
+                  <input type="number" id="p_horas" class="input" min="0" step="0.5" placeholder="ex: 6">
+                </div>
+                <div>
+                  <label>Pessoas por time (se aplicar)</label>
+                  <input type="number" id="p_pessoas" class="input" min="0" step="1" placeholder="ex: 1">
+                </div>
+              </div>
+
+              <!-- POR HORA -->
+              <div class="param-box" data-regra="por_hora">
+                <div>
+                  <label>Qtd de pessoas</label>
+                  <input type="number" id="h_pessoas" class="input" min="0" step="1" placeholder="ex: 2">
+                </div>
+                <div>
+                  <label>Horas</label>
+                  <input type="number" id="h_horas" class="input" min="0" step="0.5" placeholder="ex: 6">
+                </div>
+              </div>
+
+              <!-- POR KM -->
+              <div class="param-box" data-regra="por_km">
+                <div>
+                  <label>Km</label>
+                  <input type="number" id="k_km" class="input" min="0" step="0.1" placeholder="ex: 30">
+                </div>
+                <div>
+                  <label>Viagens</label>
+                  <input type="number" id="k_viagens" class="input" min="0" step="1" placeholder="ex: 2">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid-2" style="margin-top:12px;">
+              <div>
+                <label>Fornecedor (opcional)</label>
+                <input type="text" id="fornecedor" class="input" placeholder="Ex: Locadora XYZ, Equipe João">
+              </div>
+              <div>
+                <label>Responsável (opcional)</label>
+                <input type="text" id="responsavel" class="input" placeholder="Ex: João">
+              </div>
+              <div class="full">
+                <label>Observações</label>
+                <textarea id="obs" class="input" rows="2" placeholder="Observações internas, anotações de contrato etc."></textarea>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
+              <button type="submit" class="botao-dourado" id="btnSalvar"><i data-lucide="check-circle"></i> <span>Salvar</span></button>
+              <button type="button" class="btn btn-ghost" id="btnLimpar"><i data-lucide="eraser"></i> Limpar</button>
+              <span class="muted" id="hintEdicao" style="display:none;">Editando item… para cancelar, clique em “Limpar”.</span>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card">
+          <div class="tools">
+            <button class="btn btn-ghost" id="btnExportar"><i data-lucide="download"></i> Exportar JSON</button>
+            <label class="btn btn-ghost" style="cursor:pointer;">
+              <i data-lucide="upload"></i> Importar JSON
+              <input type="file" id="inputImportar" accept="application/json" style="display:none;">
+            </label>
+          </div>
+
+          <h2 style="margin:12px 0;">Itens do Catálogo</h2>
+          <table class="tabela-destacada" id="tabelaCustosFixos">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Categoria</th>
+                <th>Regra & Parâmetros</th>
+                <th>Unidade</th>
+                <th>Valor Unit.</th>
+                <th>Status</th>
+                <th style="text-align:center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="7" class="muted">
+                  <strong>Planilha rápida (abaixo):</strong> ajuste quantidades só para simular totais aqui na tela (não persiste).
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <!-- Planilha rápida -->
+          <div class="card" style="margin-top:16px; background:#fffdf9;">
+            <h3 style="margin-top:0;">Planilha rápida</h3>
+            <table class="tabela-destacada" id="tabelaPlanilha">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Valor Unit.</th>
+                  <th>Qtd</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="text-align:right;"><strong>Total Geral:</strong></td>
+                  <td id="totalGeralPlanilha">R$ 0,00</td>
+                </tr>
+                
+              </tfoot>
+            </table>
+            <button id="btnSalvarParaEvento" class="btn">
+  <i data-lucide="save"></i> Salvar no evento
+</button>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script>
+    (function initMenuMobile(){
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside || !back) return;
+
+      function abrir(){
+        aside.classList.add('aberto');
+        back.hidden = false;
+        document.body.classList.add('no-scroll');
+      }
+
+      function fechar(){
+        aside.classList.remove('aberto');
+        back.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+
+      if (!btn.hasAttribute('data-bound')){
+        btn.setAttribute('data-bound','1');
+        btn.addEventListener('click', () => {
+          if (aside.classList.contains('aberto')) {
+            fechar();
+          } else {
+            abrir();
+          }
+        });
+      }
+
+      if (!back.hasAttribute('data-bound')){
+        back.setAttribute('data-bound','1');
+        back.addEventListener('click', fechar);
+      }
+    })();
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => { window.lucide?.createIcons?.(); });
+
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+  </script>
+
+  <script src="custos-fixo.js" defer></script>
+  <script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim() || 'page:custos-fixo.html';
+  guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

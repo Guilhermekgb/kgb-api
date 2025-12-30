@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:financeiro-lancamentos.html">
+  <meta charset="UTF-8" />
+  <title>Todos os Lançamentos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH FORCE-API (remova quando não precisar mais) === -->
+<script>
+(function(){
+  // 1) força a base da API para o Render
+  var RENDER = 'https://kgb-api.onrender.com';
+  try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+  window.__API_BASE__ = RENDER; // redundância útil
+
+  // 2) mostra um selinho no canto para você confirmar visualmente
+  try{
+    var tag = document.createElement('div');
+    tag.id = 'kgb_api_badge';
+    tag.textContent = 'API: Render';
+    tag.style.cssText = ''+
+      'position:fixed; z-index:99999; right:10px; bottom:10px;'+
+      'background:#0ea5e9; color:#fff; font:600 12px/1.2 Inter, Arial;'+
+      'padding:6px 10px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.15);';
+    document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(tag); });
+  }catch(e){}
+})();
+</script>
+<!-- === FIM PATCH FORCE-API === -->
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH ORDEM COMUM (lancamentos) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard (usa coisas do common) -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH ORDEM COMUM (lancamentos) === -->
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+ <style>
+  /* ================== Tokens de marca ================== */
+  :root{
+    --dourado:#c29a5d; --dourado-esc:#a67c37; --marrom:#5a3e2b;
+    --bg:#f8f1e8; --card:#fff; --line:#e8dcc9; --muted:#6b7280;
+    --ok:#16a34a; --warn:#f59e0b; --late:#dc2626;
+
+    /* Fin modal */
+    --fin-bg:#ffffff; --fin-text:#1f2937; --fin-muted:#6b7280;
+    --fin-border:#e5e7eb; --fin-accent:#c29a5d; --fin-accent-600:#a67c37;
+    --fin-accent-50:#fbf6ef;
+  }
+
+  /* ================== Base & layout ================== */
+    /* Botão hamburguer (mobile) */
+  #hamburguer {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    background: #c29a5d;
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    z-index: 1001;
+    display: none;           /* só mostra no mobile */
+    box-shadow: 0 6px 16px rgba(0,0,0,.12);
+  }
+
+  html,body{margin:0;padding:0;background:var(--bg);height:100%;}
+  main.conteudo-principal, input, select, textarea, button{
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  h1{
+    font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    font-size:32px; color:var(--marrom);
+    display:flex; gap:10px; align-items:center; margin:0 0 18px;
+  }
+  .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+ :root{ --sidebar-w:260px; }
+#menuLateral{
+  position:fixed; inset:0 auto 0 0; width:var(--sidebar-w);
+  background:var(--marrom); height:100vh; overflow-y:auto; z-index:1000;
+}
+main.conteudo-principal{
+  flex-grow:1; padding:28px; height:100vh; overflow-y:auto; margin-left:var(--sidebar-w);
+}
+/* mobile: desliza o menu (mantém padrão das outras telas) */
+@media (max-width:768px){
+  #menuLateral{ transform:translateX(-100%); transition:transform .3s; }
+  #menuLateral.aberto{ transform:translateX(0); }
+  main.conteudo-principal{ margin-left:0; padding:16px; }
+}
+
+  .conteudo-central{ max-width:1180px; margin:0 auto; padding-bottom:24px; }
+
+  /* ================== Botões ================== */
+  .btn{
+    border:1px solid #d9c7aa; background:#fff; color:var(--marrom);
+    padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700; transition:.15s ease;
+    box-shadow:0 1px 0 rgba(0,0,0,.04);
+  }
+  .btn:hover{ background:#fff6e9; transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.08); }
+
+  .btn-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px;
+    border:1px solid var(--line); background:#fff; color:var(--marrom); font-weight:600; cursor:pointer; transition:.15s ease;
+    box-shadow:0 1px 0 rgba(0,0,0,.04);
+  }
+  .btn-chip:hover{ transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.08); }
+  .btn-chip .lucide{ width:16px; height:16px; }
+  .btn-chip.icon-only{ padding:6px; width:32px; height:28px; display:inline-grid; place-items:center; }
+  .btn-chip.icon-only .lucide{ width:18px; height:18px; }
+
+  /* ================== Cards & grid KPI ================== */
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08); padding:16px; min-width:0;
+  }
+
+  /* grade elástica: nunca passa da coluna central */
+  .kpis{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap:14px;
+    margin:14px 0 6px;
+    align-items:stretch;
+    max-width:100%;
+    box-sizing:border-box;
+  }
+
+  .kpi h3{ margin:0 0 6px; font-size:14px; color:var(--muted); font-weight:700; }
+  .kpi .big{ font-size:26px; font-weight:900; color:var(--marrom); line-height:1; }
+  .kpi .kpi-value{ margin-top:4px; line-height:1; }
+  .kpi .kpi-value b{ font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+/* ordem lógica (pode ajustar se quiser) */
+#kpiEntradas   { order: 1; }
+#kpiSaidas     { order: 2; }
+#kpiSaldo      { order: 3; }
+#cardReceberMes{ order: 4; }
+#cardPagarMes  { order: 5; }
+/* era 6 — vamos jogar o filtro para o topo da grade */
+#filtrosCard   { order: 0; }
+
+
+  /* cards do mês – visual com faixa lateral */
+  #cardPagarMes, #cardReceberMes{
+    display:flex; flex-direction:column; gap:8px;
+    border-left:4px solid transparent;
+    background:linear-gradient(180deg, #fff, #fffaf3);
+  }
+  #cardPagarMes{ border-left-color:var(--late); }
+  #cardReceberMes{ border-left-color:var(--ok); }
+  #cardPagarMes h3, #cardReceberMes h3{ margin:0; font-size:13px; font-weight:800; color:#7b6a5e; }
+
+  /* título/legenda dos sumários do mês */
+  .kpi-title{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:0;
+    font-weight:600; color:#5a3e2b;
+  }
+  .kpi-title .chip{
+    display:inline-flex; gap:8px; align-items:baseline; white-space:nowrap;
+    padding:.15rem .45rem; border-radius:999px; font-size:.85rem; color:#8a6a52;
+    background:#fbf7f2; border:1px solid #eadfce;
+  }
+
+  /* ================== Card de filtros (não fixo) ================== */
+  #filtrosCard{ align-self:start; padding:12px 14px; }
+  #filtrosCard .row{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:end; background:transparent;
+  }
+  #filtrosCard .row label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--marrom); }
+  #filtrosCard select, #filtrosCard input[type="month"], #filtrosCard input[placeholder]{
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 10px; min-height:38px;
+  }
+  .grow{ flex:1; }
+
+  /* ================== Tabela ================== */
+  .table{
+    background:#fff; border:1px solid var(--line); border-radius:14px; overflow:auto; margin-top:16px;
+    grid-column:1 / -1; /* se o pai for grid */
+  }
+  table{ width:100%; min-width:1080px; border-collapse:separate; border-spacing:0; }
+
+  thead th{
+    position:sticky; top:0; z-index:1;
+    background:var(--dourado); color:#fff; font-weight:800; font-size:13px; text-align:left; padding:12px;
+  }
+  tbody td{ padding:12px; border-bottom:1px solid #f0e6d6; font-size:13px; color:#2e261a; }
+  tbody tr:nth-child(odd){ background:#fff; }
+  tbody tr:nth-child(even){ background:#fbf6ef; }
+  tbody tr:hover{ background:#f7efe4; }
+
+  thead th:last-child, tbody td.acoes{ width:160px; text-align:right; white-space:nowrap; }
+  td.acoes .btn-chip{ margin-left:6px; }
+
+  /* status */
+  .status{ padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; display:inline-block; border:1px solid transparent; }
+  .status.pendente{ background:#fff7ed; color:#92400e; border-color:#f0d8b1; }
+  .status.baixado { background:#ecfdf5; color:#065f46; border-color:#bfe8c7; }
+
+  /* ================== Modal Anexo ================== */
+  #anexoModal[hidden]{ display:none; }
+  #anexoModal{
+    position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.45);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .anexo-box{
+    width:min(950px,96vw); background:#fff; border-radius:14px; border:1px solid var(--line);
+    box-shadow:0 10px 40px rgba(0,0,0,.25); overflow:hidden; display:flex; flex-direction:column;
+  }
+  .anexo-head{
+    background:var(--dourado); color:#fff; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; font-weight:800;
+  }
+  .anexo-body{ padding:12px; display:flex; align-items:center; justify-content:center; background:#fffdf9; }
+  .anexo-actions{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid var(--line); }
+  .anexo-body .viewer{ width:100%; min-height:60vh; display:flex; align-items:center; justify-content:center; }
+  .anexo-body .viewer img{ max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #efe3d3; background:#fff; }
+  .anexo-body .viewer iframe{ width:100%; height:75vh; border:0; background:#fff; }
+
+  /* ================== Modal Financeiro (estilo) ================== */
+  #dlg-lanc::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px); }
+  #dlg-lanc, #dlg-lanc *{ box-sizing:border-box; }
+  #dlg-lanc{
+    width:min(920px,96vw); margin:0 auto; padding:0; border:none; border-radius:16px; overflow:hidden;
+    background:var(--fin-bg); color:var(--fin-text);
+    box-shadow:0 30px 90px rgba(2,6,23,.25), 0 8px 24px rgba(2,6,23,.15);
+    transform:translateY(6px) scale(.985); opacity:0; transition:transform .25s ease, opacity .25s ease;
+  }
+  #dlg-lanc[open]{ transform:translateY(0) scale(1); opacity:1; }
+  #dlg-form{ max-height:85vh; overflow:auto; padding:18px; }
+
+  #dlg-form h2, #dlg-form .fin-title{
+    margin:0 0 12px; font-weight:800; font-size:clamp(18px,2.2vw,22px); letter-spacing:.2px; color:var(--marrom);
+  }
+  #dlg-close{
+    position:absolute; top:10px; right:10px; inline-size:36px; block-size:36px;
+    border-radius:10px; border:1px solid var(--fin-border); background:#fff; color:var(--fin-text); cursor:pointer;
+  }
+  #dlg-close:hover{ background:#f8fafc; }
+
+  #dlg-form .grid{ display:grid; gap:12px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  #dlg-form .col{ min-width:0; }
+  #dlg-form .col.span-1{grid-column:span 1}
+  #dlg-form .col.span-2{grid-column:span 2}
+  #dlg-form .col.span-3{grid-column:span 3}
+  #dlg-form .col.span-4{grid-column:span 4}
+  #dlg-form .col.span-6{grid-column:span 6}
+  #dlg-form .col.span-9{grid-column:span 9}
+  #dlg-form .col.span-12{grid-column:span 12}
+  @media (max-width:900px){ #dlg-form .grid{ grid-template-columns:repeat(6,minmax(0,1fr)); } }
+  @media (max-width:640px){ #dlg-form .grid{ grid-template-columns:1fr; } }
+
+  #dlg-form label{ display:block; font-size:12px; color:var(--fin-muted); margin:2px 0 6px; }
+  #dlg-form input, #dlg-form select, #dlg-form textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--fin-border); border-radius:10px;
+    background:#fff; color:var(--fin-text); font:500 14px/1.2 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; outline:none;
+  }
+  #dlg-form input:focus, #dlg-form select:focus, #dlg-form textarea:focus{
+    border-color:var(--fin-accent); box-shadow:0 0 0 3px rgba(194,154,93,.25);
+  }
+
+  #baixa-info{ margin-top:4px; font-size:12px; color:#8a6a52; }
+
+  #f-parc-modos{
+    display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:2px; padding:10px 12px;
+    border:1px dashed var(--fin-border); border-radius:12px; background:#fafafa;
+  }
+  #f-parc-prev{ margin-top:6px; font-size:12px; color:var(--fin-muted); }
+
+  #sect-cobranca{
+    border:1px solid var(--fin-border); border-radius:14px; padding:12px;
+    background:linear-gradient(0deg, #fff, var(--fin-accent-50));
+  }
+
+  #btn-save, #btn-cobranca{
+    appearance:none; border:none; cursor:pointer; border-radius:12px; padding:10px 14px; font-weight:700; font-size:14px;
+  }
+  #btn-save{ background:var(--fin-accent); color:#fff; box-shadow:0 8px 16px rgba(194,154,93,.22); }
+  #btn-save:hover{ background:var(--fin-accent-600); }
+  #btn-cobranca{ background:#f1f5f9; color:#111827; border:1px solid var(--fin-border); }
+  #btn-cobranca:hover{ background:#e2e8f0; }
+
+  .fin-actions{
+    display:flex; gap:10px; justify-content:flex-end; align-items:center;
+    padding-top:8px; margin-top:6px; border-top:1px solid var(--fin-border);
+  }
+
+  /* ================== Responsivo ================== */
+  @media (max-width:1160px){
+    .kpis{ grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  }
+  @media (max-width:768px){
+    #hamburguer{
+      display:block;
+    }
+    #menuLateral{
+      transform:translateX(-100%);
+      transition:transform .3s;
+    }
+    #menuLateral.aberto{
+      transform:translateX(0);
+    }
+    main.conteudo-principal{
+      margin-left:0;
+      padding:16px;
+    }
+  }
+
+  @media (max-width:640px){
+    .kpis{ grid-template-columns:1fr; }
+    #filtrosCard .row{ flex-direction:column; align-items:stretch; }
+  }
+  /* Backdrop do menu (off-canvas) */
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:998;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+}
+#menuBackdrop.visivel{ opacity:1; pointer-events:auto; }
+body.no-scroll{ overflow:hidden; }
+
+/* Menu off-canvas (mobile) */
+@media (max-width: 768px){
+  #hamburguer{ display:block; }
+
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{ transform: translateX(0); }
+}
+
+</style>
+
+</head>
+
+<body>
+  
+  <!-- Botão Mobile -->
+<button id="hamburguer" aria-label="Abrir menu" aria-controls="menuLateral" aria-expanded="false">
+  <i data-lucide="menu"></i>
+</button>
+
+
+
+<div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="list"></i> Todos os Lançamentos</h1>
+
+        <!-- KPIs -->
+       <section class="kpis">
+  <div class="card kpi" id="kpiEntradas">
+    <h3>Entradas (filtradas)</h3>
+    <div class="big" id="kpiEntradasPrev">R$ 0,00</div>
+  </div>
+
+  <div class="card kpi" id="kpiSaidas">
+    <h3>Saídas (filtradas)</h3>
+    <div class="big" id="kpiSaidasPrev">R$ 0,00</div>
+  </div>
+
+    </section>
+
+  <!-- Somatórios do mês (compact) -->
+<section class="kpi-row kpi-row--compact">
+  <div class="card kpi" id="cardReceberMes" role="button" tabindex="0">
+    <div class="kpi-title">
+      <span>Contas a receber (mês)</span>
+      <span class="chip">
+        <b id="ttlReceberMesValor">R$ 0,00</b>
+        <small id="ttlReceberMesQtd">• sem pendências</small>
+      </span>
+    </div>
+    <div class="kpi-value"><b id="cardReceberMesValor">R$ 0,00</b></div>
+  </div>
+
+  <div class="card kpi" id="cardPagarMes" role="button" tabindex="0">
+    <div class="kpi-title">
+      <span>Contas a pagar (mês)</span>
+      <span class="chip">
+        <b id="ttlPagarMesValor">R$ 0,00</b>
+        <small id="ttlPagarMesQtd">• sem pendências</small>
+      </span>
+    </div>
+    <div class="kpi-value"><b id="cardPagarMesValor">R$ 0,00</b></div>
+  </div>
+</section>
+
+
+
+     <!-- Card de Filtros -->
+<div class="card kpi" id="filtrosCard">
+  <div class="row">
+    <label>Origem
+      <select id="f-origem">
+        <option value="todas">Todas</option>
+        <option value="empresa">Empresa</option>
+        <option value="pessoal">Pessoal</option>
+        <option value="ambas">Ambas</option>
+      </select>
+    </label>
+
+    <label>Tipo
+      <select id="f-tipo">
+        <option value="todos">Todos</option>
+        <option value="entrada">Entrada</option>
+        <option value="saida">Saída</option>
+      </select>
+    </label>
+
+    <label>Status detalhado
+      <select id="f-status">
+        <option value="todos">Todos</option>
+        <option value="entrada_paga">Entrada paga</option>
+        <option value="saida_paga">Saída paga</option>
+        <option value="entrada_pendente">Entrada pendente</option>
+        <option value="saida_pendente">Saída pendente</option>
+      </select>
+    </label>
+
+    <label>Período
+      <input id="f-mes" type="month">
+    </label>
+
+    <input id="f-busca" class="grow" placeholder="Buscar por descrição/categoria/conta..." />
+    <button id="f-clear" class="btn">Limpar</button>
+
+    <button id="btnImprimir" class="btn">
+      <i data-lucide="printer"></i> Imprimir
+    </button>
+
+    <button id="btnPainelAnalitico" class="btn" title="Abrir painel analítico (cobranças)">
+      <i data-lucide="layout-dashboard"></i> Painel (analítico)
+    </button>
+  </div>
+</div>
+
+
+        <!-- Tabela -->
+        <section class="table">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th>Origem</th>
+                <th>Conta/Forn.</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th style="text-align:right;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal do Comprovante/Anexo -->
+  <div id="anexoModal" hidden>
+    <div class="anexo-box">
+      <div class="anexo-head">
+        <div><i data-lucide="paperclip"></i> Comprovante</div>
+        <button id="anexoClose" class="btn">Fechar</button>
+      </div>
+      <div class="anexo-body">
+        <div id="anexoViewer" class="viewer"></div>
+      </div>
+      <div class="anexo-actions">
+        <button id="anexoBaixar" class="btn"><i data-lucide="download"></i> Baixar</button>
+        <button id="anexoImprimir" class="btn"><i data-lucide="printer"></i> Imprimir</button>
+      </div>
+    </div>
+  </div>
+<!-- Scripts (ordem importa) -->
+<script type="module" src="./menu-lateral.js"></script>
+
+<!-- Ponte de agenda/notificações (se sua tela usa) -->
+<script src="./agenda-bridge.js"></script>
+
+<!-- Modal financeiro: precisa vir ANTES da tela de lançamentos -->
+<script type="module" src="./financeiro-modal.js"></script>
+
+<!-- Garante que o modal esteja injetado antes da tela usar -->
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    try { window.FinModal?.ensureModal?.(); } catch {}
+    try { window.lucide?.createIcons?.(); } catch {}
+  });
+</script>
+
+<!-- Tela de lançamentos (usa o FinModal que já está disponível) -->
+<script type="module" src="./financeiro-lancamentos.js"></script>
+
+<!-- Host dos toasts -->
+<div id="toastHost" aria-live="polite"></div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn  = document.getElementById('hamburguer');
+    const menu = document.getElementById('menuLateral');
+
+    if (!btn || !menu) return;
+
+    // ------- botão "X" dentro do menu (mobile) -------
+    const btnInside = document.createElement('button');
+    btnInside.id = 'fecharMenuMobile';
+    btnInside.type = 'button';
+    btnInside.setAttribute('aria-label', 'Fechar menu');
+    btnInside.innerHTML = '<i data-lucide="x"></i>';
+    btnInside.style.cssText = `
+      display:none;
+      position:absolute;
+      top:12px;
+      right:12px;
+      border:none;
+      border-radius:8px;
+      padding:6px 10px;
+      font-size:20px;
+      background:#c29a5d;
+      color:#fff;
+      z-index:1200;
+    `;
+    menu.prepend(btnInside);
+
+    function atualizarBotoes() {
+      if (window.innerWidth <= 768) {
+        btn.style.display = 'block';
+        btnInside.style.display = 'block';
+      } else {
+        btn.style.display = 'none';
+        btnInside.style.display = 'none';
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+        const icon = btn.querySelector('i[data-lucide]');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'menu');
+          try { window.lucide?.createIcons?.(); } catch(e) {}
+        }
+      }
+    }
+
+    atualizarBotoes();
+    window.addEventListener('resize', atualizarBotoes);
+
+    function toggleMenu() {
+      const aberto = menu.classList.toggle('aberto');
+      btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+      document.body.style.overflow = aberto ? 'hidden' : '';
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon) {
+        icon.setAttribute('data-lucide', aberto ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e) {}
+      }
+    }
+
+    // hambúrguer abre/fecha
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // botão interno (X) também fecha
+    btnInside.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // clicar fora fecha
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('aberto')) return;
+      if (!menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+        const icon = btn.querySelector('i[data-lucide]');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'menu');
+          try { window.lucide?.createIcons?.(); } catch(e) {}
+        }
+      }
+    });
+  });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const btn      = document.getElementById("hamburguer");
+  const menu     = document.getElementById("menuLateral");
+  const backdrop = document.getElementById("menuBackdrop");
+
+  if (!btn || !menu) return;
+
+  function fechar(){
+    menu.classList.remove("aberto");
+    btn.setAttribute("aria-expanded","false");
+    if (backdrop){
+      backdrop.classList.remove("visivel");
+      backdrop.hidden = true;
+    }
+    document.body.classList.remove("no-scroll");
+  }
+
+  function toggle(e){
+    e?.stopPropagation?.();
+    const aberto = menu.classList.toggle("aberto");
+    btn.setAttribute("aria-expanded", aberto ? "true" : "false");
+
+    if (backdrop){
+      backdrop.hidden = !aberto;
+      backdrop.classList.toggle("visivel", aberto);
+    }
+    document.body.classList.toggle("no-scroll", aberto);
+
+    const icon = btn.querySelector('i[data-lucide]');
+    if (icon){
+      icon.setAttribute("data-lucide", aberto ? "x" : "menu");
+      try { window.lucide?.createIcons?.(); } catch {}
+    }
+  }
+
+  btn.addEventListener("click", toggle);
+  backdrop?.addEventListener("click", fechar);
+
+  document.addEventListener("click", (ev) => {
+    if (!menu.classList.contains("aberto")) return;
+    if (!menu.contains(ev.target) && !btn.contains(ev.target)) fechar();
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 768) fechar();
+  });
+});
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

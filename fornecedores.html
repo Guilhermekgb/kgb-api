@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:fornecedores.html">
+  <meta charset="UTF-8" /><!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+
+  <title>Fornecedores</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais existentes -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    /* ======= SEU ESTILO BASE (mantido) ======= */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #f8f1e8;
+      height: 100%;
+    }
+    main.conteudo-principal,
+    input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper {
+      display: flex;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #menuLateral {
+      flex-shrink: 0;
+      background-color: #5a3e2b;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    main.conteudo-principal {
+      flex-grow: 1;
+      padding: 40px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .conteudo-central {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 28px;
+      color: #5a3e2b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #hamburguer {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: white;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1001;
+      display: none;
+    }
+    @media (max-width: 768px) {
+      #hamburguer { display: block; }
+      #menuLateral {
+        position: fixed;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 999;
+        width: 260px;
+      }
+      #menuLateral.aberto { transform: translateX(0); }
+      main.conteudo-principal { margin-left: 0; padding: 20px; }
+    }
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo {
+      background-color: #f3e8da;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    /* ======= ESTILO DA PÁGINA DE FORNECEDORES ======= */
+    .sub { margin: 0 0 16px 0; color: #6b7280; }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    }
+    .card-title { margin: 0 0 12px 0; color:#5a3e2b; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .fld { display:flex; flex-direction:column; gap:6px; }
+    .fld input, .fld select, .fld textarea {
+      width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px; font:inherit; background:#fff;
+    }
+    .fld-col2 { grid-column: span 2; }
+    fieldset.fld { border:1px solid #e5e7eb; border-radius:8px; padding:10px; }
+    legend { font-size:.95rem; color:#6b7280; }
+    .chips { display:flex; gap:14px; flex-wrap:wrap; }
+
+    .muted { color:#6b7280; font-size:.9rem; }
+
+    .actions { display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
+    .btn {
+      appearance:none; border:1px solid #e5e7eb; background:#fff; border-radius:10px;
+      padding:9px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover { background:#f8fafc; }
+    .btn.primary { background:#8b5cf6; border-color:#8b5cf6; color:#fff; }
+    .btn.primary:hover { background:#7c3aed; }
+    .btn.ghost { background:transparent; border-color:transparent; color:#5a3e2b; }
+
+    .list-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .toolbar input[type="search"] { padding:9px 10px; border:1px solid #e5e7eb; border-radius:8px; min-width: 260px; }
+    .filters { display:flex; gap:12px; align-items:center; color:#6b7280; flex-wrap:wrap; }
+
+    .table-wrap { overflow:auto; }
+    table.table { width:100%; border-collapse:collapse; }
+    .table th, .table td { border-top:1px solid #e5e7eb; padding:10px 8px; text-align:left; vertical-align:top; }
+    .table thead th { border-top:none; color:#6b7280; font-weight:600; }
+    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#4338ca; font-size:.8rem; margin-right:6px; }
+    .whats { color:#059669; text-decoration:none; font-weight:600; }
+
+    .foot { padding-top:10px; color:#6b7280; display:flex; justify-content:flex-end; }
+
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      .fld-col2 { grid-column:auto; }
+      .toolbar input[type="search"] { min-width: 200px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="package-check"></i> Fornecedores</h1>
+        <p class="sub">Cadastre e gerencie fornecedores de <strong>insumos</strong>, <strong>serviços</strong> e <strong>materiais</strong>. Evita duplicados e permite definir <strong>preço base</strong>.</p>
+
+        <!-- CADASTRO -->
+        <section class="card" aria-labelledby="tituloCadastro">
+          <h2 id="tituloCadastro" class="card-title">Cadastro de Fornecedor</h2>
+          <form id="formFornecedor" autocomplete="off">
+            <input type="hidden" id="fornId" />
+
+            <div class="grid">
+              <label class="fld">
+                <span>Nome do fornecedor *</span>
+                <input id="fornNome" type="text" placeholder="Ex.: Maria Bolos / Churras & Cia" required />
+              </label>
+
+              <fieldset class="fld">
+                <legend>Segmento(s) *</legend>
+                <div class="chips">
+                  <label><input type="checkbox" name="segmento" value="insumos" /> Insumos</label>
+                  <label><input type="checkbox" name="segmento" value="serviços" /> Serviços</label>
+                  <label><input type="checkbox" name="segmento" value="materiais" /> Materiais</label>
+                </div>
+              </fieldset>
+
+              <label class="fld">
+                <span>WhatsApp *</span>
+                <input id="fornWhats" type="tel" inputmode="tel" placeholder="(11) 9 9999-9999" required />
+              </label>
+
+              <label class="fld">
+                <span>Contato (nome)</span>
+                <input id="fornContato" type="text" placeholder="Ex.: Ana" />
+              </label>
+
+              <label class="fld">
+                <span>E-mail</span>
+                <input id="fornEmail" type="email" placeholder="exemplo@fornecedor.com" />
+              </label>
+
+              <label class="fld">
+                <span>Cidade / Região</span>
+                <input id="fornCidade" type="text" placeholder="Ex.: Sorocaba e região" />
+              </label>
+
+              <label class="fld">
+                <span>Preço base (R$)</span>
+                <input id="fornPrecoBase" type="text" inputmode="decimal" placeholder="Ex.: 150,00" />
+              </label>
+
+              <label class="fld">
+                <span>Mensagem padrão do Whats</span>
+                <input id="fornMsgPadrao" type="text" placeholder="Olá! Aqui é do Buffet. Podemos falar sobre orçamento?" />
+              </label>
+
+              <label class="fld fld-col2">
+                <span>Observações</span>
+                <textarea id="fornObs" rows="3" placeholder="Preço base, condições de entrega, lead time, observações gerais..."></textarea>
+              </label>
+
+              <label class="fld">
+                <span>Ativo</span>
+                <select id="fornAtivo">
+                  <option value="true" selected>Sim</option>
+                  <option value="false">Não</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="actions">
+              <button type="submit" class="btn primary" id="btnSalvar">
+                <i data-lucide="save"></i> Salvar fornecedor
+              </button>
+              <button type="button" class="btn" id="btnCancelar" hidden>
+                <i data-lucide="x"></i> Cancelar edição
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- LISTA -->
+        <section class="card" aria-labelledby="tituloLista">
+          <div class="list-header">
+            <h2 id="tituloLista" class="card-title">Lista de Fornecedores</h2>
+            <div class="toolbar">
+              <input id="busca" type="search" placeholder="Buscar por nome, tag, cidade..." />
+              <div class="filters">
+                <label><input type="checkbox" name="filtraSeg" value="insumos" checked /> Insumos</label>
+                <label><input type="checkbox" name="filtraSeg" value="serviços" checked /> Serviços</label>
+                <label><input type="checkbox" name="filtraSeg" value="materiais" checked /> Materiais</label>
+                <label><input type="checkbox" id="filtroAtivos" checked /> Ativos</label>
+              </div>
+              <button class="btn" id="btnExportar"><i data-lucide="download"></i> Exportar</button>
+              <label class="btn">
+                <i data-lucide="upload"></i> Importar
+                <input type="file" id="inpImportar" accept="application/json" hidden />
+              </label>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="tabela">
+              <thead>
+                <tr>
+                  <th style="width: 34%">Nome</th>
+                  <th style="width: 20%">Segmentos</th>
+                  <th style="width: 20%">WhatsApp</th>
+                  <th style="width: 26%">Ações / Preço base</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="foot">
+            <span id="total">0 fornecedor(es)</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts do seu projeto -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Script da página de fornecedores -->
+  <script>
+    // ======= Lucide =======
+    document.addEventListener('DOMContentLoaded', () => {
+      try { lucide.createIcons(); } catch {}
+    });
+
+    // ======= Storage Key =======
+    const LS_FORN = "fornecedores";
+
+    // ======= Helpers =======
+    const $  = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+    function uid() { return "forn_" + Date.now() + "_" + Math.random().toString(36).slice(2,7); }
+
+    function sanitizePhoneBR(value) {
+      const digits = String(value || "").replace(/\D+/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("55")) return digits;
+      return "55" + digits;
+    }
+
+    function whatsLink(number, msg="Olá! Aqui é do Buffet, tudo bem? Podemos falar sobre orçamento?") {
+      const n = sanitizePhoneBR(number);
+      if (!n) return "#";
+      return `https://wa.me/${n}?text=${encodeURIComponent(msg)}`;
+    }
+
+    function loadAll() {
+      try { return JSON.parse(localStorage.getItem(LS_FORN) || "[]"); } catch { return []; }
+    }
+    function saveAll(arr) {
+      try { localStorage.setItem(LS_FORN, JSON.stringify(arr || [])); }
+      catch (e) { alert("Armazenamento cheio. Exclua itens antigos ou exporte/limpe antes de salvar."); throw e; }
+    }
+
+    // moeda
+    const fmtBRL = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
+    function parseBRL(s){
+      if (typeof s === 'number') return s;
+      s = String(s || "").replace(/\s/g,'').replace(/\./g,'').replace(',', '.').replace(/[^0-9.]/g,'');
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : 0;
+    }
+    function maskBRLInput(el){
+      const val = parseBRL(el.value);
+      el.value = val ? fmtBRL.format(val) : "";
+    }
+
+    function normalizeName(s) {
+      return String(s || "")
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-z0-9\s]/g,' ')
+        .replace(/\s+/g,' ')
+        .trim();
+    }
+
+    // ======= Duplicados =======
+    function findDuplicate(todos, data, ignoreId=null) {
+      const alvoNome = normalizeName(data.nome);
+      const alvoWhats = sanitizePhoneBR(data.whats);
+      return todos.find(f => {
+        if (ignoreId && f.id === ignoreId) return false;
+        const nomeOk  = normalizeName(f.nome) === alvoNome;
+        const whatsOk = sanitizePhoneBR(f.whats) && sanitizePhoneBR(f.whats) === alvoWhats;
+        if (whatsOk) return true; // duplicado forte
+        const segOverlap = (f.segmentos || []).some(s => (data.segmentos || []).includes(s));
+        return nomeOk && segOverlap;
+      });
+    }
+
+    // ======= Estado =======
+    let editId = null;
+
+    // ======= Form =======
+    function getFormData() {
+      const nome = $("#fornNome").value.trim();
+      const whats = $("#fornWhats").value.trim();
+      const contato = $("#fornContato").value.trim();
+      const email = $("#fornEmail").value.trim();
+      const cidade = $("#fornCidade").value.trim();
+      const tags = ($("#fornTags")?.value || "").split(",").map(s => s.trim()).filter(Boolean);
+      const obs = $("#fornObs").value.trim();
+      const ativo = $("#fornAtivo").value === "true";
+      const msgPadrao = $("#fornMsgPadrao").value.trim();
+      const segmentos = $$('input[name="segmento"]:checked').map(c => c.value);
+      const precoBase = parseBRL($("#fornPrecoBase").value);
+
+      return { nome, whats, contato, email, cidade, tags, obs, ativo, msgPadrao, segmentos, precoBase };
+    }
+
+   function setFormData(f) {
+  $("#fornId").value = f.id || "";
+  $("#fornNome").value = f.nome || "";
+  $("#fornWhats").value = f.whats || "";
+  $("#fornContato").value = f.contato || "";
+  $("#fornEmail").value = f.email || "";
+  $("#fornCidade").value = f.cidade || "";
+
+  // ✅ Corrigido: nada de optional chaining no lado esquerdo
+  const elTags = $("#fornTags");
+  if (elTags) elTags.value = (f.tags || []).join(", ");
+
+  $("#fornObs").value = f.obs || "";
+  $("#fornAtivo").value = String(f.ativo !== false);
+  $("#fornMsgPadrao").value = f.msgPadrao || "Olá! Aqui é do Buffet, tudo bem? Podemos falar sobre orçamento?";
+  $("#fornPrecoBase").value = f.precoBase ? fmtBRL.format(f.precoBase) : "";
+
+  $$('input[name="segmento"]').forEach(c => { c.checked = !!(f.segmentos || []).includes(c.value); });
+
+  editId = f.id || null;
+  $("#btnSalvar").innerHTML = (editId
+    ? '<i data-lucide="save"></i> Salvar alterações'
+    : '<i data-lucide="save"></i> Salvar fornecedor');
+  $("#btnCancelar").hidden = !editId;
+  try { lucide.createIcons(); } catch {}
+}
+
+
+    function clearForm() { setFormData({ ativo:true, segmentos:[] }); }
+
+    // ======= Render =======
+    const $tbody = () => $("#tbody");
+    const fmtPreco = v => v ? fmtBRL.format(v) : "-";
+
+    function render() {
+      const tbody = $tbody();
+      tbody.innerHTML = "";
+
+      const busca = ($("#busca").value || "").trim().toLowerCase();
+      const segsMarcados = $$('input[name="filtraSeg"]:checked').map(c => c.value);
+      const soAtivos = $("#filtroAtivos").checked;
+
+      const todos = loadAll();
+      const filtrados = todos.filter(f => {
+        if (soAtivos && String(f.ativo) === "false") return false;
+        if (segsMarcados.length && !f.segmentos?.some(s => segsMarcados.includes(s))) return false;
+        if (busca) {
+          const base = [
+            f.nome, f.whats, f.contato, f.email, f.cidade,
+            (f.tags || []).join(","), (f.segmentos || []).join(",")
+          ].join(" ").toLowerCase();
+          if (!base.includes(busca)) return false;
+        }
+        return true;
+      }).sort((a,b)=> a.nome.localeCompare(b.nome));
+
+      filtrados.forEach(f => {
+        const tr = document.createElement("tr");
+
+        const segs = (f.segmentos || []).map(s => `<span class="badge">${s}</span>`).join(" ");
+        const whats = f.whats
+          ? `<a class="whats" href="${whatsLink(f.whats, f.msgPadrao || "")}" target="_blank" rel="noopener"><i data-lucide="message-square"></i> Abrir Whats</a>`
+          : "-";
+
+        tr.innerHTML = `
+          <td>
+            <div><strong>${f.nome}</strong>${f.ativo === false || String(f.ativo) === "false" ? " (inativo)" : ""}</div>
+            <div class="muted">${f.contato ? f.contato + " · " : ""}${f.email || ""}${f.cidade ? " · " + f.cidade : ""}</div>
+            ${f.tags?.length ? `<div class="muted">Tags: ${f.tags.join(", ")}</div>`:""}
+          </td>
+          <td>${segs || "-"}</td>
+          <td>${f.whats || "-"}<br>${whats}</td>
+          <td class="row-actions">
+            <span class="muted">${fmtPreco(f.precoBase)}</span>
+            <button class="btn" data-edit="${f.id}"><i data-lucide="pencil-line"></i> Editar</button>
+            <button class="btn" data-del="${f.id}"><i data-lucide="trash-2"></i> Excluir</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      $("#total").textContent = `${filtrados.length} fornecedor(es)`;
+      try { lucide.createIcons(); } catch {}
+    }
+
+    // ======= Ações =======
+    function onSubmit(e){
+      e.preventDefault();
+      const data = getFormData();
+
+      if (!data.nome)              { alert("Informe o nome do fornecedor."); return; }
+      if (!data.segmentos?.length) { alert("Selecione ao menos um segmento."); return; }
+      if (!data.whats)             { alert("Informe o WhatsApp."); return; }
+
+      const todos = loadAll();
+
+      // DUPLICADOS
+      const dup = findDuplicate(todos, data, editId);
+      if (!editId && dup) {
+        alert(`Já existe um fornecedor semelhante com mesmo Whats/Nome:\n\n• ${dup.nome}\n• Whats: ${dup.whats || "-"}`);
+        setFormData(dup); // abre o existente para edição
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (editId) {
+        const i = todos.findIndex(x => x.id === editId);
+        if (i !== -1) {
+          const atualizado = { ...todos[i], ...data, id: editId, atualizadoEm: new Date().toISOString() };
+          // limpeza caso existam restos de versão anterior com contrato
+          delete atualizado.contrato;
+          todos[i] = atualizado;
+        }
+        saveAll(todos);
+      } else {
+        const novo = { id: uid(), criadoEm: new Date().toISOString(), ...data };
+        saveAll([...todos, novo]);
+      }
+
+      clearForm();
+      render();
+      alert("Fornecedor salvo.");
+    }
+
+    function onClickTabela(e){
+      const btn = e.target.closest("button");
+      if (!btn) return;
+
+      const id = btn.dataset.edit || btn.dataset.del;
+      if (!id) return;
+
+      const todos = loadAll();
+      const f = todos.find(x => x.id === id);
+      if (!f) return;
+
+      if (btn.dataset.edit) {
+        setFormData(f);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else if (btn.dataset.del) {
+        if (confirm(`Excluir o fornecedor "${f.nome}"?`)) {
+          saveAll(todos.filter(x => x.id !== id));
+          render();
+        }
+      }
+    }
+
+    function exportar(){
+      const data = loadAll();
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "fornecedores.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importar(file){
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const arr = JSON.parse(String(r.result || "[]"));
+          if (!Array.isArray(arr)) throw new Error("JSON inválido");
+          const atuais = loadAll();
+
+          arr.forEach(f => {
+            if (!f.id) f.id = uid();
+            // limpeza de contrato herdado de versões antigas
+            if (f.contrato) delete f.contrato;
+            const i = atuais.findIndex(x => x.id === f.id);
+            if (i === -1) atuais.push(f);
+            else atuais[i] = { ...atuais[i], ...f };
+          });
+
+          saveAll(atuais);
+          render();
+          alert("Importação concluída.");
+        } catch (err) {
+          alert("Falha ao importar: " + err.message);
+        }
+      };
+      r.readAsText(file);
+    }
+
+    // ======= Bind =======
+    document.addEventListener("DOMContentLoaded", () => {
+      // máscara moeda
+      $("#fornPrecoBase").addEventListener("blur", e => maskBRLInput(e.target));
+      $("#fornPrecoBase").addEventListener("input", e => {
+        const v = e.target.value.replace(/[^\d,\.]/g,'');
+        e.target.value = v;
+      });
+
+      clearForm();
+      render();
+
+      $("#formFornecedor").addEventListener("submit", onSubmit);
+      $("#btnCancelar").addEventListener("click", () => { clearForm(); });
+
+      $("#tbody").addEventListener("click", onClickTabela);
+      $("#busca").addEventListener("input", render);
+      document.querySelectorAll("#filtroAtivos, input[name='filtraSeg']").forEach(el => el.addEventListener("change", render));
+
+      $("#btnExportar").addEventListener("click", exportar);
+      $("#inpImportar").addEventListener("change", e => {
+        const f = e.target.files?.[0];
+        if (f) importar(f);
+        e.target.value = "";
+      });
+    });
+  </script>
+
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

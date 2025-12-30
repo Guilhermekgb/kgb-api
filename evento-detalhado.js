@@ -1,0 +1,5247 @@
+/* =========================================================================
+   EVENTO DETALHADO – versão com persistência robusta
+   - Sem botão de Whats ao lado do título (fica só na barra de ações)
+   - Salva alterações no vetor 'eventos' (fonte da verdade)
+   - Merge de dados de outras telas (cardapioSelecionado, itensSelecionadosEvento, etc.)
+   - Autosave ao sair/ocultar
+   ========================================================================= */
+/* ===== Helpers ÚNICOS (cole apenas uma vez, no topo do arquivo) ===== */
+(function ensureHelpersOnce(){
+  if (typeof window.toBRL !== 'function') {
+    window.toBRL = (n) => (Number(n) || 0).toLocaleString('pt-BR', {
+      style: 'currency', currency: 'BRL'
+    });
+  }
+
+// Helper local para obter nome do usuário atual via sessão
+async function __getNomeUsuarioAtual(){
+  try {
+    const u = await (window.getUsuarioAtualAsync ? window.getUsuarioAtualAsync() : Promise.resolve(window.__KGB_USER_CACHE || null));
+    return (u && u.nome) ? u.nome : '—';
+  } catch { return '—'; }
+}
+
+  if (typeof window.parseMoney !== 'function') {
+    window.parseMoney = function (v){
+      if (typeof v === 'number') return v;
+      let s = String(v || '').trim();
+      s = s.replace(/[R$\s]/gi, '').replace(/\./g, '').replace(',', '.');
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+  }
+})();
+// === Configuração da API / eventos (nuvem) ===
+const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
+
+function callApi(endpoint, method = 'GET', body = {}) {
+  return import('./api/routes.js').then(({ handleRequest }) =>
+    new Promise((resolve) => {
+      handleRequest(endpoint, { method, body }, resolve);
+    })
+  );
+}
+
+const _fmtBR = (n) => (window.toBRL ? window.toBRL(n) :
+  (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+);
+// Helpers únicos (NÃO duplicar)
+window._catDoItem ??= function (src) {
+  const c = (src?.categoria || src?.tipo || "").toString().toLowerCase();
+  if (c.includes("card")) return "cardápio";
+  if (c.includes("serv")) return "serviço";
+  if (c.includes("adic")) return "adicional";
+  return c || "—";
+};
+
+window.nomeItemDisplay ??= function (src) {
+  return (src?.nomeItem || src?.nome || src?.titulo || src?.label || "Item").toString();
+};
+// ==== FINANCEIRO GLOBAL: helpers mínimos para lançar "Comissões" ====
+function __fgLoad() {
+  try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; }
+  catch { return {}; }
+}
+function __fgSave(g) {
+  try {
+    localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+    // ping para outras abas atualizarem
+    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+  } catch {}
+}
+function __uuid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+}
+// Tenta extrair conta (id/nome) de um objeto (lançamento ou parcela)
+function __extractConta(obj){
+  if (!obj || typeof obj !== 'object') return { contaId: null, contaNome: '' };
+  const tryVals = (...paths) => {
+    for (const p of paths){
+      try{
+        const v = p.split('.').reduce((acc,k)=>acc?.[k], obj);
+        if (v != null && String(v).trim()!=='') return v;
+      }catch{}
+    }
+    return null;
+  };
+  // procura ID em vários lugares comuns
+  const contaId = tryVals(
+    'contaId','idConta','contaBancariaId',
+    'pagamento.contaId','baixa.contaId','liquidacao.contaId',
+    'lanc.contaId','lanc.idConta'
+  );
+  // nome da conta em vários campos
+  const contaNome = tryVals(
+    'contaNome','pagamento.contaNome','baixa.contaNome','lanc.contaNome'
+  ) || '';
+  return { contaId, contaNome };
+}
+
+// === Relatório do Evento (linkagem) ===
+// Descobre o ID do evento carregado (ajuste os nomes se o seu código usar outros)
+const _idEventoCarregado =
+  (window.eventoAtual && eventoAtual.id) ||
+  (window.evento && evento.id) ||
+  new URL(location.href).searchParams.get('eventoId') ||
+  new URL(location.href).searchParams.get('id') || "";
+
+// Aponta o link do relatório para o evento atual
+function setRelatorioHref(eventoId){
+  const a = document.getElementById('linkRelatorioEvento');
+  if (a && eventoId) a.href = `relatorio-evento.html?eventoId=${encodeURIComponent(eventoId)}`;
+}
+
+/**
+ * Cria/atualiza um lançamento de comissão para este evento.
+ * - tipo: 'saida' (despesa)
+ * - categoria: 'Comissões'
+ * - status default: 'pendente' (mude p/ 'pago' quando você efetivar o pagamento)
+ */
+function upsertLancamentoComissao({ eventoId, dataISO, valor, descricao, status = 'pendente', destinatario }) {
+  const g = __fgLoad(); g.lancamentos ||= [];
+  const refKey = `comissao:${eventoId}:${dataISO}:${(descricao||'').slice(0,50)}:${Number(valor||0).toFixed(2)}`;
+  const idx = g.lancamentos.findIndex(l => String(l.refKey) === refKey);
+  const baseId = idx >= 0 && g.lancamentos[idx].id ? g.lancamentos[idx].id : __uuid();
+
+  const lanc = {
+    id: baseId,
+    refKey,
+    origem: 'comissao',
+    eventoId: String(eventoId||''),
+    tipo: 'saida',
+    categoria: 'Comissões',
+    descricao: descricao || (destinatario ? `Comissão — ${destinatario}` : 'Comissão'),
+    valor: Number(valor||0),
+    dataISO: dataISO || new Date().toISOString().slice(0,10),
+    status: String(status||'pendente').toLowerCase(),
+    destinatario: destinatario || ''
+  };
+  if (idx >= 0) g.lancamentos[idx] = { ...g.lancamentos[idx], ...lanc };
+  else g.lancamentos.push(lanc);
+  __fgSave(g);
+}
+
+function lerSnapshotFinanceiro(id){
+  try { return JSON.parse(localStorage.getItem(`financeiroEvento:${id}`) || 'null'); }
+  catch { return null; }
+}
+// Carrega usuários ativos e filtra por vendedor/administrador
+function __carregarUsuariosAtivos(){
+  const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
+  for (const k of chaves){
+    try {
+      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      if (Array.isArray(v)) return v;
+    } catch {}
+  }
+  return [];
+}
+// Evita redefinir se já existir
+window.__isVendOuAdm ??= function (u) {
+  const roles = [
+    String(u?.perfil || u?.role || u?.papel || '').toLowerCase(),
+    String(u?.perfil?.nome || '').toLowerCase(),
+    ...(Array.isArray(u?.perfis) ? u.perfis.map(p => String(p?.nome || p).toLowerCase()) : [])
+  ].filter(Boolean);
+
+  return roles.some(r => /^(admin|administrador|vendedor)s?$/.test(r));
+};
+
+// === Helpers de usuários (vendedor/adm) ===============================
+window.__carregarUsuariosAtivos ??= function () {
+  const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
+  for (const k of chaves){
+    try {
+      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      if (Array.isArray(v)) return v;
+    } catch {}
+  }
+  return [];
+};
+
+window.__isVendOuAdm ??= function (u) {
+  const roles = [
+    String(u?.perfil || u?.role || u?.papel || '').toLowerCase(),
+    String(u?.perfil?.nome || '').toLowerCase(),
+    ...(Array.isArray(u?.perfis) ? u.perfis.map(p => String(p?.nome || p).toLowerCase()) : [])
+  ].filter(Boolean);
+  return roles.some(r => /^(admin|administrador|vendedor)s?$/.test(r));
+};
+
+window.popularSelectVendedores ??= function () {
+  const sel = document.getElementById('com-dest');
+  if (!sel) return;
+
+  const users = __carregarUsuariosAtivos().filter(__isVendOuAdm);
+  const fallback = [
+    { id: 'Administrador', nome: 'Administrador' },
+    { id: 'Vendedor',      nome: 'Vendedor' }
+  ];
+
+  const itens = users.length
+    ? users.map(u => ({
+        id: u.id || u.email || (u.nome||'').toLowerCase().replace(/\s+/g,'-'),
+        nome: u.nome || u.displayName || u.email || 'Usuário'
+      }))
+    : fallback;
+
+  sel.innerHTML = '<option value="">Selecione…</option>' +
+    itens.map(i => `<option value="${String(i.id)}">${String(i.nome)}</option>`).join('');
+};
+
+// Preenche o <select id="com-dest">
+function popularSelectVendedores(){
+  const sel = document.getElementById('com-dest');
+  if (!sel) return;
+  const users = __carregarUsuariosAtivos().filter(__isVendOuAdm);
+  const fallback = [
+    { id:'Administrador', nome:'Administrador' },
+    { id:'Vendedor',      nome:'Vendedor' }
+  ];
+  const itens = users.length
+    ? users.map(u => ({ id: u.id || u.email || (u.nome||'').toLowerCase().replace(/\s+/g,'-'),
+                        nome: u.nome || u.displayName || u.email || 'Usuário' }))
+    : fallback;
+  sel.innerHTML = '<option value="">Selecione…</option>' +
+                  itens.map(i => `<option value="${String(i.id)}">${String(i.nome)}</option>`).join('');
+}
+// === Lista do modal de Comissões (lê do evento + do financeiroGlobal) ===
+// Lista do modal de Comissões (lê do evento + do financeiroGlobal)
+window.renderComissoesLista ??= function () {
+  const box = document.getElementById("com-lista");
+  if (!box) return;
+
+  const id  = new URLSearchParams(location.search).get("id")
+           || localStorage.getItem("eventoSelecionado") || "";
+  const evs = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const ev  = (evs || []).find(e => String(e.id) === String(id)) || {};
+
+  // 1) comissões dentro do evento (ev.financeiro.comissao.parcelas)
+  const a = [];
+  const com = ev?.financeiro?.comissao;
+  if (com && Array.isArray(com.parcelas)) {
+    com.parcelas.forEach(p => {
+      a.push({
+        origem: "evento",
+        dataISO: p.vencimentoISO || p.vencimento || "",
+        descricao: p.descricao || "Comissão",
+        valor: Number(p.totalPago || p.valor || 0),
+        status: String(p.status || "pendente").toLowerCase()
+      });
+    });
+  }
+
+  // 2) espelhos em financeiroGlobal
+  const b = [];
+  try {
+    const g = JSON.parse(localStorage.getItem("financeiroGlobal") || "{}") || {};
+    const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
+    const parcs = Array.isArray(g.parcelas)    ? g.parcelas    : [];
+
+    const meus = lancs.filter(l =>
+      String(l.eventoId) === String(id) &&
+      (String(l.categoriaId || l.categoria || "").toLowerCase().includes("comiss") ||
+       String(l.origem || "").toLowerCase().includes("evento:comissao"))
+    );
+
+    const limpaDesc = (s) => String(s||"").replace(/\s*[|•]\s*$/,'').trim();
+
+    meus.forEach(l => {
+      const ps = parcs.filter(p => String(p.lancamentoId) === String(l.id));
+      if (ps.length) {
+        ps.forEach(p => b.push({
+          origem: "financeiro",
+          dataISO: p.vencimentoISO || p.vencimento || l.dataISO || "",
+          descricao: limpaDesc(p.descricao || l.descricao || "Comissão"),
+          valor: Number(p.valor || 0),
+          status: String(p.status || l.status || "pendente").toLowerCase()
+        }));
+      } else {
+        b.push({
+          origem: "financeiro",
+          dataISO: l.dataISO || "",
+          descricao: limpaDesc(l.descricao || "Comissão"),
+          valor: Number(l.valor || 0),
+          status: String(l.status || "pendente").toLowerCase()
+        });
+      }
+    });
+  } catch {}
+
+  // <-- AQUI estava o erro [.a, .b]; o certo é espalhar:
+  const lista = [...a, ...b].sort((x, y) =>
+    String(x.dataISO||"").localeCompare(String(y.dataISO||""))
+  );
+
+  const fmt = n => (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+  if (!lista.length) {
+    box.innerHTML = '<tr><td colspan="4" class="muted">Sem lançamentos ainda.</td></tr>';
+    return;
+  }
+
+  box.innerHTML = lista.map(c => `
+    <tr>
+      <td>${(c.dataISO||"").split("-").reverse().join("/") || "—"}</td>
+      <td>${c.descricao || "—"} ${c.origem==="financeiro" ? '<span class="tag">fin</span>' : ''}</td>
+      <td style="text-align:right">${fmt(c.valor||0)}</td>
+      <td>${c.status}</td>
+    </tr>
+  `).join("");
+};
+
+// Abrir modal de comissões (única fonte de verdade)
+window.openComissoesDialog ??= function () {
+  const dlg = document.getElementById('dlg-comissoes');
+  if (!dlg) return;
+
+  // limpa campos
+  ['com-data','com-desc','com-valor','com-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = (id === 'com-status') ? 'pendente' : '';
+  });
+
+  try { window.popularSelectVendedores?.(); } catch {}
+  try { window.renderComissoesLista?.(); } catch {}
+
+  dlg.removeAttribute('hidden');
+  if (typeof dlg.showModal === 'function') dlg.showModal();
+  else dlg.setAttribute('open', '');
+};
+
+// abre o diálogo ao clicar no card "Comissões"
+(() => {
+  const btn = document.querySelector('[data-abrir-comissao], #linkComissoes');
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => window.openComissoesDialog());
+  }
+})();
+
+// === Salvar comissão (evento + financeiroGlobal) ===
+// === COMISSÕES: Salvar (liga no id correto e atualiza a lista/financeiro) ===
+(function bindSalvarComissoes(){
+  const btn = document.getElementById("btnSalvarComissoes") || document.getElementById("com-salvar");
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = "1";
+
+  const parseMoney = (v) => {
+    if (typeof v === "number") return v;
+    const s = String(v||'').replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3,})/g,'').replace(',', '.');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  btn.addEventListener("click", () => {
+    // 1) evento atual
+    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || '');
+    const arr = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i   = arr.findIndex(e => String(e.id) === String(id));
+    if (i === -1) return alert("Evento não encontrado.");
+    const ev  = arr[i];
+
+    // 2) campos
+    const toISO = (s)=> {
+      const v = String(s||"").trim();
+      const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      return m ? `${m[3]}-${m[2]}-${m[1]}` : v;
+    };
+
+    const dataISO   = toISO(document.getElementById("com-data")?.value || "");
+    const valor     = parseMoney(document.getElementById("com-valor")?.value || 0);
+    const status    = String(document.getElementById("com-status")?.value || "pendente").toLowerCase();
+    const dest      = (document.getElementById("com-dest")?.value || "").trim();
+    const descricao = (document.getElementById("com-desc")?.value || "Comissão").trim();
+
+    if (!valor) return alert("Informe o valor da comissão.");
+
+    // 3) grava na estrutura do evento
+    ev.financeiro ??= {};
+    ev.financeiro.comissao ??= { valor: 0, status: "pendente", destinatario: "" };
+    ev.financeiro.comissao.destinatario = dest;
+    const com = ev.financeiro.comissao;
+    com.parcelas = Array.isArray(com.parcelas) ? com.parcelas : [];
+
+    const parc = {
+      id: "cmp_" + Date.now().toString(36),
+      vencimentoISO: dataISO || new Date().toISOString().slice(0,10),
+      valor: Number(valor)||0,
+      descricao,
+      status,
+      dataPagamentoISO: status === "pago" ? (dataISO||new Date().toISOString().slice(0,10)) : null
+    };
+    com.parcelas.push(parc);
+
+         // 4) persistir evento (local + nuvem)
+    arr[i] = ev;
+
+    // 4a) cache local (para outras telas que ainda usam "eventos" no navegador)
+    try {
+      localStorage.setItem("eventos", JSON.stringify(arr));
+    } catch (e) {
+      console.warn("[comissoes] Falha ao salvar eventos no localStorage", e);
+    }
+
+    // 4b) tenta salvar na API (fonte da verdade)
+    try {
+      if (typeof callApi === "function" && typeof IS_REMOTE !== "undefined" && IS_REMOTE) {
+        callApi(`/eventos/${encodeURIComponent(String(id))}`, "PUT", ev)
+          .catch(e => {
+            console.warn("[comissoes] Erro ao salvar comissão na API", e);
+          });
+      }
+    } catch (e) {
+      console.warn("[comissoes] Falha inesperada ao chamar a API de eventos", e);
+    }
+
+
+    // 5) espelhar no financeiroGlobal (para aparecer no Financeiro do Evento)
+    try {
+      if (typeof upsertComissaoNoFinanceiroGeral === "function") {
+        upsertComissaoNoFinanceiroGeral(ev);
+      }
+    } catch(e){ console.warn(e); }
+
+    // 6) ping para outras abas + atualizar a lista do modal
+    try { localStorage.setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
+    try { renderComissoesLista(); } catch {}
+
+    // 7) limpar e feedback
+    ["com-valor","com-desc"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    alert("Comissão lançada.");
+  });
+})();
+
+// normaliza um item vindo de qualquer lugar para o formato único que a tabela usa
+function __normalizarItem(src){
+  const tipoCobranca = src.tipoCobranca || src.cobranca || (src.porPessoa ? "porPessoa" : "valorTotal");
+  return {
+    tipo: _catDoItem(src),               // <- usa helpers oficiais
+    nome: nomeItemDisplay(src),          // <-
+    valor: Number(src.valor || src.preco || src.precoUnit || 0),
+    tipoCobranca: (tipoCobranca === "porPessoa") ? "porPessoa" : "valorTotal",
+    desconto: (src.desconto ?? src.descontoValor ?? "").toString().trim(),
+    descontoPorcentagem: (src.descontoPorcentagem ?? src.percentualDesconto ?? src.descontoPercentual ?? "").toString().trim(),
+    descontoTipo: (src.descontoTipo || "")
+  };
+}
+// ===== FALTA RECEBER (mesma regra do Financeiro) =====
+
+// Converte "1.234,56" -> Number
+function __parseBR(v){
+  if (typeof v === 'number') return v;
+  let s = String(v ?? '').trim();
+  s = s.replace(/[R$\s]/gi,'').replace(/\./g,'').replace(',','.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function __brl(n){
+  try { return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+  catch { return `R$ ${Number(n||0).toFixed(2)}`; }
+}
+
+// Valor real da parcela (cobre campos valor/valorParcela/total etc)
+function __valorRealDaParcela(p){
+  if (p && p.valor != null)        return __parseBR(p.valor);
+  if (p && p.valorParcela != null) return __parseBR(p.valorParcela);
+  if (p && p.totalPago != null)    return __parseBR(p.totalPago);
+
+  const raw = p?.total ?? p?.totalPrevisto ?? null;
+  if (raw != null){
+    if (typeof raw === 'string'){
+      const s = raw.trim();
+      if (/^\d+$/.test(s) && s.length >= 3) return Number(s)/100; // centavos
+      return __parseBR(s);
+    }
+    const n = Number(raw);
+    return (n >= 10000 ? n/100 : n);
+  }
+  return 0;
+}
+
+// Soma apenas parcelas com status Pago/Recebido
+function __totalRecebidoDoEvento(eventoId){
+  // Se você já tem uma função global getParcelasDoEvento, use-a
+  if (typeof getParcelasDoEvento === 'function'){
+    const parcelas = getParcelasDoEvento(eventoId) || [];
+    return parcelas.reduce((acc,p)=>{
+      const st = String(p.status||'').toLowerCase();
+      const pago = (st === 'pago' || st === 'recebido');
+      return acc + (pago ? __valorRealDaParcela(p) : 0);
+    }, 0);
+  }
+  // Fallback: ler de alguma chave local sua (ajuste se necessário)
+  try{
+    const raw = localStorage.getItem(`parcelas:${eventoId}`) || '[]';
+    const parcelas = JSON.parse(raw);
+    return parcelas.reduce((acc,p)=>{
+      const st   = String(p.status||'').toLowerCase();
+      const pago = (st === 'pago' || st === 'recebido');
+      return acc + (pago ? __valorRealDaParcela(p) : 0);
+    }, 0);
+  }catch{ return 0; }
+}
+
+// Acha o valor do contrato (usa os mesmos campos que você já usa)
+function __valorContratoDoEvento(ev, eventoId){
+  const num = __parseBR;
+  let contrato = num(ev?.valorContrato) || num(ev?.totalContrato) || num(ev?.contratoValor)
+              || num(ev?.financeiro?.contrato?.total) || num(ev?.resumoFinanceiro?.contratoTotal)
+              || num(ev?.totais?.contrato) || num(ev?.financeiro?.resumo?.contrato);
+
+  if (!contrato && Array.isArray(ev?.itensSelecionados)){
+    contrato = ev.itensSelecionados.reduce((acc,it)=>{
+      const v = num(it?.valor ?? it?.preco ?? it?.preço ?? it?.total);
+      return acc + (isFinite(v) ? v : 0);
+    }, 0);
+  }
+  return Math.max(0, Number(contrato)||0);
+}
+
+// Atualiza a UI (chame isso no onload da página)
+function syncFaltaReceberEventoDetalhado(){
+  try {
+    const qs  = new URLSearchParams(location.search);
+    const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+    if (!eid) return;
+
+    const fmtBRL = v => (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+
+    // --- Carrega o evento atual (para calcular o contrato quando preciso)
+    let ev = null;
+    try {
+      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      ev = eventos.find(e => String(e.id) === String(eid)) || null;
+    } catch {}
+
+    // --- CONTRATO: Total c/ desconto dos itens (helper) -> fallback na função antiga
+    let contrato = 0;
+    if (typeof totalItensEventoComDesconto === 'function' && ev) {
+      contrato = Number(totalItensEventoComDesconto(ev)) || 0;
+    }
+    if (!contrato && typeof __valorContratoDoEvento === 'function') {
+      contrato = Number(__valorContratoDoEvento(ev || {}, eid)) || 0;
+    }
+
+    // --- Snapshot do Financeiro do Evento (se existir)
+    let snap = null;
+    try {
+      const raw = localStorage.getItem(`financeiroEvento:${eid}`);
+      if (raw) snap = JSON.parse(raw);
+    } catch {}
+
+    // --- RECEBIDO: prioriza snapshot.recebido; fallback __totalRecebidoDoEvento
+    let recebido = null;
+    if (snap && typeof snap.recebido === 'number') {
+      recebido = Number(snap.recebido) || 0;
+    }
+    if (recebido == null && typeof __totalRecebidoDoEvento === 'function') {
+      recebido = Number(__totalRecebidoDoEvento(eid)) || 0;
+    }
+    if (recebido == null) recebido = 0;
+
+    // --- FALTA: prioriza snapshot.falta; fallback contrato - recebido
+    let falta = null;
+    if (snap && typeof snap.falta === 'number') {
+      falta = Number(snap.falta) || 0;
+    }
+    if (falta == null) {
+      falta = Math.max(0, Number(contrato) - Number(recebido));
+    }
+
+    // --- Atualiza DOM
+    const elContrato = document.getElementById('finTotalContrato') || document.getElementById('finContrato');
+    if (elContrato) elContrato.textContent = fmtBRL(contrato);
+
+    const elRecebido = document.getElementById('finRecebido');
+    if (elRecebido) elRecebido.textContent = fmtBRL(recebido);
+
+    const elFalta = document.getElementById('finFalta') || document.getElementById('edFaltaReceber');
+    if (elFalta) elFalta.textContent = fmtBRL(falta);
+
+  } catch (e) {
+    console.warn('syncFaltaReceberEventoDetalhado (fix):', e);
+  }
+}
+// dispara na carga
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', syncFaltaReceberEventoDetalhado);
+} else {
+  syncFaltaReceberEventoDetalhado();
+}
+
+// re-renderiza quando o Financeiro publicar novos números no localStorage
+window.addEventListener('storage', (ev) => {
+  const k = String(ev.key || '');
+  if (
+    k.startsWith('financeiroEvento:') ||
+    k.startsWith('parcelas:') ||
+    k === 'financeiroGlobal' ||
+    k === 'eventos'
+  ) {
+    syncFaltaReceberEventoDetalhado();
+  }
+});
+
+ // === HELPER: total dos itens do evento já com desconto aplicado ===
+function totalItensEventoComDesconto(ev){
+  if (!ev) return 0;
+  const qtd = parseInt(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0, 10) || 0;
+  const itens = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados : [];
+  if (!itens.length) return 0;
+
+  const toNumBR = (v) => {
+    if (typeof v === 'number') return v;
+    const s = String(v ?? '').trim()
+      .replace(/[R$\s]/gi,'')
+      .replace(/\.(?=\d{3,}(?:\D|$))/g,'')
+      .replace(',', '.');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  let total = 0;
+  for (const it of itens){
+    const valor = toNumBR(it.valor ?? it.preco ?? it.preço ?? it.total ?? 0);
+    const tipo  = String(it.tipoCobranca ?? it.cobranca ?? 'valorTotal').toLowerCase();
+    const base  = /pessoa/.test(tipo) ? (valor * qtd) : valor;
+
+    // Desconto pode vir em R$ (desconto/descontoValor) ou em % (descontoPorcentagem/percentualDesconto ou "10%")
+    const dStr = String(it.desconto ?? it.descontoValor ?? '').trim();
+    const pctExp = Number(it.descontoPorcentagem ?? it.percentualDesconto ?? it.descontoPercentual ?? 0) || 0;
+    const isPctFromStr = /%\s*$/.test(dStr);
+    const dPct = isPctFromStr
+      ? (parseFloat(dStr.replace(/[^\d.,-]/g,'').replace(',','.')) || 0)
+      : pctExp;
+
+    let descAbs = 0;
+    if (dPct > 0){
+      descAbs = base * (Math.max(0, Math.min(100, dPct))/100);
+    } else if (dStr){
+      let v = toNumBR(dStr);
+      const descTipo = String(it.descontoTipo || '').toLowerCase();
+      const porPessoa = (it.descontoPorPessoa === true) || /pessoa/.test(descTipo);
+      if (porPessoa) v *= qtd;
+      descAbs = v;
+    }
+
+    const liquido = Math.max(0, base - Math.max(0, Math.min(base, descAbs)));
+    total += liquido;
+  }
+  return Math.round(total * 100) / 100;
+}
+
+// === FINANCEIRO (Resumo): render contrato e derivar "Recebido" ===
+function renderFinanceiroResumo() {
+  try {
+    // 1) Pega o id do evento e carrega do storage
+    const eid =
+      (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
+      new URLSearchParams(location.search).get('id') ||
+      localStorage.getItem('eventoSelecionado') || '';
+    if (!eid) return;
+
+    const ev = (typeof __carregarEventoDoStorage === 'function')
+      ? (__carregarEventoDoStorage(eid) || {})
+      : {};
+
+  // 2) Contrato = total dos itens com desconto (fallback para sua função antiga)
+const valorContrato = (typeof totalItensEventoComDesconto === 'function')
+  ? totalItensEventoComDesconto(ev)
+  : ((typeof __valorContratoDoEvento === 'function') ? __valorContratoDoEvento(ev, eid) : 0);
+
+    // Escreve no cartão (cobre #finTotalContrato e #finContrato)
+    const elC1 = document.getElementById('finTotalContrato');
+    const elC2 = document.getElementById('finContrato');
+    [elC1, elC2].forEach(el => {
+      if (!el) return;
+      el.textContent = (typeof __brl === 'function')
+        ? __brl(valorContrato)
+        : (Number(valorContrato) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    });
+
+    // 3) Recalcula "Recebido = Contrato − Falta"
+    if (typeof syncFaltaReceberEventoDetalhado === 'function') {
+      syncFaltaReceberEventoDetalhado();
+    }
+  } catch (e) {
+    console.warn('renderFinanceiroResumo:', e);
+  }
+}
+
+
+
+// chama já na carga
+syncFaltaReceberEventoDetalhado();
+
+// (opcional) escuta alterações vindas de outra aba/página (financeiro)
+window.addEventListener('storage', function(ev){
+  if (String(ev.key||'').startsWith('parcelas:') || String(ev.key||'').startsWith('financeiroGlobal')){
+    syncFaltaReceberEventoDetalhado();
+  }
+});
+
+// Une o que estiver salvo no evento com o que tiver em chaves de passagem do LS
+function mergeItensNoEvento(ev){
+  if (!ev) return ev;
+
+  // 1) base do próprio evento
+  const base = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados.map(__normalizarItem) : [];
+
+  // 2) chaves “ponte” que outras telas usam
+  let ponte = [];
+  try {
+    const lsChaves = [
+      "itensSelecionadosEvento",
+      "cardapioSelecionado",
+      "adicionaisSelecionadosEvento", "adicionaisSelecionados",
+      "servicosSelecionadosEvento",  "servicosSelecionados"
+    ];
+    const raw = [];
+    for (const k of lsChaves){
+      const v = JSON.parse(localStorage.getItem(k) || "null");
+      if (Array.isArray(v)) raw.push(...v);
+      else if (v && typeof v === "object") raw.push(v);
+    }
+    ponte = raw.map(__normalizarItem);
+  } catch {}
+
+  // 3) junta e elimina duplicados por (tipo+nome)
+  const todos = [...base, ...ponte];
+  const seen = new Set();
+  const unicos = [];
+  for (const it of todos){
+    const key = `${it.tipo}__${it.nome}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unicos.push(it);
+  }
+
+  ev.itensSelecionados = unicos;
+
+  // 4) limpa chaves de passagem, para não repetir no próximo carregamento
+  ["itensSelecionadosEvento","cardapioSelecionado","adicionaisSelecionadosEvento","adicionaisSelecionados","servicosSelecionadosEvento","servicosSelecionados"]
+    .forEach(k => { try{ localStorage.removeItem(k); }catch{} });
+
+  return ev;
+}
+// chama já na carga e reescuta alterações vindas de outras telas
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    renderFinanceiroResumo();
+    syncFaltaReceberEventoDetalhado();
+  });
+} else {
+  renderFinanceiroResumo();
+  syncFaltaReceberEventoDetalhado();
+}
+
+window.addEventListener("storage", function(ev){
+  const k = String(ev.key || "");
+  if (
+    k.startsWith("parcelas:") ||
+    k.startsWith("financeiroGlobal") ||
+    k.startsWith("financeiroEvento:") ||
+    k === "eventos"
+  ) {
+    renderFinanceiroResumo();
+    syncFaltaReceberEventoDetalhado();
+  }
+  (function setRelatorioHrefFromEvento(){
+  try {
+    const a = document.getElementById('linkRelatorio');
+    if (!a) return;
+    const qs = new URLSearchParams(location.search);
+    const idURL = qs.get('id') || qs.get('eventoId');
+    const idMem = (window.evento && (evento.id || evento.eventoId)) || (window.eventoSelecionado && eventoSelecionado.id);
+    const eid = String(idURL || idMem || '').trim();
+    if (eid) a.href = `relatorio-evento.html?id=${encodeURIComponent(eid)}`;
+  } catch {}
+})();
+
+});
+
+
+function __persistirQtdConvidados(evId, value) {
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i = eventos.findIndex(e => String(e.id) === String(evId));
+    if (i === -1) return false;
+
+    const qtd = parseInt(value, 10) || 0;
+    eventos[i].quantidadeConvidados = qtd;
+    eventos[i].qtdConvidados = qtd; // espelho para compatibilidade
+
+    safeSaveEventos(eventos);
+
+    // atualiza referências em memória da própria página
+    window.evento = eventos[i];
+    window.eventoSelecionado = eventos[i];
+    return true;
+  } catch (e) {
+    console.warn("Falha ao persistir quantidade de convidados:", e);
+    return false;
+  }
+}
+
+function __debounce(fn, wait = 350) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(null, args), wait);
+  };
+}
+// Resolve id atual, carrega pela API (quando existir) e mantém o cache
+(function __bootstrapEvento(){
+  // 1) Descobre o ID do evento atual
+  const id =
+    (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
+    new URLSearchParams(location.search).get('id') ||
+    localStorage.getItem('eventoSelecionado') ||
+    '';
+
+  if (!id) {
+    console.warn('[Evento detalhado] Nenhum ID de evento encontrado na URL/localStorage.');
+    return;
+  }
+
+  // Função que aplica o evento na memória e no localStorage
+  function aplicar(evBase){
+    const base = evBase && typeof evBase === 'object' ? evBase : {};
+    const merged = mergeItensNoEvento({ ...base });
+
+    // Atualiza cache "eventos" no navegador
+    try {
+      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const i = eventos.findIndex(e => String(e.id) === String(merged.id));
+      if (i > -1) eventos[i] = merged; else eventos.push(merged);
+      safeSaveEventos(eventos);
+    } catch (e) {
+      console.warn('[Evento detalhado] Erro ao atualizar cache local de eventos:', e);
+    }
+
+    // Mantém referências globais desta tela
+    window.evento = merged;
+    window.eventoSelecionado = merged;
+
+    try { setRelatorioHref(merged.id || id); } catch {}
+  }
+
+  // 2) Se estiver com API configurada, tenta primeiro na nuvem
+  if (IS_REMOTE) {
+    callApi(`/eventos/${encodeURIComponent(id)}`, 'GET', {})
+      .then((resp) => {
+        const evApi = resp?.data || resp;
+        if (evApi && evApi.id) {
+          aplicar(evApi);
+
+          // reforça cache com o que veio da API
+          try {
+            const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+            const i = eventos.findIndex(e => String(e.id) === String(evApi.id));
+            if (i > -1) eventos[i] = evApi; else eventos.push(evApi);
+            safeSaveEventos(eventos);
+          } catch (e) {
+            console.warn('[Evento detalhado] Erro ao reforçar cache local após GET /eventos/:id:', e);
+          }
+
+          return;
+        }
+
+        // Se não veio nada útil da API, usa o cache local
+        aplicar(__carregarEventoDoStorage(id) || {});
+      })
+      .catch((err) => {
+        console.warn('[Evento detalhado] Falha ao carregar evento da API, usando cache local:', err);
+        aplicar(__carregarEventoDoStorage(id) || {});
+      });
+  } else {
+    // Modo antigo: só localStorage
+    aplicar(__carregarEventoDoStorage(id) || {});
+  }
+})();
+
+
+// === GANCHO: publicar/atualizar o item do Evento na agendaUnified ===
+(function bindAgendaBridgeEvento(){
+  const id = new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado");
+  if (!id) return;
+
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const ev = eventos.find(e => String(e.id) === String(id));
+    if (!ev) return;
+
+    // Monte os campos canônicos:
+    const titulo  = ev.nomeEvento || ev.titulo || ev.nome || "Evento";
+    const dataISO = String(ev.data || ev.dataEvento || "").slice(0,10); // yyyy-mm-dd
+    const horaIni = String(ev.horarioEvento || ev.horario || "").slice(0,5);
+
+    // publica/atualiza na agenda unificada (dispara ping automático)
+    window.__agendaBridge?.upsertUnifiedItem({
+      id: `evt:${id}`,
+      src: 'evento',
+      title: `Evento • ${titulo}`,
+      date: dataISO || new Date().toISOString().slice(0,10),
+      timeStart: horaIni,
+      status: 'scheduled',
+      audience: 'operacao',               // base (filtramos depois)
+      entity: { type:'evento', id:String(id) },
+      desc: ev.local ? `Local: ${ev.local}` : ''
+    });
+  } catch(e) { console.warn('agenda evt:', e); }
+})();
+
+
+
+// === INÍCIO PATCH 3: setar campo com valor salvo (opcional, no bloco de preenchimento) ===
+try {
+  // Resolve o id do evento e carrega o objeto de forma robusta
+  const _id = __getEventoIdAtual();
+  const ev  = window.evento || __carregarEventoDoStorage(_id) || window.eventoSelecionado || {};
+
+  // Preenche o input diretamente (sem depender de setVal, que é declarado depois)
+  const el = document.getElementById("eventoConvidados");
+  if (el) {
+    const qtd = ev && (ev.quantidadeConvidados ?? ev.qtdConvidados);
+    el.value = String(Number.isFinite(Number(qtd)) ? Number(qtd) : 0);
+  }
+
+  // Mantém as referências globais atualizadas (opcional, mas seguro)
+  if (ev && (ev.id || _id)) {
+    window.evento = ev;
+    window.eventoSelecionado = ev;
+  }
+} catch {}
+// === FIM PATCH 3 ===
+
+/* ===== Helpers básicos ===== */
+const setVal  = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v == null || String(v) === "") ? "—" : String(v); };
+const eventoId = new URLSearchParams(location.search).get("id");
+
+// Alias seguro para manter compat com trechos que usam __getJSON
+if (typeof window.__getJSON !== "function") {
+  window.__getJSON = function (k, fb) {
+    try {
+      const v = localStorage.getItem(k);
+      return v != null ? JSON.parse(v) : fb;
+    } catch {
+      return fb;
+    }
+  };
+}
+// === INÍCIO PATCH: persistência da quantidade de convidados + ping cross-tela ===
+function __persistCampoEvento(evId, key, value) {
+  try {
+    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+    const i = eventos.findIndex(e => String(e.id) === String(evId));
+    if (i === -1) return false;
+
+    // normaliza e grava no objeto do evento
+    if (key === 'quantidadeConvidados') {
+      const qtd = parseInt(value, 10) || 0;
+      eventos[i].quantidadeConvidados = qtd;
+      eventos[i].qtdConvidados = qtd; // espelho retrocompatível
+    } else {
+      eventos[i][key] = value;
+    }
+
+    const evAtualizado = eventos[i];
+
+    // 1) Atualiza o cache local (para outras telas que ainda usam localStorage)
+    try {
+      if (typeof window.safeSaveEventos === 'function') {
+        window.safeSaveEventos(eventos);
+      } else {
+        localStorage.setItem('eventos', JSON.stringify(eventos));
+      }
+    } catch {}
+
+    // 2) Envia atualização para a API (nuvem), em background
+    try {
+      if (IS_REMOTE && typeof callApi === 'function' && evAtualizado && evAtualizado.id) {
+        const endpoint = `/eventos/${encodeURIComponent(String(evAtualizado.id))}`;
+        callApi(endpoint, 'PUT', evAtualizado)
+          .then((resp) => {
+            console.log('[Evento detalhado] Atualizado na API:', resp);
+          })
+          .catch((e) => {
+            console.warn('[Evento detalhado] Falha ao atualizar na API, mantendo só cache local.', e);
+          });
+      }
+    } catch (e) {
+      console.warn('[Evento detalhado] Erro ao mandar atualização para API:', e);
+    }
+
+    // 3) Atualiza referências em memória
+    window.evento = evAtualizado;
+    window.eventoSelecionado = evAtualizado;
+
+    // 4) PING para outras telas (financeiro, etc.)
+    try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'eventos' })); } catch {}
+
+    return true;
+  } catch (e) {
+    console.warn('Falha ao persistir campo do evento:', e);
+    return false;
+  }
+}
+
+// salva com debounce e já tenta re-renderizar blocos locais
+const __persistQtdConvidadosDebounced = (function(){
+  let t;
+  return function(evId, value){
+    clearTimeout(t);
+    t = setTimeout(() => {
+      __persistCampoEvento(evId, 'quantidadeConvidados', value);
+      try { renderItensUnificado?.(); } catch {}
+      try { renderFinanceiroResumo?.(); } catch {}
+      try { atualizarResumo?.(); } catch {}
+    }, 400);
+  };
+})();
+// === FIM PATCH ===
+// === PATCH: auto-bind do campo de convidados (liga o "acelerador") ===
+(function __bindConvidadosAuto(){
+  // Resolve ID do evento de forma robusta sem depender de funções externas
+  function __idAtual(){
+    try {
+      const qs = new URLSearchParams(location.search);
+      return qs.get('id') || qs.get('eventoId') ||
+             (window.evento && (evento.id || evento.eventoId)) ||
+             localStorage.getItem('eventoSelecionado') || '';
+    } catch { return ''; }
+  }
+
+  function __carregaEvento(id){
+    try {
+      const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+      return arr.find(e => String(e.id) === String(id)) || null;
+    } catch { return null; }
+  }
+
+  function __syncInput(id){
+    const el = document.getElementById('eventoConvidados');
+    if (!el) return;
+    const ev = __carregaEvento(id);
+    const qtd = ev ? (ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) : 0;
+    el.value = String(parseInt(qtd,10) || 0);
+    if (ev) { window.evento = ev; window.eventoSelecionado = ev; }
+  }
+
+  function __bind(){
+    const id = __idAtual();
+    if (!id) return;
+
+    // coloca o valor salvo no campo ao carregar
+    __syncInput(id);
+
+    const campo = document.getElementById('eventoConvidados');
+    if (!campo) return;
+    if (campo.dataset.bound === '1') return; // evita duplo-bind
+    campo.dataset.bound = '1';
+
+    const onChange = () => {
+      __persistQtdConvidadosDebounced(id, campo.value);
+      // re-render local sem esperar outra tela
+      try { renderItensUnificado?.(); } catch {}
+      try { renderFinanceiroResumo?.(); } catch {}
+      try { atualizarResumo?.(); } catch {}
+    };
+
+    campo.addEventListener('input',  onChange);
+    campo.addEventListener('change', onChange);
+    campo.addEventListener('blur',   onChange);
+
+    // Failsafe: se a aba for ocultada/fechada, garante gravação
+    const _failsafe = () => { try { __persistCampoEvento(id, 'quantidadeConvidados', campo.value); } catch {} };
+    window.addEventListener('beforeunload', _failsafe);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') _failsafe();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', __bind);
+  } else {
+    __bind();
+  }
+})();
+
+
+/* ==== Helpers p/ snapshot leve do evento ==== */
+function __trySet(store, key, value){
+  try { store.setItem(key, value); return true; } catch(e){ console.warn(e); return false; }
+}
+function salvarEventoTempSlim(ev){
+  if (!ev) return false;
+  const slim = {
+    id: ev.id,
+    quantidadeConvidados: parseInt(ev.quantidadeConvidados || ev.qtdConvidados || 0, 10) || 0,
+    itensSelecionados: Array.isArray(ev.itensSelecionados)
+      ? ev.itensSelecionados.map(it => ({
+          id: it.id ?? it.idItem ?? it.codigo ?? it.slug ?? Math.random().toString(36).slice(2),
+          nomeItem: it.nomeItem ?? it.nome ?? it.titulo ?? "",
+          valor: it.valor ?? 0,
+          tipoCobranca: it.tipoCobranca ?? it.cobranca ?? "fixo",
+          desconto: it.desconto ?? it.descontoValor ?? "",
+          descontoPorcentagem: it.descontoPorcentagem ?? it.percentualDesconto ?? it.descontoPercentual ?? "",
+          descontoTipo: it.descontoTipo ?? ""
+        }))
+      : []
+  };
+  const json = JSON.stringify(slim);
+  if (__trySet(sessionStorage, "eventoTemp", json)) return true;
+  if (__trySet(localStorage, "eventoTemp", json)) return true;
+  const onlyId = JSON.stringify({ id: slim.id });
+  return __trySet(sessionStorage, "eventoTemp", onlyId) || __trySet(localStorage, "eventoTemp", onlyId);
+}
+
+/* === Ajusta links dos cards (robusto) === */
+document.addEventListener('DOMContentLoaded', () => {
+  const id =
+    (typeof __getEventoIdFix === 'function' && __getEventoIdFix()) ||
+    new URLSearchParams(location.search).get('id') ||
+    localStorage.getItem('eventoSelecionado') ||
+    '';
+
+  const box = document.getElementById('cardsAcesso');
+  if (!box || !id) return;
+
+  box.querySelectorAll('#cardsAcesso a.card-link[href*="EVENTOID"]').forEach(a => {
+    a.href = a.href.replace('EVENTOID', encodeURIComponent(id));
+  });
+});
+
+
+const pick = (obj, keys) => {
+  if (!obj) return "";
+  for (const k of keys) {
+    const v = obj[k];
+    if (v != null && String(v).trim() !== "") return v;
+  }
+  return "";
+};
+
+/* Placeholder embutido para avatar */
+const PLACEHOLDER_AVATAR =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+       <rect width="128" height="128" rx="16" ry="16" fill="#f5efe6"/>
+       <circle cx="64" cy="50" r="24" fill="#d4c3b2"/>
+       <rect x="24" y="82" width="80" height="34" rx="17" fill="#d4c3b2"/>
+     </svg>`
+  );
+
+// === helper: monta índice leve de nomes para outras telas (ex.: checklist mostrar NOME)
+function __buildNomeIndex(arr = []) {
+  try {
+    const idx = (Array.isArray(arr) ? arr : []).map(ev => ({
+      id: String(ev.id ?? ""),
+      nome: ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`,
+      convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
+      dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
+    })).filter(x => x.id);
+    localStorage.setItem("eventos:nomeIndex", JSON.stringify(idx));
+  } catch {}
+}
+
+/* Salva "eventos" com fallback quando o storage enche (evita QuotaExceeded) + atualiza índice de nomes */
+function safeSaveEventos(arr){
+  // 1) salva normal
+  try {
+    localStorage.setItem("eventos", JSON.stringify(arr || []));
+    __buildNomeIndex(arr || []);
+    return;
+  } catch (e) { /* cai pro modo compacto */ }
+
+  // 2) salva compacto se lotou
+  try {
+    const slim = (arr || []).map(ev => {
+      const c = { ...ev };
+      delete c.anexos; delete c.arquivos; delete c.fotos; delete c.imagens;
+      delete c.contratoHtml; delete c.contratoPdf;
+      if (Array.isArray(c.historico) && c.historico.length > 50) {
+        c.historico = c.historico.slice(-50);
+      }
+      for (const k in c){
+        const v = c[k];
+        if (typeof v === "string" && v.length > 120000) c[k] = `[omitido:${k}]`;
+      }
+      return c;
+    });
+    localStorage.setItem("eventos", JSON.stringify(slim));
+    __buildNomeIndex(slim);
+    console.warn("Eventos salvos no modo compacto (evitou 'QuotaExceeded').");
+  } catch (e2) {
+    console.error("Não foi possível salvar 'eventos' nem no modo compacto.", e2);
+    alert("O armazenamento do navegador está cheio. Remova anexos grandes ou eventos antigos e tente novamente.");
+  }
+}
+
+/* === Encerramento automático se a data já passou (não bloqueia) === */
+function autoEncerrarSePassou(ev, eventos, idx) {
+  const rawData = ev.data || ev.dataEvento || ev.dataDoEvento;
+
+  // se a data mudou, reseta a migração do M13 para recalcular prazos
+  const oldDataISO = String(
+    ev.__lastDataISO ||
+    ev.data || ev.dataEvento || ev.dataDoEvento || ""
+  ).trim();
+
+  const newDataISO = String(
+    ev.data || ev.dataEvento || ev.dataDoEvento || ""
+  ).trim();
+
+  if (oldDataISO !== newDataISO) {
+    try { delete ev.__m13_migrated_v2; } catch {}
+    ev.__m13_migrated_v2 = false;
+    ev.__lastDataISO = newDataISO; // guarda o “último” para próximas comparações
+    try { localStorage.setItem("m13:dateChanged:" + ev.id, String(Date.now())); } catch {}
+  }
+
+  if (!rawData) return;
+
+  const toISO = (s) => {
+    const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+  };
+
+  const toHora = (s) => {
+    const v = String(s || "").trim();
+    if (!v) return "23:59";
+    if (/^\d{1,2}$/.test(v)) {
+      return `${String(parseInt(v, 10) || 0).padStart(2, "0")}:00`;
+    }
+    const m = v.match(/(\d{1,2})\D?(\d{2})/);
+    if (!m) return v;
+    return `${String(Math.min(23, parseInt(m[1], 10) || 0)).padStart(2, "0")}:${String(Math.min(59, parseInt(m[2], 10) || 0)).padStart(2, "0")}`;
+  };
+
+  const dataISO = rawData.includes('/') ? toISO(rawData) : rawData;
+  const hora = ev.horarioEvento || ev.horaEvento || ev.horarioCerimonia || ev.horaCerimonia || "23:59";
+  const dt = new Date(`${dataISO}T${toHora(hora)}:00`);
+
+  // CORREÇÃO: precisa testar o timestamp numérico, não o objeto Date
+  if (!isFinite(dt.getTime())) return;
+
+  if (Date.now() >= dt.getTime() && String(ev.status || "").toLowerCase() === "ativo") {
+    ev.status = "encerrado";
+    ev.historico = ev.historico || [];
+    ev.historico.push({
+      data: new Date().toLocaleDateString('pt-BR'),
+      tipo: "Encerramento automático",
+      observacao: `Evento encerrado automaticamente em ${new Date().toLocaleString('pt-BR')}.`,
+      responsavel: "Sistema"
+    });
+
+    eventos[idx] = ev;
+    safeSaveEventos(eventos);
+
+    // tenta sincronizar com a API em background (não bloqueia)
+    try {
+      if (typeof IS_REMOTE !== "undefined" && IS_REMOTE &&
+          typeof callApi === "function" && ev.id) {
+        const endpoint = `/eventos/${encodeURIComponent(String(ev.id))}`;
+        callApi(endpoint, "PUT", ev)
+          .then((resp) => {
+            console.log("[evento-detalhado] Encerramento auto sincronizado com API", resp);
+          })
+          .catch((err) => {
+            console.warn("[evento-detalhado] Falha ao sincronizar encerramento automático na API", err);
+          });
+      }
+    } catch (e) {
+      console.warn("[evento-detalhado] Erro ao tentar sincronizar encerramento automático na API", e);
+    }
+  }
+}
+
+
+/* ====== Utils display/tempo/moeda ====== */
+const toDisplay = (v) => {
+  if (v == null) return "";
+  if (typeof v === "object") {
+    const e = v;
+    if (e.rua || e.logradouro || e.cidade || e.cep || e.uf || e.estado) {
+      const ruaNum = [e.rua || e.logradouro, e.numero].filter(Boolean).join(", ");
+      const bairro = e.bairro ? ` - ${e.bairro}` : "";
+      const cidUf  = [e.cidade || e.municipio, e.uf || e.estado].filter(Boolean).join("/");
+      const cep    = e.cep ? ` - CEP ${e.cep}` : "";
+      return [ruaNum, bairro, cidUf].filter(Boolean).join(" ") + cep;
+    }
+    return (
+      e.nome ?? e.label ?? e.text ?? e.titulo ?? e.valor ?? e.descricao ??
+      e.value ?? e.tipo ?? e.nomeTipo ?? e.horario ?? e.hora ?? ""
+    );
+  }
+  return String(v);
+};
+
+const toHora = (s) => {
+  const v = String(s || "").trim();
+  if (!v) return "";
+  if (/^\d{1,2}$/.test(v)) {
+    const hh = String(Math.min(23, parseInt(v,10)||0)).padStart(2,"0");
+    return `${hh}:00`;
+  }
+  const m = v.match(/(\d{1,2})\D?(\d{2})/);
+  if (!m) return v;
+  let hh = m[1].padStart(2, "0");
+  let mm = m[2].padStart(2, "0");
+  const H = Math.min(23, Math.max(0, parseInt(hh, 10) || 0));
+  const M = Math.min(59, Math.max(0, parseInt(mm, 10) || 0));
+  return String(H).padStart(2, "0") + ":" + String(M).padStart(2, "0");
+};
+
+function formatDateBR(iso){
+  const v = String(iso || "").trim();
+  if (!v) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y,m,d] = v.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  const d = new Date(v);
+  if (!isFinite(d)) return v;
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+}
+
+const toISO   = (s) => { const v=String(s||"").trim(); const m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : v; };
+const simNao  = (v) => { if (typeof v==="boolean") return v?"Sim":"Não"; const s=String(v||"").trim().toLowerCase(); if(["sim","s","true","1"].includes(s)) return "Sim"; if(["não","nao","n","false","0"].includes(s)) return "Não"; return ""; };
+
+/* Parser BRL forte (50,00 / 5.000,00 / R$ 50,00) */
+function parseMoneyBR(v){
+  if (typeof v === "number") return v;
+  let s = String(v || "").trim();
+  s = s.replace(/[R$\s]/gi, "").replace(/\./g, "");
+  s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+// Alias de compatibilidade: define só se ainda não existir
+if (typeof window.parseMoney !== "function") {
+  window.parseMoney = parseMoneyBR;
+}
+
+
+/* ========== FOTO DO CLIENTE (robusta) ========== */
+async function _dataUrlFromBlobUrl(blobUrl){
+  try{
+    const res = await fetch(blobUrl);
+    const blob = await res.blob();
+    return await new Promise((resolve)=>{ const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.readAsDataURL(blob); });
+  }catch{ return null; }
+}
+
+// Compat: alguns trechos antigos ainda chamam _catLabel(k) esperando "Cardápio/Adicional/Serviço"
+function _catLabel(k){
+  const s = String(k || "").toLowerCase();
+  if (s.includes("card")) return "Cardápio";
+  if (s.includes("adic")) return "Adicional";
+  if (s.includes("serv")) return "Serviço";
+  // quando a função receber o próprio objeto em vez de string:
+  if (typeof k === "object" && k) return _catLabel(k.categoria || k.tipo || "");
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "—";
+}
+
+// helpers locais de parsing
+function _numBRL(v){
+  if (typeof v === "number") return v;
+  let s = String(v ?? "").trim();
+  // remove R$, espaços e separadores de milhar; troca vírgula por ponto
+  s = s.replace(/[R$\s]/gi, "").replace(/\.(?=\d{3,})/g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function _pctFrom(v){
+  // aceita "10", "10,5", "10%", "10,5%"
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const hasPercent = /%\s*$/.test(s);
+  const n = Number(s.replace(/[^\d.,-]/g, "").replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  return hasPercent ? n : null; // só considera aqui se tiver o símbolo %
+}
+function _isPercentTipo(t){
+  const x = String(t || "").toLowerCase();
+  return x.includes("percent");
+}
+
+// ——— Helpers de parse (mantenha uma única cópia no arquivo) ———
+function _asPercent(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const m = s.match(/(-?\d+(?:[.,]\d+)?)\s*%?$/); // pega "10" ou "10,5" com/sem %
+  if (!m) return null;
+  return Number(m[1].replace(',', '.'));
+}
+
+function _asNumberBRL(v) {
+  if (v == null) return 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  if (typeof parseMoneyBR === 'function') return parseMoneyBR(s);
+  // remove separador de milhar e converte vírgula em ponto
+  const cleaned = s.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ========== TOTALIZAÇÃO: respeita R$ e % sem confundir ==========
+function calcularTotais(itens = [], convidados = 0) {
+  const linhas = [];
+  let totalBruto = 0, totalDesc = 0, totalFinal = 0;
+  const qtd = Number(convidados) || 0;
+
+  for (const raw of (Array.isArray(itens) ? itens : [])) {
+    const it   = raw || {};
+    const cobr = String(it.tipoCobranca || it.cobranca || (it.porPessoa ? "porPessoa" : "valorTotal")).toLowerCase();
+    const base = Number(it.valor ?? it.preco ?? it.precoUnit ?? it.total ?? 0) || 0;
+
+    // Bruto por item
+    const bruto = cobr.includes("pessoa") ? (base * qtd) : base;
+
+    // --- Desconto: PRIORIDADE ao percentual quando explícito ---
+    const dStr   = String(it.desconto ?? it.descontoValor ?? "").trim();   // campo digitado livre (pode ser "100,00" ou "10%")
+    const pctExp = _asPercent(it.descontoPorcentagem ?? it.descontoPercentual); // campos específicos de %
+    const isPct  = /%/.test(dStr) || String(it.descontoTipo || "").toLowerCase().includes("percent");
+
+    let desconto = 0;
+    if (isPct || (pctExp != null && Number.isFinite(pctExp))) {
+      const pct = isPct ? (_asPercent(dStr) ?? 0) : Math.max(0, Math.min(100, Number(pctExp) || 0));
+      desconto = bruto * (pct / 100);
+    } else {
+      // valor fixo em R$
+      const fixo = _asNumberBRL(dStr || (it.descontoReais ?? it.descontoFixo ?? 0));
+      desconto = Math.max(0, Math.min(bruto, fixo));
+    }
+
+    const total     = Math.max(0, bruto - desconto);
+    const porPessoa = qtd > 0 ? (total / qtd) : 0;
+
+    totalBruto += bruto;
+    totalDesc  += desconto;
+    totalFinal += total;
+
+    linhas.push({
+      tipo: (window._catDoItem ? window._catDoItem(it) : (it.categoria || it.tipo || "—")),
+      nome: (window.nomeItemDisplay ? window.nomeItemDisplay(it) : (it.nomeItem || it.nome || it.titulo || it.label || "Item")),
+      bruto, desconto, total, porPessoa
+    });
+  }
+
+  return {
+    linhas,
+    totais: {
+      bruto: totalBruto,
+      desconto: totalDesc,
+      final: totalFinal,
+      porPessoa: qtd > 0 ? (totalFinal / qtd) : 0
+    }
+  };
+}
+
+
+// Converte "R$ 1.234,56" / "1.234,56" para Number
+// Converte "R$ 1.234,56" / "1.234,56" -> Number com fallback
+function _ed_toNumber(s){
+  const str = String(s ?? '').trim();
+  // 1) tenta parseMoney, se existir
+  if (typeof parseMoney === 'function') {
+    try {
+      const n1 = Number(parseMoney(str));
+      if (Number.isFinite(n1)) return n1;
+    } catch {}
+  }
+  // 2) fallback manual, removendo milhar e trocando vírgula por ponto
+  const n2 = Number(
+    str.replace(/[^\d,.-]/g,'')
+       .replace(/\.(?=\d{3,}(?:\D|$))/g,'')
+       .replace(',', '.')
+  );
+  return Number.isFinite(n2) ? n2 : 0;
+}
+
+// Calcula o desconto de um item para um subtotal (bruto do item)
+// Aceita: desconto em R$ (it.desconto), ou percentual (it.descontoPorcentagem / it.descontoPercentual)
+// ou ainda "10%" digitado em it.desconto, ou it.descontoTipo === 'percentual'
+function _ed_calcDesconto(it, subtotal){
+  const dStr   = String(it.desconto ?? '').trim();
+  const dVal   = _ed_toNumber(dStr); // quando em R$
+  const dPctEx = Number(it.descontoPorcentagem ?? it.descontoPercentual ?? 0) || 0;
+
+  const byTipo = String(it.descontoTipo || '').toLowerCase() === 'percentual';
+  const hasPct = /%\s*$/.test(dStr);
+  const isPct  = byTipo || hasPct || (!dVal && dPctEx > 0);
+
+  let pct = 0;
+  if (isPct){
+    // se o usuário escreveu "10%" em desconto, dStr já tem o número
+    const rawPct = hasPct ? (parseFloat(dStr.replace(/[^\d.,-]/g,'').replace(',','.'))||0) : (dPctEx || dVal);
+    pct = Math.max(0, Math.min(100, rawPct));
+  }
+
+  const valor = isPct ? (subtotal * (pct/100)) : Math.min(subtotal, dVal);
+  return { valor, pct, isPercent: isPct };
+}
+
+// ========== RENDER TABELA (Itens do Evento) ==========
+function renderItensUnificado(){
+  const wrap = document.getElementById("resumoItensUnificado") || document.getElementById("itensEvento");
+  if (!wrap) return;
+
+  const ev   = window.evento || {};
+  const qtd  = parseInt(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0, 10) || 0;
+  const itens = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados : [];
+
+  const fmtBR = (v) => (Number(v)||0).toLocaleString("pt-BR",{ style:"currency", currency:"BRL" });
+
+  // helpers locais (robustos p/ BRL e %)
+  const toNum = (s) => {
+    const str = String(s ?? '').trim();
+    if (typeof parseMoney === 'function') {
+      try {
+        const n1 = Number(parseMoney(str));
+        if (Number.isFinite(n1)) return n1;
+      } catch {}
+    }
+    const n2 = Number(
+      str.replace(/[^\d,.-]/g,'')
+         .replace(/\.(?=\d{3,}(?:\D|$))/g,'')
+         .replace(',', '.')
+    );
+    return Number.isFinite(n2) ? n2 : 0;
+  };
+  const asPercent = (raw) => {
+    const s = String(raw ?? '').trim();
+    if (!s) return null;
+    const m = s.match(/^(-?\d+(?:[.,]\d+)?)%?$/); // aceita "10%", "10", "10,5"
+    return m ? Number(m[1].replace(',','.')) : null;
+  };
+  const clampPct = (n) => Math.max(0, Math.min(100, Number(n)||0));
+
+  // calcula linhas e totais aqui (dispensa calcularTotais externo)
+  const linhas = [];
+  let totBruto = 0, totDesc = 0, totFinal = 0, totPorPessoa = 0;
+
+  for (const it of itens){
+    const tipoCob   = String(it.tipoCobranca || it.cobranca || 'valorTotal').toLowerCase();
+    const porPessoa = tipoCob === 'porpessoa' || tipoCob === 'pessoa' || tipoCob === 'por_pessoa' || tipoCob.includes('pessoa');
+
+    const base = Number(it.valor ?? it.preco ?? it.precoUnit ?? 0) || 0;
+
+    // bruto do item (se for por pessoa, multiplica pela qtd de convidados)
+    const bruto = porPessoa ? base * qtd : base;
+
+    // -------- desconto: aceita R$ ou % (com precedência correta) --------
+    const dStr     = String(it.desconto ?? it.descontoValor ?? '').trim();
+    const dVal     = toNum(dStr); // valor fixo (R$)
+    const dPctFld  = Number(it.descontoPorcentagem ?? it.descontoPercentual ?? 0) || 0;
+    const hasPct   = /%\s*$/.test(dStr);
+    const tipoDesc = String(it.descontoTipo || '').toLowerCase();
+
+    // ⭐️ Só é percentual quando for EXPLÍCITO:
+    const isPercent = (
+      hasPct ||                                  // escreveu "10%"
+      tipoDesc === 'percentual' || tipoDesc === '%' || tipoDesc === 'porcentagem' ||
+      (!dStr && dPctFld > 0)                     // campo percentual preenchido e o campo de desconto está vazio
+    );
+
+    let desc = 0;
+    if (isPercent){
+      const pct = hasPct
+        ? (parseFloat(dStr.replace(/[^\d.,-]/g,'').replace(',','.')) || 0)
+        : dPctFld;
+      const pctClamp = Math.max(0, Math.min(100, pct));
+      desc = bruto * (pctClamp / 100);
+    } else {
+      // ✅ valor fixo em reais
+      desc = Math.min(bruto, Math.max(0, dVal));
+    }
+
+    const total = Math.max(0, bruto - desc);
+
+    // coluna "Por pessoa":
+    // - se item é cobrado por pessoa, mostrar o próprio base (unitário)
+    // - se é valor total, mostrar o (total líquido / qtd), quando houver convidados
+    const porPessoaValor = porPessoa ? base : (qtd > 0 ? (total / qtd) : 0);
+
+    // acumula totais
+    totBruto    += bruto;
+    totDesc     += desc;
+    totFinal    += total;
+    totPorPessoa+= porPessoaValor;
+
+    linhas.push({
+      tipo: (window._catDoItem?.(it) ?? String(it.tipo || it.categoria || '—')),
+      nome: (window.nomeItemDisplay?.(it) ?? String(it.nome || it.descricao || '—')),
+      bruto, desconto: desc, total, porPessoa: porPessoaValor
+    });
+  }
+
+  const linhasHTML = linhas.map(r => `
+    <tr>
+      <td class="tipo-col">${r.tipo}</td>
+      <td title="${r.nome}">${r.nome}</td>
+      <td class="num">${fmtBR(r.bruto)}</td>
+      <td class="num">− ${fmtBR(r.desconto)}</td>
+      <td class="num">${fmtBR(r.total)}</td>
+      <td class="num">${fmtBR(r.porPessoa)}</td>
+    </tr>
+  `).join("");
+
+  wrap.innerHTML = `
+    <div class="header-itens">
+      <h3>Itens do Evento</h3>
+    </div>
+    <div class="tabela-itens">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Nome</th>
+            <th class="num">Valor bruto</th>
+            <th class="num">Desconto</th>
+            <th class="num">Total c/ desconto</th>
+            <th class="num">Por pessoa</th>
+          </tr>
+        </thead>
+        <tbody>${linhasHTML || `<tr><td colspan="6" style="text-align:center; padding:14px;">Nenhum item selecionado</td></tr>`}</tbody>
+        <tfoot>
+          <tr>
+            <th colspan="2" style="text-align:right;">Totais</th>
+            <th class="num">${fmtBR(totBruto)}</th>
+            <th class="num">− ${fmtBR(totDesc)}</th>
+            <th class="num">${fmtBR(totFinal)}</th>
+            <th class="num">${fmtBR(totPorPessoa)}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+
+  // Recalcular cards financeiros após a render
+  try { renderResumoFinanceiro?.(); } catch {}
+  try { renderFinanceiroResumo?.(); } catch {}
+}
+
+
+
+// Expor para o escopo global (outras partes chamam)
+Object.assign(window, { renderItensUnificado, calcularTotais, _catDoItem, nomeItemDisplay });
+
+// === INÍCIO PATCH 1: persistir foto SEM gravar dentro de "eventos" ===
+function _persistirFotoNormalizada(ev, dataUrl){
+  try{
+    if(!dataUrl || !ev) return;
+
+    // 1) gera/usa uma chave estável para a foto deste evento
+    const key = ev.fotoClienteKey || `foto_evento_${ev.id}`;
+
+    // 2) salva a imagem APENAS no mapa "fotosClientes" (sem duplicar no evento)
+    try{
+      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+      map[key] = dataUrl;                         // armazena base64 grande aqui
+      (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map)));
+    }catch{}
+
+    // 3) atualiza o evento para REFERENCIAR a chave, removendo campos pesados
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i = eventos.findIndex(e => String(e.id) === String(ev.id));
+    if(i !== -1){
+      delete eventos[i].fotoCliente;              // 🔴 NÃO guardar base64 no evento
+      delete eventos[i].fotoClienteUrl;
+      eventos[i].fotoClienteKey = key;            // ✅ apenas a chave
+      safeSaveEventos(eventos);                   // grava o vetor de eventos
+      window.evento = eventos[i];
+      window.eventoSelecionado = eventos[i];
+    }
+  }catch{}
+}
+// === FIM PATCH 1 ===
+
+async function resolveFotoCliente(ev){
+  if (!ev) return null;
+
+  if (ev.fotoClienteKey && typeof window.localDatabaseGet === "function") {
+    try {
+      const blob = await window.localDatabaseGet(ev.fotoClienteKey);
+      if (blob instanceof Blob) return URL.createObjectURL(blob);
+      if (blob && blob.data) {
+        return URL.createObjectURL(new Blob([blob.data], { type: blob.type || "image/*" }));
+      }
+    } catch(e) {}
+  }
+
+  const tryKeys = (keys) => {
+    for (const k of keys) {
+      const v = k.split(".").reduce((acc, p) => (acc && acc[p] != null ? acc[p] : null), ev);
+      if (!v) continue;
+      const s = String(v).trim();
+      if (/^data:image\//i.test(s)) return s;
+      if (/^blob:/i.test(s))       return s;
+      if (/^(https?:|\/)/i.test(s))return s;
+      if (/^file:/i.test(s))       return s;
+      if (typeof v === "object" && v.url) return String(v.url);
+    }
+    return null;
+  };
+
+  let url =
+    tryKeys([
+      "fotoCliente","fotoClienteUrl","foto",
+      "clienteFoto","clienteFotoUrl",
+      "imagemCliente","imagem","avatar","avatarUrl",
+      "thumb","thumbnail","fotoPerfil",
+      "fotoBase64","imageBase64"
+    ]) ||
+    tryKeys([
+      "infoCliente.fotoCliente","infoCliente.foto","infoCliente.fotoUrl",
+      "cliente.foto","cliente.fotoUrl","cliente.avatar","cliente.avatarUrl"
+    ]);
+
+  if (!url) {
+    try {
+      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+      const tryK = [];
+      if (ev?.fotoClienteKey) tryK.push(ev.fotoClienteKey);
+      if (ev?.clienteId)      tryK.push(`id:${ev.clienteId}`);
+      if (ev?.nomeCliente)    tryK.push(`nome:${String(ev.nomeCliente).trim().toLowerCase()}`);
+      for (const k of tryK) {
+        const rec = map[k];
+        if (!rec) continue;
+        const hit = (typeof rec === "string") ? rec : (rec.dataURL || rec.url || rec.data || "");
+        if (hit) { url = String(hit).trim(); if (/^data:image\//i.test(url)) _persistirFotoNormalizada(ev, url); break; }
+      }
+    } catch {}
+  }
+
+  if(!url){
+    try{
+      const leads = JSON.parse(sessionStorage.getItem("leads") || "[]");
+      const hit =
+        leads.find(l => String(l.id) === String(ev.id)) ||
+        leads.find(l => (l.nome && (ev.infoCliente?.nome || ev.nomeCliente)) &&
+                        l.nome.trim().toLowerCase() === String(ev.infoCliente?.nome || ev.nomeCliente).trim().toLowerCase()) ||
+        leads.find(l => (l.email && (ev.infoCliente?.email || ev.emailCliente)) &&
+                        l.email.trim().toLowerCase() === String(ev.infoCliente?.email || ev.emailCliente).trim().toLowerCase());
+      if (hit) {
+        url = (hit.fotoCliente && /^data:image\//i.test(String(hit.fotoCliente))) ? hit.fotoCliente :
+              (hit.fotoClienteUrl ? hit.fotoClienteUrl : null);
+        if (!url && hit.fotoClienteKey && typeof window.localDatabaseGet === "function") {
+          try {
+            const blob2 = await window.localDatabaseGet(hit.fotoClienteKey);
+            if (blob2 instanceof Blob) url = URL.createObjectURL(blob2);
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  if (url && String(url).startsWith("blob:")){
+    const possiveisChaves = [
+      `foto_evento_${ev.id}`, `fotoCliente_${ev.id}`, `foto_${ev.id}`,
+      `foto_evento_tmp_${ev.id}`, `avatar_evento_${ev.id}`
+    ];
+    for(const k of possiveisChaves){
+      const v = sessionStorage.getItem(k);
+      if(v && /^data:image\//i.test(v)){ _persistirFotoNormalizada(ev, v); return v; }
+    }
+    const dataUrl = await _dataUrlFromBlobUrl(url);
+    if (dataUrl){ _persistirFotoNormalizada(ev, dataUrl); return dataUrl; }
+    url = null;
+  }
+
+  return url;
+}
+
+/* ====== Dinheiro & Totais ====== */
+function calcularTotaisFinanceiro(ev){
+  const qtd = parseInt(ev.quantidadeConvidados || ev.qtdConvidados || 0, 10) || 0;
+  const itens = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados : [];
+  let subtotal = 0, descontos = 0;
+
+  itens.forEach(item => {
+    const valor = parseMoney(item.valor);
+    const tipo  = String(item.tipoCobranca || item.cobranca || "fixo").toLowerCase();
+    const base  = tipo.includes("pessoa") ? valor * qtd : valor;
+
+    let desc = 0;
+    const dRaw = String(item.desconto ?? item.descontoValor ?? item.valorDesconto ?? "").trim();
+    const pRaw = item.descontoPorcentagem ?? item.percentualDesconto ?? item.descontoPercentual ?? null;
+
+    if (pRaw != null && pRaw !== "") {
+      const p = parseFloat(String(pRaw).toString().replace(",", "."));
+      if (isFinite(p)) desc = base * (p/100);
+    } else if (/%\s*$/.test(dRaw)) {
+      const p = parseFloat(dRaw.replace("%","").replace(",", "."));
+      if (isFinite(p)) desc = base * (p/100);
+    } else if (dRaw) {
+      let v = parseMoney(dRaw);
+      if (/pesso(a|as)/i.test(String(item.descontoTipo||"")) || item.descontoPorPessoa === true) v *= (qtd||0);
+      desc = v;
+    }
+
+    subtotal += base;
+    descontos += Math.min(base, Math.max(0, desc));
+  });
+
+  const total = Math.max(0, subtotal - descontos);
+  return { subtotal, descontos, total, qtd };
+}
+
+function _getValorContrato(ev) {
+  const direto = ev?.financeiro?.valorContrato;
+  if (direto != null && direto !== "") return parseMoney(direto);
+const t = calcularTotaisFinanceiro(ev);
+  return t.total || 0;
+}
+
+function somaPagamentosRecebidos(ev = {}) {
+  const fontes = [];
+  if (Array.isArray(ev.pagamentosRecebidos)) fontes.push(ev.pagamentosRecebidos);
+  if (Array.isArray(ev.recebimentos))        fontes.push(ev.recebimentos);
+  if (Array.isArray(ev.pagamentos))          fontes.push(ev.pagamentos.filter(p => p.entrada || p.tipo === "recebimento"));
+  if (ev.financeiro) {
+    const fr = ev.financeiro.recebimentos || ev.financeiro.entradas || [];
+    const parcelasPagas = (ev.financeiro.parcelas || []).filter(p =>
+      p.situacao === "pago" || p.status === "pago" || p.dataPagamentoISO || p.pago === true
+    );
+    fontes.push(fr, parcelasPagas);
+  }
+  return fontes.flat().reduce((acc, x) => {
+    const valor = x.valorPago ?? x.valor ?? x.quantia ?? x.valorParcela ?? 0;
+    return acc + (parseMoney(valor) || 0);
+  }, 0);
+}
+
+function getSaldoAReceber(ev = {}) {
+const atualizado = calcularTotaisFinanceiro(ev).total || 0;
+  const contrato   = _getValorContrato(ev) || atualizado;
+  const recebido   = somaPagamentosRecebidos(ev);
+  const falta      = Math.max(0, contrato - recebido);
+  return { contrato, atualizado, recebido, falta };
+}
+
+function _dataISOor(s){
+  const v = String(s||"").trim();
+  if (!v) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(v)) {
+    const [d,m,y] = v.split("/");
+    return `${y}-${m}-${d}`;
+  }
+  const d = new Date(v);
+  return isFinite(d) ? d.toISOString() : "";
+}
+
+// === Helpers Financeiro (GLOBAL) p/ comissões ===
+function __firstContaId(){
+  const contas = __getJSON("m14.contas", []);
+  return contas?.[0]?.id || "";
+}
+function __categoriaComissaoId(){
+  const cfg = __getJSON("configFinanceiro", { categorias:[] });
+  const byId = (cfg.categorias||[]).find(c => c.id === "comissao");
+  if (byId) return "comissao";
+  const byName = (cfg.categorias||[]).find(c => String(c.descricao||"").toLowerCase().includes("comiss"));
+  return byName?.id || "";
+}
+
+/* ===== Comissões (janela simples) ===== */
+function _evCtx(){
+  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  return { eventos, i, ev: eventos[i] || null };
+}
+function _getJSON(k, fb){ try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } }
+
+// pega comissões criadas no Financeiro do Evento (ou no m14.*)
+function getComissoesFromFinanceiro(evId){
+  const fg = _getJSON('financeiroGlobal', {});
+  const lancsFG = Array.isArray(fg.lancamentos) ? fg.lancamentos : (Array.isArray(fg.lancs) ? fg.lancs : []);
+  const lancs = (lancsFG && lancsFG.length) ? lancsFG : _getJSON('m14.lancs', []);
+  const parcs = _getJSON('m14.parcelas', []);
+
+  // filtra lançamentos relacionados ao evento e de comissão
+  const isComissaoLanc = (l) => {
+    const t1 = String(l.categoriaId||"").toLowerCase() === "comissao";
+    const t2 = String(l.origem||"").toLowerCase().includes("evento:comissao");
+    const t3 = String(l.descricao||"").toLowerCase().includes("comiss");
+    return (String(l.eventoId||"") === String(evId)) && (t1 || t2 || t3);
+  };
+
+  const byId = new Map();
+  (lancs || []).filter(isComissaoLanc).forEach(l => byId.set(l.id, l));
+
+  const out = [];
+  for (const p of (parcs || [])){
+    const lid = p.lancId || p.lancamentoId;
+    const l = byId.get(lid);
+    if (!l) continue;
+    out.push({
+      origem: "financeiro",
+      dataISO: p.vencimento || l.dataCompetencia || null,
+      descricao: l.descricao || "Comissão",
+      valor: Number(p.valor || l.valorTotal || 0),
+      status: String(p.status || l.status || l.statusGeral || "pendente").toLowerCase()
+    });
+  }
+  return out;
+}
+
+// normaliza comissões do próprio evento (modal)
+function getComissoesFromEvento(ev){
+  const list = ev?.financeiro?.comissao?.parcelas || [];
+  return list.map(c => ({
+    origem: "evento",
+    dataISO: c.vencimentoISO || null,
+    descricao: c.descricao || "Comissão",
+    valor: Number(c.valor || 0),
+    status: String(c.status || "pendente").toLowerCase()
+  }));
+}
+
+// ==== helpers de LS (leitura/gravação segura) ====
+const _get = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+const _set = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+// PARTE 2/4 (CORRIGIDA)
+/**
+ * Espelha TODAS as parcelas de comissão do evento para o Financeiro GERAL
+ * - financeiroGlobal.lancamentos  (usado pela tela Financeiro)
+ * - m14.lancs / m14.parcelas      (retrocompatibilidade com trechos antigos)
+ */
+function upsertComissaoNoFinanceiroGeral(ev){
+  if (!ev || !ev.id) return;
+
+  const destino  = String(ev?.financeiro?.comissao?.destinatario || "").trim();
+  const baseDesc = destino ? `Comissão — ${destino}` : "Comissão";
+  const parcelas = Array.isArray(ev?.financeiro?.comissao?.parcelas)
+    ? ev.financeiro.comissao.parcelas
+    : [];
+
+  // --- financeiroGlobal: garantir estrutura
+  const FG_KEY = "financeiroGlobal";
+  const fg = _get(FG_KEY, { lancamentos: [], parcelas: [] }) || {};
+  fg.lancamentos = Array.isArray(fg.lancamentos) ? fg.lancamentos : [];
+  fg.parcelas    = Array.isArray(fg.parcelas)    ? fg.parcelas    : [];
+
+  const upsertLanc = (lc) => {
+    const i = fg.lancamentos.findIndex(x => String(x.id) === String(lc.id));
+    if (i > -1) fg.lancamentos[i] = { ...fg.lancamentos[i], ...lc };
+    else fg.lancamentos.push(lc);
+  };
+
+  (parcelas || []).forEach((p, idx) => {
+    const lancId  = `evt_${ev.id}_com_${p.id}`;
+    const parcId  = `${lancId}-p1`; // 1 parcela por lançamento/espelho
+    const status  = String(p.status || "pendente").toLowerCase() === "pago" ? "pago" : "pendente";
+    const dataISO = p.vencimentoISO || p.vencimento || new Date().toISOString().slice(0,10);
+    const valor   = Number(p.valor) || 0;
+
+    // ✅ descrição limpa: prioriza a digitada pelo usuário
+    const qtd = (parcelas || []).length || 1;
+    const desc = (p.descricao && String(p.descricao).trim())
+      ? String(p.descricao).trim()
+      : (qtd > 1 ? `${baseDesc} (parcela ${idx + 1}/${qtd})` : baseDesc);
+
+    // Lançamento (SAÍDA) — espelhado no FG
+    upsertLanc({
+      id: lancId,
+      eventoId: ev.id,
+      tipo: "saida",
+      escopo: "empresarial",
+      categoriaId: "comissao",
+      descricao: desc,
+      dataISO,
+      valor,
+      status,
+      origem: "evento:comissao",
+      relacionado: "comissao",
+      relacionadoId: String(p.id),
+      atualizadoEm: new Date().toISOString()
+    });
+
+    // Parcela vinculada — é o que o Financeiro do Evento lista
+    const parc = {
+      id: parcId,
+      eventoId: ev.id,
+      lancamentoId: lancId,
+      numero: 1,
+      de: 1,
+      valor,
+      vencimentoISO: dataISO,
+      vencimento: dataISO,          // 👈 alguns leitores usam este campo
+      status,
+      descricao: desc,
+      origem: "evento:comissao",
+      totalPago: status === "pago" ? valor : 0
+    };
+    const j = fg.parcelas.findIndex(x => String(x.id) === String(parc.id));
+    if (j > -1) fg.parcelas[j] = { ...fg.parcelas[j], ...parc };
+    else fg.parcelas.push(parc);
+  });
+
+  _set(FG_KEY, fg);
+  try { localStorage.setItem("financeiroGlobal:ping", String(Date.now())); } catch {}
+
+  // --- Retrocompat: m14.* (usado por leitores antigos)
+  const lancs = _get("m14.lancs", []);
+  const parcs = _get("m14.parcelas", []);
+
+  (parcelas || []).forEach((p, idx) => {
+    const lancId  = `evt_${ev.id}_com_${p.id}`;
+    const parcId  = `${lancId}-p1`;
+    const status  = String(p.status || "pendente").toLowerCase() === "pago" ? "pago" : "pendente";
+    const dataISO = p.vencimentoISO || p.vencimento || new Date().toISOString().slice(0,10);
+    const valor   = Number(p.valor) || 0;
+
+    const qtd = (parcelas || []).length || 1;
+    const desc = (p.descricao && String(p.descricao).trim())
+      ? String(p.descricao).trim()
+      : (qtd > 1 ? `${baseDesc} (parcela ${idx + 1}/${qtd})` : baseDesc);
+
+    const lanc = {
+      id: lancId,
+      escopo: "empresa",
+      tipo: "saida",
+      descricao: desc,
+      categoriaId: (typeof __categoriaComissaoId === "function" && __categoriaComissaoId()) || "comissao",
+      subcategoriaId: "",
+      formaPagamento: "Transferência",
+      contaId: (typeof __firstContaId === "function" && __firstContaId()) || "",
+      fornecedorId: "",
+      eventoId: ev.id,
+      dataCompetencia: dataISO,
+      valorTotal: valor,
+      statusGeral: status,
+      origem: "evento:comissao",
+      rateios: []
+    };
+    const iL = lancs.findIndex(x => String(x.id) === String(lancId));
+    if (iL > -1) lancs[iL] = { ...lancs[iL], ...lanc };
+    else lancs.push(lanc);
+
+    const parc = {
+      id: parcId,
+      lancId: lancId,
+      lancamentoId: lancId,
+      numero: 1,
+      valor,
+      vencimento: dataISO,
+      criadoEm: new Date().toISOString(),
+      status,
+      totalPago: status === "pago" ? valor : 0
+    };
+    const iP = parcs.findIndex(x => String(x.id) === String(parc.id));
+    if (iP > -1) parcs[iP] = { ...parcs[iP], ...parc };
+    else parcs.push(parc);
+  });
+
+  _set("m14.lancs", lancs);
+  _set("m14.parcelas", parcs);
+}
+
+
+
+/**
+ * Abre o modal de Comissões (id="dlg-comissoes")
+ * - define uma única vez
+ * - evita abrir duas vezes (DOMException)
+ * - limpa campos e popula o select/lista
+ */
+window.openComissoesDialog ??= function () {
+  const dlg = document.getElementById('dlg-comissoes');
+  if (!dlg) return;
+
+  // se já está aberto, só foca e sai (evita exceção e “travar” a página)
+  if (dlg.open) { try { dlg.querySelector('input,select,button')?.focus(); } catch {} return; }
+
+  // limpar campos do formulário
+  ['com-data','com-desc','com-valor','com-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'com-status') { el.value = 'pendente'; return; }
+    el.value = '';
+  });
+
+  // data padrão = hoje (se existir o campo)
+  const dt = document.getElementById('com-data');
+  if (dt && !dt.value) {
+    const today = new Date().toISOString().slice(0,10);
+    dt.value = today;
+  }
+
+  // popular select e lista
+  try { window.popularSelectVendedores?.(); } catch {}
+  try { window.renderComissoesLista?.(); } catch {}
+
+  // garantir que não esteja hidden antes de abrir
+  dlg.removeAttribute('hidden');
+
+  // abrir modal (com fallback para navegadores sem <dialog>)
+  if (typeof dlg.showModal === 'function') {
+    try { dlg.showModal(); } catch { dlg.setAttribute('open',''); }
+  } else {
+    dlg.setAttribute('open','');
+  }
+
+  // opcional: recria ícones do lucide após abrir
+  try { window.lucide?.createIcons?.(); } catch {}
+};
+
+
+// === Bind único para abrir Comissões a partir do card/botão ===
+if (!window.__bindComissaoClick) {
+  window.__bindComissaoClick = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-abrir-comissao]");
+    if (!btn) return;
+    e.preventDefault();
+    window.openComissoesDialog();
+  });
+}
+
+
+// ===== COMISSÕES: Salvar (cria a parcela PENDENTE + espelha no financeiroGlobal) =====
+const _btnComSalvar = document.getElementById("btnSalvarComissoes"); // <- id do botão do modal
+if (_btnComSalvar && !_btnComSalvar.dataset.bound) {
+  _btnComSalvar.dataset.bound = "1";
+  _btnComSalvar.addEventListener("click", (e) => {
+    e.preventDefault();
+
+    // 1) evento atual
+    const arr = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || '');
+    const i   = arr.findIndex(ev => String(ev.id) === String(id));
+    if (i === -1) return alert("Evento não encontrado.");
+    const ev = arr[i];
+
+    // 2) campos do formulário
+    const toISO = (s)=>{ const v=String(s||"").trim(); const m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : v; };
+    const dataISO   = toISO(document.getElementById("com-data")?.value || "");
+    const valorTxt  = document.getElementById("com-valor")?.value || "0";
+    const valor     = (function(v){
+      if (typeof parseMoney === "function") return parseMoney(v);
+      return parseFloat(String(v).replace(/\./g,"").replace(",", ".")) || 0;
+    })(valorTxt);
+    const status    = (document.getElementById("com-status")?.value || "pendente").toLowerCase();
+    const dest      = (document.getElementById("com-dest")?.value || "").trim();
+    const desc      = (document.getElementById("com-desc")?.value || "Comissão").trim();
+
+    if (!valor) return alert("Informe o valor da comissão.");
+
+    // 3) garante estrutura e adiciona parcela (sempre fica com status informado)
+    ev.financeiro = ev.financeiro || {};
+    ev.financeiro.comissao = ev.financeiro.comissao || { valor: 0, status: "pendente", destinatario: "" };
+    const com = ev.financeiro.comissao;
+    com.destinatario = dest;
+    com.parcelas = Array.isArray(com.parcelas) ? com.parcelas : [];
+
+    const novaParc = {
+      id: "cmp_" + Date.now().toString(36),
+      vencimentoISO: dataISO || new Date().toISOString().slice(0,10),
+      valor: Number(valor)||0,
+      descricao: desc,
+      status: status,
+      dataPagamentoISO: (status === "pago") ? (dataISO || new Date().toISOString().slice(0,10)) : null
+    };
+    com.parcelas.push(novaParc);
+
+    // 4) persiste o evento
+    arr[i] = ev;
+    try { localStorage.setItem("eventos", JSON.stringify(arr)); } catch {}
+
+    // 5) espelha no financeiroGlobal (tabela do Financeiro do Evento usa isso)
+    const STORAGE_KEY = "financeiroGlobal";
+    const g = (()=>{ try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; } })();
+    g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
+    g.parcelas    = Array.isArray(g.parcelas)    ? g.parcelas    : [];
+
+    // apaga espelhos antigos desta comissão (por garantia)
+    g.lancamentos = g.lancamentos.filter(l =>
+      !(String(l.eventoId) === String(ev.id) && String(l.origem||"").toLowerCase().includes("evento:comissao"))
+    );
+    g.parcelas = g.parcelas.filter(px =>
+      !(String(px.eventoId) === String(ev.id) && String(px.origem||"").toLowerCase().includes("evento:comissao"))
+    );
+
+    // cria lançamentos/parcelas
+    (com.parcelas || []).forEach((p, idx) => {
+      const qtd = (com.parcelas || []).length || 1;
+      const lancId = `evt_${ev.id}_cmp_${p.id}`;
+      const vctoISO = p.vencimentoISO || dataISO || new Date().toISOString().slice(0,10);
+      const dsc = p.descricao || `Comissão (parcela ${idx+1}/${qtd})`;
+
+      g.lancamentos.push({
+        id: lancId,
+        eventoId: ev.id,
+        tipo: "saida",
+        descricao: dsc,
+        valor: Number(p.valor)||0,
+        dataISO: vctoISO,
+        status: String(p.status||"pendente"),
+        categoriaId: "comissao",
+        origem: "evento:comissao",
+        relacionado: "comissao",
+        relacionadoId: p.id,
+        atualizadoEm: new Date().toISOString()
+      });
+
+      g.parcelas.push({
+        id: `parc_evt_${ev.id}_${p.id}`,
+        eventoId: ev.id,
+        lancamentoId: lancId,
+        numero: idx+1,
+        de: qtd,
+        valor: Number(p.valor)||0,
+        vencimentoISO: vctoISO,
+        vencimento: vctoISO,
+        status: String(p.status||"pendente"),
+        totalPago: (String(p.status).toLowerCase()==="pago") ? Number(p.valor||0) : 0,
+        descricao: dsc,
+        origem: "evento:comissao"
+      });
+    });
+
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(g)); } catch {}
+
+    // 6) notifica outras abas e refaz a lista do modal agora
+    try { localStorage.setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
+    renderComissoesLista();
+
+    // 7) limpa e feedback leve (mantém modal aberto para ver a lista)
+    ["com-data","com-desc","com-valor"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    const fx = document.getElementById("com-flash");
+    if (fx) { fx.textContent = "Comissão lançada."; fx.classList.add("show"); setTimeout(()=>fx.classList.remove("show"), 1500); }
+  });
+}
+
+
+// evento-detalhado.js
+function listarVendedores() {
+  try {
+    const us = JSON.parse(localStorage.getItem("usuarios") || "[]");
+    return (us || [])
+      .filter(u => /vendedor/i.test(String(u.perfil || u.tipo || "")))
+      .map(u => u.nome)
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+function coletarParcelas(ev = {}) {
+  const out = [];
+  const _iso = (s)=>_dataISOor(s);
+
+  const parc = Array.isArray(ev.financeiro?.parcelas) ? ev.financeiro.parcelas : [];
+  parc.forEach(p => {
+    out.push({
+      dataISO: _iso(p.vencimentoISO || p.dataPagamentoISO || p.data || ""),
+      valor: parseMoney(p.valor || p.valorParcela || 0),
+      descricao: p.descricao || p.titulo || "",
+      situacao: String(p.situacao || p.status || (p.pago ? "pago" : "pendente")).toLowerCase()
+    });
+  });
+  // também listar COMISSÕES do evento
+  const coms = Array.isArray(ev.financeiro?.comissoes) ? ev.financeiro.comissoes : [];
+  for (const c of coms){
+    out.push({
+      dataISO: c.dataISO || "",
+      valor: Number(c.valor||0),
+      descricao: c.descricao ? `Comissão: ${c.descricao}` : "Comissão",
+      situacao: String(c.status||"pendente").toLowerCase()
+    });
+  }
+
+  const lanc = Array.isArray(ev.financeiro?.lancamentos) ? ev.financeiro.lancamentos : [];
+  lanc.filter(l => /receb|entrada/i.test(String(l.tipo || l.relacionado || ""))).forEach(l => {
+    out.push({
+      dataISO: _iso(l.dataISO || l.vencimentoISO || l.data || ""),
+      valor: parseMoney(l.valor || 0),
+      descricao: l.descricao || l.titulo || "",
+      situacao: String(l.status || "pendente").toLowerCase()
+    });
+  });
+
+  const recs = ev.financeiro?.recebimentos || ev.financeiro?.entradas || [];
+  (Array.isArray(recs) ? recs : []).forEach(r => {
+    out.push({
+      dataISO: _iso(r.dataISO || r.data || ""),
+      valor: parseMoney(r.valor || r.valorPago || 0),
+      descricao: r.descricao || r.titulo || "",
+      situacao: String(r.status || "pago").toLowerCase()
+    });
+  });
+
+  return out
+    .filter(x => Number.isFinite(x.valor))
+    .sort((a,b) => String(a.dataISO||"").localeCompare(String(b.dataISO||"")));
+}
+
+/* ===== Edição rápida / Resumo ===== */
+function setResumoEditMode(edit){
+  const bE = document.getElementById("resumoBtnEditar");
+  const bS = document.getElementById("resumoBtnSalvar");
+  if (bE) bE.style.display = edit ? "none" : "inline-flex";
+  if (bS) bS.style.display = edit ? "inline-flex" : "none";
+}
+
+function atualizarResumo(){
+  const ev = window.evento || {};
+  setText("rsNome",       pick(ev, ["nomeEvento","titulo","nome"]) || "—");
+  setText("rsCliente",    "Cliente: " + (pick(ev, ["nomeCompleto","nomeCliente","cliente","clienteNome"]) || "—"));
+  const dataRaw = pick(ev, ["data","dataEvento","dataDoEvento"]) || "";
+  setText("rsData",       formatDateBR(toISO(dataRaw)));
+  setText("rsLocal",      pick(ev, ["local","localEvento","enderecoEvento","endereco"]) || "—");
+  setText("rsConvidados", pick(ev, ["quantidadeConvidados","convidados","qtdConvidados"]) || "—");
+  setText("rsCerimonia",  simNao(pick(ev, ["cerimoniaNoLocal","cerimonia","ceremoniaNoLocal"])));
+  setText("rsHorario",    toHora(pick(ev, ["horarioEvento","horaEvento","horaDoEvento","horarioCerimonia","horaCerimonia"]) || ""));
+  setText("rsCerveja",    simNao(pick(ev, ["comCerveja","cerveja"])));
+}
+
+function ativarEdicao() {
+  document.querySelectorAll(".input-editar").forEach(input => {
+    if (input.dataset.lock === "true") return;
+    input.disabled = false;
+  });
+  setResumoEditMode(true);
+}
+
+function salvarAlteracoes() {
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  if (i === -1) return alert("Evento não encontrado.");
+
+  const ev = eventos[i];
+  // guardar a data antiga antes de sobrescrever
+  const oldDataISO = String(ev.data || "");
+
+  ev.nomeEvento            = document.getElementById("eventoNome").value;
+  ev.tipoEvento            = document.getElementById("eventoTipo").value;
+  ev.data                  = document.getElementById("eventoData").value;
+  ev.local                 = document.getElementById("eventoLocal").value;
+  ev.quantidadeConvidados  = parseInt(document.getElementById("eventoConvidados").value, 10) || 0;
+  ev.qtdConvidados         = ev.quantidadeConvidados; // espelho retrocompatível
+  ev.cerimonia             = document.getElementById("eventoCerimoniaNoLocal").value;
+  ev.horarioCerimonia      = document.getElementById("eventoHorarioCerimonia").value;
+  ev.horarioEvento         = document.getElementById("eventoHorarioEvento").value || ev.horarioEvento || "";
+  ev.cerveja               = document.getElementById("eventoCerveja").value;
+
+  // ==== M13: recalcular prazos do Checklist IMEDIATAMENTE se a data mudou ====
+  try {
+    const newDataISO = String(ev.data || "");
+    if (oldDataISO !== newDataISO) {
+      
+      // normalização e reaplicação dos prazos (segue igual ao seu bloco)
+      // ... (mantido seu algoritmo daqui pra baixo) ...
+      // [o restante do seu bloco M13 foi mantido sem alterações]
+      // >>> M33: Notificar alteração de data no feed + agenda unificada
+try {
+  notifyEventoAtualizado(
+    {
+      id: ev.id,
+      nomeEvento: ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`,
+      status: ev.status || 'atualizado',
+      dataISO: newDataISO
+    },
+    { dataISO: newDataISO }
+  );
+} catch(e) {
+  console.warn('M33: falha ao notificar atualização de data do evento:', e);
+}
+
+    }
+  } catch(e){ console.warn("M13: erro no recálculo imediato:", e); }
+  // ==== /M13 recalculo imediato ====
+
+  safeSaveEventos(eventos);
+
+  window.evento = ev;
+  window.eventoSelecionado = ev;
+
+  document.querySelectorAll(".input-editar").forEach(input => input.disabled = true);
+  setResumoEditMode(false);
+  atualizarResumo();
+  renderItensUnificado();
+  try { renderFinanceiroResumo(); } catch {}
+  try { mostrarChipOrcamento(ev); } catch {}
+  alert("Alterações salvas com sucesso.");
+}
+
+function editarItensEvento() {
+  // 1) Resolver o ID do evento atual (sem duplicar a const)
+  const idResolved = String(
+    (window.evento && window.evento.id) ||
+    (window.eventoSelecionado && window.eventoSelecionado.id) ||
+    new URLSearchParams(window.location.search).get("id") ||
+    localStorage.getItem("eventoSelecionado") ||
+    ""
+  ).trim();
+
+  if (!idResolved) {
+    alert("Evento sem ID. Salve o evento antes de selecionar itens.");
+    return;
+  }
+
+  // 2) Espelhar a quantidade de convidados para a tela de itens (se usada lá)
+  try {
+    const qtd =
+      (window.evento && window.evento.quantidadeConvidados) ||
+      (window.eventoSelecionado && window.eventoSelecionado.quantidadeConvidados) ||
+      0;
+    localStorage.setItem("quantidadeConvidadosEvento", String(qtd));
+  } catch {}
+
+  // 3) (Opcional) snapshot slim do evento no LS, se sua função existir
+  try {
+    const ev =
+      (window.evento && window.evento) ||
+      (window.eventoSelecionado && window.eventoSelecionado) || { id: idResolved };
+    salvarEventoTempSlim(ev);
+  } catch {}
+
+  // 4) Redireciona informando a origem correta
+  window.location.href = `itens-evento.html?id=${encodeURIComponent(idResolved)}&origem=detalhado`;
+}
+
+/* ===== Histórico ===== */
+function _anotacaoDateNum(a) {
+  if (a?.createdAt) {
+    const t = Date.parse(a.createdAt);
+    if (Number.isFinite(t)) return t;
+  }
+  if (a?.data && /^\d{2}\/\d{2}\/\d{4}$/.test(a.data)) {
+    const [d,m,y] = a.data.split('/').map(Number);
+    const dt = new Date(y, m - 1, d, 12, 0, 0);
+    if (isFinite(dt)) return dt.getTime();
+  }
+  return 0;
+}
+
+function renderizarHistorico(lista) {
+  const container = document.getElementById("listaHistorico");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const arr = Array.isArray(lista) ? lista.slice() : [];
+  if (!arr.length) {
+    container.innerHTML = "<p>Nenhuma anotação ainda.</p>";
+    return;
+  }
+
+  arr.sort((a, b) => {
+    const fav = (b.favorita === true) - (a.favorita === true);
+    if (fav) return fav;
+    return _anotacaoDateNum(b) - _anotacaoDateNum(a);
+  });
+
+  arr.forEach(item => {
+    if (!item.id) item.id = "note_" + (Date.now() + Math.random()).toString(36).slice(2);
+    const isFav = item.favorita === true;
+
+    const div = document.createElement("div");
+    div.className = "historico-item";
+    div.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:4px;">
+        <div>
+          <strong>${item.data || "—"}</strong> - ${item.tipo || "Anotação"}
+          <span class="muted" style="margin-left:8px;">Responsável: ${item.responsavel || "—"}</span>
+        </div>
+        <button type="button" class="btn btn-ghost" data-star="${item.id}" title="${isFav ? "Remover dos favoritos" : "Favoritar"}" style="padding:4px 8px;">
+          <i data-lucide="star" style="${isFav ? 'color:#c29a5d' : ''}"></i>
+          <span style="font-size:12px; margin-left:6px; color:#5a3e2b;">${isFav ? "Favorito" : "Favoritar"}</span>
+        </button>
+      </div>
+      <div>${item.observacao || ""}</div>
+    `;
+    container.appendChild(div);
+  });
+
+  container.querySelectorAll("[data-star]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-star");
+      _toggleFavoritoAnotacao(id);
+    });
+  });
+
+  try { window.lucide?.createIcons?.(); } catch {}
+}
+
+function salvarAnotacao() {
+  const texto = (document.getElementById("novaAnotacao")?.value || "").trim();
+  if (!texto) return alert("Digite uma anotação.");
+  const hojeBR = new Date().toLocaleDateString("pt-BR");
+
+  (async () => {
+    const usuario = await __getNomeUsuarioAtual();
+    const nova = {
+      id: "note_" + Date.now().toString(36),
+      data: hojeBR,
+      createdAt: new Date().toISOString(),
+      tipo: "Anotação",
+      observacao: texto,
+      responsavel: usuario,
+      favorita: false
+    };
+
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  if (i === -1) return alert("Evento não encontrado.");
+
+  eventos[i].historico = Array.isArray(eventos[i].historico) ? eventos[i].historico : [];
+  eventos[i].historico.push(nova);
+  safeSaveEventos(eventos);
+
+    window.evento = eventos[i];
+    window.eventoSelecionado = eventos[i];
+    const campo = document.getElementById("novaAnotacao");
+    if (campo) campo.value = "";
+    renderizarHistorico(eventos[i].historico);
+  })();
+}
+
+function _toggleFavoritoAnotacao(notaId) {
+  if (!notaId) return;
+  const idEv = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const i = eventos.findIndex(e => String(e.id) === String(idEv));
+  if (i === -1) return;
+
+  const hist = Array.isArray(eventos[i].historico) ? eventos[i].historico : [];
+  const j = hist.findIndex(n => String(n.id) === String(notaId));
+  if (j === -1) return;
+
+  hist[j].favorita = !hist[j].favorita;
+  eventos[i].historico = hist;
+  safeSaveEventos(eventos);
+
+  window.evento = eventos[i];
+  window.eventoSelecionado = eventos[i];
+  renderizarHistorico(hist);
+}
+
+/* ===== Excluir evento ===== */
+function excluirEvento() {
+  if (!confirm("Excluir este evento?")) return;
+  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  if (i > -1) {
+    eventos.splice(i, 1);
+    safeSaveEventos(eventos);
+  }
+  alert("Evento excluído.");
+  window.location.href = "lista-evento.html";
+}
+window.excluirEvento = excluirEvento;
+
+/* ===== Documentos / Arquivar / Etc. ===== */
+const DOC_CATS = ["documento_cliente","contrato","comprovante","adendo","outros"];
+function isAdminUser(){
+  try{ const u = window.__KGB_USER_CACHE || null; return String((u?.perfil||"")).toLowerCase()==="administrador"; }
+  catch{ return false; }
+}
+async function isAdminUserAsync(){
+  try { const u = await (window.getUsuarioAtualAsync ? window.getUsuarioAtualAsync() : Promise.resolve(window.__KGB_USER_CACHE || null)); return String((u?.perfil||"")).toLowerCase()==="administrador"; } catch { return false; }
+}
+function displayName(nomeBase){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const yyyy = d.getFullYear();
+  const limpo = String(nomeBase||"Documento").trim();
+  return `${dd}-${mm}-${yyyy} / ${limpo}`;
+}
+function sanitizeFileName(titulo, ext){
+  const base = String(titulo||"documento").replace(/[\/\\:*?"<>|]+/g,"-").trim();
+  const e = ext ? String(ext).replace(/^\./,"") : "";
+  return e ? `${base}.${e}` : base;
+}
+function abrirDocumentosEvento(){
+  const bloco = document.getElementById("blocoDocumentosEvento");
+  if(!bloco) return;
+  if (bloco.style.display !== "block") { bloco.style.display = "block"; }
+  else { bloco.style.display = "none"; }
+  if (bloco.style.display === "block") { initDocumentosEvento(); }
+}
+function initDocumentosEvento(){
+  if(!window.eventoSelecionado) return;
+  if(!Array.isArray(eventoSelecionado.documentos)) eventoSelecionado.documentos = [];
+  const adm = isAdminUser();
+  const hint = document.getElementById("docHintAdm");
+  const btn  = document.getElementById("btnUploadDoc");
+  const sel  = document.getElementById("docCategoria");
+  if(hint) hint.style.display = adm ? "none":"inline";
+  if(btn)  btn.style.display  = adm ? "inline-flex":"none";
+  if(sel)  sel.disabled       = !adm;
+  document.querySelectorAll("#docTabs .tab-doc").forEach(b=>{
+    b.onclick = ()=>{ document.querySelectorAll("#docTabs .tab-doc").forEach(x=>x.classList.remove("ativo")); b.classList.add("ativo"); renderListaDocs(b.dataset.cat || "todos"); };
+  });
+  if(btn){ btn.onclick = ()=> document.getElementById("inputArquivoEvento")?.click(); }
+  const inp = document.getElementById("inputArquivoEvento");
+  if(inp){ inp.onchange = handleUploadArquivos; }
+  renderListaDocs("todos");
+}
+async function handleUploadArquivos(e){
+  if(!isAdminUser()){
+    alert("Apenas administradores podem enviar documentos.");
+    return;
+  }
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+
+  const catSel  = (document.getElementById("docCategoria")?.value) || "outros";
+  const catNorm = DOC_CATS.includes(catSel) ? catSel : (catSel === "todos" ? "documento_cliente" : "outros");
+
+  let u = window.__KGB_USER_CACHE || null;
+  try { if (typeof window.getUsuarioAtualAsync === 'function') u = await window.getUsuarioAtualAsync() || u; } catch {}
+  const ev = window.eventoSelecionado;
+
+  const ler = f => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(f);
+  });
+
+  Promise.all(files.map(async (f, idx) => {
+    const base64 = await ler(f);
+    const tituloBase = f.name.replace(/\.[^/.]+$/,"");
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+
+    return {
+      id: "doc_" + Date.now() + "_" + idx,
+      categoria: catNorm,
+      nome: f.name,
+      titulo: displayName(tituloBase),
+      tipo: f.type || "application/octet-stream",
+      conteudo: base64,
+      url: base64,
+      origem: "upload",
+      criadoEm: new Date().toISOString(),
+      criadoPor: u?.nome || "Admin",
+      clienteId: ev?.clienteId || null,
+      relacionadoId: null
+    };
+  }))
+  .then(novos => {
+    ev.documentos = (ev.documentos || []).concat(novos);
+    const all = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i = all.findIndex(x => String(x.id) === String(ev.id));
+    if (i !== -1) { all[i] = ev; localStorage.setItem("eventos", JSON.stringify(all)); }
+    const catAtiva = document.querySelector("#docTabs .tab-doc.ativo")?.dataset.cat || "todos";
+    renderListaDocs(catAtiva);
+    const inp = document.getElementById("inputArquivoEvento");
+    if (inp) inp.value = "";
+  })
+  .catch(err => {
+    console.error("Falha no upload:", err);
+    alert("Falha ao anexar arquivo(s).");
+  });
+}
+function renderListaDocs(cat){
+  const box = document.getElementById("listaArquivosEvento");
+  if(!box) return;
+  const ev = window.eventoSelecionado||{};
+  const adm = isAdminUser();
+  const arr = Array.isArray(ev.documentos) ? ev.documentos.slice() : [];
+  const filtrados = cat && cat!=="todos" ? arr.filter(d=>d.categoria===cat) : arr;
+  if(!filtrados.length){ box.innerHTML = `<div class="muted">Nenhum documento.</div>`; return; }
+  filtrados.sort((a,b)=> new Date(b.criadoEm||0) - new Date(a.criadoEm||0));
+  box.innerHTML = "";
+  filtrados.forEach(doc=>{
+    const origem = doc.origem==="cliente" ? "Cliente" :
+                   doc.origem==="financeiro" ? "Financeiro" :
+                   doc.origem==="upload" ? "Upload" : "—";
+    const quando = doc.criadoEm ? new Date(doc.criadoEm).toLocaleString() : "—";
+    const titulo = doc.titulo || displayName(doc.nome?.replace(/\.[^/.]+$/,"") || "Documento");
+    const ext = (doc.nome||"").split(".").pop() || "arquivo";
+    const nomeDownload = sanitizeFileName(titulo, ext);
+    const href = doc.conteudo || doc.url || "#";
+    const el = document.createElement("div");
+    el.className = "doc-item";
+    el.innerHTML = `
+      <div style="min-width:260px">
+        <div><strong>${titulo}</strong> <span class="badge">${(doc.categoria||"outros")}</span></div>
+        <div class="doc-meta">Origem: ${origem} • Tipo: ${doc.tipo||"—"} • Data: ${quando}</div>
+      </div>
+      <div class="doc-actions" style="display:flex; align-items:center;">
+        <a class="btn" href="${href}" target="_blank" rel="noopener"><i data-lucide="eye"></i> Visualizar</a>
+        <a class="btn" href="${href}" download="${nomeDownload}"><i data-lucide="download"></i> Baixar</a>
+        ${adm ? `<button class="btn" data-del="${doc.id}"><i data-lucide="trash-2"></i> Excluir</button>` : ``}
+      </div>
+    `;
+    box.appendChild(el);
+  });
+  if(adm){
+    box.querySelectorAll("button[data-del]").forEach(b=>{
+      b.onclick = ()=>{
+        if(!confirm("Excluir este documento?")) return;
+        const id = b.getAttribute("data-del");
+        const ev = window.eventoSelecionado;
+        ev.documentos = (ev.documentos||[]).filter(d=>d.id!==id);
+        const all = JSON.parse(localStorage.getItem("eventos")||"[]");
+        const i = all.findIndex(x=> String(x.id) === String(ev.id));
+        if(i!==-1){ all[i]=ev; localStorage.setItem("eventos", JSON.stringify(all)); }
+        renderListaDocs(document.querySelector("#docTabs .tab-doc.ativo")?.dataset.cat || "todos");
+      };
+    });
+  }
+  try { window.lucide?.createIcons?.(); } catch {}
+}
+
+/* ===== Arquivar ===== */
+function coletarPendenciasCriticas(ev = {}) {
+  const pend = [];
+  const { falta } = getSaldoAReceber(ev);
+  if (falta > 0.009) pend.push(`Saldo a receber: ${(Number(falta)||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}`);
+
+  let abertos = 0, quebras = 0;
+  if (ev.checklistsPorTipo && typeof ev.checklistsPorTipo === "object") {
+    for (const tipo in ev.checklistsPorTipo) {
+      const itens = ev.checklistsPorTipo[tipo] || [];
+      itens.forEach(it => {
+        const st = String(it.status || it.situacao || it.state || "").toLowerCase();
+        const done = it.done === true || it.checked === true || ["feito","concluido","concluída","ok","concluido"].includes(st);
+        if (!done) abertos++;
+        if (it.quebra === true || it.quebrado === true) quebras++;
+      });
+    }
+  }
+  if (quebras > 0) pend.push(`Checklist: ${quebras} quebra(s) registrada(s)`);
+  if (abertos > 0) pend.push(`Checklist: ${abertos} item(ns) pendente(s)`);
+
+  const tarefas = []
+    .concat(Array.isArray(ev.agenda) ? ev.agenda : [])
+    .concat(Array.isArray(ev.tarefas) ? ev.tarefas : [])
+    .concat(Array.isArray(ev.todos) ? ev.todos : []);
+  const emAberto = tarefas.filter(t => {
+    const st = String(t.status || t.situacao || "").toLowerCase();
+    const done = t.done === true || t.concluida === true || ["feito","concluido","concluída"].includes(st);
+    return !done;
+  }).length;
+  if (emAberto > 0) pend.push(`Agenda/Tarefas: ${emAberto} pendente(s)`);
+
+  const posMsgEnviada =
+    ev.posEvento?.mensagemEnviada === true ||
+    ev.posEvento?.posMsgEnviada === true ||
+    ev.mensagemPosEventoEnviada === true ||
+    (Array.isArray(ev.mensagens) && ev.mensagens.some(m =>
+      (m.tipo === "pos_evento" || m.categoria === "pos_evento") && (m.enviado || m.status === "enviado")
+    ));
+  if (!posMsgEnviada) pend.push("Mensagem pós-evento ainda não enviada");
+
+  return pend;
+}
+function renderAvisosArquivar(pend = []) {
+  const ul  = document.getElementById("arqAvisosLista");
+  const ok  = document.getElementById("arqOk");
+  if (!ul || !ok) return;
+  ul.innerHTML = "";
+  if (!pend.length) ok.style.display = "block";
+  else {
+    ok.style.display = "none";
+    pend.forEach(txt => { const li = document.createElement("li"); li.textContent = txt; ul.appendChild(li); });
+  }
+}
+function abrirModalArquivarEvento() {
+  const m = document.getElementById('modalArquivarEvento');
+  if (!m) return;
+
+  // mostra o modal (CSS exibe quando [open])
+  m.removeAttribute('hidden');
+  m.setAttribute('open', '');
+
+  // trava o scroll do fundo
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  // renderiza os avisos antes de arquivar
+  const ev = window.evento || {};
+  renderAvisosArquivar(coletarPendenciasCriticas(ev));
+
+  try { window.lucide?.createIcons?.(); } catch {}
+}
+
+function fecharModalArquivarEvento() {
+  const m = document.getElementById('modalArquivarEvento');
+  if (!m) return;
+
+  m.removeAttribute('open');
+  m.setAttribute('hidden', '');
+
+  // libera o scroll do fundo
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
+}
+
+// PARTE 3/4 (CORRIGIDA)
+
+async function confirmarArquivamentoEvento() {
+  const id =
+    localStorage.getItem("eventoSelecionado") ||
+    new URLSearchParams(location.search).get("id");
+
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  if (i === -1) {
+    alert("Evento não encontrado.");
+    return;
+  }
+
+  const classEl = document.querySelector('input[name="arqClass"]:checked');
+  const classificacao = classEl ? classEl.value : "realizado";
+  const labels = {
+    realizado: "Evento realizado",
+    cancelado: "Evento cancelado"
+  };
+
+  const observacao = (document.getElementById('arqObs')?.value || '').trim();
+
+  const ev = eventos[i];
+  ev.status = "arquivado";
+  ev.arquivamento = {
+    classificacao,
+    classificacaoLabel: labels[classificacao] || classificacao,
+    observacao,
+    dataISO: new Date().toISOString(),
+    por: await __getNomeUsuarioAtual(),
+    pendencias: coletarPendenciasCriticas(ev)
+  };
+  ev.motivoArquivamento =
+    ev.arquivamento.classificacaoLabel +
+    (observacao ? ` — ${observacao}` : '');
+
+  ev.historico = ev.historico || [];
+  ev.historico.push({
+    data: new Date().toLocaleDateString('pt-BR'),
+    tipo: "Arquivamento",
+    observacao: ev.motivoArquivamento,
+    responsavel: ev.arquivamento.por
+  });
+
+  // 1) atualiza cache local
+  safeSaveEventos(eventos);
+
+  // 2) envia para a API (nuvem)
+  try {
+    if (IS_REMOTE && typeof callApi === "function" && ev.id) {
+      const endpoint = `/eventos/${encodeURIComponent(String(ev.id))}`;
+      await callApi(endpoint, "PUT", ev);
+    }
+  } catch (e) {
+    console.warn("[evento-detalhado] Falha ao arquivar na API, mantendo apenas local.", e);
+    // se der erro, segue mesmo assim — já tá salvo no navegador
+  }
+
+  fecharModalArquivarEvento();
+  alert("Evento arquivado com sucesso.");
+  window.location.href = "eventos-arquivados.html";
+}
+
+async function desarquivarEvento() {
+  const id =
+    localStorage.getItem("eventoSelecionado") ||
+    new URLSearchParams(location.search).get("id");
+
+  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const i = eventos.findIndex(e => String(e.id) === String(id));
+  if (i === -1) {
+    alert("Evento não encontrado.");
+    return;
+  }
+
+  const ev = eventos[i];
+  ev.status = "ativo";
+  ev.arquivamento = ev.arquivamento || {};
+  ev.arquivamento.desarquivadoEm = new Date().toISOString();
+
+  // 1) atualiza cache local
+  safeSaveEventos(eventos);
+
+  // 2) envia para API
+  try {
+    if (IS_REMOTE && typeof callApi === "function" && ev.id) {
+      const endpoint = `/eventos/${encodeURIComponent(String(ev.id))}`;
+      await callApi(endpoint, "PUT", ev);
+    }
+  } catch (e) {
+    console.warn("[evento-detalhado] Falha ao desarquivar na API, mantendo apenas local.", e);
+  }
+
+  alert("Evento desarquivado.");
+  location.reload();
+}
+
+/* ===== Cliente (atalho) ===== */
+function __getClientesArrays(){
+  const keys = ['clientes','listaClientes','clientes_cad','clientesIndex','clientesList'];
+  const out = [];
+  for (const k of keys){
+    try{
+      const arr = JSON.parse(localStorage.getItem(k) || '[]');
+      if (Array.isArray(arr)) out.push(...arr);
+    }catch{}
+  }
+  return out;
+}
+
+function alternarCliente() {
+  try {
+    const ev = window.eventoSelecionado || window.evento;
+    if (!ev) { alert('Evento não carregado.'); return; }
+
+    const norm = s => String(s||'').normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+    const dig  = s => String(s||'').replace(/\D+/g,'');
+    let clientes = __getClientesArrays();
+
+    // 1) Por ID direto
+    let id = ev.clienteId || ev.idCliente || ev.cliente?.id || ev.infoCliente?.id;
+    if (id) {
+      const byId = clientes.find(c => String(c.id) === String(id));
+      if (byId) { window.location.href = `cliente-detalhado.html?id=${encodeURIComponent(byId.id)}`; return; }
+    }
+
+    // 2) Por e-mail / telefone
+    const emailEv = (ev.emailCliente || ev.infoCliente?.email || '').toLowerCase().trim();
+    const telEv   = dig(ev.whatsappCliente || ev.telefoneCliente || ev.whatsapp || ev.telefone || ev.celular || ev.infoCliente?.whatsapp || ev.infoCliente?.telefone || '');
+
+    let hit = null;
+    if (emailEv) hit = clientes.find(c => String(c.email||'').toLowerCase().trim() === emailEv);
+    if (!hit && telEv) hit = clientes.find(c => dig(c.telefone || c.whatsapp || c.celular || c.fone) === telEv);
+
+    // 3) Por nome exato
+    if (!hit) {
+      const nomeEv = norm(ev.nomeCliente || ev.infoCliente?.nome || '');
+      if (nomeEv) hit = clientes.find(c => norm(c.nome) === nomeEv);
+    }
+
+    if (hit) {
+      window.location.href = `cliente-detalhado.html?id=${encodeURIComponent(hit.id)}`;
+      return;
+    }
+
+    // 4) Fallback: lista filtrada
+    const q = encodeURIComponent(ev.nomeCliente || ev.infoCliente?.nome || emailEv || telEv || '');
+    alert('Cliente não encontrado automaticamente. Vou abrir a lista de clientes já filtrada para você localizar.');
+    window.location.href = `clientes.html?q=${q}`;
+  } catch (e) {
+    console.warn('alternarCliente()', e);
+    alert('Não foi possível abrir o cliente agora.');
+  }
+}
+// Cache simples do link do portal (pra não gerar token toda hora)
+let __portalLinkCache = null;
+
+// Gera (no servidor) um link SEGURO para a área do cliente
+async function __gerarPortalLinkSeguro(ev){
+  try {
+    const eid = String(
+      (ev && ev.id) ||
+      (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
+      (new URLSearchParams(location.search).get('id')) ||
+      (localStorage.getItem('eventoSelecionado') || '')
+    ).trim();
+
+    if (!eid) {
+      alert('Não consegui achar o ID do evento para gerar o link.');
+      return '';
+    }
+
+    // Se já geramos o link deste evento antes, reaproveita
+    if (__portalLinkCache && __portalLinkCache.eventId === eid && __portalLinkCache.link) {
+      return __portalLinkCache.link;
+    }
+
+    const apiBase = (window.__API_BASE__ || '').replace(/\/+$/,'');
+    const url = apiBase ? `${apiBase}/portal/token` : '/portal/token';
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: eid, eventoPublico: ev || {} })
+    });
+
+    if (!resp.ok) {
+      console.error('Falha ao gerar token do portal', resp.status);
+      alert('Não consegui gerar o link da área do cliente. Tente novamente.');
+      return '';
+    }
+
+    const data = await resp.json();
+
+    // Se o backend já devolver o link pronto, usamos ele;
+    // senão montamos com o token.
+    const link = data.link || (`${location.origin}/area-cliente.html?token=${encodeURIComponent(data.token)}`);
+
+    __portalLinkCache = { eventId: eid, link };
+    return link;
+  } catch (e) {
+    console.error('Erro ao gerar link do portal', e);
+    alert('Erro ao gerar link da área do cliente.');
+    return '';
+  }
+}
+
+/* ===== Área do Cliente: link, copiar, modelos do “grande dia” ===== */
+// Agora essa função só devolve o link.
+// Se já houver um link com token em cache, usa ele.
+function __getPortalLink(ev){
+  if (__portalLinkCache && __portalLinkCache.link) {
+    return __portalLinkCache.link;
+  }
+
+  const basePath = 'area-cliente.html';
+  const eid = String(
+    (ev && ev.id) ||
+    (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
+    (new URLSearchParams(location.search).get('id')) ||
+    (localStorage.getItem('eventoSelecionado') || '')
+  ).trim();
+
+  if (!eid) {
+    return `${location.origin}/${basePath}`;
+  }
+  // Fallback antigo (com ?id=) só se ainda não gerou token
+  return `${location.origin}/${basePath}?id=${encodeURIComponent(eid)}`;
+}
+
+async function __copiarTexto(txt){
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } finally { document.body.removeChild(ta); }
+    return true;
+  }
+}
+// Agora gera o link SEGURO chamando o backend e preenche o campo
+async function atualizarLinkAreaCliente(){
+  const ev  = window.evento || __carregarEventoDoStorage(__getEventoIdAtual()) || {};
+  const txt = document.getElementById("idTxtLinkCliente");
+  const btn = document.getElementById("btnAbrirAreaCliente");
+  if (!txt && !btn) return;
+
+  const url = await __gerarPortalLinkSeguro(ev);
+  if (!url) return;
+
+  if (txt) txt.value = url;
+  if (btn) btn.setAttribute("href", url);
+}
+
+// Copiar link SEMPRE usando o link seguro (gera se ainda não existir)
+async function copiarLinkAreaCliente(){
+  const ev  = window.evento || __carregarEventoDoStorage(__getEventoIdAtual()) || {};
+  const txt = document.getElementById("idTxtLinkCliente");
+
+  const url = await __gerarPortalLinkSeguro(ev);
+  if (!url){
+    alert('Não há link para copiar.');
+    return;
+  }
+
+  if (txt) txt.value = url;
+
+  try{
+    await navigator.clipboard.writeText(url);
+    alert('Link copiado para a área de transferência!');
+  } catch(e){
+    try{
+      if (txt){
+        txt.focus();
+        txt.select();
+        document.execCommand('copy');
+        alert('Link copiado! Se não funcionar, copie manualmente.');
+      } else {
+        alert('Não consegui copiar automaticamente. Copie manualmente: ' + url);
+      }
+    } catch(e2){
+      alert('Não consegui copiar automaticamente. Copie manualmente: ' + url);
+    }
+  }
+}
+
+
+/* === Helper Whats com DDI BR (55) === */
+function __resolveWhatsCliente(ev = {}) {
+  const candidatos = [
+    ev.whatsappCliente, ev.telefoneCliente, ev.clienteTelefone,
+    ev.whatsapp, ev.telefone, ev.celular, ev.fone, ev.telefone1,
+    ev?.infoCliente?.whatsapp, ev?.infoCliente?.telefone, ev?.infoCliente?.celular
+  ].map(v => (v == null ? "" : String(v)));
+
+  let dig = "";
+  for (const c of candidatos) {
+    const d = c.replace(/\D+/g, "");
+    if (d.length >= 8) { dig = d; break; }
+  }
+  if (!dig) return "";
+
+  if (!dig.startsWith("55") && (dig.length === 10 || dig.length === 11)) {
+    dig = "55" + dig;
+  }
+  dig = dig.replace(/^0+/, "");
+  return dig;
+}
+
+/* ===== Mensagem do GRANDE DIA ===== */
+function __obterModeloPorSlug(slug){
+  if(!slug) return '';
+  let lista = [];
+  try { lista = JSON.parse(localStorage.getItem('modelos_documentos')||'[]'); } catch {}
+  if (!Array.isArray(lista) || !lista.length){
+    try { lista = JSON.parse(localStorage.getItem('modelos')||'[]'); } catch {}
+  }
+  const hit = (lista||[]).find(m => String(m.slug) === String(slug));
+  const fromList = String(hit?.conteudo || hit?.html || hit?.texto || '').trim();
+  if (fromList) return fromList;
+
+  const raw = localStorage.getItem(`modelo_${slug}`);
+  if (!raw) return '';
+  try { const obj = JSON.parse(raw); return String(obj?.conteudo || obj?.html || obj || '').trim(); }
+  catch { return String(raw).trim(); }
+}
+function __htmlToText(html){
+  const tmp = document.createElement('div'); tmp.innerHTML = String(html||'');
+  const t = tmp.textContent || tmp.innerText || '';
+  return t.replace(/\u00A0/g, ' ').trim();
+}
+function __montarValores(ev){
+  const base = {
+    nomeCliente: ev.nomeCliente || ev.cliente || ev.infoCliente?.nome || '',
+    emailCliente: ev.emailCliente || ev.infoCliente?.email || '',
+    whatsappCliente: (ev.telefoneCliente || ev.whatsappCliente || ev.whatsapp || '').replace(/\D/g,''),
+    nomeEvento: ev.nomeEvento || ev.titulo || ev.nome || '',
+    dataEvento: ev.data || ev.dataEvento || ev.dataDoEvento || '',
+    horaEvento: ev.horarioEvento || '',
+    localEvento: ev.local || ev.localEvento || ev.endereco || ev.enderecoEvento || '',
+  };
+  const urlPortal = __getPortalLink(ev);
+  return {
+    ...base,
+    link_area_cliente: urlPortal,
+    linkPortal: urlPortal,
+    nome_cliente: base.nomeCliente,
+    email_cliente: base.emailCliente,
+    whatsapp_cliente: base.whatsappCliente,
+    nome_evento: base.nomeEvento,
+    data_evento: base.dataEvento,
+    hora_evento: base.horaEvento,
+    local_evento: base.localEvento,
+  };
+}
+function __substituirVars(tpl, valores){
+  return String(tpl).replace(/\{\{\s*([\w]+)\s*\}\}/g, (_, k) => (valores[k] ?? ''));
+}
+// Enviar pelo WhatsApp SOMENTE o link seguro do portal
+async function enviarWhatsLinkCliente(){
+  const ev = window.evento || {};
+  const fone = __resolveWhatsCliente(ev);
+  if(!fone){
+    alert('Não encontrei o WhatsApp do cliente neste evento. Confira se o telefone/WhatsApp está preenchido.');
+    return;
+  }
+
+  const linkAC = await __gerarPortalLinkSeguro(ev);
+  if (!linkAC) return;
+
+  const url = `https://wa.me/${fone}?text=${encodeURIComponent(linkAC)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+/* Botão Whats do topo (mensagem simples) */
+function abrirWhatsClienteTopo(){
+  const ev = window.evento || {};
+  const fone = __resolveWhatsCliente(ev);
+  if(!fone){ alert('Não encontrei WhatsApp do cliente.'); return; }
+  const url  = `https://wa.me/${fone}`;
+  window.open(url, '_blank', 'noopener');
+}
+document.addEventListener('DOMContentLoaded', ()=>{ document.getElementById('btnWhatsClienteTopo')?.addEventListener('click', abrirWhatsClienteTopo); });
+
+/* ====== Agendamento mensagem do GRANDE DIA (08:00 padrão) ====== */
+function __getAppConfig(){ try{ return JSON.parse(localStorage.getItem('app_config')||'{}'); }catch{ return {}; } }
+function __horaPadraoMensagens(){ const h = __getAppConfig().msgHoraPadrao || '08:00'; return toHora(h) || '08:00'; }
+function __dataEventoISO(ev){
+  const dia = ev.data || ev.dataEvento || ev.dataDoEvento || '';
+  return dia.includes('/') ? toISO(dia) : dia.slice(0,10);
+}
+function __msEnvioGrandeDia(ev){
+  const dataISO = __dataEventoISO(ev);
+  if(!dataISO) return 0;
+  const hhmm = __horaPadraoMensagens();
+  const d = new Date(`${dataISO}T${hhmm}:00`);
+  return isFinite(d) ? d.getTime() : 0;
+}
+function __marcarMsgDiaEnviada(ev){
+  const arr = JSON.parse(localStorage.getItem('eventos')||'[]');
+  const i = arr.findIndex(x=> String(x.id) === String(ev.id));
+  if(i>-1){
+    arr[i].msgDiaEnviada = true;
+    arr[i].msgDiaEnviadaEm = new Date().toISOString();
+    localStorage.setItem('eventos', JSON.stringify(arr));
+    window.evento = arr[i];
+    window.eventoSelecionado = arr[i];
+  }
+}
+// === AGENDA UNIFICADA — Checklist do evento (upsert) ===
+// Usa com: upsertChecklistTask(eventoId, { id, title, date, status })
+function upsertChecklistTask(eventoId, task){
+  try{
+    if (!window.__agendaBridge || !task) return;
+    const tid    = String(task.id || task.taskId || '').trim();
+    if (!tid || !eventoId) return;
+
+    const titulo = String(task.title || task.titulo || 'Tarefa do evento');
+    const prazo  = String(task.date  || task.prazoISO || '').slice(0,10);
+    const stRaw  = String(task.status || '').toLowerCase();
+    const st     = (stRaw === 'ok' || stRaw === 'done' || stRaw === 'concluida') ? 'done' : 'scheduled';
+
+    window.__agendaBridge.upsertUnifiedItem({
+      id: `evt:${eventoId}:task:${tid}`,
+      src: 'evento',
+      title: titulo,
+      date: prazo,
+      status: st,
+      entity: { type:'evento', id:String(eventoId) }
+    });
+  }catch(e){ console.warn('upsertChecklistTask falhou:', e); }
+}
+
+
+function enviarMensagemDoGrandeDia(ev){
+  // Apenas o texto do modelo (sem link automático)
+  const slug   = ev.msgDiaSlug || ev.mensagemDiaDoEvento?.slug || '';
+  const tplRaw = __obterModeloPorSlug(slug)
+              || 'Olá {{nome_cliente}}! Hoje é o grande dia! Qualquer dúvida estamos por aqui.';
+  const msg    = __htmlToText(__substituirVars(tplRaw, __montarValores(ev)));
+
+  const fone = __resolveWhatsCliente(ev);
+  if(!fone) return;
+
+  const url = `https://wa.me/${fone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank', 'noopener');
+  __marcarMsgDiaEnviada(ev);
+}
+function agendarMensagemDoGrandeDia(ev){
+  if(!ev) return;
+  if(ev.msgDiaEnviada === true) return; // já foi
+  const quando = __msEnvioGrandeDia(ev);
+  if(!quando) return;
+  const agora = Date.now();
+  const diaEvento = (__dataEventoISO(ev) || '').slice(0,10);
+  const hoje = new Date().toISOString().slice(0,10);
+
+  if(agora >= quando && diaEvento === hoje){
+    enviarMensagemDoGrandeDia(ev);
+    return;
+  }
+  if(agora < quando){
+    const delay = Math.max(0, quando - agora);
+    clearTimeout(window.__timerGrandeDia);
+    window.__timerGrandeDia = setTimeout(()=> enviarMensagemDoGrandeDia(ev), delay);
+  }
+}
+function carregarModelosGrandeDia(selectId, ev){
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+
+  let modelos = JSON.parse(localStorage.getItem('modelos_documentos') || 'null');
+  if (!Array.isArray(modelos)) modelos = JSON.parse(localStorage.getItem('modelos') || '[]');
+
+  const lista = (Array.isArray(modelos) ? modelos : []).filter(m => !m.tipo || /grande[_\s]?dia|whats|whatsapp|evento/i.test(String(m.tipo)));
+  sel.innerHTML = lista.length
+    ? lista.map(m => `<option value="${m.slug}">${m.nome || m.titulo || m.slug}</option>`).join('')
+    : `<option value="">— sem modelos —</option>`;
+
+  const atual = ev.msgDiaSlug || ev.mensagemDiaDoEvento?.slug || '';
+  if (atual) sel.value = atual;
+
+  sel.onchange = () => {
+    const slug = sel.value || '';
+    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+    const i = eventos.findIndex(x => String(x.id) === String(ev.id));
+    if (i > -1) {
+      eventos[i].msgDiaSlug = slug;
+      localStorage.setItem('eventos', JSON.stringify(eventos));
+      window.evento = eventos[i];
+      const chip = document.getElementById('chipMsgGrandeDiaAC');
+      if (chip) {
+        if (slug) { chip.textContent = "Mensagem do grande dia: configurada"; chip.classList.add("ok"); chip.classList.remove("warn"); }
+        else      { chip.textContent = "Mensagem do grande dia: não configurada"; chip.classList.add("warn"); chip.classList.remove("ok"); }
+      }
+    }
+  };
+}
+
+/* ===== Acréscimo de Convidados ===== */
+function _realToNumber(txt){
+  let s = String(txt||"").trim();
+  s = s.replace(/[^\d.,-]/g,"");
+  if (s.includes(".") && s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if (s.includes(",")) s = s.replace(",",".");
+  const n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+const __qp = new URLSearchParams(location.search);
+const __eventoId = __qp.get("id");
+
+function abrirModalAddConvidados(){
+  const m = document.getElementById('modalAddConvidados');
+  if (!m) return;
+  m.removeAttribute('hidden');
+  try { window.lucide?.createIcons?.(); } catch {}
+  (document.getElementById('addQtdConvidados') || document.getElementById('inpQtdAdd'))?.focus();
+}
+function fecharModalAddConvidados(){
+  const m = document.getElementById('modalAddConvidados');
+  if (!m) return;
+  m.setAttribute('hidden','');
+}
+function aplicarAcrescimoDeConvidados(eventoId, qtdMais, vlUnit){
+  const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+  const i = eventos.findIndex(e => String(e.id) === String(eventoId));
+  if (i === -1) return false;
+
+  const ev = eventos[i];
+
+  // 1) SOMA a quantidade de convidados no próprio objeto do evento
+  const atual = Number(ev.quantidadeConvidados || ev.qtdConvidados || 0);
+  const somar = Number(qtdMais || 0);
+  ev.quantidadeConvidados = atual + somar;
+  ev.qtdConvidados = ev.quantidadeConvidados; // espelho para campos antigos
+
+  // 2) histórico do acréscimo (opcional)
+  ev.acrescimosConvidados = Array.isArray(ev.acrescimosConvidados) ? ev.acrescimosConvidados : [];
+  ev.acrescimosConvidados.push({
+    id: 'ac_' + Date.now(),
+    data: new Date().toISOString(),
+    qtd: Number(qtdMais),
+    valorUnit: Number(vlUnit || 0),
+    total: Number(vlUnit || 0) * Number(qtdMais)
+  });
+
+  // 3) (opcional) cria um lançamento a receber referente ao acréscimo
+  ev.financeiro = ev.financeiro || {};
+  ev.financeiro.lancamentos = Array.isArray(ev.financeiro.lancamentos) ? ev.financeiro.lancamentos : [];
+  if (vlUnit && Number(vlUnit) > 0){
+    ev.financeiro.lancamentos.push({
+      id: 'lan_' + Date.now(),
+      tipo: 'receber',
+      relacionado: 'entrada',
+      descricao: `Acréscimo de ${qtdMais} convidado(s)`,
+      quantidade: Number(qtdMais),
+      valorUnit: Number(vlUnit),
+      valor: Number(vlUnit) * Number(qtdMais),
+      status: 'pendente',
+      criadoEm: new Date().toISOString()
+    });
+  }
+
+  // 4) Persiste e atualiza a referência global
+  eventos[i] = ev;
+  try { safeSaveEventos(eventos); } catch {}
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'eventos' })); } catch {}
+  window.evento = ev;
+  window.eventoSelecionado = ev;
+
+  return true;
+}
+
+function salvarAddConvidados(){
+  const qtd = parseInt(
+    (document.getElementById('addQtdConvidados')?.value || document.getElementById('inpQtdAdd')?.value || '0'),
+    10
+  );
+  const vlTxt = (document.getElementById('addValorPorPessoa')?.value || document.getElementById('inpVlPorPessoa')?.value || '0');
+  const vl = typeof parseMoney === 'function' ? parseMoney(vlTxt) : _realToNumber(vlTxt);
+
+  if (!qtd || qtd <= 0) { alert('Informe a quantidade de convidados.'); return; }
+
+  const ok = aplicarAcrescimoDeConvidados(__eventoId, qtd, vl);
+  if (ok){
+    // fecha modal
+    try { fecharModalAddConvidados(); } catch {}
+
+    // (re)carrega o evento atualizado no window.evento, por garantia
+    try {
+      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const ev = eventos.find(e => String(e.id) === String(__eventoId));
+      if (ev) {
+        window.evento = ev;
+        window.eventoSelecionado = ev;
+      }
+    } catch {}
+
+    // agora recalcula tudo com a nova quantidade
+    try { renderItensUnificado(); } catch {}
+    try { renderFinanceiroResumo(); } catch {}
+    try { atualizarResumo(); } catch {}
+
+    // atualiza o input visual de convidados, se existir
+    try {
+      const el = document.getElementById('eventoConvidados');
+      if (el && window.evento) el.value = window.evento.quantidadeConvidados || window.evento.qtdConvidados || 0;
+    } catch {}
+
+    alert("Convidados e financeiro atualizados com sucesso.");
+  } else {
+    alert('Não foi possível atualizar o evento.');
+  }
+}
+
+/* ====== Binds ====== */
+document.addEventListener("DOMContentLoaded", () => {
+  // Pega o id do evento atual
+  const id = (window.__EVT_ID_FIX || __getEventoIdFix());
+
+  // Carrega eventos e encontra o evento atual
+  let eventos = [];
+  try { eventos = JSON.parse(localStorage.getItem("eventos") || "[]"); } catch {}
+  let ev = eventos.find(e => String(e.id) === String(id)) || null;
+
+  // === INÍCIO PATCH 3: migração 1x para limpar fotos inline nos eventos ===
+  (function migrarFotosInlineParaMapa(){
+    try{
+      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      if (!Array.isArray(eventos) || !eventos.length) return;
+
+      let houveMudanca = false;
+      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+
+      eventos.forEach(ev => {
+        if (!ev || !ev.id) return;
+
+        // se tiver foto inline (data:image), migra para o mapa e remove do evento
+        const foto = ev.fotoCliente || ev.clienteFoto || ev.imagemCliente || "";
+        if (typeof foto === "string" && /^data:image\//i.test(foto)) {
+          const key = ev.fotoClienteKey || `foto_evento_${ev.id}`;
+          map[key] = foto;
+          ev.fotoClienteKey = key;
+          delete ev.fotoCliente;
+          delete ev.clienteFoto;
+          delete ev.imagemCliente;
+          houveMudanca = true;
+        }
+      });
+
+      if (houveMudanca) {
+        (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map)));
+        safeSaveEventos(eventos); // salva eventos já sem foto inline
+      }
+    }catch(e){}
+  })();
+  // === FIM PATCH 3 ===
+
+  // se ainda não achou, cai para o primeiro evento válido que existir
+  if (!ev && eventos.length) {
+    ev = eventos[0];
+    history.replaceState({}, '', location.pathname + '?id=' + encodeURIComponent(ev.id));
+    try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+  }
+  if (!ev) { alert("Evento não encontrado."); return; }
+  // --- PATCH: ouvir alterações no input #eventoConvidados e persistir + pingar
+(function setupAumentoConvidados(){
+  const input = document.getElementById('eventoConvidados');
+  if (!input) return;
+
+  input.addEventListener('change', () => {
+    try{
+      const novo = parseInt(input.value, 10) || 0;
+
+      // Recarrega LS, acha o evento atual e atualiza os campos
+      const id = (window.__EVT_ID_FIX || (typeof __getEventoIdFix === 'function' ? __getEventoIdFix() : ev?.id));
+      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const i = eventos.findIndex(e => String(e.id) === String(id));
+      if (i < 0) return;
+
+      const ev2 = eventos[i] || {};
+      ev2.quantidadeConvidados = novo;
+      ev2.qtdConvidados = novo; // compat
+      eventos[i] = ev2;
+
+           // Persiste local
+      try {
+        localStorage.setItem("eventos", JSON.stringify(eventos));
+      } catch (e) {
+        console.warn("[evento-detalhado] Falha ao salvar eventos no localStorage", e);
+      }
+
+      // Tenta salvar também na API (fonte da verdade)
+      try {
+        if (typeof callApi === "function" && typeof IS_REMOTE !== "undefined" && IS_REMOTE) {
+          callApi(`/eventos/${encodeURIComponent(String(id))}`, "PUT", ev2)
+            .catch(err => {
+              console.warn("[evento-detalhado] Falha ao salvar quantidade de convidados na API", err);
+            });
+        }
+      } catch (e) {
+        console.warn("[evento-detalhado] Erro inesperado ao chamar API para salvar convidados", e);
+      }
+
+      // Espelhos úteis (se você usa em outros pontos)
+      try { window.evento = ev2; window.eventoSelecionado = ev2; } catch {}
+
+      // 🔔 Ping para outras telas recalcularem (financeiro-evento, etc.)
+      try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+
+
+      alert('Convidados atualizados para ' + novo);
+    }catch(e){}
+  });
+})();
+
+
+  // sincroniza itens vindos da tela de itens
+  try { syncItensFromItensEvento(ev, eventos); } catch {}
+
+  // garante criadoEm
+  if (!ev.criadoEm) {
+    ev.criadoEm = new Date().toISOString().slice(0,10);
+    safeSaveEventos(eventos);
+  }
+
+  // Título + criadoEm
+  const nomeTitulo = ev.nomeEvento || ev.titulo || ev.nome || "—";
+  setText("tituloEvento", nomeTitulo);
+  setText("criadoEm", formatDateBR(ev.criadoEm));
+
+  // Foto do cliente
+  (async () => {
+    const url = await resolveFotoCliente(ev);
+    const img = document.getElementById("fotoCliente");
+    const ph  = document.getElementById("fotoClientePh");
+    if (img) img.onerror = () => { img.onerror = null; img.src = PLACEHOLDER_AVATAR; };
+    if (img && ph) {
+      if (url) { img.src = url; img.alt = ev.cliente || ev.nomeCliente || "Foto do cliente"; img.style.display = "block"; ph.style.display = "none"; }
+      else     { img.src = PLACEHOLDER_AVATAR; img.alt = "Foto do cliente"; img.style.display = "block"; ph.style.display = "none"; }
+    }
+    try { window.lucide?.createIcons?.(); } catch {}
+  })();
+
+  // >>> Normaliza estrutura do histórico (evita null/undefined)
+  if (!Array.isArray(ev.historico)) ev.historico = [];
+
+  // Guarda seleção atual (disponibiliza globalmente)
+  window.evento = ev;
+  window.eventoSelecionado = ev;
+  localStorage.setItem("eventoSelecionado", String(ev.id));
+  localStorage.setItem("eventoSelecionadoNome", ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`);
+
+  // >>> ADIÇÃO: expor contexto mínimo p/ checklist e salvar nome visível
+  try {
+    const nomeVisivel = ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`;
+    localStorage.setItem("eventoSelecionadoNome", nomeVisivel);
+    localStorage.setItem("evtCtx", JSON.stringify({
+      id: String(ev.id),
+      nome: nomeVisivel,
+      convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
+      dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
+    }));
+  } catch {}
+
+  // === Histórico: render na carga ===
+  try { renderizarHistorico(ev.historico); } catch {}
+});
+// === Evento Detalhado: sincroniza itens vindos do cadastro/itens-evento e renderiza ===
+document.addEventListener("DOMContentLoaded", () => {
+  try {
+    const id = new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || "";
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const i = eventos.findIndex(e => String(e.id) === String(id));
+    if (i > -1) {
+      // puxa itens que ficaram nas chaves-ponte e cola no próprio evento
+      if (typeof window.syncItensFromItensEvento === "function") {
+        window.syncItensFromItensEvento(eventos[i], eventos);
+      }
+      // atualiza globais
+      window.evento = eventos[i];
+      window.eventoSelecionado = eventos[i];
+    }
+  } catch {}
+
+  try { renderItensUnificado?.(); } catch {}
+  try { renderFinanceiroResumo?.(); } catch {}
+});
+
+try {
+  const hist = Array.isArray((window.evento || {}).historico)
+    ? (window.evento || {}).historico
+    : [];
+  renderizarHistorico(hist);
+} catch {}
+
+// --- MERGE DO BACKUP SE PRECISAR (evita sumir comissão após voltar à tela)
+(function mergeBackupIfNeeded(){
+  try {
+    const evId = __getEventoIdAtual();
+    if (!evId) return;
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    let ev = eventos.find(e => String(e.id) === String(evId)) || null;
+    const bakRaw =
+      localStorage.getItem("eventoBackup:" + evId) ||
+      sessionStorage.getItem("eventoBackup:" + evId);
+    if (!bakRaw) return;
+
+    const bak = JSON.parse(bakRaw);
+    const temComNaPrincipal = !!(ev?.financeiro?.comissao?.parcelas?.length);
+    const temComNoBackup    = !!(bak?.financeiro?.comissao?.parcelas?.length);
+
+    if (!temComNaPrincipal && temComNoBackup) {
+      ev = ev || { id: evId };
+      ev.financeiro = ev.financeiro || {};
+      ev.financeiro.comissao = bak.financeiro.comissao;
+      const idx = eventos.findIndex(x => String(x.id) === String(evId));
+      if (idx > -1) eventos[idx] = ev; else eventos.push(ev);
+      try { safeSaveEventos(eventos); } catch {}
+      window.evento = ev;
+      window.eventoSelecionado = ev;
+    }
+  } catch {}
+})();
+
+// === PATCH: preencher UI e binds usando window.evento (fora do escopo do DOMContentLoaded) ===
+(function preencherUIEventoAtual(){
+  // garante um evento atual em memória
+  const ev = (window.evento || __carregarEventoDoStorage(__getEventoIdAtual()) || {});
+
+  // Inputs principais
+  setVal("eventoNome",             toDisplay(pick(ev, ["nomeEvento","titulo","nome"])));
+  setVal("eventoTipo",             toDisplay(pick(ev, ["tipoEvento","tipo","tipo_de_evento","eventoTipo","tipoEventoNome","categoriaEvento","categoria","eventType","tipo_evento","tipoEventoSelecionado","tipoSelecionado","nomeTipo" ])));
+  setVal("eventoData",             toISO(pick(ev, ["data","dataEvento","dataDoEvento"])));
+  setVal("eventoLocal",            toDisplay(pick(ev, ["local","localEvento","enderecoEvento","endereco"])));
+  setVal("eventoConvidados",       String((ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0)));
+  setVal("eventoCerimoniaNoLocal", simNao(pick(ev, ["cerimoniaNoLocal","cerimonia","ceremoniaNoLocal"])));
+  setVal("eventoHorarioCerimonia", toHora(pick(ev, ["horarioCerimonia","horaCerimonia","horarioDaCerimonia","horario_da_cerimonia","horario_cerimonia","hora_da_cerimonia","hora_cerimonia","cerimoniaHora","ceremoniaHora","horarioInicio","horaInicio","inicioCerimonia","horario_inicio","horarioEvento","horaEvento","horaDoEvento"])));
+  setVal("eventoHorarioEvento",    toHora(pick(ev, ["horarioEvento","horaEvento","horaDoEvento","horario","hora","hora_inicio","horario_inicio"])));
+  setVal("eventoCerveja",          simNao(pick(ev, ["comCerveja","cerveja"])));
+
+  // Upload de foto do cliente
+  instalarUploadFotoCliente();
+
+  // Binds secundários
+  document.getElementById("btnDesarquivar")     ?.addEventListener("click", desarquivarEvento);
+  document.getElementById("btnAbrirArquivar")   ?.addEventListener("click", abrirModalArquivarEvento);
+  document.getElementById("btnSalvarAnotacao")  ?.addEventListener("click", (e)=>{ e.preventDefault(); salvarAnotacao(); });
+  document.getElementById("btnExcluirEvento")   ?.addEventListener("click", (e)=>{ e.preventDefault(); excluirEvento(); });
+
+  // Área do Cliente
+  try{
+   atualizarLinkAreaCliente();  // agora ativo
+
+
+    carregarModelosGrandeDia("selModeloGrandeDia", ev);
+    document.getElementById("btnCopiarLinkCliente")?.addEventListener("click", copiarLinkAreaCliente);
+    document.getElementById("btnWhatsLinkCliente")?.addEventListener("click", enviarWhatsLinkCliente);
+
+    const slug = ev.msgDiaSlug || (ev.mensagemDiaDoEvento && ev.mensagemDiaDoEvento.slug) || "";
+    const chip = document.getElementById("chipMsgGrandeDiaAC");
+    if (chip){
+      if (slug){
+        chip.textContent = "Mensagem do grande dia: configurada";
+        chip.classList.add("ok"); chip.classList.remove("warn");
+      } else {
+        chip.textContent = "Mensagem do grande dia: não configurada";
+        chip.classList.add("warn"); chip.classList.remove("ok");
+      }
+    }
+    document.getElementById("btnAbrirAreaCliente")?.setAttribute("href", __getPortalLink(ev));
+  } catch(e){ console.warn("Área do Cliente (chip/link):", e); }
+
+  // Renderizações principais (usam window.evento)
+  renderItensUnificado();
+  try { renderFinanceiroResumo(); } catch {}
+  atualizarResumo();
+
+  // Auto encerrar se passou (recalcula contexto local)
+  try {
+    const id      = __getEventoIdFix();
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const idx     = eventos.findIndex(e => String(e.id) === String(id));
+    autoEncerrarSePassou(window.evento || {}, eventos, idx);
+  } catch {}
+
+  // Ícones
+  try { window.lucide?.createIcons?.(); } catch {}
+})();
+
+// mantém este bloco (já existente) que re-renderiza histórico ao mudar "eventos"
+try {
+  const hist = Array.isArray((window.evento || {}).historico)
+    ? (window.evento || {}).historico
+    : [];
+  renderizarHistorico(hist);
+} catch {}
+
+/* ===== Upload Foto Cliente ===== */
+function instalarUploadFotoCliente(){
+  const btn = document.getElementById("btnTrocarFoto");
+  const inp = document.getElementById("inpFotoCliente");
+  if (!btn || !inp) return;
+  btn.addEventListener("click", () => inp.click());
+  inp.addEventListener("change", () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) {
+      alert("Selecione uma imagem.");
+      inp.value = "";
+      return;
+    }
+    const reader = new FileReader();
+   reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const idx = eventos.findIndex(ev => String(ev.id) === String(eventoId));
+      if (idx === -1) { alert("Evento não encontrado."); return; }
+
+      // usa o fluxo robusto: salva no mapa e referencia por chave
+      const ev = eventos[idx];
+      _persistirFotoNormalizada(ev, dataUrl);
+
+      // recarrega versão atualizada do evento (com fotoClienteKey) e reflete na UI
+      const atualizados = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const evAtual = atualizados.find(x => String(x.id) === String(ev.id)) || ev;
+      window.evento = evAtual;
+      window.eventoSelecionado = evAtual;
+
+      const img = document.getElementById("fotoCliente");
+      const ph  = document.getElementById("fotoClientePh");
+      if (img && ph) { img.src = dataUrl; img.style.display = "block"; ph.style.display = "none"; }
+      try { window.lucide?.createIcons?.(); } catch {}
+      alert("Foto atualizada com sucesso.");
+    };
+    reader.readAsDataURL(f);
+    inp.value = "";
+  });
+}
+
+/* >>> SINCRONIZA ITENS ESCOLHIDOS NA TELA DE ITENS (robusto) <<< */
+function syncItensFromItensEvento(ev, eventos) {
+  try {
+    const temp = JSON.parse(localStorage.getItem("eventoTemp") || "null");
+    const itensDoTemp =
+      (temp && String(temp.id) === String(ev.id) && Array.isArray(temp.itensSelecionados))
+        ? temp.itensSelecionados : null;
+
+    const itensSoltos = JSON.parse(localStorage.getItem("itensSelecionadosEvento") || "null");
+
+    const cardSel = JSON.parse(localStorage.getItem("cardapioSelecionado") || "null");
+    const addsSel = JSON.parse(localStorage.getItem("adicionaisSelecionadosEvento") || localStorage.getItem("adicionaisSelecionados") || "null");
+    const srvsSel = JSON.parse(localStorage.getItem("servicosSelecionadosEvento") || localStorage.getItem("servicosSelecionados") || "null");
+
+    // Agora separo categoriaPadrao de cobrancaPadrao
+    const normalizarItem = (it, categoriaPadrao = "", cobrancaPadrao = "fixo") => ({
+      id: it.id ?? it.idItem ?? it.codigo ?? it.slug ?? it.idCardapio ?? it.cardapioId ?? ("it_" + Math.random().toString(36).slice(2)),
+      nomeItem: it.nomeItem ?? it.nome ?? it.titulo ?? it.label ?? it.descricao ?? "Item",
+      valor: it.valor ?? it.preco ?? it.preço ?? it.total ?? 0,
+      tipoCobranca: it.tipoCobranca ?? it.cobranca ?? cobrancaPadrao,   // ← só cobrança aqui
+      desconto: it.desconto ?? it.descontoValor ?? "",
+      descontoPorcentagem: it.descontoPorcentagem ?? it.percentualDesconto ?? it.descontoPercentual ?? "",
+      descontoTipo: it.descontoTipo ?? "",
+      categoria: (it.categoria || it.tipo || "").toString().toLowerCase() || categoriaPadrao // ← só categoria aqui
+    });
+
+    // Monte cada grupo com a CATEGORIA correta
+    const doCardapio = cardSel ? [ normalizarItem(cardSel, "cardapio", "pessoa") ] : [];
+    const dosAdds    = Array.isArray(addsSel) ? addsSel.map(a => normalizarItem(a, "adicional", a.cobranca || "pessoa")) : [];
+    const dosSrvs    = Array.isArray(srvsSel) ? srvsSel.map(s => normalizarItem(s, "servico",   s.cobranca || "fixo"))   : [];
+
+    // Se não houver 'itensSelecionados' no temp/LS, junte os três grupos
+    const escolhidos =
+      (itensDoTemp && itensDoTemp.length) ? itensDoTemp :
+      (Array.isArray(itensSoltos) && itensSoltos.length ? itensSoltos : [...doCardapio, ...dosAdds, ...dosSrvs].filter(Boolean));
+
+    const qtdLS = localStorage.getItem("quantidadeConvidadosEvento");
+
+    if (escolhidos && escolhidos.length) {
+      ev.itensSelecionados = escolhidos;
+      if (qtdLS != null) ev.quantidadeConvidados = parseInt(qtdLS,10) || ev.quantidadeConvidados;
+
+      const i = eventos.findIndex(e => String(e.id) === String(ev.id));
+      if (i > -1) {
+        eventos[i] = ev;
+        safeSaveEventos(eventos);
+      }
+
+      if (temp) {
+        temp.itensSelecionados = escolhidos;
+        localStorage.setItem("eventoTemp", JSON.stringify(temp));
+      }
+
+      ["itensSelecionadosEvento","quantidadeConvidadosEvento","cardapioSelecionado","adicionaisSelecionadosEvento","adicionaisSelecionados","servicosSelecionadosEvento","servicosSelecionados"]
+        .forEach(k => { try{ localStorage.removeItem(k); }catch{} });
+    }
+  } catch (e) {
+    console.warn("syncItensFromItensEvento (robusto):", e);
+  }
+}
+
+/* ======== PATCH: persistência robusta ======== */
+(() => {
+  const id = localStorage.getItem('eventoSelecionado') || new URLSearchParams(location.search).get('id');
+  if (!id) return;
+
+  const getJSON = (k, def = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } };
+  const setEventos = (arr) => {
+    try {
+      localStorage.setItem('eventos', JSON.stringify(arr));
+    } catch (e) {
+      // Fallback: salva versão “leve” sem anexos/base64 para não explodir a cota
+      try {
+        const light = Array.isArray(arr)
+          ? arr.map(x => (typeof __stripHeavyFromEvent === "function" ? __stripHeavyFromEvent(x) : x))
+          : arr;
+        localStorage.setItem('eventos:light', JSON.stringify(light));
+        console.warn("Eventos salvos no modo compacto (evitou 'QuotaExceeded').");
+      } catch {
+        // Último recurso: sessionStorage
+        try {
+          const light = Array.isArray(arr)
+            ? arr.map(x => (typeof __stripHeavyFromEvent === "function" ? __stripHeavyFromEvent(x) : x))
+            : arr;
+          sessionStorage.setItem('eventos:light', JSON.stringify(light));
+        } catch {}
+      }
+    }
+  };
+
+  const mergeDeep = (base, patch) => {
+    if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return patch;
+    const out = { ...(base || {}) };
+    for (const k of Object.keys(patch)) out[k] = mergeDeep(base?.[k], patch[k]);
+    return out;
+  };
+
+  function persistPatch(patchOrEv = {}) {
+    let eventos = getJSON('eventos', []) || [];
+    const i = eventos.findIndex(e => String(e.id) === String(id));
+    const current = i > -1 ? eventos[i] : { id };
+    const next = mergeDeep(current, patchOrEv);
+    if (i > -1) eventos[i] = next; else eventos.push(next);
+    setEventos(eventos);
+    window.evento = next;
+    window.eventoSelecionado = next;
+  }
+
+  function mergeStagingIntoEvento() {
+    const eventos = getJSON('eventos', []) || [];
+    const i = eventos.findIndex(e => String(e.id) === String(id));
+    let ev = i > -1 ? eventos[i] : { id };
+
+    // itens/quantidade de telas auxiliares
+    try {
+      const temp = getJSON('eventoTemp', null);
+      const itensSoltos = getJSON('itensSelecionadosEvento', null);
+      const qtdLS = localStorage.getItem('quantidadeConvidadosEvento');
+      const escolhidos =
+        (temp && String(temp.id) === String(id) && Array.isArray(temp.itensSelecionados) && temp.itensSelecionados.length)
+          ? temp.itensSelecionados
+          : (Array.isArray(itensSoltos) && itensSoltos.length ? itensSoltos : null);
+      if (escolhidos) {
+        ev.itensSelecionados = escolhidos;
+        if (qtdLS != null) ev.quantidadeConvidados = parseInt(qtdLS, 10) || ev.quantidadeConvidados;
+        localStorage.removeItem('itensSelecionadosEvento');
+        localStorage.removeItem('quantidadeConvidadosEvento');
+      }
+    } catch {}
+
+    // cardápio escolhido → normaliza para ev.cardapioContratado
+    try {
+      const raw = localStorage.getItem('cardapioSelecionado');
+      let sel = null;
+      try { sel = JSON.parse(raw); } catch { sel = raw; }
+
+      const catalogo = getJSON('produtosBuffet', []) || getJSON('cardapiosBuffet', []) || [];
+      const hit = Array.isArray(catalogo)
+        ? catalogo.find(c =>
+            String(c.id) === String(sel?.id || sel) ||
+            String(c.nome || '').toLowerCase() === String(sel || '').toLowerCase()
+          )
+        : null;
+      const base = (sel && typeof sel === 'object') ? sel : hit;
+
+      if (base) {
+        ev.cardapioContratado = {
+          id: base.id,
+          nome: base.nome || base.titulo || 'Cardápio',
+          descricao: base.descricao || '',
+          imagens: Array.isArray(base.imagens) ? base.imagens : (base.imageUrl ? [{ src: base.imageUrl, tamanho: 'grande' }] : [])
+        };
+      }
+    } catch {}
+
+    persistPatch(ev);
+  }
+
+  // Autosave ao sair/ocultar
+  window.addEventListener('pagehide', () => persistPatch(window.evento || {}));
+  window.addEventListener('beforeunload', () => persistPatch(window.evento || {}));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) persistPatch(window.evento || {}); });
+
+  // Garante que o botão "Salvar" também grave no array 'eventos'
+  const __origSalvar = window.salvarAlteracoes;
+  if (typeof __origSalvar === 'function') {
+    window.salvarAlteracoes = function () { try { __origSalvar(); } finally { persistPatch(window.evento || {}); } };
+  }
+
+  // rodar ao carregar
+  mergeStagingIntoEvento();
+})();
+
+/* ========= FIX PACK: ID robusto + persistência com backup ========= */
+// 1) ID robusto
+function __getEventoIdFix() {
+  const qsId = new URLSearchParams(location.search).get('id') || '';
+  const lsId = localStorage.getItem('eventoSelecionado') || '';
+  let eventos = [];
+  try { eventos = JSON.parse(localStorage.getItem('eventos') || '[]'); } catch {}
+
+  // candidato inicial (query > LS)
+  let id = qsId || lsId || '';
+
+  const existe = eventos.some(e => String(e.id) === String(id));
+
+  // se o id atual NÃO existe, escolhe um válido e corrige a URL
+  if (!existe) {
+    const lsValido = eventos.find(e => String(e.id) === String(lsId));
+    const qsValido = eventos.find(e => String(e.id) === String(qsId));
+    const fallback = (lsValido && lsValido.id) || (qsValido && qsValido.id) || (eventos[0] && eventos[0].id) || '';
+
+    if (fallback) {
+      id = fallback;
+      history.replaceState({}, '', location.pathname + '?id=' + encodeURIComponent(id));
+    } else {
+      id = '';
+    }
+  }
+
+  if (id) { try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {} }
+  return id;
+}
+const __EVT_ID_FIX = __getEventoIdFix();
+
+// 2) Injeta ID nos cards se faltar (evita voltar sem dados)
+(function ensureIdOnCardLinks(){
+  const box = document.getElementById('cardsAcesso');
+  if (!box) return;
+  // >>> ADIÇÃO: se o card de checklist ainda apontar para checklist.html, troca para checklist-materiais.html
+  try {
+    const cl = box.querySelector('a.card-link[data-area="checklist"]');
+    if (cl) {
+      let href = cl.getAttribute('href') || '';
+      if (/checklist\.html\b/i.test(href)) {
+        href = href.replace(/checklist\.html\b/i, 'checklist-materiais.html');
+        cl.setAttribute('href', href);
+      }
+    }
+  } catch {}
+
+  box.querySelectorAll('a.card-link').forEach(a=>{
+    if (a.href.includes('EVENTOID')) {
+      a.href = a.href.replace('EVENTOID', encodeURIComponent(__EVT_ID_FIX));
+    }
+    a.addEventListener('click', (e)=>{
+      let href = a.getAttribute('href') || '';
+      if (!href) return;
+      if (!/[\?&]id=/.test(href)) {
+        href += (href.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(__EVT_ID_FIX);
+        a.setAttribute('href', href);
+      }
+    });
+  });
+})();
+
+// 3) Persistência forte (+ backups)
+function __getJSON(k, d){ try{ const s=localStorage.getItem(k); return s? JSON.parse(s): d; }catch{ return d; } }
+// Remove campos pesados (base64) de um evento
+function __stripHeavyFromEvent(ev = {}) {
+  const c = {...ev};
+
+  // foto grande
+  if (typeof c.fotoCliente === 'string' && /^data:image\//i.test(c.fotoCliente)) {
+    delete c.fotoCliente;
+  }
+
+  // imagens genéricas
+  if (Array.isArray(c.imagens)) {
+    c.imagens = c.imagens.map(img => {
+      const ii = {...img};
+      if (typeof ii.src === 'string' && /^data:image\//i.test(ii.src)) ii.src = '';
+      return ii;
+    });
+  }
+
+  // documentos: mantém metadados, remove base64
+  if (Array.isArray(c.documentos)) {
+    c.documentos = c.documentos.map(d => {
+      const dd = {...d};
+      if (typeof dd.url === 'string' && /^data:/.test(dd.url)) delete dd.url;
+      if (typeof dd.conteudo === 'string' && /^data:/.test(dd.conteudo)) delete dd.conteudo;
+      return dd;
+    });
+  }
+
+  return c;
+}
+function __lightenPayload(v) {
+  if (Array.isArray(v)) return v.map(x => (x && typeof x === 'object' && 'id' in x) ? __stripHeavyFromEvent(x) : x);
+  if (v && typeof v === 'object' && 'id' in v) return __stripHeavyFromEvent(v);
+  return v;
+}
+
+// Grava JSON com fallback para "backup leve"
+function __setJSON(k, v) {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+    return true;
+  } catch (e) {
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+      try {
+        const light = __lightenPayload(v);
+        localStorage.setItem(k + ':light', JSON.stringify(light));
+        if (!localStorage.getItem('__backupQuotaWarned')) {
+          localStorage.setItem('__backupQuotaWarned', '1');
+          console.warn('Armazenamento cheio: salvei backup leve (sem fotos/arquivos).');
+        }
+        return true;
+      } catch {
+        try {
+          sessionStorage.setItem(k + ':light', JSON.stringify(__lightenPayload(v)));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+    return false;
+  }
+}
+// PARTE 4/4 (CORRIGIDA)
+function hardPersistEvento(ev){
+  if (!ev || !ev.id) return;
+
+  // 1) fonte da verdade
+  let arr = __getJSON('eventos', []);
+  const i = arr.findIndex(x=> String(x.id) === String(ev.id));
+  if (i>-1) arr[i] = ev; else arr.push(ev);
+  __setJSON('eventos', arr);
+
+  // 2) backups LEVES (sem base64)
+  const evLight = __stripHeavyFromEvent(ev);
+  __setJSON(`eventoBackup:${ev.id}`, evLight);
+  __setJSON('eventosBackup', arr.map(__stripHeavyFromEvent));
+
+  // 3) manter seleção atual (não persistir em localStorage — migrando para querystring)
+  try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+
+  // 4) >>> NOVO: manter nome visível, contexto e índice de nomes p/ outras telas (ex.: checklist)
+  try {
+    // nome “bonito” para o evento atual
+    const nomeVisivel = ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`;
+    localStorage.setItem("eventoSelecionadoNome", nomeVisivel);
+
+    // contexto mínimo para telas filhas (id/nome/convidados/data)
+    localStorage.setItem("evtCtx", JSON.stringify({
+      id: String(ev.id),
+      nome: nomeVisivel,
+      convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
+      dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
+    }));
+
+    // índice leve de nomes para popular selects por NOME
+    if (typeof __buildNomeIndex === "function") {
+      __buildNomeIndex(arr);
+    } else {
+      // fallback caso o helper ainda não tenha sido colado
+      const idx = (Array.isArray(arr) ? arr : []).map(e => ({
+        id: String(e.id ?? ""),
+        nome: e.nomeEvento || e.titulo || e.nome || `Evento ${e.id}`,
+        convidados: Number(e.quantidadeConvidados ?? e.qtdConvidados ?? 0) || 0,
+        dataISO: String(e.data || e.dataEvento || e.dataDoEvento || "").slice(0,10)
+      })).filter(x => x.id);
+      localStorage.setItem("eventos:nomeIndex", JSON.stringify(idx));
+    }
+  } catch {}
+
+  // 5) refletir globals (útil para handlers subsequentes)
+  try { window.evento = ev; window.eventoSelecionado = ev; } catch {}
+}
+
+window.addEventListener('pagehide',      ()=> hardPersistEvento(window.evento));
+window.addEventListener('beforeunload',  ()=> hardPersistEvento(window.evento));
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden) hardPersistEvento(window.evento); });
+
+// Patcha o botão Salvar para persistir SEMPRE no vetor + backup
+(function patchSalvar(){
+  const orig = window.salvarAlteracoes;
+  if (typeof orig === 'function') {
+    window.salvarAlteracoes = function(){
+      try { orig(); } finally { hardPersistEvento(window.evento); }
+    };
+  }
+})();
+
+// 4) Restaura se alguém zerou o vetor 'eventos'
+(function restoreIfMissing(){
+  const id = (typeof __EVT_ID_FIX !== "undefined" && __EVT_ID_FIX) ? __EVT_ID_FIX : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado'));
+  if (!id) return;
+  let arr = __getJSON('eventos', []);
+  let ev  = arr.find(e=> String(e.id) === String(id));
+  if (!ev) {
+    const bak = __getJSON(`eventoBackup:${id}`, null) || null;
+    if (bak) {
+      if (!Array.isArray(arr)) arr = [];
+      const i = arr.findIndex(e=> String(e.id) === String(id));
+      if (i>-1) arr[i] = bak; else arr.push(bak);
+      __setJSON('eventos', arr);
+      window.evento = bak;
+      window.eventoSelecionado = bak;
+      try{ console.warn('Evento restaurado a partir do backup local.'); }catch{}
+    }
+  }
+})();
+
+// ====== CONTROLE ÚNICO DE EDIÇÃO NO TOPO ======
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btnIrItens');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const id = new URLSearchParams(location.search).get('id')
+              || localStorage.getItem('eventoSelecionado') || '';
+      try { salvarEventoTempSlim?.(window.evento); } catch {}
+      if (id) location.href = `modelos.html?id=${encodeURIComponent(id)}#itens`;
+      else    location.href = `modelos.html#itens`;
+    });
+  }
+
+  const btnEditar   = document.getElementById('btnEditarHero');
+  const btnSalvar   = document.getElementById('btnSalvarHero');
+  const btnCancelar = document.getElementById('btnCancelarHero');
+
+  if (!btnEditar || !btnSalvar || !btnCancelar) return;
+
+  const $inputs = () => document.querySelectorAll('.input-editar');
+
+  function setEditMode(on){
+    // NodeList.forEach nem sempre existe em browsers antigos → Array.from
+    Array.from($inputs()).forEach(inp => {
+      if (inp && inp.dataset && inp.dataset.lock !== "true") {
+        inp.disabled = !on;
+      }
+    });
+    document.body.classList.toggle('em-edicao', !!on);
+    try { window.lucide?.createIcons?.(); } catch {}
+  }
+
+  setEditMode(false);
+
+  btnEditar.addEventListener('click', () => setEditMode(true));
+
+  btnCancelar.addEventListener('click', () => {
+    // helpers locais apenas para este handler
+    const setVal  = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+    const toISO   = s => { const m=String(s||"").match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m?`${m[3]}-${m[2]}-${m[1]}`:s||""; };
+    const toHora  = v => { v=String(v||""); const m=v.match(/(\d{1,2})\D?(\d{2})/); return m?`${m[1].padStart(2,"0")}:${m[2].padStart(2,"0")}`:v; };
+    const simNao  = v => { const s=String(v||"").toLowerCase(); if(["sim","true","1","s"].includes(s))return"Sim"; if(["nao","não","false","0","n"].includes(s))return"Não"; return ""; };
+
+    // pick/toDisplay locais para evitar ReferenceError se ainda não estiverem definidos globalmente
+    const pick = (obj, keys) => {
+      if (!obj) return "";
+      for (const k of keys) {
+        const v = obj[k];
+        if (v != null && String(v).trim() !== "") return v;
+      }
+      return "";
+    };
+    const toDisplay = (v) => {
+      if (v == null) return "";
+      if (typeof v === "object") {
+        const e = v;
+        if (e.rua || e.logradouro || e.cidade || e.cep || e.uf || e.estado) {
+          const ruaNum = [e.rua || e.logradouro, e.numero].filter(Boolean).join(", ");
+          const bairro = e.bairro ? ` - ${e.bairro}` : "";
+          const cidUf  = [e.cidade || e.municipio, e.uf || e.estado].filter(Boolean).join("/");
+          const cep    = e.cep ? ` - CEP ${e.cep}` : "";
+          return [ruaNum, bairro, cidUf].filter(Boolean).join(" ") + cep;
+        }
+        return (
+          e.nome ?? e.label ?? e.text ?? e.titulo ?? e.valor ?? e.descricao ??
+          e.value ?? e.tipo ?? e.nomeTipo ?? e.horario ?? e.hora ?? ""
+        );
+      }
+      return String(v);
+    };
+
+    // recupera o evento de forma robusta
+    let ev = {};
+    try {
+      const getId = (typeof __getEventoIdAtual === "function")
+        ? __getEventoIdAtual()
+        : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || "");
+      ev = window.evento || (typeof __carregarEventoDoStorage === "function" ? __carregarEventoDoStorage(getId) : {}) || {};
+    } catch {}
+
+    // restaura os valores no formulário
+    setVal("eventoNome",             toDisplay(pick(ev, ["nomeEvento","titulo","nome"])));
+    setVal("eventoTipo",             toDisplay(pick(ev, ["tipoEvento","tipo","tipo_de_evento","eventoTipo","tipoEventoNome","categoriaEvento","categoria","eventType","tipo_evento","tipoEventoSelecionado","tipoSelecionado","nomeTipo"])));
+    setVal("eventoData",             toISO(pick(ev, ["data","dataEvento","dataDoEvento"])));
+    setVal("eventoLocal",            toDisplay(pick(ev, ["local","localEvento","enderecoEvento","endereco"])));
+    setVal("eventoConvidados",       String((ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0)));
+    setVal("eventoCerimoniaNoLocal", simNao(pick(ev, ["cerimoniaNoLocal","cerimonia","ceremoniaNoLocal"])));
+    setVal("eventoHorarioCerimonia", toHora(pick(ev, ["horarioCerimonia","horaCerimonia","horarioDaCerimonia","horario_da_cerimonia","horario_cerimonia","hora_da_cerimonia","hora_cerimonia","cerimoniaHora","ceremoniaHora","horarioInicio","horaInicio","inicioCerimonia","horario_inicio","horarioEvento","horaEvento","horaDoEvento"])));
+    setVal("eventoHorarioEvento",    toHora(pick(ev, ["horarioEvento","horaEvento","horaDoEvento","horario","hora","hora_inicio","horario_inicio"])));
+    setVal("eventoCerveja",          simNao(pick(ev, ["comCerveja","cerveja"])));
+
+    setEditMode(false);
+  });
+
+  btnSalvar.addEventListener('click', () => {
+    try {
+      if (typeof window.salvarAlteracoes === 'function') window.salvarAlteracoes();
+    } finally {
+      setEditMode(false);
+    }
+  });
+});
+
+// Link seguro para a Área do Cliente (com token)
+function gerarLinkCliente(eventId){
+  const eventos = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{ return []; } })();
+  const i = eventos.findIndex(e => String(e.id)===String(eventId));
+  if (i < 0) return null;
+
+  eventos[i].acesso = eventos[i].acesso || {};
+  if (!eventos[i].acesso.token) {
+    try {
+      const rnd = (len=24) => Array.from(crypto.getRandomValues(new Uint8Array(len)))
+        .map(b => b.toString(16).padStart(2,'0')).join('');
+      eventos[i].acesso.token = rnd();
+    } catch {
+      // Fallback sem crypto (ambientes antigos)
+      eventos[i].acesso.token = 't_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+    }
+    try { localStorage.setItem('eventos', JSON.stringify(eventos)); } catch {}
+  }
+
+  // Usa o diretório atual (compatível com apps hospedadas em subpastas)
+  const base = location.origin || (location.protocol + '//' + location.host);
+  const path = location.pathname.replace(/\/[^/]*$/, '/');
+  return `${base}${path}area-cliente.html?id=${encodeURIComponent(eventId)}&t=${encodeURIComponent(eventos[i].acesso.token)}`;
+}
+
+// === Chip do checklist + alertas discretos nos cards (Contratos, Financeiro, Checklist) ===
+(function () {
+  // Helpers
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const qs       = () => new URLSearchParams(location.search);
+  const getId    = () => qs().get("id") || localStorage.getItem("eventoSelecionado") || "";
+  const getArr   = () => { try { return JSON.parse(localStorage.getItem("eventos") || "[]"); } catch { return []; } };
+  const getEv    = () => (getArr().find(e => String(e.id) === String(getId())) || {});
+
+  // --- CHIP: "Checklist: ok / N atrasado(s)"
+  function atualizarChipChecklist() {
+    try {
+      const ev   = getEv();
+      const n    = parseInt(ev.__checklistAtrasadosTotal || 0, 10) || 0;
+      const chip = document.getElementById("chipChecklistResumo");
+      if (chip) chip.textContent = n ? `Checklist: ${n} atrasado(s)` : "Checklist: ok";
+    } catch {}
+  }
+
+  // --- Regras de alerta (cards)
+  function pendChecklist(ev) {
+    const n = parseInt(ev.__checklistAtrasadosTotal || 0, 10) || 0;
+    if (n > 0) return true;
+
+    // Fallback: calcula no ato
+    try {
+      const listasObj = ev.checklistsPorTipo || {};
+      const vals = Object.values(listasObj || {});
+      const listas = (vals.flat ? vals.flat() : [].concat(...vals));
+      return (listas || []).some(it => it && it.status !== "ok" && it.prazoISO && it.prazoISO < todayISO());
+    } catch { return false; }
+  }
+
+  function pendFinanceiro(ev) {
+    const caminhos = [ev?.financeiro?.parcelas, ev?.parcelas, ev?.financeiro_evento?.parcelas].filter(Array.isArray);
+    const todas = (caminhos.flat ? caminhos.flat() : [].concat(...caminhos));
+    if (!todas.length) return false;
+
+    return todas.some(p => {
+      const pago = Boolean(p.paga || p.pago || p.status === "pago" || p.status === "quitada");
+      const venc = String(p.vencimentoISO || p.vencimento || p.dataVencimento || "").slice(0, 10);
+      const atrasada = venc && venc < todayISO();
+      return !pago && atrasada;
+    });
+  }
+
+  function pendContratos(ev) {
+    if (ev?.contrato?.status && String(ev.contrato.status).toLowerCase() !== "assinado") return true;
+    const a = ev?.contrato?.assinaturas || ev?.assinaturas;
+    if (a && (a.clienteAssinou === false || a.empresaAssinou === false)) return true;
+    if (a && (!a.clienteAssinou || !a.empresaAssinou)) return true;
+    if (Array.isArray(ev?.documentosObrigatorios)) {
+      if (ev.documentosObrigatorios.some(d => !d?.ok && !d?.assinado)) return true;
+    }
+    return false;
+  }
+
+  function setCardState(area, hasAlert) {
+    const card = document.querySelector(`.cards-acesso .card-link[data-area="${area}"]`);
+    if (!card) return;
+    card.classList.toggle("alert", !!hasAlert);
+  }
+
+  function atualizarCards() {
+    try {
+      const ev = getEv();
+      setCardState("checklist",  pendChecklist(ev));
+      setCardState("financeiro", pendFinanceiro(ev));
+      setCardState("contratos",  pendContratos(ev));
+    } catch {}
+  }
+
+  // --- Re-render do histórico quando "eventos" mudar (outra aba/tela)
+  function atualizarHistoricoSeMudar(e) {
+    if (e && e.key && e.key !== "eventos") return;
+    try {
+      const evId  = (typeof __getEventoIdAtual === "function" ? __getEventoIdAtual() : getId());
+      const atual = (typeof __carregarEventoDoStorage === "function" ? __carregarEventoDoStorage(evId) : getEv());
+      const hist  = Array.isArray(atual?.historico) ? atual.historico : [];
+      if (typeof renderizarHistorico === "function") renderizarHistorico(hist);
+    } catch {}
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    atualizarChipChecklist();
+    atualizarCards();
+  });
+
+  window.addEventListener("storage", (e) => {
+    if (["eventos", "agenda"].includes(e.key)) {
+      atualizarChipChecklist();
+      atualizarCards();
+    }
+    if (e.key === "eventos") atualizarHistoricoSeMudar(e);
+  });
+
+  window.__atualizarCardsAcesso = atualizarCards;
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.querySelector('[data-abrir-itens]');
+  if (!btn) return;
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const eid =
+      new URLSearchParams(location.search).get('id') ||
+      localStorage.getItem('eventoSelecionado') || '';
+
+    try { salvarEventoTempSlim?.(window.evento || {}); } catch {}
+
+    window.location.href = `itens-evento.html?id=${encodeURIComponent(eid)}`;
+  });
+});
+
+// ===== Render da área: Itens do Evento =====
+function renderItensDoEvento(){
+  const qs  = new URLSearchParams(location.search);
+  const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+  if (!eid) return;
+
+  // carregar evento atual
+  const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+  const idx = eventos.findIndex(e => String(e.id) === String(eid));
+  if (idx === -1) return;
+  const ev = eventos[idx] || {};
+
+  // garantir merge dos itens salvos fora
+  mergeItensNoEvento(ev, eid);
+
+  const convidados = parseInt(ev.quantidadeConvidados || ev.qtdConvidados || 0, 10) || 0;
+  const itens = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados : [];
+
+  // elemento host
+  const host = document.getElementById('itensEvento');
+  if (!host) return;
+
+  // estado vazio
+  if (!itens.length){
+    host.innerHTML = `
+      <div class="lista-itens-simples">
+        <div class="li-header">
+          <div class="li-hcell"><i data-lucide="list"></i> Tipo</div>
+          <div class="li-hcell"><i data-lucide="tag"></i> Nome</div>
+        </div>
+        <div class="li-empty"><i data-lucide="info"></i> Nenhum item selecionado ainda.</div>
+      </div>`;
+    // zera totais
+    document.getElementById('totBruto')   ?.replaceChildren(document.createTextNode(_fmtBR(0)));
+    document.getElementById('totDesc')    ?.replaceChildren(document.createTextNode(_fmtBR(0)));
+    document.getElementById('totLiquido') ?.replaceChildren(document.createTextNode(_fmtBR(0)));
+    document.getElementById('totPorPessoa')?.replaceChildren(document.createTextNode(_fmtBR(0)));
+    try{ window.lucide?.createIcons?.(); }catch{}
+    return;
+  }
+
+  // monta linhas + calcula valores
+  let totalBruto = 0, totalDesc = 0, totalLiq = 0;
+
+  const linhasHTML = itens.map(it => {
+    const tipo = _catLabel(_catDoItem(it));
+    const nome = nomeItemDisplay(it);
+
+    // valor base conforme tipo de cobrança
+    const valor = parseMoney(it.valor);
+    const tipoCob = String(it.tipoCobranca || it.cobranca || 'fixo').toLowerCase();
+    const base = tipoCob.includes('pessoa') ? valor * (convidados || 0) : valor;
+
+    // desconto pode vir em R$ ou %
+    let desconto = 0;
+    const dRaw = (it.desconto ?? it.descontoValor ?? it.valorDesconto ?? '').toString().trim();
+    const pRaw = it.descontoPorcentagem ?? it.percentualDesconto ?? it.descontoPercentual ?? null;
+
+    if (pRaw != null && pRaw !== ''){
+      const p = parseFloat(String(pRaw).toString().replace(',', '.'));
+      if (isFinite(p)) desconto = base * (p/100);
+    }else if (/%\s*$/.test(dRaw)){
+      const p = parseFloat(dRaw.replace('%','').replace(',', '.'));
+      if (isFinite(p)) desconto = base * (p/100);
+    }else if (dRaw){
+      let v = parseMoney(dRaw);
+      // desconto por pessoa?
+      if (/pesso(a|as)/i.test(String(it.descontoTipo || '')) || it.descontoPorPessoa === true){
+        v *= (convidados || 0);
+      }
+      desconto = v;
+    }
+
+    desconto = Math.max(0, Math.min(base, desconto));
+    const liq = Math.max(0, base - desconto);
+
+    totalBruto += base;
+    totalDesc  += desconto;
+    totalLiq   += liq;
+
+    return `
+      <div class="li-row">
+        <div class="li-tipo">${tipo}</div>
+        <div class="li-nome">${nome}</div>
+      </div>
+    `;
+  }).join('');
+
+  // injeta lista
+  host.innerHTML = `
+    <div class="lista-itens-simples">
+      <div class="li-header">
+        <div class="li-hcell"><i data-lucide="list"></i> Tipo</div>
+        <div class="li-hcell"><i data-lucide="tag"></i> Nome</div>
+      </div>
+      ${linhasHTML}
+    </div>
+  `;
+
+  // atualiza cartões de totais
+  const porPessoa = (convidados > 0) ? (totalLiq / convidados) : 0;
+  document.getElementById('totBruto')    ?.replaceChildren(document.createTextNode(_fmtBR(totalBruto)));
+  document.getElementById('totDesc')     ?.replaceChildren(document.createTextNode(_fmtBR(totalDesc)));
+  document.getElementById('totLiquido')  ?.replaceChildren(document.createTextNode(_fmtBR(totalLiq)));
+  document.getElementById('totPorPessoa')?.replaceChildren(document.createTextNode(_fmtBR(porPessoa)));
+
+  // opcional: persiste valor do contrato no evento
+  try{
+    ev.financeiro = ev.financeiro || {};
+    ev.financeiro.valorContrato = Number(totalLiq || 0);
+    eventos[idx] = ev;
+    localStorage.setItem('eventos', JSON.stringify(eventos));
+  }catch{}
+
+  try{ window.lucide?.createIcons?.(); }catch{}
+}
+// === INÍCIO PATCH: auto-bind do campo #eventoConvidados ===
+function __carregarEventoDoStorage(evId) {
+  try {
+    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    return eventos.find(e => String(e.id) === String(evId)) || null;
+  } catch { return null; }
+}
+function __syncInputConvidadosComStorage(evId) {
+  const el = document.getElementById("eventoConvidados");
+  if (!el) return;
+  const ev = __carregarEventoDoStorage(evId);
+  const qtd = ev ? (ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) : 0;
+  el.value = String(qtd);
+  if (ev) { window.evento = ev; window.eventoSelecionado = ev; }
+}
+
+function __getEventoIdAtual(){
+  return (typeof window.__getEventoIdFix === 'function' && window.__getEventoIdFix())
+      || new URLSearchParams(location.search).get('id')
+      || localStorage.getItem('eventoSelecionado')
+      || '';
+}
+
+function __bindConvidadosListeners() {
+  const id = __getEventoIdAtual();
+  if (!id) return;
+
+  __syncInputConvidadosComStorage(id);
+
+  const campo = document.getElementById("eventoConvidados");
+  if (!campo) return;
+
+  if (campo.dataset.bound === "1") return; // evita duplo-bind
+  campo.dataset.bound = "1";
+
+  const handler = () => __persistQtdConvidadosDebounced(id, campo.value);
+  campo.addEventListener("input",  handler);
+  campo.addEventListener("change", handler);
+  campo.addEventListener("blur",   handler);
+
+  // failsafe: ao sair ou ocultar a aba, salva último valor
+  const _failsafe = () => __persistCampoEvento(id, 'quantidadeConvidados', campo.value);
+  window.addEventListener("beforeunload", _failsafe);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") _failsafe();
+  });
+}
+
+// inicializa assim que o DOM estiver pronto
+(function __initConvidadosAutoBind(){
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", __bindConvidadosListeners);
+  } else {
+    __bindConvidadosListeners();
+  }
+})();
+// === FIM PATCH ===
+
+// ===== Navegação do botão "Adicionar/Editar Itens" =====
+document.addEventListener('DOMContentLoaded', () => {
+  // render inicial
+  try{ renderItensDoEvento(); }catch(e){ console.warn(e); }
+
+  // botão abre a tela de itens com o mesmo id
+  const btn = document.getElementById('btnIrItens');
+  if (btn){
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const eid = new URLSearchParams(location.search).get('id')
+               || localStorage.getItem('eventoSelecionado') || '';
+      const url = `itens-evento.html?id=${encodeURIComponent(eid)}`;
+      window.location.href = url;
+    });
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  try { renderItensUnificado?.(); } catch {}
+});
+// === Navegação dos cards: Cliente e Pós-Evento (hotfix seguro) ===
+(function () {
+  function getEventoId() {
+    return new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+  }
+
+  // CLIENTE
+  const cardCliente = document.querySelector('.cards-acesso .card-link[onclick*="alternarCliente"]');
+  if (cardCliente) {
+    // reforça o clique via addEventListener (sem depender só do onclick inline)
+    cardCliente.addEventListener('click', function (e) {
+      e.preventDefault();
+      try {
+        if (typeof window.alternarCliente === 'function') {
+          window.alternarCliente();
+        } else {
+          // fallback: abre cliente por ID do evento
+          const eid = getEventoId();
+          if (eid) location.href = `cliente-detalhado.html?id=${encodeURIComponent(eid)}`;
+          else alert('Evento não carregado.');
+        }
+      } catch {
+        const eid = getEventoId();
+        if (eid) location.href = `cliente-detalhado.html?id=${encodeURIComponent(eid)}`;
+        else alert('Evento não carregado.');
+      }
+    });
+  }
+
+  // PÓS-EVENTO
+  const cardPos = document.getElementById('linkPosEvento');
+  if (cardPos) {
+    cardPos.addEventListener('click', function (e) {
+      e.preventDefault();
+      const eid = getEventoId();
+      if (!eid) { alert('Evento não carregado.'); return; }
+      // Se sua tela reconhecer outro parâmetro que indique "pós-evento", ajuste aqui.
+      location.href = `checklist-execucao.html?id=${encodeURIComponent(eid)}#pos`;
+    });
+  }
+})();
+/* ===== Abertura do CLIENTE e do PÓS-EVENTO (binds dos cards) ===== */
+(function initCardsAcessos() {
+  // Resolve o ID do evento atual
+  const resolveEvtId = () =>
+    new URLSearchParams(location.search).get("id") ||
+    localStorage.getItem("eventoSelecionado") || "";
+
+  // ------- CLIENTE -------
+  // Implementa/expõe alternarCliente no escopo global (window)
+  window.alternarCliente = function () {
+    try {
+      const ev =
+        window.eventoSelecionado || window.evento || {} ;
+
+      // tenta carregar listas possíveis de clientes
+      const getArr = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : []; } catch { return []; } };
+      const bases = [
+        "clientes","listaClientes","clientes_cad","clientesIndex","clientesList"
+      ];
+      const todos = bases.map(getArr).flat().filter(Boolean);
+
+      // normalizadores
+      const norm = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+      const dig  = s => String(s||"").replace(/\D+/g,"");
+
+      // 1) por id
+      const idCli = ev.clienteId || ev.idCliente || ev?.cliente?.id || ev?.infoCliente?.id;
+      let hit = idCli ? todos.find(c => String(c.id) === String(idCli)) : null;
+
+      // 2) por e-mail/telefone
+      if (!hit) {
+        const email = (ev.emailCliente || ev?.infoCliente?.email || "").toLowerCase().trim();
+        const tel   = dig(ev.whatsappCliente || ev.telefoneCliente || ev.whatsapp || ev.telefone || ev.celular || ev?.infoCliente?.whatsapp || ev?.infoCliente?.telefone);
+        if (email) hit = todos.find(c => String(c.email||"").toLowerCase().trim() === email);
+        if (!hit && tel) hit = todos.find(c => dig(c.telefone || c.whatsapp || c.celular || c.fone) === tel);
+      }
+
+      // 3) por nome
+      if (!hit) {
+        const nomeEv = norm(ev.nomeCliente || ev?.infoCliente?.nome);
+        if (nomeEv) hit = todos.find(c => norm(c.nome) === nomeEv);
+      }
+
+      if (hit && hit.id != null) {
+        window.location.href = `cliente-detalhado.html?id=${encodeURIComponent(hit.id)}`;
+      } else {
+        // fallback: abre a lista de clientes já filtrada
+        const filtro = encodeURIComponent(ev.nomeCliente || ev?.infoCliente?.nome || ev.emailCliente || "");
+        alert("Cliente não encontrado automaticamente. Vou abrir a lista já filtrada para você localizar.");
+        window.location.href = `clientes.html?q=${filtro}`;
+      }
+    } catch (e) {
+      console.warn("alternarCliente() falhou:", e);
+      alert("Não foi possível abrir o cliente agora.");
+    }
+  };
+
+  // substitui qualquer onclick inline por um listener “seguro”
+  document.addEventListener("click", (e) => {
+    const aCliente = e.target.closest('.cards-acesso .card-link[data-area="cliente"]');
+    if (aCliente) {
+      e.preventDefault();
+      window.alternarCliente();
+      return;
+    }
+    const aPos = e.target.closest('.cards-acesso .card-link[data-area="pos_evento"], .cards-acesso .card-link[data-area="posEvento"]');
+    if (aPos) {
+      e.preventDefault();
+      const id = resolveEvtId();
+      // aponta para a página de PÓS-EVENTO (gerada a partir da execução)
+      window.location.href = `pos-evento.html?id=${encodeURIComponent(id)}`;
+    }
+  });
+
+  // também corrige hrefs com placeholder EVENTOID (se existirem)
+  const currId = resolveEvtId();
+  document.querySelectorAll('.cards-acesso .card-link[href*="EVENTOID"]').forEach(a=>{
+    a.href = a.href.replace("EVENTOID", encodeURIComponent(currId));
+  });
+})();
+// === Abrir Itens a partir do EVENTO DETALHADO e marcar retorno ===
+(function wireAbrirItensFromDetalhado(){
+  const btn = document.getElementById("btnIrItens");
+  if (!btn) return;
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    const id =
+      (window.evento && window.evento.id) ||
+      new URLSearchParams(location.search).get("id") ||
+      localStorage.getItem("eventoSelecionado") || "";
+
+    try { localStorage.setItem("itensEvento:returnTo", "detalhado"); } catch {}
+    const url = `itens-evento.html?id=${encodeURIComponent(String(id || ""))}&from=detalhado`;
+    window.location.href = url;
+  });
+})();
+
+// === Abrir Itens a partir do EVENTO DETALHADO e garantir o retorno correto ===
+(function () {
+  function getIdAtual() {
+    try {
+      return String(
+        (window.evento && window.evento.id) ||
+        new URLSearchParams(location.search).get("id") ||
+        localStorage.getItem("eventoSelecionado") ||
+        ""
+      );
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function onClick(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
+
+    const id = getIdAtual();
+    try { localStorage.setItem("itensEvento:returnTo", "detalhado"); } catch (e) {}
+
+    // Use 'origem=detalhado' para a tela de itens saber para onde voltar
+    const url = "itens-evento.html?id=" + encodeURIComponent(id) + "&origem=detalhado";
+    window.location.href = url;
+  }
+
+  function wire() {
+    const btn = document.getElementById("btnIrItens");
+    if (!btn) return;
+    // Remove qualquer handler inline antigo
+    btn.removeAttribute("onclick");
+    // Usa capture para garantir prioridade sobre listeners antigos
+    btn.addEventListener("click", onClick, { capture: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wire);
+  } else {
+    wire();
+  }
+})();
+/* ====== RESUMO FINANCEIRO (Contrato / Recebido / Falta) — FIX FINAL ====== */
+
+// 1) Parser BRL único (não redeclara se já existir)
+if (typeof window.parseMoney !== "function") {
+  window.parseMoney = function(v){
+    if (typeof v === "number") return v;
+    let s = String(v || "").trim();
+    s = s.replace(/[R$\s]/gi, "").replace(/\./g, "").replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+}
+const toBRL = window.toBRL; // reutiliza a do topo, sem redeclarar
+
+
+// 2) Utilidades
+function getIdEventoAtual(){
+  try {
+    return String(
+      (window.evento && window.evento.id) ||
+      new URLSearchParams(location.search).get("id") ||
+      localStorage.getItem("eventoSelecionado") || ""
+    );
+  } catch { return ""; }
+}
+function carregarEventoDoLS(id){
+  try {
+    const todos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    return todos.find(e => String(e.id) === String(id)) || null;
+  } catch { return null; }
+}
+
+// 3) Contrato = soma itensSelecionados (valor por pessoa × qtd – desconto)
+function calcContrato(ev){
+  if (!ev) return 0;
+  const qtd   = parseInt(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0, 10) || 0;
+  const itens = Array.isArray(ev.itensSelecionados) ? ev.itensSelecionados : [];
+  let total = 0;
+
+  for (const it of itens) {
+    const valor = window.parseMoney(it.valor ?? it.preco ?? it.preço ?? it.total ?? 0);
+    const cobr  = String(it.tipoCobranca || it.cobranca || "").toLowerCase();
+    const base  = (cobr.includes("pessoa") || cobr === "porpessoa") ? (valor * (qtd || 0)) : valor;
+
+    // desconto: %, número, ou valor; também "por pessoa"
+    let desc = 0;
+    const dRaw = String(it.desconto ?? it.descontoValor ?? "").trim();
+    const pRaw = it.descontoPorcentagem ?? it.percentualDesconto ?? it.descontoPercentual;
+
+    if (pRaw != null && pRaw !== "") {
+      const p = parseFloat(String(pRaw).replace(",", "."));
+      if (isFinite(p)) desc = base * (p/100);
+    } else if (/%\s*$/.test(dRaw)) {
+      const p = parseFloat(dRaw.replace("%","").replace(",", "."));
+      if (isFinite(p)) desc = base * (p/100);
+    } else if (dRaw) {
+      let v = window.parseMoney(dRaw);
+      if (/pesso(a|as)/i.test(String(it.descontoTipo || "")) || it.descontoPorPessoa === true) {
+        v *= (qtd || 0);
+      }
+      desc = v;
+    }
+
+    total += Math.max(0, base - Math.max(0, Math.min(base, desc)));
+  }
+  return total;
+}
+
+// 4) Recebido (entradas recebidas/pagas)
+function isPago(rec){
+  const s = String(rec?.status || rec?.situacao || rec?.statusGeral || "").toLowerCase();
+  return rec?.pago === true || /pago|quitado|baixado|recebid/.test(s) || Number(rec?.valorPago) > 0;
+}
+function ehEntrada(rec){
+  const txt = `${rec?.tipo||""} ${rec?.categoria||""} ${rec?.descricao||""} ${rec?.nome||""}`.toLowerCase();
+  if (/despesa|custo|fornecedor|pagamento a|sa[ií]da/.test(txt)) return false;
+  return /entrad|receb|parcela|pix|cart|dinheiro|dep[oó]s|cr[eé]dit/.test(txt) || (String(rec?.tipo||"").toLowerCase()==="entrada");
+}
+function valorDe(rec){
+  const cand = [rec?.valorPago, rec?.valorParcela, rec?.valor, rec?.total, rec?.totalPago, rec?.totalPrevisto];
+  for (const v of cand){
+    if (v == null) continue;
+    if (typeof v === "number") return v;
+    const s = String(v).trim();
+    // alguns fluxos salvam em centavos (ex.: "100000" => 1000,00)
+    if (/^\d+$/.test(s) && s.length >= 3) return Number(s)/100;
+    const n = parseFloat(s.replace(/\./g,"").replace(",", "."));
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+function somaArr(arr, id, forcaMesmoEvento){
+  // forcaMesmoEvento=true: não exige eventoId (caso da chave por-evento)
+  let tot = 0;
+  (arr || []).forEach(rec => {
+    const evId = String(rec?.eventoId ?? rec?.evento ?? rec?.idEvento ?? "");
+    if (!forcaMesmoEvento) {
+      if (id && evId && evId !== String(id)) return; // no global, só conta se eventoId bater
+    }
+    if (!isPago(rec)) return;
+    if (!ehEntrada(rec)) return;
+    tot += valorDe(rec);
+  });
+  return tot;
+}
+function calcRecebido(id){
+  let r = 0;
+
+  // A) chave específica do evento — NÃO exige eventoId
+  try {
+    const key = "financeiroEvento:" + id;
+    const fx  = JSON.parse(localStorage.getItem(key) || "{}") || {};
+    r += somaArr(fx.lancamentos,  id, true);
+    r += somaArr(fx.parcelas,     id, true);
+    r += somaArr(fx.recebimentos, id, true);
+  } catch {}
+
+  // B) dentro do próprio evento (se você salvar ali)
+  try {
+    const f = window.evento?.financeiro || {};
+    r += somaArr(f.lancamentos,  id, true);
+    r += somaArr(f.parcelas,     id, true);
+    r += somaArr(f.recebimentos, id, true);
+    if (Number(f.recebidoTotal) > 0) r = Math.max(r, Number(f.recebidoTotal));
+  } catch {}
+
+  // C) agregado global — só conta se houver eventoId igual
+  try {
+    const g = JSON.parse(localStorage.getItem("financeiroGlobal") || "{}") || {};
+    r += somaArr(g.lancamentos,  id, false);
+    r += somaArr(g.parcelas,     id, false);
+    r += somaArr(g.recebimentos, id, false);
+  } catch {}
+
+  // D) ponte opcional (se existir e for o mesmo evento)
+  try {
+    const ponte = JSON.parse(localStorage.getItem("financeiro:return") || "{}");
+    if (String(ponte?.idEvento) === String(id) && Number(ponte?.recebido) > 0) {
+      r = Math.max(r, Number(ponte.recebido));
+    }
+  } catch {}
+
+  return r;
+}
+
+// 5) Render
+function renderResumoFinanceiro(){
+  const id = getIdEventoAtual();
+
+  // **sempre** pega a versão mais nova do evento do LS (Itens/Financeiro podem ter salvado)
+  const ls = carregarEventoDoLS(id);
+  if (ls) window.evento = ls; // atualiza espelho na página
+  const ev = window.evento || ls || {};
+
+ const contrato = (typeof totalItensEventoComDesconto === 'function')
+  ? totalItensEventoComDesconto(ev)
+  : calcContrato(ev); // fallback se o helper não estiver carregado
+
+  const recebido = calcRecebido(id);
+  const falta    = Math.max(0, contrato - recebido);
+
+  // escreve (suporta #finTotalContrato e #finContrato)
+  const elC1 = document.getElementById("finTotalContrato");
+  const elC2 = document.getElementById("finContrato");
+  if (elC1) elC1.textContent = toBRL(contrato);
+  if (elC2) elC2.textContent = toBRL(contrato);
+
+  const elR = document.getElementById("finRecebido");
+  const elF = document.getElementById("finFalta");
+  if (elR) elR.textContent = toBRL(recebido);
+  if (elF) elF.textContent = toBRL(falta);
+}
+
+// 6) Dispara agora e quando voltar de outras telas
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", renderResumoFinanceiro);
+} else {
+  renderResumoFinanceiro();
+}
+window.addEventListener("storage", e => {
+  const k = e?.key || "";
+  if (k === "eventos" || k.startsWith("financeiroEvento:") || k === "financeiroGlobal" || k === "financeiro:return") {
+    renderResumoFinanceiro();
+  }
+});
+
+/* ====== "+ Convidados" – usar modal existente (div.hidden) ====== */
+(function setupAddConvidados(){
+  if (window.__bindAddConvidados) return; // evita duplo-bind
+  window.__bindAddConvidados = true;
+
+  const modal   = document.getElementById('modalAddConvidados');
+  const btnPlus = document.getElementById('btnAddConvidados');
+  const btnX    = document.getElementById('btnFecharAddConvidados');
+  const btnCan  = document.getElementById('btnCancelarAddConvidados');
+  const btnOk   = document.getElementById('btnSalvarAddConvidados');
+  const inpQtd  = document.getElementById('addQtdConvidados');
+  const inpVPP  = document.getElementById('addValorPorPessoa');
+
+  const show = () => {
+    if (!modal) return;
+    // sugestão automática do VPP com base em algum item "porPessoa", se existir
+    try {
+      const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
+              || new URLSearchParams(location.search).get('id')
+              || localStorage.getItem('eventoSelecionado') || '';
+      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const ev = eventos.find(e => String(e.id) === String(id)) || {};
+      const it = (ev.itensSelecionados || []).find(x => String(x.tipoCobranca||x.cobranca).toLowerCase()==='porpessoa');
+      if (it) {
+        const v = Number(it.valor || it.preco || it.precoUnit || 0);
+        if (v > 0 && !inpVPP.value) inpVPP.value = v.toLocaleString('pt-BR',{minimumFractionDigits:2});
+      }
+    } catch {}
+    modal.hidden = false;
+    modal.setAttribute('open','');
+  };
+
+  const hide = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    modal.removeAttribute('open');
+  };
+
+  const parseBR = (s) => {
+    if (typeof parseMoney === 'function') return parseMoney(s);
+    return Number(String(s||'').replace(/[^\d,.-]/g,'').replace('.', '').replace(',','.')) || 0;
+  };
+
+  const confirmar = () => {
+    const q   = parseInt(inpQtd?.value || '0', 10) || 0;
+    const vpp = parseBR(inpVPP?.value || 0);
+    if (q <= 0) { alert('Informe a quantidade.'); return; }
+    if (vpp < 0) { alert('Valor por pessoa inválido.'); return; }
+
+    // carrega evento
+    const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
+            || new URLSearchParams(location.search).get('id')
+            || localStorage.getItem('eventoSelecionado') || '';
+    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+    const idx = eventos.findIndex(e => String(e.id) === String(id));
+    if (idx === -1) { hide(); return; }
+
+    // 1) soma convidados
+    const atual = parseInt(eventos[idx].quantidadeConvidados ?? eventos[idx].qtdConvidados ?? 0, 10) || 0;
+    const novo  = atual + q;
+    eventos[idx].quantidadeConvidados = novo;
+    eventos[idx].qtdConvidados = novo;
+
+    // 2) adiciona/atualiza item "Convidados extra" (valorTotal = q * vpp)
+    const totExtra  = Math.max(0, q * vpp);
+    const nomeExtra = `Convidados extra (+${q} × ${vpp.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})})`;
+
+    const arr = Array.isArray(eventos[idx].itensSelecionados) ? eventos[idx].itensSelecionados : [];
+    const pos = arr.findIndex(it => it && (it.__extraConvidados === true || /convidados extra/i.test(String(it.nome||it.nomeItem||''))));
+    const novoItem = {
+      categoria: 'adicional',
+      tipo: 'adicional',
+      nome: nomeExtra,
+      nomeItem: nomeExtra,
+      valor: totExtra,                // total já fechado
+      tipoCobranca: 'valorTotal',     // IMPORTANTÍSSIMO: não multiplicar pelos convidados totais
+      __extraConvidados: true,
+      atualizadoEm: new Date().toISOString()
+    };
+    if (pos > -1) arr[pos] = novoItem; else arr.push(novoItem);
+    eventos[idx].itensSelecionados = arr;
+
+    // 3) persiste e reflete no DOM
+    if (typeof safeSaveEventos === 'function') safeSaveEventos(eventos);
+    else localStorage.setItem('eventos', JSON.stringify(eventos));
+
+    window.evento = eventos[idx];
+    window.eventoSelecionado = eventos[idx];
+
+    const inputConv = document.getElementById('eventoConvidados') || document.querySelector('[name="quantidadeConvidados"]');
+    if (inputConv) inputConv.value = String(novo);
+
+    try { renderItensUnificado?.(); } catch {}
+    try { renderFinanceiroResumo?.(); } catch {}
+    try { syncFaltaReceberEventoDetalhado?.(); } catch {}
+
+    hide();
+  };
+
+  // binds
+  btnPlus?.addEventListener('click', show);
+  btnX?.addEventListener('click', hide);
+  btnCan?.addEventListener('click', hide);
+  btnOk?.addEventListener('click', confirmar);
+
+  // fecha clicando fora (se quiser)
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) hide();
+  });
+})();
+
+// compat
+window.renderFinanceiroResumo    = renderResumoFinanceiro;
+window.atualizarResumoFinanceiro = renderResumoFinanceiro;
+
+/* ====== Unificar Resumo Financeiro (1 só lógica, 2 nomes) ====== */
+(function unifyResumoFinanceiro(){
+  // Escolhe uma implementação canônica (prioriza a mais completa que você tenha)
+  let CANON = null;
+
+  if (typeof window.renderResumoFinanceiro === 'function') {
+    CANON = window.renderResumoFinanceiro;
+  }
+  if (typeof window.renderFinanceiroResumo === 'function') {
+    // Se essa estiver mais atual, comente a linha acima e use esta como canônica:
+    // CANON = window.renderFinanceiroResumo;
+    // Se ambas existem, mantenha a que já usa totalItensEventoComDesconto(ev)
+    // e sobrescreva a outra pra apontar pra mesma.
+  }
+
+  // Se por algum motivo nenhuma estava definida ainda, cria uma base vazia pra não quebrar:
+  if (!CANON) {
+    CANON = function(){ /* noop até ser preenchida */ };
+  }
+
+  // Aponta os dois nomes para a MESMA função:
+  window.renderResumoFinanceiro = CANON;
+  window.renderFinanceiroResumo = CANON;
+
+  // Boot/Listeners apenas 1x
+  if (!window.__financeiroBootOnce) {
+    window.__financeiroBootOnce = true;
+
+    const boot = () => {
+      try { (window.renderResumoFinanceiro || window.renderFinanceiroResumo)(); } catch(e){ console.warn(e); }
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+      boot();
+    }
+
+    window.addEventListener('storage', (e) => {
+      const k = String(e.key || '');
+      if (
+        k === 'eventos' ||
+        k.startsWith('financeiroEvento:') ||
+        k === 'financeiroGlobal' ||
+        k === 'financeiro:return' ||
+        k.startsWith('parcelas:')
+      ) {
+        boot();
+      }
+    });
+  }
+})();
+
+
+// === Compat: evitar "ev is not defined" em chamadas antigas ===
+window.pintarFaltaReceber ||= function () {
+  try { renderFinanceiroResumo(); } catch {}
+};
+
+// Render inicial do resumo financeiro (contrato/recebido/falta)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => { try { renderFinanceiroResumo(); } catch {} });
+} else {
+  try { renderFinanceiroResumo(); } catch {}
+}
+// === Abrir modal de Comissões a partir do card ===
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest?.('[data-abrir-comissao], #linkComissoes');
+  if (!btn) return;
+  e.preventDefault();
+  try { window.openComissoesDialog?.(); } catch {}
+});
+// Bind robusto para abrir o diálogo de Comissões
+(function bindCardComissoes(){
+  const handler = (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (typeof window.openComissoesDialog === 'function') {
+      window.openComissoesDialog();
+    }
+  };
+  // delegação (pega cliques em qualquer filho)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('#cardComissoes, [data-abrir-comissao]');
+    if (btn) handler(e);
+  });
+})();
+// ==== Utilidades para o select de destinatário (não duplica) ====
+window.__carregarUsuariosAtivos ??= function () {
+  const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
+  for (const k of chaves){
+    try {
+      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      if (Array.isArray(v)) return v;
+    } catch {}
+  }
+  return [];
+};
+
+window.__isVendOuAdm ??= function (u) {
+  const roles = [
+    String(u?.perfil || u?.role || u?.papel || '').toLowerCase(),
+    String(u?.perfil?.nome || '').toLowerCase(),
+    ...(Array.isArray(u?.perfis) ? u.perfis.map(p => String(p?.nome||p).toLowerCase()) : [])
+  ].filter(Boolean);
+  return roles.some(r => /admin|administrador|vendedor/.test(r));
+};
+
+window.popularSelectVendedores ??= function () {
+  const sel = document.getElementById('com-dest');
+  if (!sel) return;
+  const users = __carregarUsuariosAtivos().filter(__isVendOuAdm);
+  const fallback = [
+    { id: 'Administrador', nome: 'Administrador' },
+    { id: 'Vendedor',      nome: 'Vendedor' }
+  ];
+  const itens = users.length
+    ? users.map(u => ({
+        id: u.id || u.email || (u.nome||'').toLowerCase().replace(/\s+/g,'-'),
+        nome: u.nome || u.displayName || u.email || 'Usuário'
+      }))
+    : fallback;
+  sel.innerHTML = '<option value="">Selecione…</option>' +
+    itens.map(i => `<option value="${String(i.id)}">${String(i.nome)}</option>`).join('');
+};
+
+// ==== Abre o modal de Comissões (não duplica) ====
+window.openComissoesDialog ??= function () {
+  const dlg = document.getElementById('dlg-comissoes');
+  if (!dlg) return;
+
+  // limpa e preenche campos
+  (['com-data','com-desc','com-valor','com-status']).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = (id === 'com-status' ? 'pendente' : '');
+  });
+  try { popularSelectVendedores(); } catch {}
+  try { renderComissoesLista?.(); } catch {}
+
+  if (typeof dlg.showModal === 'function') dlg.showModal();
+  else dlg.removeAttribute('hidden');
+};
+
+// ==== Listener para o card (um único delegado) ====
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-abrir-comissao], #linkComissoes');
+  if (btn) {
+    ev.preventDefault();
+    try { openComissoesDialog(); } catch (e) { console.error(e); }
+  }
+});
+// === Abrir o <dialog id="dlg-comissoes"> ao clicar no card ===
+(function bindAbrirComissoes(){
+  const attach = () => {
+    const btn = document.querySelector('[data-abrir-comissao]') || document.getElementById('linkComissoes');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (typeof window.openComissoesDialog === 'function') {
+        window.openComissoesDialog();
+      } else {
+        // fallback (se por algum motivo a função não existir)
+        const dlg = document.getElementById('dlg-comissoes');
+        if (!dlg) return;
+        dlg.removeAttribute('hidden');
+        if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open','');
+      }
+    });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach, { once: true });
+  } else {
+    attach();
+  }
+})();
+// === Relatório do Evento (linkagem) ===
+(function setRelatorioHrefFromEvento(){
+  try {
+    const a  = document.getElementById('linkRelatorioEvento');
+    if (!a) return;
+    const qs = new URLSearchParams(location.search);
+    // tenta em ordem: URL (?id ou ?eventoId) → objetos globais comuns
+    const idURL = qs.get('id') || qs.get('eventoId');
+    const idMem = (window.eventoAtual && (eventoAtual.id || eventoAtual.eventoId))
+               || (window.evento && (evento.id || evento.eventoId));
+    const eid = String(idURL || idMem || '').trim();
+    if (eid) a.href = `relatorio-evento.html?id=${encodeURIComponent(eid)}`;
+  } catch {}
+})();

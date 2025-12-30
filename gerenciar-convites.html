@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:gerenciar-convites.html">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH ORDEM (helpers + guard) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH ORDEM (helpers + guard) === -->
+
+  <title>Gerenciar Convites</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="./kgb-common.css"/>
+  <link rel="stylesheet" href="./menu-lateral.css"/>
+  <link rel="stylesheet" href="./gerenciar-convites.css"/>
+</head>
+<body>
+<button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+<div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+  <main class="conteudo-principal">
+    <div class="conteudo-central">
+      <div class="container">
+        <div class="h h1">Gerenciar Convites</div>
+
+        <!-- Filtros -->
+        <div class="card">
+          <div class="row">
+            <div class="col"><label>Evento <select id="selEvento" class="input"></select></label></div>
+            <div class="col"><label>Tipo
+              <select id="selTipo" class="input"><option value="">(todos)</option></select>
+            </label></div>
+            <div class="col"><label>Nº <input id="fNum" class="input" placeholder="ex.: 0012"/></label></div>
+            <div class="col"><label>Faixa <input id="fFaixa" class="input" placeholder="ex.: 0050-0068"/></label></div>
+            <div class="col"><label>Status
+              <select id="selStatus" class="input">
+                <option value="">(todos)</option>
+                <option value="pendente">pendente</option>
+                <option value="vendido">vendido</option>
+                <option value="cancelado">cancelado</option>
+                <option value="checkin">checkin</option>
+              </select>
+            </label></div>
+            <div class="col" style="max-width:160px"><button id="btnBuscar" class="btn" style="width:100%">Buscar</button></div>
+          </div>
+        </div>
+
+        <!-- Resultados -->
+        <div class="card">
+          <div class="h h2">Resultados</div>
+          <div class="results">
+            <table class="table" id="tabConvites">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="ckAll"/></th>
+                  <th>Número</th>
+                  <th>Tipo</th>
+                  <th class="k-right">Preço</th>
+                  <th>Status</th>
+                  <th>ID</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="bulkbar">
+            <button id="btnPrintSel" class="btn">Imprimir selecionados</button>
+            <button id="btnSendWA" class="btn ghost">Enviar WhatsApp</button>
+            <button id="btnSendEmail" class="btn ghost">Enviar E-mail</button>
+          </div>
+
+          <div class="small">Dica: troque o evento acima para atualizar a lista automaticamente.</div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast">Pronto!</div>
+
+<!-- Modal WhatsApp -->
+<div id="waModal" class="modal" aria-hidden="true">
+  <div class="box">
+    <div class="h h3" style="margin:0 0 6px">Enviar por WhatsApp</div>
+
+    <div class="row">
+      <label style="flex:1">Número (DDI+DDD+NÚMERO)
+        <input id="waPhone" class="input" placeholder="ex.: 5599999999999"/>
+      </label>
+    </div>
+    <div class="small" style="margin-top:6px">
+      Dica: primeiro clique em <b>Imprimir selecionados</b> para salvar em PDF/PNG, depois anexe no WhatsApp.
+    </div>
+    <div class="footer">
+      <button class="btn ghost" id="waCancel">Cancelar</button>
+      <button class="btn" id="waGo">Abrir WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal E-mail -->
+<dialog id="emailModal" class="wa-modal">
+  <form method="dialog" class="wa-box">
+    <div class="wa-title">Enviar convites por <b>E-mail</b></div>
+    <p>Informe o e-mail do destinatário (pode ser seu, para você anexar os PDFs e encaminhar):</p>
+    <input id="emailTo" type="email" placeholder="nome@cliente.com" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:10px">
+    <div class="wa-actions">
+      <button id="emailCancel" type="button" class="btn ghost">Cancelar</button>
+      <button id="emailGo" type="button" class="btn">Abrir e-mail</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  (function initHamburguer(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function setOpened(open){
+      const opened = !!open;
+      aside.classList.toggle('aberto', opened);
+      back.hidden = !opened;
+      document.body.classList.toggle('no-scroll', opened);
+
+      const icon = btn.querySelector('i[data-lucide]');
+      if (icon){
+        icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+        try { window.lucide?.createIcons?.(); } catch(e){}
+      }
+    }
+
+    function isMobile(){ return window.innerWidth <= 768; }
+
+    function syncVisibility(){
+      const mob = isMobile();
+      btn.style.display = mob ? 'block' : 'none';
+      if (!mob){
+        setOpened(false);
+      }
+    }
+
+    // Clique no hambúrguer
+    if (!btn.hasAttribute('data-bound')){
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        setOpened(!aside.classList.contains('aberto'));
+      });
+    }
+
+    // Clique no fundo escuro
+    if (!back.hasAttribute('data-bound')){
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', ()=> setOpened(false));
+    }
+
+    // Clique fora do menu
+    document.addEventListener('click', (e)=>{
+      if (!aside.classList.contains('aberto')) return;
+      if (!aside.contains(e.target) && !btn.contains(e.target)){
+        setOpened(false);
+      }
+    });
+
+    syncVisibility();
+    window.addEventListener('resize', syncVisibility);
+  })();
+</script>
+
+<!-- Se o seu arquivo está realmente em /js/convites.js, troque para "js/convites.js" -->
+<script src="./js/convites.js"></script>
+
+
+<!-- menu (igual as outras telas) -->
+
+<script type="module" src="./menu-lateral.js"></script>
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

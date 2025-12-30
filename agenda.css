@@ -1,0 +1,60 @@
+/* ===== Agenda v3.2 =====
+   - Reforços anti-overflow (lado direito)
+   - Filtros em grid auto-fit + ações com flex-wrap
+*/
+:root{ --bg:#faf7f2; --surface:#fff; --ink:#2f2a25; --muted:#7a7066; --line:#eadfd1; --brand:#c29a5d; --radius:12px; --shadow:0 3px 12px rgba(0,0,0,.05); }
+html,body{ background:var(--bg); color:var(--ink); }
+*{ box-sizing:border-box; }
+.wrapper{ overflow-x:hidden; }
+.conteudo-principal{ overflow-x:hidden; }
+.conteudo-central{ overflow-x:clip; max-width:100%; }
+
+.topo-voltar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:12px; }
+.conteudo-central h1{ font-family:"Playfair Display", Georgia, serif; font-weight:600; color:#3f3024; display:flex; gap:10px; align-items:center; margin:0; }
+
+.bloco{ background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:14px; margin-bottom:12px; max-width:100%; }
+
+/* Filtros */
+.filtros{ max-width:100%; }
+.f-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; align-items:end; }
+.f-row label{ font-size:12px; color:#6c5c4e; font-weight:600; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.chk-line{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; min-width:0; }
+.view-toggle{ display:flex; gap:8px; justify-self:end; flex-wrap:wrap; }
+.actions-row{ display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+
+/* Abas */
+.abas{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.aba{ background:#fff; border:1px solid var(--line); padding:8px 12px; border-radius:999px; font-size:13px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+.aba.ativa{ border-color:var(--brand); box-shadow:0 0 0 3px rgba(194,154,93,.12); }
+
+/* Tabela */
+.tabela{ width:100%; overflow:auto; }
+.tabela table{ width:100%; border-collapse:separate; border-spacing:0; max-width:100%; }
+.tabela thead th{ text-align:left; font-size:12px; color:#7a6f66; background:#fffdf7; border-bottom:1px solid var(--line); padding:10px 12px; position:sticky; top:0; }
+.tabela tbody td{ padding:10px 12px; border-bottom:1px solid #f1e8da; font-size:14px; }
+.tabela tbody tr:nth-child(even){ background:#fffdfb; }
+.tabela tbody tr:hover{ background:#fffaf1; }
+.hint{ padding:10px; color:#7a7066; }
+
+/* Badges & botões */
+.badge{ display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); white-space:nowrap; }
+.badge.tone-overdue{ background:#fff1f1; border-color:#ffd0d0; color:#b33; }
+.badge.tone-today{ background:#fff7e0; border-color:#ffe6a7; color:#7a5600; }
+.badge.tone-future{ background:#eef7ff; border-color:#cfe7ff; color:#124f86; }
+.btn-ghost{ border:1px solid var(--line); background:#fff; border-radius:10px; padding:6px 10px; font-size:13px; display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+.btn-mini{ border:1px solid var(--line); background:#fff; border-radius:8px; padding:4px 8px; font-size:12px; display:inline-flex; gap:6px; align-items:center; cursor:pointer; white-space:nowrap; }
+
+/* Calendário */
+#calWrap{ --gap:8px; }
+.cal-head{ display:grid; grid-template-columns: repeat(7, 1fr); gap:var(--gap); margin-bottom:6px; }
+.cal-head .dow{ text-align:center; font-size:12px; color:#7a6f66; }
+.cal-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap:var(--gap); }
+.day{ background:#fff; border:1px solid var(--line); border-radius:10px; min-height:120px; display:flex; flex-direction:column; }
+.day .d{ font-size:12px; color:#7a7066; padding:6px 8px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px dashed #f0e6d8; }
+.day .items{ padding:6px 8px; display:flex; flex-direction:column; gap:4px; }
+.cal-item{ font-size:12px; display:flex; align-items:center; gap:6px; line-height:1.25; }
+.cal-item .dot{ width:8px; height:8px; border-radius:999px; background:#c29a5d; flex:0 0 auto; }
+.cal-item .act{ margin-left:auto; }
+
+@media (max-width:1000px){ .view-toggle{ justify-self:stretch } }
+@media (max-width:640px){ .cal-head{ display:none } .day{ min-height:100px } }

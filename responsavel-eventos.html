@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:responsavel-eventos.html">
+  <meta charset="UTF-8" />
+  <title>Meus Eventos — Responsável</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Desenvolvimento local
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Estilos base -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <style>
+    :root{
+      --bg:#f8f1e8; --surface:#fff; --ink:#3e332b; --muted:#6b7280; --line:#efe3d6;
+      --brand:#5a3e2b; --brand-900:#4c3426; --chip:#f4e9db; --radius:14px; --shadow:0 10px 22px rgba(0,0,0,.06);
+      --sidebar-w:260px;
+    }
+    html,body{margin:0;padding:0;background:linear-gradient(180deg,#fcf8f3 0%, #f7efe6 120%); color:var(--ink); font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;}
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    main.conteudo-principal{flex:1;padding:32px;height:100vh;overflow:auto}
+    .conteudo-central{max-width:1100px;margin:0 auto}
+
+    h1{display:flex;gap:12px;align-items:center;margin:0 0 16px;font-family:"Playfair Display",Georgia,serif;font-weight:700;color:#3f2f23}
+    h1 i{opacity:.85}
+
+    .top-hint{color:var(--muted);margin-bottom:10px}
+    .searchline{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .input{border:1px solid var(--line);background:#fff;border-radius:999px;padding:10px 14px;min-width:260px}
+
+    .grid{display:grid;gap:16px}
+    .grid.cards{grid-template-columns:repeat(2,minmax(260px,1fr))}
+    @media(max-width:900px){ .grid.cards{grid-template-columns:1fr} main.conteudo-principal{padding:20px} }
+
+    .card{
+      background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px;
+      transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+    .card:hover{ transform:translateY(-1px); box-shadow:0 14px 28px rgba(0,0,0,.08); border-color:#ead7c4; }
+    .card h3{margin:0 0 8px;color:#5a3e2b}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{background:var(--brand);color:#fff;border:0;padding:9px 14px;border-radius:12px;display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .btn:hover{background:var(--brand-900)}
+
+    .fields{display:grid;gap:6px;margin-top:4px}
+    .fields .f{display:flex;gap:6px;align-items:baseline}
+    .fields .lab{color:#5a3e2b;font-weight:600;min-width:210px}
+    .fields .val{color:#3e332b}
+    @media (max-width:700px){ .fields .lab{min-width:unset} }
+
+    @media (min-width: 901px){
+      #menuLateral{ position: fixed; left:0; top:0; width: var(--sidebar-w); height:100vh; z-index:999; overflow:auto; background:#5a3e2b; }
+      .wrapper{ padding-left: var(--sidebar-w); }
+      .wrapper > main{ margin-left: 0 !important; }
+    }
+
+    #hamburguer{position:fixed;top:12px;left:12px;background:#c29a5d;border:none;color:#fff;font-size:24px;padding:6px 12px;border-radius:8px;z-index:1001;display:none}
+    @media (max-width:900px){
+      #hamburguer{display:block}
+      #menuLateral{position:fixed;transform:translateX(-100%);transition:transform .25s ease;width:var(--sidebar-w);z-index:999}
+      #menuLateral.aberto{transform:translateX(0)}
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="calendar-check-2"></i> Meus Eventos</h1>
+
+        <div class="searchline">
+          <div class="top-hint">Somente eventos ativos designados a você.</div>
+          <input id="busca" class="input" placeholder="Buscar por nome ou data (ex.: 14/08/2025, 14/08, 2025)…">
+        </div>
+
+        <div id="lista" class="grid cards"></div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) {
+      guard({ permissao });
+    } else {
+      guard(); // fallback, se um dia usar perfis na meta
+    }
+    aplicarPermissoesNaTela();
+  </script>
+
+
+  <script>
+    (function(){
+      var btn = document.getElementById('hamburguer');
+      if(btn){
+        btn.addEventListener('click', function(){
+          var m = document.getElementById('menuLateral');
+          if(m) m.classList.toggle('aberto');
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function(){
+        try{
+          if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+          }
+        }catch{}
+      });
+    })();
+
+    var q = function(s){ return document.querySelector(s); };
+    var S_EVT = "eventos";
+
+    function norm(s){
+      return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+    }
+    function get(k,def){
+      if(typeof def==="undefined") def="[]";
+      try{ return JSON.parse(localStorage.getItem(k)||def); }catch{ return JSON.parse(def); }
+    }
+    function getUser(){ try{ return JSON.parse(localStorage.getItem("usuarioLogado")||"null"); }catch{ return null; } }
+    function isAdmin(u){ return norm(u && u.perfil) === "administrador"; }
+
+    function parseDataRaw(ev){
+      var raw = (ev && (ev.data || ev.dataEvento || ev.dataDoEvento)) || "";
+      var v = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)){ var p=v.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+      var m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+      var d = new Date(v); return isFinite(d) ? d : new Date("2100-01-01");
+    }
+    function fmtBR(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+    function diaSemana(d){ try{ return d.toLocaleDateString("pt-BR",{weekday:"long"}); }catch{ return ""; } }
+    function pickLocalFesta(ev){
+      var prefer = ["localFesta","localEvento","nomeEspaco","nomeCasa","salao","espaco","venue","local"];
+      for (var i=0;i<prefer.length;i++){ var k=prefer[i]; if (ev && ev[k]) return ev[k]; }
+      return "—";
+    }
+    function cerimoniaNoLocalLabel(ev){
+      var v = norm(ev && (ev.cerimoniaNoLocal || ev.cerimonia || ""));
+      if (v.startsWith("s")) return "Sim";
+      if (v.startsWith("n")) return "Não";
+      return "—";
+    }
+
+    function eventosAtivos(){
+      return get(S_EVT).filter(function(e){ return norm(e.status) !== "arquivado"; });
+    }
+
+    function eventosParaListar(){
+      var u = getUser();
+      var base = eventosAtivos();
+      if (isAdmin(u)) return base; // Admin vê todos (não arquivados), inclusive passados
+      // Responsável: apenas seus eventos e apenas futuros/hoje
+      var hoje = new Date(); hoje.setHours(0,0,0,0);
+      return base.filter(function(e){
+        var isMeu = norm(e.responsavelEquipe) === norm(u && u.nome);
+        var d = parseDataRaw(e);
+        return isMeu && d >= hoje;
+      });
+    }
+
+    function matchBusca(ev, termoRaw){
+      var termo = norm(termoRaw);
+      if(!termo) return true;
+      var nome = norm(ev.nomeEvento||ev.nome||ev.titulo||"");
+      if (nome.includes(termo)) return true;
+
+      var d = parseDataRaw(ev);
+      var dd = String(d.getDate()).padStart(2,"0");
+      var mm = String(d.getMonth()+1).padStart(2,"0");
+      var yyyy = String(d.getFullYear());
+      var dataBR = dd+"/"+mm+"/"+yyyy;
+      if (dataBR.includes(termo)) return true;
+
+      var digits = termo.replace(/\D/g,"");
+      if (digits){
+        var combos = [dd+mm+yyyy, dd+mm, mm+yyyy, yyyy+mm+dd];
+        if (combos.some(function(x){ return x.includes(digits); })) return true;
+      }
+
+      var semana = norm(d.toLocaleDateString("pt-BR",{weekday:"long"}));
+      return semana.includes(termo);
+    }
+
+    function aplicarBusca(lista){
+      var el = q("#busca");
+      var termo = el ? el.value : "";
+      if (!termo) return lista;
+      return lista.filter(function(ev){ return matchBusca(ev, termo); });
+    }
+
+    function render(){
+      var cont = q("#lista");
+      if(!cont) return;
+      cont.innerHTML = "";
+
+      var base = aplicarBusca(eventosParaListar()).sort(function(a,b){
+        return parseDataRaw(a) - parseDataRaw(b);
+      });
+
+      if(!base.length){
+        cont.innerHTML = '<div class="card muted">Nenhum evento ativo para você.</div>';
+        return;
+      }
+
+      base.forEach(function(ev){
+        var d          = parseDataRaw(ev);
+        var dataBR     = fmtBR(d);
+        var semana     = diaSemana(d);
+        var nomeEv     = (ev.nomeEvento||ev.nome||ev.titulo||"—");
+        var local      = pickLocalFesta(ev);
+        var qtd        = (ev.quantidadeConvidados || ev.convidados || ev.qtdConvidados || "—");
+        var horaCer    = (ev.horarioCerimonia || ev.horaCerimonia || "—");
+        var cerLoc     = cerimoniaNoLocalLabel(ev);
+        var horaInicio = (ev.horarioEvento || ev.horaEvento || ev.hora_inicio || "—");
+
+        var hrefDetalhe = './detalhes-responsavel-evento.html?id=' + encodeURIComponent(ev.id);
+
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML =
+          '<div class="row" style="justify-content:space-between;align-items:flex-start">' +
+            '<div style="flex:1">' +
+              '<h3>'+nomeEv+'</h3>' +
+              '<div class="fields">' +
+                '<div class="f"><span class="lab">Data do evento:</span><span class="val">'+dataBR+'</span></div>' +
+                '<div class="f"><span class="lab">Dia da semana:</span><span class="val">'+semana+'</span></div>' +
+                '<div class="f"><span class="lab">Nome do evento:</span><span class="val">'+nomeEv+'</span></div>' +
+                '<div class="f"><span class="lab">Local do evento:</span><span class="val">'+local+'</span></div>' +
+                '<div class="f"><span class="lab">Quantidade de convidados:</span><span class="val">'+qtd+'</span></div>' +
+                '<div class="f"><span class="lab">Horário da cerimônia:</span><span class="val">'+horaCer+'</span></div>' +
+                '<div class="f"><span class="lab">Cerimônia no local:</span><span class="val">'+cerLoc+'</span></div>' +
+                '<div class="f"><span class="lab">Início da festa:</span><span class="val">'+horaInicio+'</span></div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="row">' +
+              '<a class="btn btn-ver-detalhes" href="'+hrefDetalhe+'"><i data-lucide="eye"></i> Ver detalhes</a>' +
+            '</div>' +
+          '</div>';
+
+        cont.appendChild(card);
+
+        // === INÍCIO PATCH A — persistência consistente do eventId ===
+        var btn = card.querySelector('.btn-ver-detalhes');
+        btn.addEventListener('click', function(){
+          try{
+            // Guardar apenas o ID em 'eventoSelecionado' (compatível com outras páginas)
+            localStorage.setItem('eventoSelecionado', String(ev.id));
+            // Opcional: JSON completo em outra chave para debug
+            localStorage.setItem('eventoSelecionadoJSON', JSON.stringify({ id: ev.id, nome: nomeEv }));
+          }catch{}
+        });
+        // === FIM PATCH A ===
+      });
+
+      // === INÍCIO PATCH B — garantir ícones após render ===
+      try{
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      }catch{}
+      // === FIM PATCH B ===
+    }
+
+    // === INÍCIO PATCH C — listener da busca seguro ===
+    var elBusca = document.getElementById("busca");
+    if (elBusca) elBusca.addEventListener("input", render);
+    // === FIM PATCH C ===
+
+    window.addEventListener("storage", function(e){
+      if(e.key==="eventos" || e.key==="usuarioLogado") render();
+    });
+    document.addEventListener("DOMContentLoaded", render);
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

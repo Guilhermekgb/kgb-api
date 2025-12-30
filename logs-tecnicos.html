@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:logs-tecnicos.html">
+  <meta charset="UTF-8" />
+  <title>Logs Técnicos – Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .tabela-container { overflow-x:auto; background:#fff; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.05); }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:12px 16px; border-bottom:1px solid #eee; text-align:left; }
+    th { background:#f3e0c8; color:#4b2e1d; }
+    tr:nth-child(even){ background:#fff6eb; }
+    .btn-dourado{ margin-top:20px; background:#c29a5d; color:#fff; border:none; padding:10px 20px; font-weight:bold; border-radius:6px; cursor:pointer; }
+    .btn-dourado:hover{ background:#a77f3f; }
+     /* Botão hamburguer (mobile) */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:1001;
+      background:#c29a5d;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      padding:6px 12px;
+      font-size:22px;
+      box-shadow:0 4px 12px rgba(0,0,0,.18);
+      cursor:pointer;
+      display:none; /* só mostra no mobile */
+    }
+
+    /* Fundo escuro por trás do menu */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.35);
+      z-index:998;
+    }
+
+    /* Travar scroll quando o menu estiver aberto */
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+      #menuLateral.aberto{ z-index:999; }
+    }
+    /* MENU MOBILE */
+#menuBackdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: none;
+  z-index: 900;
+}
+#menuBackdrop.visivel{ display:block; }
+body.no-scroll{ overflow:hidden; }
+
+@media (max-width:768px){
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .3s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{ transform: translateX(0); }
+}
+
+ </style>
+
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard / RBAC -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Bridge para a API local (routes.js). 
+       Deixe exatamente ACIMA do script principal. -->
+ <script type="module">
+  import { handleRequest } from './api/routes.js';
+  window.__apiCall = (endpoint, req = {}) =>
+    new Promise(resolve => handleRequest(endpoint, req, resolve));
+</script>
+
+</head>
+<body>
+
+  <!-- Botão Hamburguer -->
+  <button id="hamburguer"><i data-lucide="menu"></i></button>
+
+   <!-- Estrutura -->
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h2 style="color:#5C4033; font-size:24px; display:flex; align-items:center; gap:10px;">
+          <i data-lucide="file-search"></i> Logs Técnicos
+        </h2>
+        <p id="totalLogs" style="font-size:14px;color:#7b5c4a;margin:8px 0;"></p>
+
+        <div class="tabela-container">
+          <table id="tabelaLogs">
+            <thead>
+              <tr>
+                <th>Rota</th>
+                <th>Método</th>
+                <th>Status</th>
+                <th>ms</th>
+                <th>Usuário</th>
+                <th>Data/Hora</th>
+                <th>Tamanho</th>
+                <th>Erro</th>
+                <th>Red.</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody><!-- Preenchido via JS --></tbody>
+          </table>
+        </div>
+
+        <button class="btn-dourado" onclick="limparLogs()">Limpar Logs</button>
+      </div>
+    </main>
+  </div>
+
+    <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+    (function initHamburguer(){
+      const btn   = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const back  = document.getElementById('menuBackdrop');
+
+      if (!btn || !aside || !back) return;
+
+      function setOpened(open){
+        const opened = !!open;
+        aside.classList.toggle('aberto', opened);
+        back.hidden = !opened;
+        document.body.classList.toggle('no-scroll', opened);
+
+        const icon = btn.querySelector('i[data-lucide]');
+        if (icon){
+          icon.setAttribute('data-lucide', opened ? 'x' : 'menu');
+          try { window.lucide?.createIcons?.(); } catch(e){}
+        }
+      }
+
+      function isMobile(){ return window.innerWidth <= 768; }
+
+      function syncVisibility(){
+        const mob = isMobile();
+        btn.style.display = mob ? 'block' : 'none';
+        if (!mob){
+          setOpened(false);
+        }
+      }
+
+      if (!btn.hasAttribute('data-bound')){
+        btn.setAttribute('data-bound','1');
+        btn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          setOpened(!aside.classList.contains('aberto'));
+        });
+      }
+
+      if (!back.hasAttribute('data-bound')){
+        back.setAttribute('data-bound','1');
+        back.addEventListener('click', ()=> setOpened(false));
+      }
+
+      document.addEventListener('click', (e)=>{
+        if (!aside.classList.contains('aberto')) return;
+        if (!aside.contains(e.target) && !btn.contains(e.target)){
+          setOpened(false);
+        }
+      });
+
+      syncVisibility();
+      window.addEventListener('resize', syncVisibility);
+    })();
+  </script>
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  const btn=document.getElementById("hamburguer");
+  const menu=document.getElementById("menuLateral");
+  const back=document.getElementById("menuBackdrop");
+
+  if(!btn||!menu) return;
+
+  function abrir(){
+    menu.classList.add("aberto");
+    if(back){ back.classList.add("visivel"); back.hidden=false; }
+    document.body.classList.add("no-scroll");
+  }
+
+  function fechar(){
+    menu.classList.remove("aberto");
+    if(back){ back.classList.remove("visivel"); back.hidden=true; }
+    document.body.classList.remove("no-scroll");
+  }
+
+  btn.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    menu.classList.contains("aberto") ? fechar() : abrir();
+  });
+
+  back?.addEventListener("click",fechar);
+});
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

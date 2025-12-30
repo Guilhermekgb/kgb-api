@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Tipos de Evento</title>
+  <meta name="page-permission" content="page:kgb-formaturas-tipos-evento.html">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{ --sidebar-w:260px; }
+
+    html, body{
+      margin:0; padding:0; background:#f8f1e8; height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+      overflow:hidden;
+    }
+
+    #menuLateral{
+      flex-shrink:0;
+      height:100vh;
+      overflow-y:auto;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100% !important;
+      max-width:none !important;
+      margin:0 !important;
+      padding:24px clamp(16px, 3vw, 32px) 40px;
+    }
+
+    .conteudo-central{ display:contents !important; }
+
+    h1{
+      font-size:26px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:4px;
+    }
+    h1 i{
+      width:26px; height:26px;
+      color:#c29a5d;
+    }
+    .subtitulo{
+      margin:0 0 18px;
+      font-size:14px;
+      color:#8a6a4a;
+    }
+
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px;
+      z-index:1001; display:none;
+      cursor:pointer;
+    }
+
+    @media (min-width:769px){
+      #menuLateral{
+        position:fixed; inset:0 auto 0 0;
+        width:var(--sidebar-w); height:100vh; z-index:999;
+      }
+      .wrapper{ padding-left:var(--sidebar-w); }
+      main.conteudo-principal{ margin-left:0 !important; }
+    }
+
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+
+      #menuLateral{
+        position:fixed;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:999; width:var(--sidebar-w);
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+
+      .wrapper{ padding-left:0; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    html body aside#menuLateral{
+      background-color:#532b03 !important;
+      background-image:none !important;
+      box-shadow:2px 0 14px rgba(0,0,0,.18);
+    }
+    aside#menuLateral .menu-lateral,
+    aside#menuLateral .submenu{
+      background:transparent !important;
+      background-color:transparent !important;
+    }
+
+    /* --------- ESTILO ESPECÍFICO: TIPOS DE EVENTO (UNIFICADO COM PACOTES) --------- */
+
+    .linha-topo-eventos{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .grupo-filtros{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo label{
+      font-weight:500;
+    }
+    .campo input,
+    .campo select,
+    .campo textarea{
+      padding:6px 10px;
+      border-radius:8px;
+      border:1px solid #e1cbb0;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+    .campo input,
+    .campo select{
+      min-width:150px;
+    }
+    .campo textarea{
+      min-height:60px;
+      resize:vertical;
+    }
+    .campo input:focus,
+    .campo select:focus,
+    .campo textarea:focus{
+      border-color:#c29a5d;
+      box-shadow:0 0 0 1px rgba(194,154,93,0.25);
+    }
+
+    .btn-primario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#c29a5d;
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 8px 16px rgba(0,0,0,.12);
+    }
+    .btn-primario i{
+      width:16px; height:16px;
+    }
+
+    .btn-secundario{
+      border:none;
+      border-radius:999px;
+      padding:8px 16px;
+      font-size:13px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    .box-evento-flex{
+      display:grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap:18px;
+      align-items:flex-start;
+      margin-bottom:18px;
+    }
+    @media (max-width:900px){
+      .box-evento-flex{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card-form-evento{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+    .card-form-evento h2{
+      font-size:18px;
+      margin:0 0 10px;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .card-form-evento h2 i{
+      width:18px; height:18px;
+    }
+
+    .linha-form{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .campo-menor{
+      max-width:180px;
+    }
+
+    .campo-checkbox{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-top:6px;
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .campo-checkbox input{
+      width:16px; height:16px;
+      border-radius:4px;
+    }
+
+    .linha-botoes-form{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      margin-top:10px;
+      flex-wrap:wrap;
+    }
+
+    .card-dica{
+      background:#fff;
+      border-radius:14px;
+      padding:14px 16px;
+      box-shadow:0 8px 20px rgba(0,0,0,.04);
+      font-size:12px;
+      color:#7a5a3c;
+    }
+    .card-dica h3{
+      font-size:14px;
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      color:#5a3e2b;
+    }
+    .card-dica h3 i{
+      width:16px; height:16px;
+    }
+    .card-dica ul{
+      margin:6px 0 0;
+      padding-left:17px;
+    }
+    .card-dica li{
+      margin-bottom:4px;
+    }
+
+    .box-tabela-tipos{
+      background:#fff;
+      border-radius:14px;
+      padding:16px 18px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.06);
+    }
+
+    .tabela-tipos{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .tabela-tipos thead{
+      background:#f5e7d8;
+    }
+    .tabela-tipos th,
+    .tabela-tipos td{
+      padding:8px 10px;
+      text-align:left;
+      vertical-align:middle;
+    }
+    .tabela-tipos th{
+      font-weight:600;
+      color:#6c4b30;
+    }
+    .tabela-tipos tbody tr:nth-child(even){
+      background:#fdf7f0;
+    }
+
+    .tag-letra{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:26px;
+      height:26px;
+      border-radius:999px;
+      background:#f3e8da;
+      color:#6c4b30;
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .badge-simples{
+      display:inline-flex;
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#e4f7ec;
+      color:#1f6b3b;
+      gap:4px;
+      align-items:center;
+    }
+    .badge-simples i{
+      width:12px; height:12px;
+    }
+    .badge-nao{
+      background:#eee2d3;
+      color:#7a5a3c;
+    }
+
+    .status-pacote{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .status-pacote i{
+      width:12px; height:12px;
+    }
+    .status-ativo{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .status-inativo{
+      background:#eee2d3;
+      color:#7a5a3c;
+    }
+
+    .acoes-tipo{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .btn-acao{
+      border:none;
+      border-radius:999px;
+      padding:5px 10px;
+      font-size:11px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .btn-acao i{
+      width:13px; height:13px;
+    }
+
+    .rodape-tabela{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:10px;
+      font-size:11px;
+      color:#9a7b58;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .paginacao{
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .paginacao button{
+      border:none;
+      background:#f3e8da;
+      color:#6c4b30;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      cursor:pointer;
+    }
+    .paginacao button[disabled]{
+      opacity:.4;
+      cursor:default;
+    }
+
+    /* ---------- MODAL DE EDIÇÃO ---------- */
+
+    .backdrop-modal{
+      position:fixed;
+      inset:0;
+      background:rgba(15,10,5,0.45);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:1100;
+    }
+    .backdrop-modal[hidden]{
+      display:none;
+    }
+    .janela-modal{
+      background:#fff;
+      border-radius:16px;
+      padding:18px 20px 16px;
+      width:min(480px, 92vw);
+      box-shadow:0 20px 45px rgba(0,0,0,.25);
+    }
+    .janela-modal header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .janela-modal header h2{
+      font-size:18px;
+      margin:0;
+      color:#5a3e2b;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .janela-modal header h2 i{
+      width:18px; height:18px;
+    }
+    .janela-modal header button{
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      padding:4px;
+      border-radius:999px;
+    }
+    .janela-modal header button:hover{
+      background:#f5e7d8;
+    }
+    .janela-modal .linha-botoes-form{
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <h1><i data-lucide="party-popper"></i> Tipos de Evento – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Configure cada tipo de evento/pacote da formatura, com letra do convite, quantidade de convites, valor por aluno e modelo de convite.
+        </p>
+
+        <div class="linha-topo-eventos">
+          <div class="grupo-filtros">
+            <div class="campo">
+              <label for="buscaTipoEvento">Pesquisar tipo de evento</label>
+              <input id="buscaTipoEvento" type="text" placeholder="Ex.: Colação, Baile, Churrasco...">
+            </div>
+          </div>
+
+          <button type="button" class="btn-primario" id="btnNovoTipo">
+            <i data-lucide="plus"></i>
+            Novo tipo de evento
+          </button>
+        </div>
+
+        <div class="box-evento-flex">
+          <!-- FORMULÁRIO UNIFICADO -->
+          <section class="card-form-evento" aria-label="Cadastro de tipo de evento">
+            <h2><i data-lucide="sparkles"></i> Cadastro / edição de tipo de evento</h2>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 220px;">
+                <label for="campoNomeTipo">Nome do tipo de evento</label>
+                <input id="campoNomeTipo" type="text" placeholder="Ex.: Colação de Grau, Baile de Formatura...">
+              </div>
+              <div class="campo campo-menor" style="max-width:130px;">
+                <label for="campoLetraTipo">Letra no convite</label>
+                <input id="campoLetraTipo" type="text" maxlength="1" placeholder="C, B, H...">
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo campo-menor">
+                <label for="campoConvitesInclusos">Quantidade de convites</label>
+                <input id="campoConvitesInclusos" type="number" min="0" placeholder="Ex.: 5">
+              </div>
+              <div class="campo campo-menor">
+                <label for="campoValorPorAluno">Valor por aluno (R$)</label>
+                <input id="campoValorPorAluno" type="number" step="0.01" min="0" placeholder="0,00">
+              </div>
+              <div class="campo" style="flex:1 1 200px;">
+                <label for="campoModeloConvite">Modelo de convites</label>
+                <select id="campoModeloConvite">
+                  <option value="">Selecionar modelo...</option>
+                  <option value="modelo1">Modelo 1 - Clássico dourado</option>
+                  <option value="modelo2">Modelo 2 - Moderno</option>
+                  <option value="modelo3">Modelo 3 - Minimalista</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <div class="campo" style="flex:1 1 100%;">
+                <label for="campoDescricaoTipo">O que está incluso nesse pacote?</label>
+                <textarea id="campoDescricaoTipo" placeholder="Ex.: 1 cadeira por formando, beca, capelo, fotos individuais e coletivas, decoração básica, etc."></textarea>
+              </div>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox" for="campoGeraConvite">
+                <input id="campoGeraConvite" type="checkbox" checked>
+                Este tipo de evento gera convites individuais (com numeração e QR Code).
+              </label>
+            </div>
+
+            <div class="linha-form">
+              <label class="campo-checkbox" for="campoAtivoTipo">
+                <input id="campoAtivoTipo" type="checkbox" checked>
+                Pacote ativo para novas vendas.
+              </label>
+            </div>
+
+            <div class="linha-botoes-form">
+              <button type="button" class="btn-secundario" id="btnLimparTipo">
+                <i data-lucide="eraser"></i>
+                Limpar
+              </button>
+              <button type="button" class="btn-primario" id="btnSalvarTipo">
+                <i data-lucide="save"></i>
+                Salvar tipo de evento
+              </button>
+            </div>
+          </section>
+
+          <!-- DICAS -->
+          <aside class="card-dica" aria-label="Dicas sobre tipos de evento">
+            <h3><i data-lucide="info"></i> Dicas importantes</h3>
+            <ul>
+              <li>A letra do convite será usada na numeração. Ex.: <strong>B-0001-2025</strong> para Baile.</li>
+              <li>A quantidade de convites será atribuída automaticamente ao aluno quando você marcar esse tipo no cadastro dele.</li>
+              <li>O valor por aluno entra no financeiro do aluno e ajuda a decidir se já pode emitir convites daquele evento.</li>
+              <li>Se marcar que gera convites, o sistema vai criar os números com a letra + sequência por ano.</li>
+              <li>Marcando como ativo, o tipo aparece na venda; inativo fica só para histórico.</li>
+            </ul>
+          </aside>
+        </div>
+
+        <!-- LISTA DE TIPOS DE EVENTO -->
+        <section class="box-tabela-tipos" aria-label="Lista de tipos de evento">
+          <table class="tabela-tipos">
+            <thead>
+              <tr>
+                <th style="width:60px;">Letra</th>
+                <th>Tipo de evento</th>
+                <th>Valor por aluno</th>
+                <th>Convites</th>
+                <th>Gera convites?</th>
+                <th>Status</th>
+                <th>Modelo de convite</th>
+                <th style="width:260px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyTiposEvento">
+              <!-- Preenchido via JavaScript/localStorage -->
+            </tbody>
+          </table>
+
+          <div class="rodape-tabela">
+            <span id="infoResumoTipos">Exibindo 0 tipos de evento.</span>
+            <div class="paginacao">
+              <button disabled>&laquo;</button>
+              <button disabled>1</button>
+              <button disabled>&raquo;</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL DE EDIÇÃO DE TIPO DE EVENTO -->
+  <div id="modalEditarTipo" class="backdrop-modal" hidden>
+    <div class="janela-modal" role="dialog" aria-modal="true" aria-labelledby="tituloModalEditarTipo">
+      <header>
+        <h2 id="tituloModalEditarTipo">
+          <i data-lucide="edit-3"></i>
+          Editar tipo de evento
+        </h2>
+        <button type="button" id="btnFecharModalEditar" aria-label="Fechar">
+          <i data-lucide="x"></i>
+        </button>
+      </header>
+
+      <div class="linha-form">
+        <div class="campo" style="flex:1 1 220px;">
+          <label for="editNomeTipo">Nome do tipo de evento</label>
+          <input id="editNomeTipo" type="text">
+        </div>
+        <div class="campo campo-menor" style="max-width:130px;">
+          <label for="editLetraTipo">Letra no convite</label>
+          <input id="editLetraTipo" type="text" maxlength="1">
+        </div>
+      </div>
+
+      <div class="linha-form">
+        <div class="campo campo-menor">
+          <label for="editConvitesInclusos">Quantidade de convites</label>
+          <input id="editConvitesInclusos" type="number" min="0">
+        </div>
+        <div class="campo campo-menor">
+          <label for="editValorPorAluno">Valor por aluno (R$)</label>
+          <input id="editValorPorAluno" type="number" step="0.01" min="0">
+        </div>
+        <div class="campo" style="flex:1 1 200px;">
+          <label for="editModeloConvite">Modelo de convites</label>
+          <select id="editModeloConvite">
+            <option value="">Selecionar modelo...</option>
+            <option value="modelo1">Modelo 1 - Clássico dourado</option>
+            <option value="modelo2">Modelo 2 - Moderno</option>
+            <option value="modelo3">Modelo 3 - Minimalista</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="linha-form">
+        <div class="campo" style="flex:1 1 100%;">
+          <label for="editDescricaoTipo">O que está incluso nesse pacote?</label>
+          <textarea id="editDescricaoTipo"></textarea>
+        </div>
+      </div>
+
+      <div class="linha-form">
+        <label class="campo-checkbox" for="editGeraConvite">
+          <input id="editGeraConvite" type="checkbox">
+          Este tipo de evento gera convites individuais (com numeração e QR Code).
+        </label>
+      </div>
+
+      <div class="linha-form">
+        <label class="campo-checkbox" for="editAtivoTipo">
+          <input id="editAtivoTipo" type="checkbox">
+          Pacote ativo para novas vendas.
+        </label>
+      </div>
+
+      <div class="linha-botoes-form">
+        <button type="button" class="btn-secundario" id="btnCancelarEdicaoTipo">
+          <i data-lucide="x-circle"></i>
+          Cancelar
+        </button>
+        <button type="button" class="btn-primario" id="btnSalvarEdicaoTipo">
+          <i data-lucide="save"></i>
+          Salvar alterações
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.firebaseSync = window.firebaseSync || {};
+    window.firebaseSync.enabled = true;
+  </script>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) {
+            aplicarPermissoesNaTela();
+            o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      /* --------- MENU LATERAL (MOBILE) --------- */
+      const menu = document.getElementById('menuLateral');
+      const btn = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (btn && menu && backdrop) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+        btn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+
+      /* --------- LOCALSTORAGE: TIPOS DE EVENTO --------- */
+
+      const LS_KEY = 'kgb_formaturas_tiposEvento';
+
+      function carregarTipos(){
+        try{
+          const bruto = localStorage.getItem(LS_KEY);
+          if(!bruto) return [];
+          const arr = JSON.parse(bruto);
+          return Array.isArray(arr) ? arr : [];
+        }catch(e){
+          console.error('Erro lendo tipos de evento do localStorage', e);
+          return [];
+        }
+      }
+
+      function salvarTipos(lista){
+        try{
+          localStorage.setItem(LS_KEY, JSON.stringify(lista));
+        }catch(e){
+          console.error('Erro salvando tipos de evento no localStorage', e);
+        }
+      }
+
+      function criarId(){
+        return 'tipo_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      }
+
+      // Campos do formulário principal
+      const campoNomeTipo = document.getElementById('campoNomeTipo');
+      const campoLetraTipo = document.getElementById('campoLetraTipo');
+      const campoConvitesInclusos = document.getElementById('campoConvitesInclusos');
+      const campoValorPorAluno = document.getElementById('campoValorPorAluno');
+      const campoModeloConvite = document.getElementById('campoModeloConvite');
+      const campoDescricaoTipo = document.getElementById('campoDescricaoTipo');
+      const campoGeraConvite = document.getElementById('campoGeraConvite');
+      const campoAtivoTipo = document.getElementById('campoAtivoTipo');
+
+      const btnNovoTipo = document.getElementById('btnNovoTipo');
+      const btnLimparTipo = document.getElementById('btnLimparTipo');
+      const btnSalvarTipo = document.getElementById('btnSalvarTipo');
+
+      const tbody = document.getElementById('tbodyTiposEvento');
+      const infoResumoTipos = document.getElementById('infoResumoTipos');
+      const campoBuscaTipo = document.getElementById('buscaTipoEvento');
+
+      // Modal de edição
+      const modalEditar = document.getElementById('modalEditarTipo');
+      const btnFecharModalEditar = document.getElementById('btnFecharModalEditar');
+      const btnCancelarEdicaoTipo = document.getElementById('btnCancelarEdicaoTipo');
+      const btnSalvarEdicaoTipo = document.getElementById('btnSalvarEdicaoTipo');
+
+      const editNomeTipo = document.getElementById('editNomeTipo');
+      const editLetraTipo = document.getElementById('editLetraTipo');
+      const editConvitesInclusos = document.getElementById('editConvitesInclusos');
+      const editValorPorAluno = document.getElementById('editValorPorAluno');
+      const editModeloConvite = document.getElementById('editModeloConvite');
+      const editDescricaoTipo = document.getElementById('editDescricaoTipo');
+      const editGeraConvite = document.getElementById('editGeraConvite');
+      const editAtivoTipo = document.getElementById('editAtivoTipo');
+
+      function getModeloLabel(valor){
+        if(!valor) return '—';
+        if(!campoModeloConvite) return valor;
+        const op = campoModeloConvite.querySelector(`option[value="${valor}"]`);
+        return op ? op.textContent.trim() : valor;
+      }
+
+      function formatarValor(valorNum){
+        if(isNaN(valorNum)) valorNum = 0;
+        return valorNum.toLocaleString('pt-BR',{
+          minimumFractionDigits:2,
+          maximumFractionDigits:2
+        });
+      }
+
+      // NÃO cria mais tipos de exemplo: só o que estiver salvo mesmo
+      let tiposEvento = carregarTipos();
+      if (!Array.isArray(tiposEvento)) {
+        tiposEvento = [];
+      }
+
+      function renderTabela(filtroTexto = ''){
+        const termo = filtroTexto.trim().toLowerCase();
+        let lista = tiposEvento;
+
+        if(termo){
+          lista = tiposEvento.filter(t => {
+            const modeloLabel = getModeloLabel(t.modeloConvite).toLowerCase();
+            return (
+              (t.nome || '').toLowerCase().includes(termo) ||
+              (t.letra || '').toLowerCase().includes(termo) ||
+              modeloLabel.includes(termo)
+            );
+          });
+        }
+
+        tbody.innerHTML = '';
+
+        lista.forEach(tipo => {
+          const tr = document.createElement('tr');
+          const modeloLabel = getModeloLabel(tipo.modeloConvite);
+          const temModelo = !!tipo.modeloConvite;
+          const geraConvite = !!tipo.geraConvite;
+          const ativo = !!tipo.ativo;
+
+          tr.innerHTML = `
+            <td><span class="tag-letra">${tipo.letra || '-'}</span></td>
+            <td>${tipo.nome || '-'}</td>
+            <td>R$ ${formatarValor(Number(tipo.valor))}</td>
+            <td>${Number.isFinite(Number(tipo.convites)) ? Number(tipo.convites) : 0}</td>
+            <td>
+              <span class="badge-simples ${geraConvite ? '' : 'badge-nao'}">
+                <i data-lucide="${geraConvite ? 'check-circle-2' : 'minus-circle'}"></i>
+                ${geraConvite ? 'Sim' : 'Não'}
+              </span>
+            </td>
+            <td>
+              <span class="status-pacote ${ativo ? 'status-ativo' : 'status-inativo'}">
+                <i data-lucide="${ativo ? 'check-circle-2' : 'pause-circle'}"></i>
+                ${ativo ? 'Ativo' : 'Inativo'}
+              </span>
+            </td>
+            <td>${temModelo ? modeloLabel : '—'}</td>
+            <td>
+              <div class="acoes-tipo">
+                <button class="btn-acao btn-editar-tipo" data-id="${tipo.id}">
+                  <i data-lucide="edit-3"></i>
+                  Editar
+                </button>
+                ${temModelo ? `
+                <button class="btn-acao btn-ver-modelo" data-id="${tipo.id}">
+                  <i data-lucide="ticket"></i>
+                  Ver modelo de convite
+                </button>` : ''}
+                <button class="btn-acao btn-excluir-tipo" data-id="${tipo.id}">
+                  <i data-lucide="trash-2"></i>
+                  Excluir
+                </button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        const total = tiposEvento.length;
+        const visiveis = lista.length;
+        if(infoResumoTipos){
+          if(termo){
+            infoResumoTipos.textContent = `Exibindo ${visiveis} de ${total} tipos de evento filtrados por "${filtroTexto}".`;
+          }else{
+            infoResumoTipos.textContent = `Exibindo ${visiveis} tipos de evento.`;
+          }
+        }
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      renderTabela();
+
+      /* --------- FILTRO DE BUSCA --------- */
+
+      if(campoBuscaTipo){
+        campoBuscaTipo.addEventListener('input', () => {
+          renderTabela(campoBuscaTipo.value);
+        });
+      }
+
+      /* --------- FORMULÁRIO PRINCIPAL (NOVO TIPO) --------- */
+
+      let currentEditId = null; // reservado se quiser editar pelo form principal no futuro
+
+      function limparFormulario(){
+        if(campoNomeTipo) campoNomeTipo.value = '';
+        if(campoLetraTipo) campoLetraTipo.value = '';
+        if(campoConvitesInclusos) campoConvitesInclusos.value = '';
+        if(campoValorPorAluno) campoValorPorAluno.value = '';
+        if(campoModeloConvite) campoModeloConvite.value = '';
+        if(campoDescricaoTipo) campoDescricaoTipo.value = '';
+        if(campoGeraConvite) campoGeraConvite.checked = true;
+        if(campoAtivoTipo) campoAtivoTipo.checked = true;
+        currentEditId = null;
+      }
+
+      if(btnNovoTipo){
+        btnNovoTipo.addEventListener('click', () => {
+          limparFormulario();
+          if(campoNomeTipo) campoNomeTipo.focus();
+        });
+      }
+
+      if(btnLimparTipo){
+        btnLimparTipo.addEventListener('click', () => {
+          limparFormulario();
+        });
+      }
+
+      if(btnSalvarTipo){
+        btnSalvarTipo.addEventListener('click', () => {
+          const nome = (campoNomeTipo.value || '').trim();
+          const letra = (campoLetraTipo.value || '').trim().toUpperCase();
+          const convites = parseInt(campoConvitesInclusos.value, 10);
+          const valorNum = parseFloat(String(campoValorPorAluno.value).replace(',', '.'));
+          const modelo = campoModeloConvite.value || '';
+          const descricao = (campoDescricaoTipo.value || '').trim();
+          const geraConvite = campoGeraConvite.checked;
+          const ativo = campoAtivoTipo.checked;
+
+          if(!nome){
+            alert('Informe o nome do tipo de evento.');
+            campoNomeTipo.focus();
+            return;
+          }
+          if(!letra){
+            alert('Informe a letra que aparecerá no convite.');
+            campoLetraTipo.focus();
+            return;
+          }
+
+          const dado = {
+            id: currentEditId || criarId(),
+            nome,
+            letra,
+            convites: Number.isNaN(convites) ? 0 : convites,
+            valor: Number.isNaN(valorNum) ? 0 : valorNum,
+            modeloConvite: modelo,
+            descricao,
+            geraConvite,
+            ativo
+          };
+
+          if(currentEditId){
+            const idx = tiposEvento.findIndex(t => t.id === currentEditId);
+            if(idx >= 0){
+              tiposEvento[idx] = dado;
+            }else{
+              tiposEvento.push(dado);
+            }
+          }else{
+            tiposEvento.push(dado);
+          }
+
+          salvarTipos(tiposEvento);
+          renderTabela(campoBuscaTipo ? campoBuscaTipo.value : '');
+          limparFormulario();
+          alert('Tipo de evento salvo com sucesso!');
+        });
+      }
+
+      /* --------- MODAL DE EDIÇÃO --------- */
+
+      let modalEditId = null;
+
+      function abrirModalEdicao(tipo){
+        modalEditId = tipo.id;
+        editNomeTipo.value = tipo.nome || '';
+        editLetraTipo.value = tipo.letra || '';
+        editConvitesInclusos.value = (Number.isFinite(Number(tipo.convites)) ? Number(tipo.convites) : 0);
+        editValorPorAluno.value = (Number(tipo.valor) || 0);
+        editModeloConvite.value = tipo.modeloConvite || '';
+        editDescricaoTipo.value = tipo.descricao || '';
+        editGeraConvite.checked = !!tipo.geraConvite;
+        editAtivoTipo.checked = !!tipo.ativo;
+
+        modalEditar.hidden = false;
+        editNomeTipo.focus();
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      function fecharModalEdicao(){
+        modalEditar.hidden = true;
+        modalEditId = null;
+      }
+
+      if(btnFecharModalEditar){
+        btnFecharModalEditar.addEventListener('click', fecharModalEdicao);
+      }
+      if(btnCancelarEdicaoTipo){
+        btnCancelarEdicaoTipo.addEventListener('click', fecharModalEdicao);
+      }
+
+      if(modalEditar){
+        modalEditar.addEventListener('click', (ev) => {
+          if(ev.target === modalEditar){
+            fecharModalEdicao();
+          }
+        });
+      }
+
+      if(btnSalvarEdicaoTipo){
+        btnSalvarEdicaoTipo.addEventListener('click', () => {
+          if(!modalEditId) return;
+
+          const nome = (editNomeTipo.value || '').trim();
+          const letra = (editLetraTipo.value || '').trim().toUpperCase();
+          const convites = parseInt(editConvitesInclusos.value, 10);
+          const valorNum = parseFloat(String(editValorPorAluno.value).replace(',', '.'));
+          const modelo = editModeloConvite.value || '';
+          const descricao = (editDescricaoTipo.value || '').trim();
+          const geraConvite = editGeraConvite.checked;
+          const ativo = editAtivoTipo.checked;
+
+          if(!nome){
+            alert('Informe o nome do tipo de evento.');
+            editNomeTipo.focus();
+            return;
+          }
+          if(!letra){
+            alert('Informe a letra que aparecerá no convite.');
+            editLetraTipo.focus();
+            return;
+          }
+
+          const idx = tiposEvento.findIndex(t => t.id === modalEditId);
+          if(idx < 0) return;
+
+          tiposEvento[idx] = {
+            ...tiposEvento[idx],
+            nome,
+            letra,
+            convites: Number.isNaN(convites) ? 0 : convites,
+            valor: Number.isNaN(valorNum) ? 0 : valorNum,
+            modeloConvite: modelo,
+            descricao,
+            geraConvite,
+            ativo
+          };
+
+          salvarTipos(tiposEvento);
+          renderTabela(campoBuscaTipo ? campoBuscaTipo.value : '');
+          fecharModalEdicao();
+          alert('Tipo de evento atualizado com sucesso!');
+        });
+      }
+
+      /* --------- AÇÕES DA TABELA (EDITAR / VER MODELO / EXCLUIR) --------- */
+
+      if(tbody){
+        tbody.addEventListener('click', (ev) => {
+          const btnEditar = ev.target.closest('.btn-editar-tipo');
+          const btnVerModelo = ev.target.closest('.btn-ver-modelo');
+          const btnExcluir = ev.target.closest('.btn-excluir-tipo');
+
+          if(btnEditar){
+            const id = btnEditar.getAttribute('data-id');
+            const tipo = tiposEvento.find(t => t.id === id);
+            if(tipo){
+              abrirModalEdicao(tipo);
+            }
+            return;
+          }
+
+          if(btnVerModelo){
+            const id = btnVerModelo.getAttribute('data-id');
+            const tipo = tiposEvento.find(t => t.id === id);
+            if(!tipo) return;
+
+            if(!tipo.modeloConvite){
+              alert('Este tipo de evento não tem modelo de convite vinculado.');
+              return;
+            }
+
+            const url = `kgb-formaturas-modelos-convite.html?modelo=${encodeURIComponent(tipo.modeloConvite)}`;
+            window.location.href = url;
+            return;
+          }
+
+          if(btnExcluir){
+            const id = btnExcluir.getAttribute('data-id');
+            const idx = tiposEvento.findIndex(t => t.id === id);
+            if(idx < 0) return;
+
+            const ok = confirm('Deseja realmente excluir este tipo de evento? Essa ação não pode ser desfeita.');
+            if(!ok) return;
+
+            tiposEvento.splice(idx, 1);
+            salvarTipos(tiposEvento);
+            renderTabela(campoBuscaTipo ? campoBuscaTipo.value : '');
+            return;
+          }
+        });
+      }
+    });
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

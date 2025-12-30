@@ -764,10 +764,21 @@ body.no-scroll{
           documentos, tipoPessoa, cnpj, cpfCnpj: (tipoPessoa === 'pj') ? cnpj : cpf
         };
 
-     // ✅ Salva no Firebase (cria ou atualiza pelo id)
-const rdata = await firebaseClientes.upsert(payload);
+     // Salva via API /leads (cria ou atualiza). Se falhar, usa fallback local (payload).
+      let rdata = null;
+      try {
+        if (editId) {
+          const res = await api('/leads/' + encodeURIComponent(editId), 'PUT', payload);
+          rdata = (res && (res.data || res.lead)) ? (res.data || res.lead) : null;
+        } else {
+          const res = await api('/leads', 'POST', payload);
+          rdata = (res && (res.data || res.lead)) ? (res.data || res.lead) : null;
+        }
+      } catch (e) {
+        console.warn('[Cadastro Cliente] falha ao salvar em /leads:', e);
+      }
 
-               const novoCliente = {
+      const novoCliente = {
           id: String(rdata.id ?? rdata._id ?? rdata.idCliente ?? payload.id ?? Date.now()),
           nome: rdata.nome ?? payload.nome,
           email: rdata.email ?? payload.email,
@@ -928,6 +939,9 @@ const rdata = await firebaseClientes.upsert(payload);
 </script>
 
 
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
 </body>
 </html>
 

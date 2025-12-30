@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:configuracoes.html">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH kgb-common (precisa vir cedo no <head>) === -->
+<script type="module" src="./kgb-common.js"></script>
+<!-- === FIM PATCH kgb-common === -->
+
+  <title>Configurações do Sistema</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais e menu -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="icon" type="image/png" href="logo.png">
+
+
+  <style>
+    :root{
+      --brand:#5a3e2b;   /* marrom */
+      --brand-2:#c29a5d; /* dourado */
+      --bg:#f8f1e8;      /* bege */
+      --ink:#2d2730;
+      --line:#ead9c8;
+      --radius:14px;
+    }
+    html,body{margin:0;height:100%;background:var(--bg)}
+    /* fontes iguais ao modelo base */
+    main.conteudo-principal,
+    input,select,textarea,button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+                   Roboto, Arial, "Noto Sans", "Apple Color Emoji",
+                   "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1,h2,h3{
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    #menuLateral{flex-shrink:0;background:#5a3e2b;height:100vh;overflow-y:auto}
+    /* mantém ícones do menu brancos como nas outras telas */
+    #menuLateral, #menuLateral * { color:#fff; }
+    #menuLateral svg.lucide{color:#fff;stroke:#fff}
+
+    main.conteudo-principal{flex-grow:1;padding:32px;height:100vh;overflow-y:auto}
+    .conteudo-central{max-width:1120px;margin:0 auto}
+    h1{font-size:30px;color:#5a3e2b;display:flex;gap:10px;align-items:center;margin:0 0 16px}
+
+    /* Hero preview */
+    .hero{
+      background: linear-gradient(90deg,var(--brand),var(--brand-2));
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.06);
+      color:#fff;
+      padding:18px;
+      display:flex;align-items:center;gap:16px;
+    }
+    .logo-wrap{
+      width:120px;height:120px;border-radius:16px;
+      background:#fff;display:grid;place-items:center;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+      flex:0 0 auto; overflow:hidden;
+    }
+    .logo-wrap img{max-width:100%;max-height:100%;object-fit:contain}
+
+    .hero-txt h2{font-size:22px;margin:0}
+    .hero-txt small{opacity:.9}
+    .pill-colors{display:flex;gap:14px;margin-top:8px}
+    .pill{display:flex;align-items:center;gap:8px}
+    .dot{width:16px;height:16px;border-radius:6px;border:1px solid rgba(255,255,255,.6)}
+
+    .section{
+      background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:0 2px 12px rgba(0,0,0,.04);
+      padding:18px;margin-top:18px;
+    }
+    .section h3{margin:0 0 12px;color:#3b2a21;font-size:20px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+    label{font-size:12px;color:#6c6271;font-weight:600}
+    input[type="text"],input[type="email"],input[type="tel"]{
+      width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff
+    }
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{
+      appearance:none;border:none;background:var(--brand);color:#fff;font-weight:700;
+      padding:10px 14px;border-radius:10px;display:inline-flex;align-items:center;gap:8px;cursor:pointer
+    }
+    .btn.ghost{background:#fff;color:#2d2730;border:1px solid var(--line)}
+    .btn.warn{background:#c29a5d}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .mini{font-size:12px;color:#6c6271}
+
+    /* Caixa de LOGO (clique/arraste) */
+    .logo-uploader{
+      border:1px dashed var(--line);
+      border-radius:12px;
+      padding:12px;
+      display:flex;align-items:center;gap:12px;
+      background:#fffaf4;
+    }
+    .logo-box{
+      width:160px;height:120px;border-radius:12px;background:#fff;
+      border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;
+      position:relative;cursor:pointer;
+    }
+    .logo-box img{max-width:100%;max-height:100%;object-fit:contain}
+    .logo-box .hint{
+      position:absolute;inset:auto 8px 8px auto;background:rgba(0,0,0,.55);
+      color:#fff;border-radius:8px;padding:4px 8px;font-size:11px
+    }
+    .savebar{display:flex;justify-content:flex-end;margin-top:16px}
+    .alert{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fffbe8;font-size:14px}
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+
+  <div class="wrapper">
+    <!-- Menu lateral (igual ao modelo base) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="settings"></i> Configurações do Sistema</h1>
+
+        <!-- Preview -->
+        <div class="hero">
+          <div class="logo-wrap"><img id="logoPreview" alt="Logo" /></div>
+          <div class="hero-txt">
+            <h2 id="heroNome">Seu Buffet</h2>
+            <small>Pré-visualização · cores e logo</small>
+            <div class="pill-colors">
+              <div class="pill"><span class="dot" id="dotP" style="background:#5a3e2b"></span> Primária</div>
+              <div class="pill"><span class="dot" id="dotS" style="background:#c29a5d"></span> Dourado</div>
+              <div class="pill"><span class="dot" id="dotB" style="background:#f8f1e8"></span> Fundo</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Identidade -->
+        <div class="section">
+          <h3>Identidade da Empresa</h3>
+          <div class="grid">
+            <div>
+              <label>Nome da empresa</label>
+              <input id="cfgNome" type="text" placeholder="Ex.: KGB Buffet e Eventos" />
+            </div>
+            <div>
+              <label>E-mail</label>
+              <div class="row">
+                <input id="cfgEmail" type="email" placeholder="contato@seudominio.com" />
+                <button class="btn ghost" id="btnTestEmail"><i data-lucide="mail"></i> Testar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid" style="margin-top:10px">
+            <div>
+              <label>WhatsApp da empresa</label>
+              <div class="row">
+                <input id="cfgWhats" type="tel" placeholder="(11) 99999-9999" />
+                <button class="btn ghost" id="btnTestWhats"><i data-lucide="phone"></i> Testar</button>
+              </div>
+              <div class="mini">Esse número será usado em “Fale conosco” na Área do Cliente.</div>
+            </div>
+
+            <!-- Uploader de LOGO -->
+            <div>
+              <label>Logo do Buffet</label>
+              <div class="logo-uploader">
+                <div class="logo-box" id="dropLogo" title="Clique para escolher ou arraste sua imagem">
+                  <img id="logoBoxImg" alt="Logo" />
+                  <span class="hint">Clique ou solte aqui</span>
+                </div>
+                <div class="row">
+                  <input id="logoInput" type="file" accept="image/*" hidden />
+                  <button class="btn" id="btnEnviarLogo"><i data-lucide="upload"></i> Enviar logo</button>
+                  <button class="btn ghost" id="btnRemoverLogo"><i data-lucide="x"></i> Remover</button>
+                </div>
+              </div>
+              <div class="mini">PNG com fundo transparente fica mais elegante. A imagem **não** é cortada (object-fit: contain).</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cores -->
+        <div class="section">
+          <h3>Paleta de Cores</h3>
+          <div class="grid">
+            <div class="row">
+              <label style="min-width:150px">Cor primária (marrom)</label>
+              <input id="colorP" type="color" value="#5a3e2b" />
+              <input id="txtP" type="text" style="width:130px" value="#5a3e2b" />
+            </div>
+            <div class="row">
+              <label style="min-width:150px">Cor de realce (dourado)</label>
+              <input id="colorS" type="color" value="#c29a5d" />
+              <input id="txtS" type="text" style="width:130px" value="#c29a5d" />
+            </div>
+            <div class="row">
+              <label style="min-width:150px">Cor de fundo (bege)</label>
+              <input id="colorB" type="color" value="#f8f1e8" />
+              <input id="txtB" type="text" style="width:130px" value="#f8f1e8" />
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost" id="btnPaleta"><i data-lucide="palette"></i> Usar paleta do Buffet</button>
+          </div>
+        </div>
+
+        <!-- Mensagens automáticas -->
+        <div class="section">
+          <h3>Mensagens automáticas</h3>
+          <div class="alert">
+            Horário padrão para disparo da <strong>mensagem do grande dia</strong> definido para <strong>08:00</strong>.
+          </div>
+        </div>
+
+        <div class="savebar">
+          <button class="btn" id="btnSalvar"><i data-lucide="save"></i> Salvar configurações</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts do menu e permissões (iguais ao modelo base) -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild) { aplicarPermissoesNaTela(); o.disconnect(); }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <!-- Lógica da página -->
+  <script>
+    const KEY = 'app_config';
+    const $ = (id)=>document.getElementById(id);
+    const cfg = ()=> JSON.parse(localStorage.getItem(KEY) || '{}');
+
+    function applyThemePreview({brand,brand2,bg}){
+      if(brand)  document.documentElement.style.setProperty('--brand',brand);
+      if(brand2) document.documentElement.style.setProperty('--brand-2',brand2);
+      if(bg)     document.documentElement.style.setProperty('--bg',bg);
+      if(brand)  $('dotP').style.background = brand;
+      if(brand2) $('dotS').style.background = brand2;
+      if(bg)     $('dotB').style.background = bg;
+    }
+    function normalizeHex(v){
+      const s = String(v||'').trim();
+      if(/^#[0-9a-f]{6}$/i.test(s)) return s;
+      if(/^[0-9a-f]{6}$/i.test(s)) return '#'+s;
+      return '#000000';
+    }
+
+    function load(){
+      const c = cfg();
+      $('cfgNome').value  = c.nome  || 'Seu Buffet';
+      $('cfgEmail').value = c.email || '';
+      $('cfgWhats').value = c.whats || '';
+      $('heroNome').textContent = c.nome || 'Seu Buffet';
+
+      // cores
+      const brand  = c.brand  || '#5a3e2b';
+      const brand2 = c.brand2 || '#c29a5d';
+      const bg     = c.bg     || '#f8f1e8';
+      $('colorP').value = $('txtP').value = brand;
+      $('colorS').value = $('txtS').value = brand2;
+      $('colorB').value = $('txtB').value = bg;
+      applyThemePreview({brand,brand2,bg});
+
+      // logo
+      const src = c.logo || '';
+      $('logoPreview').src = src;
+      $('logoBoxImg').src  = src;
+      try{ lucide.createIcons(); }catch{}
+    }
+
+    function save(){
+      const brand  = normalizeHex($('txtP').value || $('colorP').value);
+      const brand2 = normalizeHex($('txtS').value || $('colorS').value);
+      const bg     = normalizeHex($('txtB').value || $('colorB').value);
+      const data = {
+        nome:  $('cfgNome').value.trim(),
+        email: $('cfgEmail').value.trim(),
+        whats: $('cfgWhats').value.trim(),
+        logo:  $('logoPreview').src || '',
+        brand, brand2, bg,
+        msgHoraPadrao: '08:00'
+      };
+      localStorage.setItem(KEY, JSON.stringify(data));
+      applyThemePreview(data);
+      $('heroNome').textContent = data.nome || 'Seu Buffet';
+      alert('Configurações salvas!');
+    }
+
+    // ---- Logo: upload/dragdrop
+    function handleLogoFile(file){
+      if(!file) return;
+      if(!/^image\//.test(file.type)) { alert('Selecione uma imagem.'); return; }
+      const r = new FileReader();
+      r.onload = e => {
+        const src = e.target.result;
+        $('logoPreview').src = src;
+        $('logoBoxImg').src  = src;
+      };
+      r.readAsDataURL(file);
+    }
+    $('btnEnviarLogo').onclick = ()=> $('logoInput').click();
+    $('logoInput').addEventListener('change', ()=>{
+      const f = $('logoInput').files && $('logoInput').files[0];
+      handleLogoFile(f);
+      $('logoInput').value = '';
+    });
+    $('btnRemoverLogo').onclick = ()=> { $('logoPreview').src=''; $('logoBoxImg').src=''; };
+
+    // clique/drag na caixa
+    const drop = $('dropLogo');
+    drop.addEventListener('click', ()=> $('logoInput').click());
+    ;['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,(e)=>{e.preventDefault();drop.style.borderColor='#c29a5d';}));
+    ;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,(e)=>{e.preventDefault();drop.style.borderColor='var(--line)';}));
+    drop.addEventListener('drop', (e)=>{
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      handleLogoFile(f);
+    });
+
+    // ---- Cores
+    ['P','S','B'].forEach(k=>{
+      $('color'+k).addEventListener('input', e=>{
+        $('txt'+k).value = e.target.value;
+        applyThemePreview({ brand:$('txtP').value, brand2:$('txtS').value, bg:$('txtB').value });
+      });
+      $('txt'+k).addEventListener('change', e=>{
+        const v = normalizeHex(e.target.value);
+        $('txt'+k).value = v; $('color'+k).value = v;
+        applyThemePreview({ brand:$('txtP').value, brand2:$('txtS').value, bg:$('txtB').value });
+      });
+    });
+    $('btnPaleta').onclick = ()=>{
+      $('colorP').value = $('txtP').value = '#5a3e2b';
+      $('colorS').value = $('txtS').value = '#c29a5d';
+      $('colorB').value = $('txtB').value = '#f8f1e8';
+      applyThemePreview({brand:'#5a3e2b',brand2:'#c29a5d',bg:'#f8f1e8'});
+    };
+
+    // testar contatos
+    $('btnTestEmail').onclick = ()=>{
+      const to = $('cfgEmail').value.trim() || 'contato@seudominio.com';
+      window.open(`mailto:${to}?subject=Teste de contato`, '_blank');
+    };
+    $('btnTestWhats').onclick = ()=>{
+      const n = ($('cfgWhats').value||'').replace(/\D+/g,'');
+      if(!n){ alert('Informe um WhatsApp.'); return; }
+      window.open(`https://wa.me/${n}?text=${encodeURIComponent('Olá! Teste do WhatsApp do Buffet.')}`,'_blank');
+    };
+
+    // mobile hamburger
+    const hb = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const backdrop = document.getElementById('menuBackdrop');
+    const mq = window.matchMedia('(max-width:768px)');
+    function syncHamb(){ hb.style.display = mq.matches ? 'block' : 'none'; }
+    mq.addEventListener('change', syncHamb); syncHamb();
+    hb.onclick = ()=>{ aside.classList.toggle('aberto'); backdrop.hidden = !aside.classList.contains('aberto'); };
+    backdrop.onclick = ()=>{ aside.classList.remove('aberto'); backdrop.hidden=true; };
+
+    // salvar
+    $('btnSalvar').onclick = save;
+
+    // carrega tudo
+    load();
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Identidade RBAC da página (usada pelo guard) -->
+<meta name="page-permission" content="page:detalhes-responsavel-evento.html">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH PASSO 3 (common + guard) === -->
+<!-- 3.1 Helpers globais (sempre antes do guard) -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- 3.2 Guard: usa a meta page-permission -->
+<script type="module">
+  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  const meta = document.querySelector('meta[name="page-permission"]');
+  const permissao = meta?.content?.trim();
+  if (permissao) guard({ permissao });
+  aplicarPermissoesNaTela();
+</script>
+
+<!-- (opcional) favicon para evitar 404 -->
+<link rel="icon" href="data:," />
+<!-- === FIM PATCH PASSO 3 (common + guard) === -->
+
+  
+  <title>Detalhes do Responsável</title>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg:#f8f1e8; --paper:#f5e7d6; --card:#fff7ee; --text:#3a2b23;
+      --gold:#c29a5d; --brown:#5a3e2b; --radius:18px; --shadow:0 10px 18px rgba(0,0,0,.08);
+      --sidebar-w:260px;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);height:100%}
+    main.conteudo-principal, input,select,textarea,button{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:var(--text)}
+    h1,h2,h3{font-family:"Playfair Display",Georgia,serif}
+
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    #menuLateral{flex-shrink:0;background:var(--brown);height:100vh;overflow:auto}
+    @media (min-width:901px){
+      #menuLateral{position:fixed;left:0;top:0;width:var(--sidebar-w);z-index:900}
+      .wrapper{padding-left:var(--sidebar-w)}
+    }
+
+    main.conteudo-principal{
+      flex:1; min-height:100vh; padding:40px; box-sizing:border-box;
+      display:flex; justify-content:center; align-items:flex-start;
+      margin-left:0 !important;
+    }
+    .conteudo-central{width:min(1100px,100%); margin:0 auto}
+
+    #hamburguer{position:fixed;top:12px;left:12px;background:var(--gold);color:#fff;border:0;border-radius:8px;font-size:22px;padding:6px 10px;z-index:1001;display:none}
+    #menuBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:898;display:none}
+    #menuBackdrop.visivel{display:block}
+    @media (max-width:900px){
+      #hamburguer{display:block}
+      #menuLateral{position:fixed;transform:translateX(-100%);transition:transform .28s;width:var(--sidebar-w);z-index:899}
+      #menuLateral.aberto{transform:translateX(0)}
+      .wrapper{padding-left:0}
+      main.conteudo-principal{padding:20px}
+    }
+
+    .topo{display:flex;gap:12px;margin:8px 0 20px;align-items:center}
+    .titulo{font-size:clamp(28px,3.2vw,44px);line-height:1.05;color:var(--brown);margin:0;display:flex;gap:10px}
+
+    .secao{background:linear-gradient(180deg,var(--paper),var(--card));border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin:16px 0}
+    .secao .cabeca{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+    .secao .cabeca h3{font-size:20px;margin:0;color:var(--brown)}
+    .secao .conteudo{margin-top:12px;display:none}
+    .secao.aberta .conteudo{display:block}
+    .linha{height:1px;background:#dbc8b1;margin:12px 0}
+    .folha{background:#fff;border:1px solid #eee;border-radius:12px;padding:16px}
+    .muted{opacity:.7}
+
+    .grid-cards{display:grid;gap:16px;grid-template-columns:repeat(1,minmax(0,1fr))}
+    @media (min-width:720px){.grid-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    .card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:14px}
+    .card h4{margin:0;color:var(--brown)}
+    .acoes{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:10px 14px;font-weight:600;background:#efe4d6;color:#3a2b23;box-shadow:var(--shadow);text-decoration:none;cursor:pointer}
+    .btn.brown{background:var(--brown);color:#fff}
+    .btn.ghost{background:#fff;border:1px solid #eadbcc}
+    .pill{display:inline-block;padding:8px 12px;border-radius:999px;background:#f2e6d6;margin:6px 8px 0 0;font-size:14px}
+    .clickable{cursor:pointer}
+
+    .modal{position:fixed;inset:0;display:none;z-index:3000}
+    .modal.aberta{display:block}
+    .modal .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.36)}
+    .modal .janela{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(900px,96vw);max-height:86vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,.25)}
+    .modal header{padding:14px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between}
+    .modal .conteudo{padding:18px}
+    .img-preview{max-width:100%;height:auto;border-radius:12px;border:1px solid #eee}
+
+    /* Apenas para pré-visualização no modal (estética) */
+    .a4{width:210mm; box-sizing:border-box; margin:0 auto}
+    .a4 .inner{padding:0}
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop"></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+
+        <div class="topo">
+          <h1 class="titulo"><i data-lucide="clipboard-list"></i> Detalhes do Responsável</h1>
+        </div>
+
+        <div id="bloqueio" class="aviso" style="display:none"></div>
+
+        <section class="secao aberta" id="boxDados">
+          <div class="cabeca" data-toggle="#dadosConteudo">
+            <h3>Dados do evento</h3><i data-lucide="minus"></i>
+          </div>
+          <div class="conteudo" id="dadosConteudo">
+            <div id="dadosEvento" class="folha"><div class="muted">Carregando dados do evento…</div></div>
+          </div>
+        </section>
+
+        <section class="secao aberta" id="boxItens">
+          <div class="cabeca" data-toggle="#itensConteudo">
+            <h3>Itens contratados</h3><i data-lucide="minus"></i>
+          </div>
+          <div class="conteudo" id="itensConteudo">
+            <div id="itensLista" class="folha"><div class="muted">Carregando itens…</div></div>
+          </div>
+        </section>
+
+        <section class="secao aberta">
+          <div class="cabeca"><h3>Documentos e escala</h3><span></span></div>
+          <div class="conteudo">
+            <div class="grid-cards">
+
+              <!-- CARDÁPIO -->
+              <article class="card" id="cardCardapio">
+                <h4>Cardápio definido</h4>
+                <div class="acoes">
+                  <button class="btn ghost" id="btnVerCardapio" type="button"><i data-lucide="eye"></i> Visualizar</button>
+                  <button class="btn brown" id="btnBaixarCardapioPDF" type="button"><i data-lucide="download"></i> Baixar PDF (A4)</button>
+                </div>
+                <div class="folha muted">Abra em <strong>Visualizar</strong> para ver a folha do cardápio.</div>
+              </article>
+
+              <!-- LAYOUT -->
+              <article class="card" id="cardLayout">
+                <h4>Layout do evento</h4>
+                <div class="acoes">
+                  <button class="btn ghost" id="btnVerLayout" type="button"><i data-lucide="eye"></i> Visualizar</button>
+                  <button class="btn brown" id="btnBaixarLayoutPDF" type="button"><i data-lucide="download"></i> Baixar PDF (A4)</button>
+                </div>
+                <div class="folha muted">Abra em <strong>Visualizar</strong> para ver o layout.</div>
+              </article>
+
+              <!-- ESCALA -->
+              <article class="card" id="cardEscala">
+                <h4>Escala da equipe</h4>
+                <a class="btn brown" id="btnAbrirEscala" href="#"><i data-lucide="users"></i> Abrir escala</a>
+                <div class="muted" id="statusEscala">Nenhum colaborador na escala.</div>
+              </article>
+
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="backdrop"></div>
+    <div class="janela">
+      <header>
+        <strong id="modalTitulo">Visualização</strong>
+        <button class="fechar" id="modalFechar" title="Fechar"><i data-lucide="x"></i></button>
+      </header>
+      <div class="conteudo" id="modalConteudo"></div>
+    </div>
+  </div>
+
+  <!-- Menu -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- html2pdf (CDN principal) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+  <script>
+    /* ===== utilitários base ===== */
+    const q=(s,el=document)=>el.querySelector(s);
+    const getLS=(k,fb)=>{try{return JSON.parse(localStorage.getItem(k))??fb}catch{return fb}};
+    const norm=(s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
+    const ddmmyyyy=(iso)=>{ if(!iso)return"—"; const b=String(iso).split("T")[0]; if(b.includes("/"))return b; const [y,m,d]=b.split("-"); return(d&&m&&y)?`${d}/${m}/${y}`:b; };
+    function getUser(){
+      try {
+        if (window.__KGB_USER_CACHE) return window.__KGB_USER_CACHE;
+        if (typeof window.getUsuarioAtualAsync === 'function') {
+          window.getUsuarioAtualAsync().then(u=>{ if (u) window.__KGB_USER_CACHE = u; });
+        }
+      } catch {}
+      return null;
+    }
+    const isAdmin=(u)=> norm(u?.perfil)==="administrador";
+    const pickLocalFesta=(ev)=>ev?.local||ev?.localEvento||ev?.endereco||ev?.enderecoEvento||"—";
+    const cerimoniaNoLocalLabel=(ev)=>{const s=norm(ev?.cerimoniaNoLocal??ev?.cerimonia??""); if(s.startsWith("s"))return"Sim"; if(s.startsWith("n"))return"Não"; return"—";};
+    const hora=(ev,keys)=>{for(const k of keys){const v=ev?.[k]; if(v&&String(v).trim()) return v} return"—";};
+
+    function getEventoId(){
+      const id = new URLSearchParams(location.search).get("id")
+              || localStorage.getItem("eventoSelecionado")
+              || "";
+      return String(id||"");
+    }
+
+    /* ===== modal ===== */
+    function abrirModal(titulo, nodeOrHtml){
+      q("#modalTitulo").textContent=titulo||"Visualização";
+      const box=q("#modalConteudo"); box.innerHTML="";
+      if(typeof nodeOrHtml==="string"){box.innerHTML=nodeOrHtml}else if(nodeOrHtml){box.appendChild(nodeOrHtml)}
+      q("#modal").classList.add("aberta"); window.lucide?.createIcons?.();
+    }
+    function fecharModal(){q("#modal").classList.remove("aberta");q("#modalConteudo").innerHTML=""}
+
+    /* ===== loader para html2pdf com fallback ===== */
+    function ensureHtml2Pdf() {
+      return new Promise((resolve, reject) => {
+        if (window.html2pdf) return resolve();
+        const s2 = document.createElement('script');
+        s2.src = 'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
+        s2.onload  = () => resolve();
+        s2.onerror = () => reject(new Error('html2pdf não carregou'));
+        document.head.appendChild(s2);
+      });
+    }
+
+    /* ===== Cabeçalho KGB para PDF ===== */
+    function kgbHeaderHtml(meta, logoUrl){
+      const nome = meta?.nome || "KGB Buffet & Eventos";
+      const data = meta?.data || "—";
+      const local= meta?.local || "—";
+      const convidados = meta?.convidados || "—";
+      const linha2 = `Data: ${data} • Local: ${local} • Convidados: ${convidados}`;
+
+      const logoImg = logoUrl
+        ? `<img src="${logoUrl}" alt="KGB" style="height:30px;display:block"/>`
+        : `<div style="font-weight:800;font-size:18px;letter-spacing:.5px;">KGB BUFFET & EVENTOS</div>`;
+
+      return `
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e7d8c5;padding:10px 0 8px 0;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;color:#5a3e2b">
+          ${logoImg}
+          <div style="font-weight:700;font-size:16px">${nome}</div>
+        </div>
+        <div style="text-align:right;color:#5a3e2b;font-size:12px">${linha2}</div>
+      </div>`;
+    }
+
+    /* ===== Helper: embrulha conteúdo em A4 com cabeçalho ===== */
+    function buildPdfPage(innerHtml, meta, opts={}){
+      const logo = obterLogoKGB();
+      const header = kgbHeaderHtml(meta, logo);
+      const padding = opts.padding ?? "6mm 10mm 8mm 10mm";
+      return `
+        <div style="width:210mm;min-height:297mm;box-sizing:border-box;">
+          <div style="padding:${padding}; font-family:Arial,Helvetica,sans-serif; color:#222;">
+            ${header}
+            <div>${innerHtml || ""}</div>
+          </div>
+        </div>`;
+    }
+
+    /* ===== Geração de PDF ===== */
+    async function htmlToPDF_A4(htmlString, filename, orientation="portrait"){
+      try{
+        await ensureHtml2Pdf();
+      }catch(e){
+        alert("Falha ao carregar gerador de PDF.");
+        console.error(e); return;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = htmlString;
+
+      const opt = {
+        margin:       [0, 0, 0, 0],       // já controlamos padding no buildPdfPage
+        filename:     filename || "documento.pdf",
+        image:        { type: "jpeg", quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: "mm", format: "a4", orientation }
+      };
+      window.html2pdf().set(opt).from(wrapper).save();
+    }
+
+    /* ===== tenta obter logo salvo no sistema (opcional) ===== */
+    function obterLogoKGB(){
+      // tente em definicoes gerais ou onde você costuma salvar
+      try{
+        const a = JSON.parse(localStorage.getItem("kgb_logo")||"null");
+        if (a && typeof a === "string") return a;
+      }catch{}
+      try{
+        const g = JSON.parse(localStorage.getItem("brandingKGB")||"null");
+        if (g?.logo) return g.logo;
+      }catch{}
+      try{
+        const keys = Object.keys(localStorage).filter(k => k.startsWith("definicoes_evento_"));
+        for(const k of keys){
+          const o = JSON.parse(localStorage.getItem(k)||"null");
+          const logo = o?.imagens?.logo || o?.logoUrl || o?.branding?.logo;
+          if (logo) return logo;
+        }
+      }catch{}
+      return ""; // sem logo
+    }
+
+    // toggle e modal
+    document.addEventListener("click",(e)=>{
+      const t=e.target.closest("[data-toggle]");
+      if(t){ const sel=t.getAttribute("data-toggle"); const box=q(sel)?.closest(".secao"); if(box) box.classList.toggle("aberta"); }
+      if(e.target.matches("#modal .backdrop")||e.target.closest("#modalFechar")) fecharModal();
+    });
+
+    document.addEventListener("DOMContentLoaded",()=>{
+      try { lucide.createIcons(); } catch {}
+      carregar();
+    });
+    window.addEventListener("storage",(e)=>{ if(e.key==="eventos"||(e.key||"").startsWith("definicoes_evento_")) carregar(); });
+
+    /* ===== Helpers IndexedDB para o LAYOUT (busca por idbKey salvo em Definições) ===== */
+    const IDB_DB = 'buffetLayouts';
+    const IDB_STORE = 'layouts';
+    function idbOpen(){
+      return new Promise((resolve, reject)=>{
+        const req = indexedDB.open(IDB_DB, 1);
+        req.onupgradeneeded = ()=> {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)){
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = ()=> resolve(req.result);
+        req.onerror   = ()=> reject(req.error);
+      });
+    }
+    async function idbGet(key){
+      const db = await idbOpen();
+      return new Promise((resolve, reject)=>{
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const rq = tx.objectStore(IDB_STORE).get(key);
+        rq.onsuccess = ()=> resolve(rq.result ?? null);
+        rq.onerror   = ()=> reject(rq.error);
+      });
+    }
+
+    /* ===== fluxo principal ===== */
+    function carregar(){
+      const id=getEventoId();
+      const user=getUser();
+      const eventos=getLS("eventos",[]);
+      let ev=eventos.find(e => String(e?.id)===id || String(e?.codigo)===id || String(e?.uuid)===id) || null;
+
+      // Arquivado/inexistente?
+      if(!ev){ bloquear("Evento não encontrado."); return; }
+      if(norm(ev.status)==="arquivado"){ bloquear("Este evento foi arquivado/excluído."); return; }
+
+      // Gate de acesso (Admin pode tudo; caso contrário só o responsável)
+      if(!isAdmin(user) && norm(ev.responsavelEquipe)!==norm(user?.nome)){
+        bloquear("Sem acesso a este evento."); return;
+      }
+
+      // Link de escala -> equipe.html já com o evento
+      const btn = q("#btnAbrirEscala");
+      if(btn) btn.href = `equipe.html?id=${encodeURIComponent(id)}`;
+
+      // Definições adicionais (para cardápio/layout)
+      const defs = obterDefinicoesById(id) || {};
+
+      // Dados do evento
+      const meta={
+        nome:(ev?.nomeEvento||ev?.nome||ev?.titulo||defs?.eventoMeta?.nome||"—"),
+        data:ddmmyyyy(ev?.data||ev?.dataEvento||ev?.dataDoEvento||defs?.eventoMeta?.data),
+        local:(pickLocalFesta(ev)||defs?.eventoMeta?.local||"—"),
+        convidados:(ev?.quantidadeConvidados||ev?.convidados||ev?.qtdConvidados||defs?.eventoMeta?.qtd||"—"),
+        horaCer:(hora(ev,["horarioCerimonia","horaCerimonia"])||defs?.eventoMeta?.horaCer||"—"),
+        horaEvt:(hora(ev,["horarioEvento","horaEvento","hora_inicio"])||defs?.eventoMeta?.horaEvt||"—"),
+        horaJantar:(ev?.horaJantar||defs?.eventoMeta?.horaJantar||"—"),
+        cerLoc:(cerimoniaNoLocalLabel(ev)||defs?.eventoMeta?.cerimoniaLocal||"—")
+      };
+      q("#dadosEvento").innerHTML=`
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+          <div><div class="muted" style="font-size:12px">Evento</div><div style="font-weight:600">${meta.nome}</div></div>
+          <div><div class="muted" style="font-size:12px">Data</div><div style="font-weight:600">${meta.data}</div></div>
+          <div><div class="muted" style="font-size:12px">Local</div><div style="font-weight:600">${meta.local}</div></div>
+          <div><div class="muted" style="font-size:12px">Convidados</div><div style="font-weight:600">${meta.convidados}</div></div>
+          <div><div class="muted" style="font-size:12px">Cerimônia</div><div style="font-weight:600">${meta.horaCer} • ${meta.cerLoc}</div></div>
+          <div><div class="muted" style="font-size:12px">Início da festa</div><div style="font-weight:600">${meta.horaEvt}</div></div>
+          <div><div class="muted" style="font-size:12px">Jantar</div><div style="font-weight:600">${meta.horaJantar}</div></div>
+        </div>`;
+
+      // Itens contratados — SOMENTE nomes (cardápio, adicionais, serviços)
+      const IT = defs?.itens || {};
+      const nomes = (arr)=> (Array.isArray(arr)&&arr.length) ? arr.map(i=>i?.nome||i?.titulo||i?.id||"Item") : [];
+      const pills = (list)=> list.length ? list.map(n=>`<span class="pill">${n}</span>`).join("") : `<span class="muted">Nenhum item.</span>`;
+
+      const listaCardapios = (()=>{
+        const n1 = defs?.cardapio?.nome || defs?.cardapioNome || defs?.cardapio?.titulo;
+        if (n1) return [String(n1)];
+        const n2 = nomes(defs?.cardapios || []);
+        if (n2.length) return n2;
+        const n3 = defs?.eventoMeta?.cardapio || defs?.eventoMeta?.nomeCardapio || ev?.cardapio || ev?.nomeCardapio;
+        if (n3) return [String(n3)];
+        return [];
+      })();
+      const listaAdicionais = nomes(IT.adicional || defs?.adicionais || []);
+      const listaServicos   = nomes((IT.servico || IT.servicos) || defs?.servicos || []);
+
+      q("#itensLista").innerHTML = `
+        <div style="display:grid;gap:14px">
+          <div><strong>Cardápio</strong><div>${pills(listaCardapios)}</div></div>
+          <div class="linha"></div>
+          <div><strong>Adicionais</strong><div>${pills(listaAdicionais)}</div></div>
+          <div class="linha"></div>
+          <div><strong>Serviços</strong><div>${pills(listaServicos)}</div></div>
+        </div>`;
+
+      /* ===== Cardápio ===== */
+      const folhaHtml=defs?.previewHtml||defs?.a4Html||defs?.cardapioDefinido?.html||defs?.cardapioHtml||"";
+
+      // Visualizar (modal)
+      q("#btnVerCardapio").addEventListener("click", ()=>{
+        const node = document.createElement("div");
+        node.innerHTML = `<div class="a4"><div class="inner">${folhaHtml || "<div class='muted'>Nenhum cardápio definido.</div>"}</div></div>`;
+        abrirModal("Cardápio do Evento", node);
+      });
+
+      // Baixar PDF (A4) — retrato
+      q("#btnBaixarCardapioPDF").addEventListener("click", async ()=>{
+        const corpo = folhaHtml || "<div>Sem itens</div>";
+        const html  = buildPdfPage(corpo, meta, { padding:"8mm 12mm 10mm 12mm" });
+        await htmlToPDF_A4(html, "cardapio_evento.pdf", "portrait");
+      });
+
+      /* ===== Layout ===== */
+      let layoutUrl =
+        defs?.layoutUrl || defs?.layoutImagem || defs?.imagens?.layout ||
+        ev?.layoutUrl   || ev?.layoutImagem  || "";
+
+      (async () => {
+        if (!layoutUrl) {
+          const idbKey =
+            defs?.layout?.idbKey ||
+            ev?.definicoes?.layout?.idbKey ||
+            (defs?.layoutIdbKey || null);
+          if (idbKey) {
+            try {
+              const blob = await idbGet(idbKey);
+              if (blob instanceof Blob) layoutUrl = URL.createObjectURL(blob);
+            } catch (e) { console.warn('Falha ao carregar layout do IndexedDB:', e); }
+          }
+        }
+
+        // Visualizar (modal)
+        q("#btnVerLayout").addEventListener("click", ()=>{
+          if(!layoutUrl){ alert("Nenhum layout definido."); return; }
+          const node = document.createElement("div");
+          node.innerHTML = `<div class="a4"><div class="inner"><img src="${layoutUrl}" alt="Layout" style="max-width:100%;height:auto;display:block;margin:0 auto"/></div></div>`;
+          abrirModal("Layout do Evento", node);
+        });
+
+        // Baixar PDF (A4) — paisagem
+        q("#btnBaixarLayoutPDF").addEventListener("click", async ()=>{
+          if(!layoutUrl){ alert("Nenhum layout definido."); return; }
+          const corpo = `<div style="display:flex;align-items:center;justify-content:center;min-height:180mm">
+            <img src="${layoutUrl}" alt="Layout" style="max-width:260mm;height:auto;display:block;"/>
+          </div>`;
+          const html = buildPdfPage(corpo, meta, { padding:"6mm 10mm 8mm 10mm" });
+          await htmlToPDF_A4(html, "layout_evento.pdf", "landscape");
+        });
+      })();
+
+      // Escala (contador simples usando ev.equipe)
+      const qtd = Array.isArray(ev.equipe) ? ev.equipe.length : 0;
+      q("#statusEscala").textContent = qtd ? `${qtd} colaborador(es) na escala.` : "Nenhum colaborador na escala.";
+    }
+
+    function obterDefinicoesById(id){
+      const val=localStorage.getItem(`definicoes_evento_${id}`);
+      if(val){ try{return JSON.parse(val)}catch{} }
+      const keys=Object.keys(localStorage).filter(k=>k.startsWith("definicoes_evento_"));
+      let unico=null, match=null;
+      for(const k of keys){
+        try{
+          const obj=JSON.parse(localStorage.getItem(k));
+          if(!obj) continue;
+          if(!unico) unico=obj;
+          const m=obj?.eventoMeta;
+          const ok = [m?.id,m?.codigo,m?.uuid].map(x=>String(x||"")).includes(String(id));
+          if(ok){ match=obj; break; }
+        }catch{}
+      }
+      return match || (keys.length===1 ? unico : null);
+    }
+
+    function bloquear(msg){
+      const b = q("#bloqueio");
+      b.textContent = msg || "—";
+      b.style.display = "block";
+      // Esconde o restante das seções
+      document.querySelectorAll(".secao").forEach(s=> s.style.display="none");
+    }
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

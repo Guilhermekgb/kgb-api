@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:notificacoes.html">
+  <meta charset="UTF-8" />
+  <title>Notificações de Leads</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO: Helpers globais + Guard (ordem importa) === -->
+<script type="module" src="./kgb-common.js"></script>
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+<!-- Permissão desta página para o guard (já existe no arquivo) -->
+<!-- <meta name="page-permission" content="page:notificacoes.html"> -->
+<!-- === FIM: Helpers globais + Guard === -->
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    /* ===== Escopo desta página ===== */
+    html,body{margin:0;padding:0;background:#f8f1e8;height:100%}
+    body, main.conteudo-principal, input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    h1{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+      font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; margin:0;
+    }
+
+    .wrapper{display:flex;min-height:100vh;overflow:hidden}
+    main.conteudo-principal{flex-grow:1;min-height:100vh;overflow:auto;padding:40px}
+    .conteudo-central{max-width:1200px;margin:0 auto}
+
+    /* Hamburguer (mobile) */
+    #hamburguer{
+      position:fixed;top:12px;left:12px;background:#c29a5d;border:none;color:#fff;font-size:24px;
+      padding:6px 12px;border-radius:8px;z-index:1001;display:none
+    }
+    @media (max-width:768px){
+        /* Backdrop do menu mobile */
+#menuBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 998;
+}
+
+    /* Quando o menu está aberto, trava o scroll do fundo */
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+      #hamburguer{display:block}
+      #menuLateral{position:fixed;transform:translateX(-100%);transition:transform .3s ease;z-index:999;width:260px}
+      #menuLateral.aberto{transform:translateX(0)}
+      main.conteudo-principal{margin-left:0;padding:20px}
+    }
+
+    /* Ações topo */
+    .acoes{display:flex;gap:8px;margin:12px 0 18px;flex-wrap:wrap}
+
+    /* GRID uma coluna (apenas externas) */
+    .cols{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:18px;
+    }
+    .cols section{background:#fff;border:1px solid #e8d7c2;border-radius:12px;padding:16px}
+    .cols h3{ margin:0 0 10px; color:#5C4033; font-size:18px; display:flex; align-items:center; gap:8px; }
+
+    /* Esconder completamente as notificações internas nesta página */
+    #notificacoesPage section[aria-labelledby="titInternas"],
+    #notificacoesPage #countInt {
+      display:none !important;
+    }
+
+    /* Modal */
+    .modal[hidden]{ display:none; }
+    .modal{
+      position:fixed; inset:0; z-index:9999;
+      display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .modal__backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
+    .modal__card{
+      position:relative; background:#fff; width:min(560px,92vw);
+      border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.2); overflow:hidden;
+    }
+    .modal__header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 16px; background:#f9f2ea; border-bottom:1px solid #f0e5dc;
+    }
+    .modal__body{ padding:16px; display:grid; gap:12px; }
+    .modal__footer{ display:flex; justify-content:flex-end; gap:10px; padding:12px 16px; border-top:1px solid #f0e5dc; }
+    .modal__close{ background:transparent; border:none; cursor:pointer; }
+    .modal__body label span{ display:block; font-size:13px; color:#7a6a58; margin-bottom:6px; }
+    .modal__body input, .modal__body select, .modal__body textarea{
+      width:100%; padding:10px 12px; border:1px solid #e9dccf; border-radius:8px;
+    }
+
+    /* Cartões de notificação */
+    .notif-card{
+      background:#fff; border:1px solid #e8d7c2; border-radius:14px;
+      padding:14px; display:flex; flex-direction:column; gap:10px;
+      transition: box-shadow .15s ease, transform .05s ease, background .15s ease;
+    }
+    .notif-card--unread{ background:#fff7cc; border-color:#e6cc66; }
+    .notif-card:hover{ box-shadow:0 6px 18px rgba(0,0,0,.08); }
+
+    .notif-card__header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .notif-card__title{ display:flex; align-items:center; gap:8px; font-weight:700; color:#5C4033; }
+    .notif-card__meta{ display:flex; align-items:center; gap:10px; white-space:nowrap; }
+    .notif-card__date{ color:#7a6a58; font-size:12px; }
+
+    .chip{
+      padding:2px 8px; border-radius:999px; font-size:12px; line-height:18px;
+      border:1px solid #eadbc9; color:#5C4033; background:#faf5ef;
+    }
+    .badge{
+      padding:2px 8px; border-radius:999px; font-size:12px; line-height:18px; font-weight:700;
+      border:1px solid transparent;
+    }
+    .badge--unread{ color:#7a5a00; background:#ffef9c; border-color:#e6cc66; }
+    .badge--read{ color:#6b6b6b; background:#f5f5f5; border-color:#dddddd; }
+
+    .notif-card__body{ color:#5a4a3a; }
+    .notif-card__footer{ display:flex; gap:8px; flex-wrap:wrap; }
+
+    .pill{
+      margin-left:8px; padding:2px 8px; font-size:12px; border-radius:999px;
+      background:#f3e8da; color:#5C4033; border:1px solid #e8d7c2;
+    }
+
+    /* Utilitários */
+    .muted{ color:#7a6a58; font-size:12px; }
+    .box{ background:#fff; border:1px solid #e8d7c2; border-radius:12px; padding:12px; }
+
+    /* Botões */
+    .btn{ padding:8px 12px; border-radius:10px; border:none; cursor:pointer; }
+    .btn-prim{ background:#c29a5d; color:#fff; }
+    .btn-sec{ background:#f3e8da; color:#5C4033; }
+    .btn-ghost{ background:#f3e8da; color:#5C4033; }
+
+    /* Remover a pílula do item ativo do menu nesta página */
+    #menuLateral .menu-lateral a.ativo,
+    #menuLateral .menu-lateral .submenu a.ativo {
+      background: transparent !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      color: #fff !important;
+      font-weight: 700;
+    }
+    /* === ESTILOS DO BOTÃO HAMBÚRGUER (MOBILE) === */
+#hamburguer {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    background: #c29a5d;
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    z-index: 1001;
+    display: none;
+    box-shadow: 0 6px 16px rgba(0,0,0,.12);
+}
+@media (max-width:768px){
+    #hamburguer { display: block; }
+    .conteudo-principal {
+        padding: 20px;
+        margin-left: 0 !important;
+    }
+}
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+</button>
+
+<div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="bell"></i> Notificações de Leads</h1>
+
+        <div class="acoes">
+          <button id="btnMarcarTodas" class="btn btn-prim" type="button">Marcar todas como lidas</button>
+        </div>
+
+        <!-- AGORA: APENAS EXTERNAS VISÍVEIS -->
+        <div class="cols" role="group" aria-label="Listas de notificações">
+          <section aria-labelledby="titExternas">
+            <h3 id="titExternas"><i data-lucide="inbox"></i> Externas (formulário)
+              <span id="countExt" class="pill" aria-live="polite">0</span>
+            </h3>
+            <div id="lista-notificacoes-externas" role="list" aria-describedby="titExternas"></div>
+          </section>
+
+          <!-- Continua no HTML por causa do JS, mas fica escondido pelo CSS -->
+          <section aria-labelledby="titInternas">
+            <h3 id="titInternas"><i data-lucide="mail"></i> Internas (para equipe)
+              <span id="countInt" class="pill" aria-live="polite">0</span>
+            </h3>
+            <div id="lista-notificacoes-internas" role="list" aria-describedby="titInternas"></div>
+          </section>
+        </div>
+      </div> <!-- /conteudo-central -->
+
+      <!-- MODAL “ATENDER” -->
+      <div id="modalAtender" class="modal" hidden>
+        <div class="modal__backdrop" data-close="1"></div>
+        <div class="modal__card" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalAtenderTitulo">
+          <div class="modal__header">
+            <h3 id="modalAtenderTitulo" style="display:flex;align-items:center;gap:8px;">
+              <i data-lucide="user-plus"></i> Atender lead
+            </h3>
+            <button type="button" class="modal__close" data-close="1" aria-label="Fechar">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <form id="formAtender" class="modal__body">
+            <input type="hidden" name="notifId" />
+            <input type="hidden" name="leadId" />
+
+            <div class="grid-2" style="display:grid;gap:12px;grid-template-columns:1fr 1fr">
+              <label>
+                <span>Designar para</span>
+                <select name="responsavel" required></select>
+              </label>
+
+              <label>
+                <span>Ação</span>
+                <select name="acao" required>
+                  <option value="apenas-atribuir">Apenas atribuir</option>
+                  <option value="atribuir-e-abrir-orcamento">Atribuir e abrir orçamento</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="grid-2" style="display:grid;gap:12px;grid-template-columns:1fr 1fr">
+              <label>
+                <span>Data do follow-up (opcional)</span>
+                <input type="date" name="dataFollow" />
+              </label>
+              <label>
+                <span>Hora do follow-up (opcional)</span>
+                <input type="time" name="horaFollow" />
+              </label>
+            </div>
+
+            <label>
+              <span>Observações (opcional)</span>
+              <textarea name="obs" rows="3" placeholder="Ex.: Priorizar contato ainda hoje."></textarea>
+            </label>
+
+            <div>
+              <span class="muted">Resumo do lead</span>
+              <div id="resumoLead" class="box" style="margin-top:6px; border:1px solid #e8d7c2;border-radius:12px;padding:12px;background:#fff;"></div>
+            </div>
+
+            <div class="modal__footer">
+              <button type="button" class="btn btn-sec" data-close="1">Cancelar</button>
+              <button type="submit" class="btn btn-prim"><i data-lucide="check"></i> OK</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- MODAL “VISUALIZAR” -->
+      <div id="modalVisualizar" class="modal" hidden>
+        <div class="modal__backdrop" data-close="1"></div>
+        <div class="modal__card" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalVizTitulo">
+          <div class="modal__header" style="display:flex;align-items:center;justify-content:space-between;">
+            <h3 id="modalVizTitulo" style="display:flex;align-items:center;gap:8px;">
+              <i data-lucide="eye"></i> Detalhes da notificação
+            </h3>
+            <button type="button" class="modal__close" data-close="1" aria-label="Fechar">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <div class="modal__body">
+            <div class="muted">Resumo</div>
+            <div id="vizResumo" class="box" style="margin-top:6px;"></div>
+          </div>
+
+          <div class="modal__footer">
+            <button type="button" class="btn btn-sec" data-close="1">Fechar</button>
+            <button type="button" id="vizCriarOrc" class="btn btn-prim">
+              <i data-lucide="file-plus-2"></i> Criar orçamento
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Ponte (Agenda / Notificações internas) -->
+  <script src="agenda-bridge.js"></script>
+
+   <!-- Lógica desta página -->
+  <script src="notificacoes.js" defer></script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

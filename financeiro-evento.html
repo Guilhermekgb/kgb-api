@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Financeiro do Evento</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- === INÍCIO PATCH FORCE-API (remova quando não precisar mais) === -->
+<script>
+(function(){
+  // 1) força a base da API para o Render
+  var RENDER = 'https://kgb-api.onrender.com';
+  try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+  window.__API_BASE__ = RENDER; // redundância útil
+
+  // 2) mostra um selinho no canto para você confirmar visualmente
+  try{
+    var tag = document.createElement('div');
+    tag.id = 'kgb_api_badge';
+    tag.textContent = 'API: Render';
+    tag.style.cssText = ''+
+      'position:fixed; z-index:99999; right:10px; bottom:10px;'+
+      'background:#0ea5e9; color:#fff; font:600 12px/1.2 Inter, Arial;'+
+      'padding:6px 10px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.15);';
+    document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(tag); });
+  }catch(e){}
+})();
+</script>
+<!-- === FIM PATCH FORCE-API === -->
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH COMMON + GUARD (financeiro-evento) === -->
+<!-- Helpers globais SEMPRE antes do guard -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard / RBAC (usa coisas do common) -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- === FIM PATCH COMMON + GUARD (financeiro-evento) === -->
+
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --dourado:#c29a5d; --dourado-esc:#a67c37; --marrom:#5a3e2b;
+      --bg:#f8f1e8; --card:#fff; --line:#ece6dd; --muted:#6b7280;
+      --ok:#16a34a; --warn:#f59e0b; --late:#dc2626;
+    }
+    html,body{margin:0;background:var(--bg);}
+    .wrapper{display:flex;min-height:100vh;}
+    #menuLateral{background:var(--marrom);width:260px;position:fixed;inset:0 auto 0 0;overflow-y:auto;}
+    main.conteudo-principal{margin-left:260px;padding:32px;width:calc(100% - 260px);min-height:100vh;overflow:auto;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial;}
+        /* Botão hambúrguer (padrão geral) */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      background:#c29a5d;
+      border:none;
+      color:#fff;
+      font-size:24px;
+      padding:6px 12px;
+      border-radius:8px;
+      z-index:1001;
+      display:none;
+    }
+
+    /* Backdrop do menu lateral */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.35);
+      z-index:990;
+    }
+
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+        @media (max-width:1024px){
+      #menuLateral{
+        position:fixed;
+        top:0; left:0; height:100vh; width:260px;
+        transform:translateX(-100%);
+        transition:transform .25s ease;
+        z-index:999;
+      }
+
+      /* quando o menu está aberto no mobile */
+      #menuLateral.aberto{
+        transform:translateX(0);
+      }
+
+      /* mostra o botão hambúrguer nesse breakpoint */
+      #hamburguer{
+        display:block;
+      }
+
+      main.conteudo-principal{
+        margin-left:0;
+        width:100%;
+        padding:20px;
+      }
+
+      .cards{ grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width:640px){
+      .cards{grid-template-columns:1fr}
+    }
+
+    h1,h2,h3{font-family:"Playfair Display",ui-serif,Georgia,"Times New Roman",serif;color:var(--marrom)}
+    h1{font-size:28px;display:flex;align-items:center;gap:10px;margin:0 0 16px}
+    .conteudo-central{max-width:1200px;margin:0 auto}
+    .grid-top{display:grid;grid-template-columns:1.2fr .8fr .8fr .8fr;gap:12px}
+    @media (max-width:900px){.grid-top{grid-template-columns:1fr 1fr}}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f3e8da;color:var(--marrom);font-size:13px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:18px}
+    .cards{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px}
+    @media (max-width:1100px){.cards{grid-template-columns:1fr 1fr}}
+    @media (max-width:640px){.cards{grid-template-columns:1fr}}
+    .kpi h3{margin:0 0 8px 0;font-size:16px}
+    .kpi .big{font-size:24px;font-weight:800;color:var(--marrom)}
+    .muted{color:var(--muted);font-size:13px}
+    .status.ok{color:var(--ok)} .status.warn{color:var(--warn)} .status.late{color:var(--late)}
+    .toolbar{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+    table{width:100%;border-collapse:collapse}
+    thead th{background:var(--dourado);color:#fff;text-align:left;padding:12px;border-radius:10px 10px 0 0}
+    tbody tr{background:#fff} td{padding:12px;border-bottom:1px solid #eee}
+    .btn{background:var(--dourado);color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn:hover{background:var(--dourado-esc)}
+    .btn-ghost{background:#fff;color:var(--marrom);border:1px solid var(--line)}
+    .tag{padding:2px 8px;border-radius:999px;font-size:12px}
+    .tag.ok{background:#ecfdf5;color:#065f46} .tag.pend{background:#fff7ed;color:#92400e}
+    .tag.late{background:#fef2f2;color:#991b1b} .tag.wait{background:#fefce8;color:#854d0e}
+    .acao{display:inline-flex;gap:8px}
+    /* ===== botões de ação (editar/excluir) mais bonitos ===== */
+.btn-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:10px;border:1px solid var(--line);
+  background:#fff;color:var(--marrom);font-weight:600;cursor:pointer;
+  transition:.15s ease; box-shadow:0 1px 0 rgba(0,0,0,.04);
+}
+.btn-chip:hover{ transform:translateY(-1px); box-shadow:0 2px 6px rgba(0,0,0,.08) }
+.btn-chip .lucide{ width:16px; height:16px; }
+
+.btn-chip.edit{ border-color:#e8e0d4 }
+.btn-chip.delete{ border-color:#f0d6d6; color:#9b1c1c; background:#fff9f9 }
+.btn-chip.delete:hover{ background:#fff3f3 }
+
+/* ===== botão mini “+” (custos fixos) ===== */
+.btn-mini{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:8px;border:1px solid var(--line);
+  background:#fff;color:var(--marrom); margin-left:6px; cursor:pointer;
+}
+.btn-mini:hover{ background:#f9f4ec }
+
+/* ===== topo (pílulas mais elegantes) ===== */
+.pill-hero{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;
+  background:#f6efe6;color:var(--marrom);font-weight:700; box-shadow:inset 0 1px 0 #fff;
+}
+.pill-hero .lucide{width:18px;height:18px;color:var(--dourado-esc)}
+.grid-top .label{ font-size:12px; color:var(--muted); margin-bottom:6px; display:block }
+
+/* ===== kpis empilhados (entradas/saídas) ===== */
+.kpi-lines{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.kpi-lines .row{display:flex;align-items:center;justify-content:space-between;color:var(--muted)}
+.kpi-lines .row strong{color:var(--marrom)}
+
+/* ===== situação compacto ===== */
+#kSituacao{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;
+  background:#f6efe6;font-weight:800
+}
+.status.ok{ color:#065f46; background:#ecfdf5!important }
+.status.late{ color:#991b1b; background:#fef2f2!important }
+/* Entradas/Saídas mais compactos */
+.card.kpi h3{ font-size:16px; margin:0 0 6px; }
+.kpi-lines{ gap:4px; }
+.kpi-lines .row{ font-size:13px; line-height:1.2; }
+.kpi-lines .row strong{ font-size:13px; }
+/* Estimativa de Custo e Situação mais compactos */
+#card-cost, #card-situ{ padding:12px 14px; }
+#card-cost h3, #card-situ h3{ font-size:18px; margin:0 0 8px; }
+
+/* Tabela da estimativa mais “densa” */
+#card-cost table td{ padding:6px 8px; }
+
+/* Observação/nota menor */
+#card-cost .note, #card-situ .note{
+  font-size:11px; line-height:1.3; color:var(--muted); margin-top:6px;
+}
+
+/* Situação: pílula já é compacta; só garante pouco espaço interno */
+#card-situ #kSituacao{ padding:6px 10px; }
+/* Grid dos cards: 3 colunas no desktop */
+.cards{
+  display:grid;
+  gap:16px;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
+/* Estimativa de Custo mais largo; Situação mais enxuto */
+#card-cost{ grid-column: span 2; padding:14px 16px; }
+#card-situ{ grid-column: span 1; padding:14px 16px; }
+
+/* Títulos e células um pouco mais compactas */
+#card-cost h3, #card-situ h3{ font-size:18px; margin:0 0 8px; }
+#card-cost table td{ padding:6px 8px; }
+#card-situ #kSituacao{ padding:6px 10px; }
+/* 4 colunas para a fileira de KPI do topo */
+.cards.cards-4{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+/* ===== Modal/Overlay (recibo) ===== */
+.overlay[hidden]{ display:none !important; }
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; z-index:9999;
+}
+.overlay-dialog{
+  background:#fff; border-radius:14px;
+  width:100%; max-width:720px; max-height:90vh; overflow:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.25); }
+
+.overlay-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid #eee;
+}
+.editor-title{ display:flex; align-items:center; gap:10px; font-weight:800; color:#2b2b2b }
+.editor-toolbar{ display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid #eee; flex-wrap:wrap }
+.a4-wrap{ padding:16px }
+.a4{ background:#fff; border:1px solid #eee; border-radius:10px; padding:16px; min-height:80mm }
+.overlay-actions{ display:flex; gap:10px; padding:12px 16px; }
+/* Toolbar título mais compacto (para caber o texto) */
+.toolbar{
+  display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;
+}
+.toolbar h2{
+  flex:1 1 auto;            /* dá prioridade de espaço pro título */
+  font-size:18px;            /* menor pra sempre caber */
+  margin:0;
+  line-height:1.2;
+  white-space:nowrap;        /* evita quebra feia */
+  overflow:hidden;
+  text-overflow:ellipsis;    /* se faltar MUITO espaço, mostra "…" mas não some */
+}
+
+@media (max-width: 900px){
+  .toolbar h2{ font-size: 18px; }
+}
+/* tabela mais estável */
+  .table table { width:100%; border-collapse: collapse; table-layout: auto; }
+  .table th, .table td { padding: 8px 10px; vertical-align: middle; }
+  .table td.acoes, .table th.acoes { text-align: right; white-space: nowrap; }
+  .table th:last-child, .table td:last-child { width:1%; } /* evita quebrar botões */
+
+  /* chips de ação */
+  .btn-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #e5e5e5; background:#fff; border-radius:8px; cursor:pointer; }
+  .btn-chip.icon-only { width:34px; height:34px; padding:0; justify-content:center; }
+  .btn-chip.delete { border-color:#f2d6d6; }
+  .btn-chip i { width:16px; height:16px; }
+
+  /* modal anexo */
+  #anexoModal[hidden]{ display:none !important; }
+  #anexoModal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index: 9999; }
+  .anexo-box { width:min(92vw,820px); background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.25); overflow:hidden; }
+  .anexo-head { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:#5a3e2b; color:#fff; font-weight:700; }
+  .anexo-body { padding:10px; display:flex; align-items:center; justify-content:center; background:#fff; }
+  #anexoImg { max-width:100%; max-height:70vh; }
+  .anexo-actions { display:flex; gap:8px; padding:10px; justify-content:flex-end; background:#fff; }
+/* ===== Card Contrato (visual melhorado) ===== */
+.card-contrato{
+  position:relative; overflow:hidden;
+  background:linear-gradient(180deg,#fff, #fbf7f0);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:0 6px 16px rgba(0,0,0,.06);
+  padding:16px 16px 14px;
+}
+.card-contrato .contrato-head{
+  display:flex; align-items:center; gap:8px; margin-bottom:8px;
+}
+.card-contrato .contrato-head .lucide{ width:18px; height:18px; color:var(--dourado-esc) }
+.card-contrato h3{ margin:0; font-size:16px; color:var(--marrom) }
+
+.card-contrato .contrato-valor{
+  font-size:28px; font-weight:900; color:var(--marrom); line-height:1; margin-top:2px;
+}
+.card-contrato .contrato-sub{ color:var(--muted); font-size:12px; margin-top:6px }
+
+.card-contrato .contrato-divider{
+  height:1px; background:linear-gradient(90deg,transparent, #eae1d4, transparent);
+  margin:10px 0;
+}
+.card-contrato .contrato-falta{
+  display:flex; align-items:center; justify-content:space-between;
+  background:#fff; border:1px dashed #e8dcc8; border-radius:10px;
+  padding:8px 10px;
+}
+.card-contrato .contrato-falta .label{
+  font-size:12px; font-weight:800; letter-spacing:.3px; color:#8a693f;
+}
+.card-contrato .contrato-falta .value{
+  font-weight:900; color:#7a552e;
+}
+
+/* cores dinâmicas quando quitado */
+.card-contrato.quitado .contrato-falta{
+  background:#ecfdf5; border-color:#c8f3e3;
+}
+.card-contrato.quitado .contrato-falta .label{ color:#0e6b4d }
+.card-contrato.quitado .contrato-falta .value{ color:#065f46 }
+
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+   <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+    <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="wallet-cards"></i> Financeiro do Evento</h1>
+
+
+        <!-- TOPO (metadados do evento) -->
+        <div class="card">
+         <div class="grid-top">
+  <div>
+    <span class="label">Evento</span>
+    <div class="pill-hero"><i data-lucide="calendar-heart"></i><span id="evNome">—</span></div>
+  </div>
+  <div>
+    <span class="label">Data</span>
+    <div class="pill-hero"><i data-lucide="calendar-clock"></i><span id="evData">—</span></div>
+  </div>
+  <div>
+    <span class="label">Local</span>
+    <div class="pill-hero"><i data-lucide="map-pin"></i><span id="evLocal">—</span></div>
+  </div>
+  <div>
+    <span class="label">Convidados</span>
+    <div class="pill-hero"><i data-lucide="users"></i><span id="evConvs">—</span></div>
+  </div>
+</div>
+
+
+        <!-- CARDS KPI -->
+      <div class="cards cards-4" style="margin-top:16px">
+          <div class="card kpi card-contrato">
+  <div class="contrato-head">
+    <i data-lucide="file-signature"></i>
+    <h3>Contrato</h3>
+  </div>
+
+  <div class="contrato-valor" id="kContrato">R$ 0,00</div>
+  <div class="contrato-sub">Valor total do contrato</div>
+
+  <div class="contrato-divider"></div>
+
+  <div class="contrato-falta">
+    <span class="label">FALTA RECEBER</span>
+    <span class="value" id="kContratoFalta">R$ 0,00</span>
+  </div>
+</div>
+
+
+          <div class="card kpi"><h3>Entradas</h3>
+  <div class="kpi-lines">
+    <div class="row"><span>Previsto:</span> <strong id="kEntPrev">R$ 0,00</strong></div>
+    <div class="row"><span>Recebido:</span> <strong id="kEntRec">R$ 0,00</strong></div>
+    <div class="row"><span>A receber:</span> <strong id="kEntFalta">R$ 0,00</strong></div>
+  </div>
+</div>
+
+<div class="card kpi"><h3>Saídas</h3>
+  <div class="kpi-lines">
+    <div class="row"><span>Previsto:</span> <strong id="kSaiPrev">R$ 0,00</strong></div>
+    <div class="row"><span>Pago:</span> <strong id="kSaiPago">R$ 0,00</strong></div>
+    <div class="row"><span>A pagar:</span> <strong id="kSaiFalta">R$ 0,00</strong></div>
+  </div>
+</div>
+
+          <div class="card kpi"><h3>Lucro</h3>
+            <div class="muted">Previsto: <strong id="kLucPrev">R$ 0,00</strong></div>
+            <div class="muted">Realizado: <strong id="kLucReal">R$ 0,00</strong></div>
+          </div>
+        </div>
+
+        <!-- ESTIMATIVA DE CUSTO + SITUAÇÃO -->
+<div class="cards" style="margin-top:16px">
+  <!-- Estimativa de Custo (mais larga) -->
+  <div class="card" id="card-cost">
+    <h3>Estimativa de Custo</h3>
+
+    <table class="tbl-kpis" style="margin-top:6px; width:100%;">
+     <tbody>
+  <tr>
+    <td colspan="2" class="muted">Cardápio: <strong id="kNomeCardapio">—</strong></td>
+  </tr>
+   <tr>
+    <td>Custo Cardápio</td>
+    <td style="text-align:right;" id="kCustoCard">R$ 0,00</td>
+  </tr>
+  <tr>
+    <td>
+      Custos Fixos
+      <button id="btnCustosFixos" class="btn-mini" title="Selecionar custos fixos do evento" style="vertical-align:middle;margin-left:6px;">
+        <i data-lucide="plus"></i>
+      </button>
+    </td>
+    <td style="text-align:right;" id="kCustoFixos">R$ 0,00</td>
+  </tr>
+  <tr>
+    <td><strong>Contrato</strong></td>
+    <td style="text-align:right;"><strong id="kContrato2">R$ 0,00</strong></td>
+  </tr>
+  <tr>
+    <td><strong>Lucro Estimado</strong></td>
+    <td style="text-align:right;"><strong id="kLucroEst">R$ 0,00</strong></td>
+  </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Situação (mais compacto) -->
+  <div class="card" id="card-situ">
+    <h3>Situação</h3>
+    <div id="kSituacao" class="status">—</div>
+    <div class="muted" style="margin-top:8px;">Regras de atraso/juros seguem as configurações do Financeiro.</div>
+  </div>
+</div>
+
+        <!-- LISTA de LANÇAMENTOS -->
+        <div class="card" style="margin-top:18px">
+            
+ <div class="toolbar">
+  <h2>ENTRADAS / SAÍDAS</h2>
+  <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button id="btnNovo" class="btn"><i data-lucide="plus"></i> Novo lançamento (entrada/saída)</button>
+    <button id="btnGerarRecibo" class="btn"><i data-lucide="file-text"></i> Gerar recibo</button>
+  </div>
+  
+</div>
+
+
+
+          <div style="overflow:auto;margin-top:10px">
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Vencimento</th>
+                  <th>Descrição</th>
+                  <th style="text-align:right">Valor</th>
+                  <th>Parcela</th>
+                  <th>Situação</th>
+                  <th>Forma/Conta</th>
+                  <th style="width:120px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tbLancs"><tr><td colspan="8" class="muted">Nenhum lançamento cadastrado.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+      <!-- ================ MODAL: GERAR RECIBO ================ -->
+<div id="reciboModal" class="overlay" hidden>
+  <div class="overlay-dialog" style="max-width:720px;">
+    <div class="overlay-header">
+      <div class="editor-title">
+        <i data-lucide="file-text"></i>
+        <span>Gerar recibo</span>
+      </div>
+      <div class="overlay-actions">
+        <button class="btn btn-ghost" id="rbClose"><i data-lucide="x"></i> Fechar</button>
+      </div>
+    </div>
+
+    <div class="editor-toolbar" style="gap:12px;">
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+        <label><small>Selecione um pagamento (lançamento/parcela <b>pago</b>):</small></label>
+        <select id="rbSelecaoPago" class="tb" style="width:100%;padding:10px;border-radius:10px"></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+        <label><small>Modelo:</small></label>
+        <select id="rbModelo" class="tb" style="width:100%;padding:10px;border-radius:10px"></select>
+      </div>
+    </div>
+
+    <div class="a4-wrap">
+      <div class="a4">
+        <div id="rbPreview" style="min-height:80mm;white-space:pre-wrap;"></div>
+      </div>
+    </div>
+
+    <div class="overlay-actions" style="padding:10px;border-top:1px solid #eee;gap:8px;">
+      <button id="rbGerar" class="btn btn-primary"><i data-lucide="file-text"></i> Gerar recibo</button>
+      <button id="rbImprimir" class="btn"><i data-lucide="printer"></i> Imprimir / Salvar PDF</button>
+      <button id="rbWhats" class="btn btn-secondary"><i data-lucide="send"></i> WhatsApp</button>
+    </div>
+  </div>
+</div>
+<!-- ================ MODAL: CATEGORIAS FINANCEIRO ================ -->
+<div id="catModal" class="overlay" hidden>
+  <div class="overlay-dialog" style="max-width:720px;">
+    <div class="overlay-header">
+      <div class="editor-title">
+        <i data-lucide="folder-open"></i>
+        <span>Categorias do Financeiro</span>
+      </div>
+      <div class="overlay-actions">
+        <button class="btn btn-ghost" id="catClose"><i data-lucide="x"></i> Fechar</button>
+      </div>
+    </div>
+
+    <div class="editor-toolbar" style="gap:12px;flex-wrap:wrap">
+      <select id="catTipoFiltro" class="tb">
+        <option value="">Todas</option>
+        <option value="entrada">Entrada</option>
+        <option value="saida">Saída</option>
+      </select>
+      <div style="margin-left:auto"></div>
+      <button id="catNovo" class="btn"><i data-lucide="plus"></i> Nova categoria</button>
+    </div>
+
+    <div class="a4-wrap">
+      <table class="tabela" id="catTabela">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th style="width:160px">Ações</th>
+          </tr>
+        </thead>
+        <tbody><!-- renderizado por JS --></tbody>
+      </table>
+
+       </div>
+  </div>
+</div>
+
+    </main>
+  </div>
+<!-- Modal do Comprovante/Anexo (Financeiro do Evento) -->
+<div id="anexoModal" hidden>
+  <div class="anexo-box">
+    <div class="anexo-head">
+      <div><i data-lucide="paperclip"></i> Comprovante</div>
+      <button id="anexoClose" class="btn">Fechar</button>
+    </div>
+  <div class="anexo-body">
+  <div id="anexoViewer" class="viewer"></div>
+</div>
+
+    <div class="anexo-actions">
+      <button id="anexoBaixar" class="btn"><i data-lucide="download"></i> Baixar</button>
+      <button id="anexoImprimir" class="btn"><i data-lucide="printer"></i> Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts do projeto -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="fin-cartao.js"></script> <!-- núcleo de fatura/parcelas -->
+<!-- disponibiliza o modal nesta página -->
+<script src="financeiro-modal.js"></script>
+
+<script type="module" src="fin-cobranca-integ.js"></script>
+
+<script type="module">
+  window.addEventListener('DOMContentLoaded', () => {
+    window.FinModal?.ensureModal?.(); // injeta a estrutura do modal
+    try { window.lucide?.createIcons?.(); } catch {}
+  });
+</script>
+
+<script src="./agenda-bridge.js"></script>
+<!-- scripts específicos da página de evento -->
+<script type="module" src="financeiro-evento.js"></script>
+
+
+
+<script>
+  // Menu mobile (padrão agenda/configurações, breakpoint 1024px)
+  (function(){
+    const hb = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const backdrop = document.getElementById('menuBackdrop');
+    if (!hb || !aside || !backdrop) return;
+
+    const mq = window.matchMedia('(max-width:1024px)');
+
+    function syncHamb(){
+      hb.style.display = mq.matches ? 'block' : 'none';
+
+      if (!mq.matches){
+        aside.classList.remove('aberto');
+        backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+    }
+
+    mq.addEventListener('change', syncHamb);
+    syncHamb();
+
+    hb.addEventListener('click', () => {
+      const aberto = aside.classList.toggle('aberto');
+      backdrop.hidden = !aberto;
+      document.body.classList.toggle('no-scroll', aberto);
+    });
+
+    backdrop.addEventListener('click', () => {
+      aside.classList.remove('aberto');
+      backdrop.hidden = true;
+      document.body.classList.remove('no-scroll');
+    });
+  })();
+</script>
+</body>
+</html>

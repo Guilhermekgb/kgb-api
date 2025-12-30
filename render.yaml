@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: kgb-api
+    env: node
+    plan: free
+    root: kgb-api
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true

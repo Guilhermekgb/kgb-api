@@ -921,7 +921,14 @@ const ROLES = {
 async function verifyFirebaseToken(req, res, next) {
   // Modo dev sem Auth
   if (String(process.env.DISABLE_AUTH||'0') === '1') {
-    req.user = { uid:'dev', email:'dev@local', tenantId: (req.headers['x-tenant-id']||'default'), roles:['Administrador'] };
+   req.user = {
+  uid: 'dev',
+  email: 'dev@local',
+  tenantId: (req.headers['x-tenant-id'] || 'default'),
+  roles: ['Administrador','sync','admin','owner'],
+  permissions: ['sync','read','write','admin'],
+};
+
     return next();
   }
 

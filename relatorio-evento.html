@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <!-- Permissões da página (RBAC) -->
+  <meta name="page-permission" content="page:relatorio-evento.html">
+
+  <!-- Metadados básicos -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Desenvolvimento local
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Relatório por Evento</title>
+
+  <!-- Evita 404 de favicon -->
+  <link rel="icon" href="data:," />
+
+  <!-- CSS globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- CSS específico desta página -->
+  <link rel="stylesheet" href="relatorio-evento.css" />
+
+  <!-- Guard (RBAC) e helpers globais (module não bloqueia) -->
+  <script src="js/auth-helper.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+
+  <!-- Ícones e Chart.js (defer para não bloquear o parser) -->
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0" defer></script>
+
+  <!-- (opcional) refinamentos visuais locais -->
+  <style>
+    :root{
+      --gold:#c29a5d; --gold-2:#d9bf95; --brown:#5a3e2b; --ink:#2e261a;
+      --bg:#f8f1e8; --paper:#fbf6ef; --card:#ffffff; --line:#ead9c8;
+      --muted:#6b7280; --ok:#0f766e; --warn:#b45309; --bad:#b91c1c;
+      --radius:16px; --shadow:0 10px 24px rgba(0,0,0,.06);
+    }
+    html[data-theme="dark"]{
+      --bg:#12100e; --paper:#191613; --card:#1f1b17; --line:#3b3128;
+      --ink:#f1e9df; --muted:#a0988c; --brown:#e1cda9; --gold:#d2b37a; --gold-2:#f1d8a3;
+      --ok:#34d399; --warn:#f59e0b; --bad:#ef4444;
+      --shadow:0 10px 24px rgba(0,0,0,.4);
+    }
+    html,body{background:var(--bg); color:var(--ink);}
+    body{margin:0;}
+
+    .topo{
+      position:sticky; top:0; z-index:5;
+      background:linear-gradient(180deg, var(--paper), transparent 92%);
+      padding:12px 0 8px;
+      border-bottom:1px solid rgba(0,0,0,0.02);
+      backdrop-filter:saturate(140%) blur(3px);
+    }
+    .top-line{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .top-line h1{
+      margin:0; font-family:"Playfair Display", ui-serif, Georgia, serif;
+      font-size:28px; letter-spacing:.2px; color:var(--brown);
+      display:flex; gap:10px; align-items:center;
+    }
+    .top-actions{display:flex; gap:8px; align-items:center;}
+    .btn-icon{
+      display:inline-flex; align-items:center; gap:8px;
+      border:1px solid var(--line); background:var(--card);
+      padding:8px 12px; border-radius:12px; cursor:pointer;
+      font-weight:700; color:var(--brown); transition:.18s ease; box-shadow:0 1px 0 rgba(0,0,0,.04);
+    }
+    .btn-icon:hover{ transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
+    .btn-ghost{ border:1px dashed var(--line); background:transparent; }
+    .link-voltar{
+      text-decoration:none; font-weight:700; color:var(--brown);
+      border:1px solid var(--line); background:var(--card);
+      padding:6px 10px; border-radius:10px;
+    }
+    .link-voltar:hover{ background:var(--paper); }
+
+    .filtros-topo{
+      display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;
+      align-items:end;
+    }
+    .sel-evento{ display:flex; flex-direction:column; gap:6px; min-width:260px; }
+    .sel-evento span{ font-size:12px; color:var(--muted); font-weight:700; }
+    .sel-evento select{
+      border:1px solid var(--line); background:var(--card); color:var(--ink);
+      border-radius:12px; padding:10px 12px; min-height:42px; outline:none;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,0); transition:.18s ease;
+    }
+    .sel-evento select:focus{ box-shadow:inset 0 0 0 2px var(--gold-2); }
+
+    .kpi-grid{ display:grid; gap:12px; margin-top:16px; grid-template-columns:repeat(5, minmax(180px, 1fr)); }
+    @media (max-width:1100px){ .kpi-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:620px){ .kpi-grid{ grid-template-columns:1fr; } }
+    .kpi{
+      background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+      padding:14px; box-shadow:var(--shadow); display:flex; gap:12px; align-items:center;
+      position:relative; overflow:hidden;
+    }
+    .kpi::after{
+      content:""; position:absolute; inset:auto -20% -30% auto; width:68%; height:48%;
+      background:radial-gradient(ellipse at 70% 0%, rgba(194,154,93,.18), transparent 60%);
+      pointer-events:none;
+    }
+    .kpi-icon{
+      width:42px; height:42px; border-radius:14px; display:grid; place-items:center;
+      background:linear-gradient(180deg, var(--paper), transparent);
+      border:1px solid var(--line); color:var(--brown);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.35);
+      flex-shrink:0;
+    }
+    .kpi-meta{ display:flex; flex-direction:column; gap:2px; }
+    .kpi-title{ font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.2px; }
+    .kpi-value{ font-size:18px; font-weight:800; color:var(--brown); display:flex; gap:6px; align-items:baseline; }
+    .kpi-value em{ font-style:normal; font-size:12px; color:var(--muted); }
+
+    .cards-duplos{ display:grid; grid-template-columns:1.1fr .9fr; gap:12px; margin-top:12px; }
+    @media (max-width:1000px){ .cards-duplos{ grid-template-columns:1fr; } }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
+    .card h3{ margin:0 0 10px; font-size:15px; color:var(--brown); display:flex; gap:8px; align-items:center; }
+
+    .chip{ display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:800; padding:3px 8px; border-radius:999px; letter-spacing:.2px;
+      border:1px solid var(--line); background:var(--paper); color:var(--brown); }
+    .chip.verde{ background:#ecfdf5; border-color:#bbf7d0; color:#065f46; }
+    .chip.vinho{ background:#fef2f2; border-color:#fecaca; color:#7f1d1d; }
+
+    .tabela-min{ width:100%; border-collapse:separate; border-spacing:0; }
+    .tabela-min thead th{
+      position:sticky; top:0; background:var(--gold); color:#fff; text-align:left;
+      padding:10px; font-size:12px; letter-spacing:.2px;
+    }
+    .tabela-min tbody td{ padding:9px 10px; border-bottom:1px solid #f0e6d6; font-size:13px; color:var(--ink); }
+    .tabela-min tfoot th, .tabela-min tfoot td{ padding:10px; background:var(--paper); font-size:13px; }
+    .tabela-min .num{ text-align:right; }
+    .tabela-min .sep{ border-top:2px solid var(--line); }
+
+    .mini-chart-wrap{ position:relative; min-height:160px; display:flex; align-items:center; justify-content:center; }
+    #chartEmpty{ position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:12px; }
+
+    .row-between{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .filtros-lista{ display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+    .filtros-lista label{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+    .filtros-lista span{ font-size:12px; color:var(--muted); font-weight:700; letter-spacing:.2px; }
+    .filtros-lista select, .filtros-lista input{
+      border:1px solid var(--line); background:var(--card); color:var(--ink);
+      border-radius:12px; padding:9px 10px; min-height:40px;
+    }
+    .filtros-lista .grow{ flex:1; min-width:240px; }
+
+    .lista-compacta{ display:grid; gap:8px; }
+    #hamburguer{
+      position:fixed; top:12px; left:12px; z-index:20;
+      display:none; border:1px solid var(--line); background:var(--card);
+      color:var(--brown); border-radius:12px; padding:8px; cursor:pointer;
+      box-shadow:var(--shadow);
+    }
+    @media (max-width: 768px){ #hamburguer{ display:inline-flex; } }
+
+    .conteudo-principal{ padding:24px; }
+    .conteudo-central{ max-width:1100px; margin:0 auto; }
+        /* Backdrop e bloqueio de scroll para o menu lateral */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.35);
+      z-index:15;
+    }
+
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Menu mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal" role="main">
+
+      <div class="conteudo-central">
+
+<header class="topo" aria-labelledby="ttl-relatorio-evento">
+  <div class="top-line">
+    <h1 id="ttl-relatorio-evento">Relatório por Evento</h1>
+    <div class="top-actions">
+      <a id="linkVoltarEvento" class="link-voltar" href="#" hidden>
+        <i data-lucide="arrow-left"></i> Voltar
+      </a>
+    </div>
+  </div>
+
+  <div class="filtros-topo" role="region" aria-label="Filtros do relatório">
+    <label class="sel-evento">
+      <span>Evento</span>
+      <select id="selEvento" aria-label="Selecionar evento"></select>
+    </label>
+
+    <label>Início <input type="date" id="fDataIni"></label>
+    <label>Fim <input type="date" id="fDataFim"></label>
+
+    <div class="top-actions" style="display:flex; gap:8px; align-items:center;">
+      <button id="btnVerLanc" class="btn-icon" type="button">
+        <i data-lucide="list"></i> Ver Lançamentos
+      </button>
+      <button id="btnPrint" class="btn-icon" type="button" title="Imprimir relatório">
+        <i data-lucide="printer"></i> Imprimir
+      </button>
+    </div>
+  </div>
+</header>
+
+        <!-- KPIs -->
+        <section class="kpi-grid" aria-label="Indicadores do evento">
+          <div class="kpi kpi--in-pagas">
+            <div class="kpi-icon"><i data-lucide="arrow-down-circle"></i></div>
+            <div class="kpi-meta">
+              <span class="kpi-title">Entradas Recebidas</span>
+              <span class="kpi-value"><em>R$</em><b id="kEntradasPagas">0,00</b></span>
+            </div>
+          </div>
+
+          <div class="kpi kpi--in-pend">
+            <div class="kpi-icon"><i data-lucide="clock-4"></i></div>
+            <div class="kpi-meta">
+              <span class="kpi-title">Entradas Pendentes</span>
+              <span class="kpi-value"><em>R$</em><b id="kEntradasPend">0,00</b></span>
+            </div>
+          </div>
+
+          <div class="kpi kpi--out-pagas">
+            <div class="kpi-icon"><i data-lucide="arrow-up-circle"></i></div>
+            <div class="kpi-meta">
+              <span class="kpi-title">Saídas Pagas</span>
+              <span class="kpi-value"><em>R$</em><b id="kSaidasPagas">0,00</b></span>
+            </div>
+          </div>
+
+          <div class="kpi kpi--out-pend">
+            <div class="kpi-icon"><i data-lucide="hourglass"></i></div>
+            <div class="kpi-meta">
+              <span class="kpi-title">Saídas Pendentes</span>
+              <span class="kpi-value"><em>R$</em><b id="kSaidasPend">0,00</b></span>
+            </div>
+          </div>
+
+          <div class="kpi kpi--saldo">
+            <div class="kpi-icon"><i data-lucide="sigma"></i></div>
+            <div class="kpi-meta">
+              <span class="kpi-title">Saldo do Evento (pago)</span>
+              <span class="kpi-value"><em>R$</em><b id="kSaldoPago">0,00</b></span>
+            </div>
+          </div>
+        </section>
+
+<!-- Abas -->
+<div class="tabs" role="tablist" style="display:flex;gap:8px;margin:14px 0;">
+  <button data-view="extrato" class="btn-icon active" role="tab" aria-controls="view-extrato" aria-selected="true">
+    <i data-lucide="list"></i> Extrato
+  </button>
+  <button data-view="lucratividade" class="btn-icon" role="tab" aria-controls="view-lucratividade" aria-selected="false">
+    <i data-lucide="building-2"></i> Lucratividade
+  </button>
+  <button data-view="contratado" class="btn-icon" role="tab" aria-controls="view-contratado" aria-selected="false">
+    <i data-lucide="bar-chart-3"></i> Contratado × Recebido
+  </button>
+</div>
+
+<h2 style="margin:6px 0 10px;">Relatório do <span id="evtNome">—</span></h2>
+
+<!-- Visão: Extrato -->
+<section id="view-extrato" class="view">
+  <div class="card">
+    <h3><i data-lucide="list"></i> Extrato do Período</h3>
+    <table id="tb-extrato" class="tabela-min" style="width:100%;">
+      <thead>
+        <tr>
+          <th>Vencimento</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+          <th class="num">Valor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="extratoBody"></tbody>
+    </table>
+
+    <!-- Totais do Extrato (Patch B) -->
+    <div class="totais" style="margin-top:12px; display:flex; gap:24px; flex-wrap:wrap">
+      <div>Entradas: <b id="extratoTotalEntradas">R$ 0,00</b></div>
+      <div>Saídas:   <b id="extratoTotalSaidas">R$ 0,00</b></div>
+      <div>Saldo:    <b id="extratoSaldo">R$ 0,00</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- Visão: Lucratividade -->
+<section id="view-lucratividade" class="view hidden">
+  <div class="card" style="display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;">
+    <div><div class="muted">Contratado</div><div id="k-contratado" class="big">—</div></div>
+    <div><div class="muted">Recebido</div><div id="k-recebido"   class="big">—</div></div>
+    <div><div class="muted">Custos</div><div id="k-custos"       class="big">—</div></div>
+    <div><div class="muted">Comissões</div><div id="k-comissoes" class="big">—</div></div>
+    <div><div class="muted">Lucro (previsto)</div><div id="k-lucro-prev" class="big">—</div></div>
+    <div><div class="muted">Lucro (real)</div><div id="k-lucro-real" class="big">—</div></div>
+  </div>
+</section>
+
+<!-- Visão: Contratado × Recebido -->
+<section id="view-contratado" class="view hidden">
+  <div class="card">
+    <h3><i data-lucide="bar-chart-3"></i> Contratado × Recebido</h3>
+    <div class="bars" style="display:grid;gap:12px;max-width:640px;margin-top:8px;">
+      <div id="bar-contr" class="bar"><strong>Contratado:</strong> <span data-v>—</span></div>
+      <div id="bar-recv"  class="bar"><strong>Recebido:</strong>   <span data-v>—</span></div>
+      <div id="bar-pend"  class="bar"><strong>Pendente:</strong>    <span data-v>—</span></div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .view[hidden], .view.hidden { display:none !important; }
+  .big{ font-size:22px; font-weight:800; }
+  .bar{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; }
+  .tabela-min .num{ text-align:right; }
+</style>
+
+<!-- Totais + Mini gráfico -->
+<section class="cards-duplos" aria-label="Totais e fluxo">
+  <article class="card">
+    <h3><i data-lucide="calculator"></i> Totais do Evento</h3>
+    <table class="tabela-min totals" role="table" aria-label="Totais do evento">
+      <tbody>
+        <tr><td>Entradas (pagas)</td><td class="num" id="tInPagas">R$ 0,00</td></tr>
+        <tr><td>Entradas (pendentes)</td><td class="num" id="tInPend">R$ 0,00</td></tr>
+        <tr><td class="sep">Saídas (pagas)</td><td class="num sep" id="tOutPagas">R$ 0,00</td></tr>
+        <tr><td>Saídas (pendentes)</td><td class="num" id="tOutPend">R$ 0,00</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><th>Saldo (pago)</th><th class="num" id="tSaldoPago">R$ 0,00</th></tr>
+        <tr><th>Saldo (geral)</th><th class="num" id="tSaldoGeral">R$ 0,00</th></tr>
+      </tfoot>
+    </table>
+  </article>
+
+  <article class="card">
+    <h3><i data-lucide="activity"></i> Fluxo (pagos) por dia</h3>
+    <div class="chart-wrap">
+      <canvas id="chartFluxo" height="220" aria-label="Fluxo pago por dia" role="img"></canvas>
+      <div id="chartFluxoPlaceholder" class="chart-placeholder">Sem dados pagos para plotar.</div>
+    </div>
+  </article>
+</section>
+
+<!-- Resumos por categoria -->
+<section class="cards-duplos" aria-label="Resumo por categoria">
+  <article class="card">
+    <h3><i data-lucide="pie-chart"></i> Resumo por Categoria — <span class="chip verde">Entradas (Pago)</span></h3>
+    <table class="tabela-min" id="tbCatEntradas">
+      <thead><tr><th>Categoria</th><th class="num">Total Pago</th></tr></thead>
+      <tbody><tr><td>—</td><td class="num">R$ 0,00</td></tr></tbody>
+      <tfoot><tr><th>Total</th><th class="num" id="ttlCatEntradas">R$ 0,00</th></tr></tfoot>
+    </table>
+  </article>
+
+  <article class="card">
+    <h3><i data-lucide="pie-chart"></i> Resumo por Categoria — <span class="chip vinho">Saídas (Pago)</span></h3>
+    <table class="tabela-min" id="tbCatSaidas">
+      <thead><tr><th>Categoria</th><th class="num">Total Pago</th></tr></thead>
+      <tbody><tr><td>—</td><td class="num">R$ 0,00</td></tr></tbody>
+      <tfoot><tr><th>Total</th><th class="num" id="ttlCatSaidas">R$ 0,00</th></tr></tfoot>
+    </table>
+  </article>
+</section>
+
+<!-- Filtros + Lista -->
+<section class="card" aria-label="Lançamentos do evento">
+  <div class="card-head row-between">
+    <h3><i data-lucide="list"></i> Lançamentos do Evento</h3>
+    <div class="filtros-lista">
+      <label>
+        <span>Status</span>
+        <select id="fltStatus" aria-label="Filtrar por status">
+          <option value="todos">Todos</option>
+          <option value="pagos">Pagos/Recebidos</option>
+          <option value="pendentes">Pendentes</option>
+        </select>
+      </label>
+      <label>
+        <span>Categoria</span>
+        <select id="fltCat" aria-label="Filtrar por categoria">
+          <option value="">Todas</option>
+        </select>
+      </label>
+      <label class="grow">
+        <span>Buscar</span>
+        <input id="fltBusca" type="text" placeholder="Descrição, observação…" aria-label="Buscar lançamentos" />
+      </label>
+    </div>
+  </div>
+  <div class="lista-compacta" id="listaLanc" aria-live="polite"></div>
+</section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- scripts existentes -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="financeiro-relatorios.js"></script>
+
+  <!-- Inicialização segura de ícones + alternância de tema -->
+  <script>
+  (function initUI(){
+    const root = document.documentElement;
+    // trava sempre em tema claro:
+    root.setAttribute('data-theme', 'light');
+
+       // Menu hambúrguer (padrão agenda/configurações)
+    const hb = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const backdrop = document.getElementById('menuBackdrop');
+    const mq = window.matchMedia('(max-width:768px)');
+
+    function syncHamb(){
+      if (!hb) return;
+      hb.style.display = mq.matches ? 'inline-flex' : 'none';
+
+      if (!mq.matches){
+        aside?.classList.remove('aberto');
+        if (backdrop) backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      }
+    }
+
+    mq.addEventListener('change', syncHamb);
+    syncHamb();
+
+    if (hb && aside && backdrop){
+      hb.addEventListener('click', () => {
+        const aberto = aside.classList.toggle('aberto');
+        backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      });
+
+      backdrop.addEventListener('click', () => {
+        aside.classList.remove('aberto');
+        backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      });
+    }
+
+    // Ícones
+    try {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    } catch {}
+  })();
+</script>
+
+  <!-- === ÚNICO PATCH — Extrato por Evento === -->
+  <script id="patch-relatorios-extrato">
+  (function(){
+    'use strict';
+    const $  = (s,el=document)=>el.querySelector(s);
+    const fmtBRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+    const money = n => fmtBRL.format(Number(n||0));
+    const ymd   = d => String(d||'').slice(0,10);
+    const escapeHtml = s => String(s==null?'':s).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
+
+    function getParam(name){ const u = new URL(location.href); return u.searchParams.get(name); }
+    function getEventId(){ return getParam('eventId') || getParam('id') || localStorage.getItem('eventoSelecionado') || ''; }
+
+    async function loadExtrato(){
+      const base = window.__API_BASE__ || '';
+      const eventId = getEventId();
+      const url = eventId ? `${base}/fin/relatorios/extrato?eventId=${encodeURIComponent(eventId)}`
+                          : `${base}/fin/relatorios/extrato`;
+      try{
+        const data = await window.apiFetch(url, { headers: { 'x-tenant-id':'default' } });
+        renderExtrato(data);
+      }catch(e){
+        console.warn('[Extrato evento] erro:', e);
+        try{ window.toast?.('Falha ao carregar extrato', 'warn'); }catch{}
+        renderExtrato({ entradas:[], saidas:[] });
+      }
+    }
+
+    function renderExtrato({ entradas=[], saidas=[] } = {}){
+      const tbody = $('#extratoBody') || $('#view-extrato tbody');
+      if (!tbody) return;
+
+      const linhas = [];
+      entradas.forEach(it => {
+        linhas.push(`
+          <tr>
+            <td>${ymd(it.data)}</td>
+            <td>Entrada</td>
+            <td>${escapeHtml(it.descricao||'-')}</td>
+            <td class="num">${money(it.valor)}</td>
+            <td>${escapeHtml(it.origem||'pago')}</td>
+          </tr>`);
+      });
+      saidas.forEach(it => {
+        const dataRef = it.pagoEm || it.vencimento || '';
+        linhas.push(`
+          <tr>
+            <td>${ymd(dataRef)}</td>
+            <td>Saída</td>
+            <td>${escapeHtml(it.descricao||'-')}</td>
+            <td class="num">${money(it.valor)}</td>
+            <td>${escapeHtml(it.status||'')}</td>
+          </tr>`);
+      });
+
+      tbody.innerHTML = linhas.length ? linhas.join('') :
+        `<tr><td colspan="5" style="text-align:center; padding:14px 8px; color:#6b7280">Nenhum lançamento no período.</td></tr>`;
+
+      const totEntradas = entradas.reduce((s,x)=>s+Number(x.valor||0),0);
+      const totSaidas   = saidas.reduce((s,x)=>s+Number(x.valor||0),0);
+      const saldo       = totEntradas - totSaidas;
+
+      const setText = (id, val) => { const el=document.getElementById(id); if (el) el.textContent = val; };
+      setText('extratoTotalEntradas', money(totEntradas));
+      setText('extratoTotalSaidas',   money(totSaidas));
+      setText('extratoSaldo',         money(saldo));
+    }
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      loadExtrato();
+      try{
+        window.addEventListener('focus', loadExtrato);
+        document.addEventListener('visibilitychange', ()=> {
+          if (document.visibilityState === 'visible') loadExtrato();
+        });
+      }catch{}
+      try{ window.onFGChange?.(loadExtrato); }catch{}
+    });
+
+    window.__dbgLoadExtrato = loadExtrato;
+  })();
+  </script>
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

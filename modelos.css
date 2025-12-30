@@ -1,0 +1,241 @@
+/* garante que qualquer elemento com hidden fique realmente oculto */
+[hidden] { display: none !important; }
+
+/* ===== base da página ===== */
+html, body{
+  margin:0; padding:0; height:100%;
+  font-family:'Playfair Display', serif; background:#f8f1e8;
+}
+.wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+/* Botão hamburguer (padrão do sistema) */
+#hamburguer{
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1001;
+  background: #c29a5d;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 24px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.12);
+  cursor: pointer;
+  display: none; /* some no desktop */
+}
+
+@media (max-width: 768px){
+  #hamburguer{ display:block; }
+}
+
+/* área principal centralizada e com padding simétrico */
+main.conteudo-principal{
+  flex: 1;
+  height: 100vh;
+  overflow: auto;
+  padding: 24px; /* simétrico */
+}
+
+/* miolo central: ocupa toda a largura do main e fica centralizado */
+.content-frame{
+  width: 100%;
+  max-width: none;        /* sem limite aqui */
+  margin: 0 auto;         /* centraliza horizontalmente */
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+/* menu lateral com largura estável */
+#menuLateral{
+  flex-shrink: 0;
+  background: #5a3e2b;
+  height: 100vh;
+  overflow-y: auto;
+  min-width: 260px;
+}
+
+.titulo-pagina{ display:flex; align-items:center; gap:10px; color:#5a3e2b; margin:0 0 10px; }
+
+/* ===== topbar ===== */
+.topbar{ display:flex; gap:12px; align-items:center; margin:8px 0 18px; }
+.search{ display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #e3d7c9; border-radius:12px; padding:8px 12px; flex:1;}
+.search input{ border:none; outline:none; width:100%; font-family:inherit; background:transparent; }
+.btn{ border:1px solid #d1c2ad; background:#fff; color:#5a3e2b; border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:600; }
+.btn:hover{ box-shadow:0 4px 16px rgba(0,0,0,0.08); }
+.btn-primary{ background:#c29a5d; color:#fff; border:0; }
+.btn-secondary{ background:#e7d9c4; color:#5a3e2b; border:0; }
+.btn-ghost{ background:transparent; border:0; color:#5a3e2b; }
+.muted{ color:#7a6b58; }
+
+/* ===== grid de cards =====
+   - Largura máx. da grade e centralização própria
+   - auto-fit: preenche com o máximo de colunas que couberem
+   - minmax: cada card nunca fica menor que 280px (ajuste se quiser)
+*/
+.cards-grid{
+  display:grid;
+  gap:16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  max-width: 1200px;     /* largura alvo do miolo */
+  margin: 0 auto;        /* centraliza a grade em telas grandes */
+  justify-items: stretch;
+  align-items: start;
+}
+
+.card{
+  background:#fff; border:1px solid #eadfce; border-radius:16px;
+  padding:16px; display:flex; flex-direction:column; gap:10px;
+  box-shadow:0 6px 20px rgba(0,0,0,0.06);
+  transition:.18s transform, .18s box-shadow;
+}
+.card:hover{ transform:translateY(-2px); box-shadow:0 12px 28px rgba(0,0,0,0.10); }
+.card .card-top{ display:flex; align-items:center; gap:8px; justify-content:space-between; }
+.card .name{ display:flex; align-items:center; gap:10px; font-weight:700; color:#5a3e2b; }
+.card .actions{ display:flex; gap:8px; }
+.card .actions button{ border:0; background:#f5eee3; color:#5a3e2b; border-radius:10px; padding:6px 8px; cursor:pointer; }
+.card .meta{ font-size:12px; color:#7a6b58; }
+
+/* dica quando vazio */
+.grid-vazio{ color:#7a6b58; margin:18px 0; display:none; }
+
+/* ===== overlay do editor ===== */
+.overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,0.35);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; z-index:1001;
+}
+.overlay-dialog{
+  width:min(1100px, 96vw); max-height:92vh; background:#fff; border-radius:14px;
+  box-shadow:0 18px 60px rgba(0,0,0,0.35); display:flex; flex-direction:column; overflow:hidden;
+}
+.overlay-header{ display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #eee; background:#fbf7f1; }
+.editor-title{ display:flex; align-items:center; gap:10px; font-weight:800; color:#5a3e2b; }
+.overlay-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+
+/* toolbar */
+.editor-toolbar{ display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid #eee; background:#fff; }
+.editor-toolbar[aria-disabled="true"]{ opacity:.5; pointer-events:none; }
+.tb{ background:#eee; border:1px solid #ddd; border-radius:8px; padding:6px 10px; cursor:pointer; }
+.tb-inline{ display:flex; align-items:center; gap:6px; }
+.tb-upload{ cursor:pointer; }
+
+/* === Folha A4 REAL no editor, com guias de corte visuais === */
+.a4-wrap{
+  position: relative;
+  overflow: auto;
+  padding: 16px;
+  background: #faf7f2;
+}
+
+/* A4: 210 x 297 mm */
+.a4{
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: #fffefc;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20mm;           /* margem interna amigável */
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
+
+  /* Guia de corte (linha sutil a cada 297mm de altura) */
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 297mm,
+      rgba(0,0,0,.10) 297mm,
+      rgba(0,0,0,.10) calc(297mm + 1px)
+    );
+  background-clip: padding-box;
+}
+
+/* conteúdo do editor ocupa a largura útil e deixa o navegador quebrar linhas normalmente */
+#editorHtml{
+  min-height: 80vh;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+/* Impressão real */
+@page{ size:A4; margin:20mm; }
+@media print{
+  body{ background:#fff !important; }
+  #menuLateral, #hamburguer{ display:none !important; }
+}
+
+
+/* ===== painel de imagem ===== */
+.img-tools{
+  position: absolute;
+  left: 0; top: 0;
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.14);
+  padding:10px;
+  z-index:10000;
+  user-select: none;
+  cursor: default;
+}
+.img-tools .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+.img-tools .close{ margin-left:auto; }
+.img-tools .row strong{ cursor: move; }
+
+#editorHtml img{ max-width:100%; height:auto; display:inline-block; }
+.img-left  { float:left;  margin:0 12px 8px 0;  display:inline-block; }
+.img-right { float:right; margin:0 0 8px 12px; display:inline-block; }
+.img-center{ float:none;  display:block; margin:8px auto; }
+
+/* preview modal */
+.preview-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.45);
+  display:flex; align-items:center; justify-content:center; padding:18px; z-index:1003;
+}
+.preview-dialog{ width:min(1100px,96vw); height:min(88vh, 900px); background:#fff; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+.preview-header{ display:flex; gap:10px; align-items:center; padding:8px 12px; border-bottom:1px solid #eee; background:#fbf7f1; }
+.preview-body{ flex:1; background:#f1eee8; }
+.preview-body iframe{ width:100%; height:100%; border:0; }
+.preview-controls{ display:flex; gap:8px; align-items:center; }
+
+/* impressão real */
+@page{ size:A4; margin:20mm; }
+@media print{
+  body{ background:#fff !important; }
+  #menuLateral, #hamburguer{ display:none !important; }
+}
+.page-break{ page-break-after: always; }
+
+/* ===== overrides finais (se alguma folha global estiver limitando) ===== */
+.wrapper > main.conteudo-principal > .content-frame{
+  max-width: none !important;
+  width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+#menuBackdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;
+  z-index:900;
+}
+#menuBackdrop.visivel{ display:block; }
+body.no-scroll{ overflow:hidden; }
+
+@media (max-width:768px){
+  #menuLateral{
+    position:fixed;
+    top:0;
+    left:0;
+    width:260px;
+    height:100vh;
+    transform:translateX(-100%);
+    transition:transform .3s ease;
+    z-index:999;
+  }
+  #menuLateral.aberto{ transform:translateX(0); }
+}

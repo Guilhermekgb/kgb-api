@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+   <meta charset="UTF-8" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Cadastro de Usuário</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="page-permission" content="page:cadastro-usuario.html" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+<!-- 1) Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+
+  <!-- Estilos globais -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <!-- Menu/base: NÃO força fonte, herda das globais -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: inherit;
+      background-color: #f8f1e8;
+      height: 100%;
+    }
+    .wrapper {
+      display: flex;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #menuLateral {
+      flex-shrink: 0;
+      background-color: #5a3e2b;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    main.conteudo-principal {
+      flex-grow: 1;
+      padding: 40px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .conteudo-central {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    h1, h2 {
+      font-size: 28px;
+      color: #5a3e2b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #hamburguer {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #c29a5d;
+      border: none;
+      color: white;
+      font-size: 24px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      z-index: 1001;
+      display: none;
+    }
+    @media (max-width: 768px) {
+      #hamburguer { display: block; }
+      #menuLateral {
+        position: fixed;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 999;
+        width: 260px;
+      }
+      #menuLateral.aberto { transform: translateX(0); }
+      main.conteudo-principal { margin-left: 0; padding: 20px; }
+    }
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo {
+      background-color: #f3e8da;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    /* Formulário */
+    .form-linha { margin-bottom:30px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+    .preview-foto { width:120px; height:120px; border-radius:50%; object-fit:cover; border:2px solid #C89D63; background:#fff; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; }
+    .form-item { display:flex; flex-direction:column; }
+    .form-item label { margin-bottom:6px; font-weight:600; color:#5C4033; }
+    .form-item input, .form-item select { padding:10px; border-radius:8px; border:1px solid #ccc; font-size:16px; line-height:1.4; }
+    .form-rodape { margin-top:30px; text-align:right; }
+    .botao-dourado { background:#C89D63; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; }
+    .botao-dourado:hover { background:#b48952; }
+
+    .senha-linha{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: end;
+    }
+    .campo{ position: relative; }
+    .campo input{
+      width: 100%;
+      height: 44px;
+      padding: 10px 44px 10px 12px;
+      box-sizing: border-box;
+    }
+    .campo .olho{
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .campo .olho [data-lucide]{ width: 18px; height: 18px; }
+
+    /* === Multiseleção de Perfis (NOVO) === */
+    .check-grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap:10px;
+    }
+    .check-grid label{
+      display:flex; align-items:center; gap:8px;
+      padding:10px; border:1px solid #ddd; border-radius:10px; background:#fff;
+      cursor:pointer;
+    }
+    .check-grid input[type="checkbox"]{ width:18px; height:18px; }
+  </style>
+</head>
+
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral"></aside>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h2 id="tituloPagina" style="display:flex; align-items:center; gap:10px;">
+          <i data-lucide="user-plus"></i> <span>Cadastrar Novo Usuário</span>
+        </h2>
+
+        <form id="formUsuario" autocomplete="off">
+          <!-- Foto de perfil -->
+          <div class="form-linha">
+            <div>
+              <label for="foto">Foto de Perfil</label>
+              <input type="file" id="foto" name="foto" accept="image/*">
+              <p style="font-size:13px; color:#777; margin:8px 0 0;">Prévia da Foto:</p>
+              <img id="previewFoto"
+                src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='55%' text-anchor='middle' font-size='48' fill='%239ca3af'>👤</text></svg>"
+                alt="Prévia da Foto"
+                class="preview-foto">
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-item">
+              <label for="nome">Nome</label>
+              <input type="text" id="nome" name="nome" autocomplete="name" required>
+            </div>
+
+            <div class="form-item">
+              <label for="email">E-mail</label>
+              <input type="email" id="email" name="email" autocomplete="username" required>
+            </div>
+
+            <div class="form-item">
+              <label for="telefone">Telefone (WhatsApp)</label>
+              <input type="tel" id="telefone" name="telefone" autocomplete="tel" placeholder="(11) 99999-9999">
+            </div>
+
+            <!-- PERFIS: multiseleção (NOVO) -->
+            <div class="form-item">
+              <label>Perfis (marque 1 ou mais)</label>
+              <div id="perfisGroup" class="check-grid"><!-- checkboxes via JS --></div>
+            </div>
+
+            <!-- Senha e Confirmar -->
+            <div class="form-row senha-linha">
+              <div class="campo">
+                <label for="senha">Senha</label>
+                <input type="password" id="senha" autocomplete="new-password" />
+                <button type="button" class="olho" data-target="senha" aria-label="Mostrar/ocultar senha">
+                  <i data-lucide="eye"></i>
+                </button>
+              </div>
+
+              <div class="campo">
+                <label for="confirmarSenha">Confirmar Senha</label>
+                <input type="password" id="confirmarSenha" autocomplete="new-password" />
+                <button type="button" class="olho" data-target="confirmarSenha" aria-label="Mostrar/ocultar confirmação">
+                  <i data-lucide="eye"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-rodape">
+            <button type="submit" class="botao-dourado">Salvar Usuário</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+<!-- INCLUA APENAS EM HOMOLOG/PROD -->
+<script src="./config.env.js"></script>
+
+<!-- Adapter de API -->
+<script type="module" src="./api/remote-adapter.js"></script>
+
+<!-- O que já existia -->
+<script type="module" src="menu-lateral.js"></script>
+
+  <!-- Guard do modelo base -->
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+  </script>
+
+  <!-- Lógica da página -->
+  <script type="module">
+    import { handleRequest } from './api/routes.js';
+
+    const authHeader = () => {
+      const t = localStorage.getItem('token') || sessionStorage.getItem('token');
+      return t ? { Authorization: 'Bearer ' + t } : {};
+    };
+
+    const api = (endpoint, req = {}) => {
+      const headers = { ...authHeader(), ...(req.headers || {}) };
+      return new Promise(resolve => handleRequest(endpoint, { ...req, headers }, resolve));
+    };
+
+    // Refs
+    const form        = document.getElementById('formUsuario');
+    const nomeI       = document.getElementById('nome');
+    const emailI      = document.getElementById('email');
+    const whatsI      = document.getElementById('telefone');
+    const senhaI      = document.getElementById('senha');
+    const confirmaI   = document.getElementById('confirmarSenha');
+    const fotoI       = document.getElementById('foto');
+    const previewFoto = document.getElementById('previewFoto');
+    const perfisGroup = document.getElementById('perfisGroup');
+
+    let fotoBase64  = '';
+    let usuarioAtualEdicao = null;
+
+    function fileToBase64(file){
+      return new Promise((resolve, reject)=>{
+        const rd = new FileReader();
+        rd.onload = () => resolve(rd.result);
+        rd.onerror = reject;
+        rd.readAsDataURL(file);
+      });
+    }
+
+    fotoI?.addEventListener('change', async (e)=>{
+      const f = e.target.files?.[0];
+      if (!f) { fotoBase64 = ''; return; }
+      fotoBase64 = await fileToBase64(f);
+      if (previewFoto) previewFoto.src = fotoBase64;
+    });
+
+      async function getPerfis() {
+      const fixos = ['Administrador','Vendedor','Financeiro','Maitre'];
+      let arr = [];
+      try {
+        const resp = await api('/perfis', { method: 'GET' });
+        if (resp && resp.status === 200 && Array.isArray(resp.data)) {
+          arr = resp.data;
+        }
+      } catch (e) {
+        console.warn('Não foi possível carregar perfis da API. Usando apenas perfis fixos.', e);
+      }
+
+      const nomes = new Set();
+      const out = [];
+      const add = (n) => {
+        const s = String(n||'').trim(); if (!s) return;
+        const k = s.toLowerCase(); if (nomes.has(k)) return;
+        nomes.add(k); out.push(s);
+      };
+      fixos.forEach(add);
+      if (Array.isArray(arr)) arr.forEach(p => add(p?.nome ?? p));
+      return out;
+    }
+
+
+    function idSeguroPerfil(nome){
+      return 'pf_' + String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-zA-Z0-9]+/g,'_').toLowerCase();
+    }
+
+       /** Monta os checkboxes de perfis no container #perfisGroup */
+    async function popularPerfisCheckboxes(selecionados = []){
+      const lista = await getPerfis();
+      if (!perfisGroup) return;
+      perfisGroup.innerHTML = lista.map(nome => {
+        const id = idSeguroPerfil(nome);
+        const checked = selecionados.includes(nome) ? 'checked' : '';
+        return `
+          <label for="${id}">
+            <input type="checkbox" id="${id}" name="perfis" value="${nome}" ${checked} />
+            <span>${nome}</span>
+          </label>
+        `;
+      }).join('');
+    }
+
+    // Máscara WhatsApp
+    whatsI?.addEventListener('input', () => {
+      const v = (whatsI.value || '').replace(/\D/g,'').slice(0,11);
+      whatsI.value = v
+        .replace(/^(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d{4})$/, '$1-$2');
+    });
+
+    // Edição (?id=...)
+    const params = new URLSearchParams(location.search);
+    const id     = params.get('id');
+
+    // Primeiro monta checkbox vazio (sem seleção) para já aparecer UI
+    popularPerfisCheckboxes([]);
+
+    // Busca usuário para edição
+    let u;
+    if (id) {
+      const r = await api('/usuarios', { method: 'GET' });
+      u = (r?.data || []).find(x => String(x.id) === String(id));
+
+      if (u) {
+        // Campos básicos
+        nomeI.value  = u.nome     || '';
+        emailI.value = u.email    || '';
+        whatsI.value = u.whatsapp || '';
+
+        // Perfis selecionados (array ou legado)
+        const selecionados = Array.isArray(u?.perfis) ? u.perfis : (u?.perfil ? [u.perfil] : []);
+        popularPerfisCheckboxes(selecionados);
+
+        // Título
+        const tituloSpan = document.querySelector('#tituloPagina span');
+        if (tituloSpan) tituloSpan.textContent = 'Editar Usuário';
+      }
+    }
+
+    usuarioAtualEdicao = u || null;
+    if (u?.foto) {
+      fotoBase64 = u.foto;
+      if (previewFoto) previewFoto.src = u.foto;
+    }
+
+    const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || '').trim());
+
+    // Submit
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const nome     = (nomeI.value   || '').trim();
+      const emailRaw = (emailI.value  || '').trim().toLowerCase();
+      const email    = emailRaw;
+      const whatsapp = (whatsI?.value || '').replace(/\D/g, '');
+      const senha    = (senhaI.value  || '').trim();
+      const conf     = (confirmaI.value || '').trim();
+
+      // Coleta múltiplos perfis
+      const selecionados = Array.from(perfisGroup?.querySelectorAll('input[type="checkbox"]:checked') || [])
+        .map(chk => chk.value);
+
+      if (!nome)                return alert('Informe o nome.');
+      if (!isValidEmail(email)) return alert('E-mail inválido.');
+      if (!selecionados.length) return alert('Selecione ao menos um perfil.');
+      if (senha || conf) {
+        if (senha.length < 4)   return alert('Senha muito curta.');
+        if (senha !== conf)     return alert('As senhas não coincidem.');
+      }
+
+      let fotoParaSalvar = '';
+      if (fotoBase64) fotoParaSalvar = fotoBase64;
+      else if (usuarioAtualEdicao?.foto) fotoParaSalvar = usuarioAtualEdicao.foto;
+
+      // Compatibilidade: envia perfis[] e também perfil = primeiro
+      const body = { nome, email, whatsapp, perfis: selecionados, perfil: selecionados[0] || '' };
+      if (id)    body.id = id;
+      if (senha) body.senha = senha;
+      if (fotoParaSalvar) body.foto = fotoParaSalvar;
+
+      const r = await api('/usuarios', {
+        method: id ? 'PUT' : 'POST',
+        body
+      });
+
+      // ✅ Caso de sucesso real (quando a API existir)
+      if (r?.status >= 200 && r?.status < 300) {
+        alert('Usuário salvo com sucesso!');
+        location.replace('usuarios.html');
+
+      // ⚠️ E-mail duplicado na API real
+      } else if (r?.status === 409) {
+        alert('Já existe um usuário com esse e-mail.');
+
+      // 🟡 PLANO B: backend não tem /usuarios (404) -> salvar só no navegador
+      } else if (r?.status === 404) {
+        try {
+          const chave = 'usuarios_dev_local';
+
+          // carrega lista atual do navegador
+          const lista = JSON.parse(localStorage.getItem(chave) || '[]');
+
+          // gera um id fake se não tiver
+          const novoId = body.id || Date.now();
+
+          const novoUsuario = {
+            ...body,
+            id: novoId,
+            _devLocal: true    // só pra você saber que é "local"
+          };
+
+          lista.push(novoUsuario);
+          localStorage.setItem(chave, JSON.stringify(lista));
+
+          alert('Usuário salvo apenas neste navegador (modo teste - backend sem /usuarios).');
+          location.replace('usuarios.html');
+        } catch (e2) {
+          console.error(e2);
+          alert('Backend respondeu 404 e não consegui salvar localmente.');
+        }
+
+      // Demais erros
+      } else {
+        alert('Erro ao salvar: ' + (r?.error || r?.status || 'desconhecido'));
+      }
+
+    });
+
+    // Olhinhos
+    document.querySelectorAll('.olho').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const alvo = document.getElementById(btn.dataset.target);
+        if (!alvo) return;
+        const novoTipo = alvo.type === 'password' ? 'text' : 'password';
+        alvo.type = novoTipo;
+        const icon = (novoTipo === 'password') ? 'eye' : 'eye-off';
+        btn.querySelector('i')?.setAttribute('data-lucide', icon);
+        if (window.lucide?.createIcons) lucide.createIcons();
+      });
+    });
+  </script>
+
+  <!-- Script base: hamburguer + ícones -->
+  <script>
+      document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

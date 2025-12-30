@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:colaboradores.html">
+  <meta charset="UTF-8" />
+  <title>Colaboradores</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = "https://kgb-api.onrender.com";
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+ <!-- Helpers globais -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- Guard / RBAC -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg: #f8f1e8;
+      --brown: #5a3e2b;
+      --gold: #c29a5d;
+      --ink: #2b2b2b;
+      --line: #e7dfd6;
+      --chip: #f3e8da;
+    }
+    html, body { margin:0; padding:0; background:var(--bg); }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    main { flex-grow:1; padding:40px; height:100vh; overflow-y:auto; transition: margin-left .2s ease; }
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+
+    main, input, select, textarea, button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    h1, h2, h3 { font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif; }
+
+    h1{
+      font-size:28px; color:var(--brown);
+      display:flex; align-items:center; gap:10px;
+      letter-spacing:.2px;
+    }
+
+    .bloco-detalhes{
+      background:#fff; border:1px solid var(--line);
+      border-radius:16px; padding:18px 16px; margin:18px 0;
+      box-shadow:0 8px 24px rgba(0,0,0,.04);
+    }
+    .bloco-detalhes h3{ color:var(--brown); margin:0 0 10px; }
+
+#hamburguer{
+  position:fixed; top:12px; left:12px;
+  background:var(--gold); border:none; color:#fff;
+  font-size:24px; padding:6px 12px; border-radius:8px;
+  z-index:1001; display:none;
+  box-shadow:0 6px 16px rgba(0,0,0,.12);
+}
+
+/* trava o scroll quando o menu estiver aberto */
+body.no-scroll{
+  overflow: hidden;
+}
+
+@media (max-width: 768px){
+  #hamburguer{ display:block; }
+
+  /* menu vira painel lateral que entra pela esquerda */
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    background: #5a3e2b;
+    transform: translateX(-100%);
+    transition: transform .3s ease;
+    z-index: 1000;
+  }
+
+  #menuLateral.aberto{
+    transform: translateX(0);
+  }
+
+  /* fundo escuro atrás do menu */
+  #menuBackdrop{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.38);
+    z-index: 999;
+  }
+
+  main{ padding:20px; }
+}
+
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:var(--chip); border-radius:6px; font-weight:bold;
+    }
+
+    /* ====== LISTA ====== */
+    .linha{
+      display:grid;
+      /* 5 campos + coluna de ações */
+      grid-template-columns:
+        minmax(0,1.2fr)  /* Nome */
+        minmax(0,1fr)    /* Whats */
+        minmax(0,1.2fr)  /* Endereço */
+        minmax(0,1.1fr)  /* Disponibilidade */
+        minmax(0,.8fr)   /* Tamanho Camiseta */
+        max-content;     /* Ações */
+      gap:8px; align-items:center; margin:8px 0;
+      background:#fff; padding:12px; border-radius:12px;
+      border:1px solid var(--line);
+      box-shadow:0 4px 14px rgba(0,0,0,.06);
+    }
+    .linha > * { min-width: 0; }
+
+    @media (max-width: 1024px){
+      .linha{
+        grid-template-columns:
+          minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr);
+      }
+      .linha .acoes{ grid-column: 1 / -1; justify-content:flex-end; }
+    }
+
+    .linha.editando{ box-shadow:0 6px 20px rgba(0,0,0,.1); border-color:#e9dcc7; }
+
+    .input-editar-cliente{
+      background:#fff; border:1px solid #e6ded2; border-radius:10px;
+      padding:10px 12px; outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    .input-editar-cliente:focus{
+      border-color:#d9c4a3; box-shadow:0 0 0 4px rgba(194,154,93,.18);
+    }
+    .input-editar-cliente[disabled]{ background:#faf6f0; color:#666; border-color:#eadfce; }
+
+    .acoes{
+      display:flex; align-items:center; justify-content:flex-end; gap:6px;
+      white-space: nowrap;
+    }
+    .icon-btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      height:34px; width:34px; min-width:34px;
+      border:1px solid #e6ded2; border-radius:10px; background:#fff;
+      cursor:pointer; transition:transform .08s ease, background .15s ease, border-color .15s;
+    }
+    .icon-btn:hover{ background:#fffaf4; border-color:#e3d3bc; }
+    .icon-btn:active{ transform:translateY(1px); }
+    .icon-btn.primary{ background:var(--chip); border-color:#e7d7bf; }
+    .icon-btn.danger{ background:#fff5f5; border-color:#f0cccc; }
+
+  </style>
+</head>
+
+<body>
+  <button id="hamburguer" aria-label="Abrir menu">
+    <i data-lucide="menu"></i>
+  </button>
+
+ <div class="wrapper">
+  <aside id="menuLateral"></aside>
+  <div id="menuBackdrop" hidden></div>
+  <main class="conteudo-principal">
+
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="users"></i> Colaboradores</h1>
+
+        <div class="bloco-detalhes">
+          <h3>Cadastrar</h3>
+          <div class="linha">
+            <input id="novoNome" class="input-editar-cliente" placeholder="Nome">
+            <input id="novoWhats" class="input-editar-cliente" placeholder="WhatsApp (apenas números)">
+            <input id="novoEnd" class="input-editar-cliente" placeholder="Endereço">
+            <input id="novoDisp" class="input-editar-cliente" placeholder="Disponibilidade">
+            <input id="novoCamiseta" class="input-editar-cliente" placeholder="Tam. camiseta (ex.: P/M/G/44)">
+            <div class="acoes">
+              <button class="btn" id="btnAdd" style="display:inline-flex; align-items:center; gap:6px;">
+                <i data-lucide="plus"></i> Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bloco-detalhes">
+          <h3>Lista</h3>
+          <div id="lista"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => { window.lucide?.createIcons?.(); });
+
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // ===== App: Colaboradores (LocalStorage) =====
+    const KEY="colaboradoresBase";
+    const gid = (id)=>document.getElementById(id);
+    const getBase=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch{ return []; } };
+    const setBase=(v)=> localStorage.setItem(KEY, JSON.stringify(v));
+
+    function linhaHTML(c, i){
+      return `
+        <input class="input-editar-cliente" value="${c.nome||""}" placeholder="Nome" disabled>
+        <input class="input-editar-cliente" value="${c.whatsapp||""}" placeholder="WhatsApp" disabled>
+        <input class="input-editar-cliente" value="${c.endereco||""}" placeholder="Endereço" disabled>
+        <input class="input-editar-cliente" value="${c.disponibilidade||""}" placeholder="Disponibilidade" disabled>
+        <input class="input-editar-cliente" value="${c.tamanhoCamiseta||c.camiseta||""}" placeholder="Tam. camiseta" disabled>
+        <div class="acoes">
+          <button class="icon-btn primary" title="Editar" data-editar="${i}"><i data-lucide="pencil"></i></button>
+          <button class="icon-btn" title="Salvar" data-salvar="${i}" hidden><i data-lucide="check"></i></button>
+          <button class="icon-btn danger" title="Remover" data-remover="${i}"><i data-lucide="trash-2"></i></button>
+        </div>
+      `;
+    }
+
+    function render(){
+      const base=getBase();
+      const box=gid("lista");
+      box.innerHTML="";
+      if(!base.length){
+        box.innerHTML="<p style='color:#666;'>Nenhum colaborador cadastrado.</p>";
+        return;
+      }
+      base.forEach((c,i)=>{
+        const row=document.createElement("div");
+        row.className="linha";
+        row.innerHTML = linhaHTML(c,i);
+        box.appendChild(row);
+      });
+
+      // eventos das ações
+      box.querySelectorAll('[data-editar]').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          const i = Number(e.currentTarget.getAttribute('data-editar'));
+          const row = e.currentTarget.closest('.linha');
+          if(!row) return;
+          row.classList.add('editando');
+          const inputs = row.querySelectorAll('input');
+          inputs.forEach(inp => inp.disabled = false);
+          row.querySelector(`[data-editar="${i}"]`).hidden = true;
+          row.querySelector(`[data-salvar="${i}"]`).hidden = false;
+        });
+      });
+      box.querySelectorAll('[data-salvar]').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          const i = Number(e.currentTarget.getAttribute('data-salvar'));
+          const row = e.currentTarget.closest('.linha');
+          if(!row) return;
+          const inputs = row.querySelectorAll('input');
+          const [nome, whatsapp, endereco, disponibilidade, tamanhoCamiseta] = Array.from(inputs).map(x=>x.value.trim());
+          const b = getBase();
+          b[i] = { ...(b[i]||{}), nome, whatsapp, endereco, disponibilidade, tamanhoCamiseta };
+          setBase(b);
+          inputs.forEach(inp => inp.disabled = true);
+          row.classList.remove('editando');
+          row.querySelector(`[data-editar="${i}"]`).hidden = false;
+          row.querySelector(`[data-salvar="${i}"]`).hidden = true;
+        });
+      });
+      box.querySelectorAll('[data-remover]').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{ const i = Number(e.currentTarget.getAttribute('data-remover')); del(i); });
+      });
+
+      window.lucide?.createIcons?.();
+    }
+
+    window.upd=(i,campo,valor)=>{ const b=getBase(); b[i][campo]=valor; setBase(b); };
+    window.del=(i)=>{ if(!confirm("Remover colaborador?")) return;
+      const b=getBase(); b.splice(i,1); setBase(b); render();
+    };
+
+    document.getElementById("btnAdd").onclick=()=>{
+      const nome=gid("novoNome").value.trim();
+      const whatsapp=gid("novoWhats").value.trim();
+      const endereco=gid("novoEnd").value.trim();
+      const disponibilidade=gid("novoDisp").value.trim();
+      const tamanhoCamiseta=gid("novoCamiseta").value.trim();
+      if(!nome||!whatsapp){ alert("Nome e WhatsApp são obrigatórios."); return; }
+      const b=getBase();
+      b.push({ id:"colab_"+Math.random().toString(36).slice(2,10), nome, whatsapp, endereco, disponibilidade, tamanhoCamiseta });
+      setBase(b);
+      gid("novoNome").value=""; gid("novoWhats").value=""; gid("novoEnd").value=""; gid("novoDisp").value=""; gid("novoCamiseta").value="";
+      render();
+    };
+
+    document.addEventListener("DOMContentLoaded", render);
+  </script>
+
+  <script>
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+  <script>
+  (function initMenuMobile(){
+    const btn   = document.getElementById('hamburguer');
+    const aside = document.getElementById('menuLateral');
+    const back  = document.getElementById('menuBackdrop');
+
+    if (!btn || !aside || !back) return;
+
+    function abrir(){
+      aside.classList.add('aberto');
+      back.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+
+    function fechar(){
+      aside.classList.remove('aberto');
+      back.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    if (!btn.hasAttribute('data-bound')) {
+      btn.setAttribute('data-bound','1');
+      btn.addEventListener('click', () => {
+        if (aside.classList.contains('aberto')) {
+          fechar();
+        } else {
+          abrir();
+        }
+      });
+    }
+
+    if (!back.hasAttribute('data-bound')) {
+      back.setAttribute('data-bound','1');
+      back.addEventListener('click', fechar);
+    }
+  })();
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

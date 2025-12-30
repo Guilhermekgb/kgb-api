@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    var PROD_API = "https://kgb-api.onrender.com";
+   var DEV_API  = "http://127.0.0.1:3333";
+
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+ <title>Contrato do Evento</title>
+
+<!-- Permissão de página para o guard -->
+<meta name="page-permission" content="contratos:editar" />
+
+<!-- Ícones -->
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<!-- Estilos -->
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="menu-lateral.css" />
+
+<!-- Corrige favicon 404 -->
+<link rel="icon" href="data:," />
+
+<!-- === ORDEM DE SCRIPTS (importante) ===
+1) Helpers globais (kgb-common)
+2) Guard de permissões (proteger-pagina)
+3) Biblioteca de PDF
+4) Cliente ZapSign (uma única vez)
+(contrato.js fica no final do <body>)
+-->
+
+<!-- 1) Helpers globais (module) -->
+<script type="module" src="./kgb-common.js"></script>
+
+<!-- 2) Guard / RBAC (module) -->
+<script src="js/auth-helper.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
+<!-- 3) Biblioteca de PDF (usada pelo zapsign e pelo contrato.js) -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+<!-- (Opcional) Bypass do guard em *.netlify.app até ativarmos Auth -->
+<script>
+  (function () {
+    try {
+      var h = String(location.hostname || "");
+      if (/\.netlify\.app$/i.test(h)) {
+        localStorage.setItem("guard.enforce", "0");
+        if (!localStorage.getItem("perfil")) localStorage.setItem("perfil", "Administrador");
+        console.log("[GUARD] Bypass ativo (Netlify)");
+      }
+    } catch (e) {}
+  })();
+</script>
+
+<style>
+
+    html, body { margin:0; padding:0; font-family:'Playfair Display', serif; background:#f8f1e8; height:100%; }
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral { flex-shrink:0; background:#5a3e2b; height:100vh; overflow-y:auto; }
+    main.conteudo-principal {
+   flex-grow:1;
+   padding:40px;
+   min-height:auto;
+   height:auto;
+   overflow:visible;
+}
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+    h1 { font-size:28px; color:#5a3e2b; display:flex; align-items:center; gap:10px; }
+
+    #hamburguer { position:fixed; top:12px; left:12px; background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px; z-index:1001; display:none; }
+    @media (max-width:768px){
+      #hamburguer{display:block}
+      #menuLateral{position:fixed; transform:translateX(-100%); transition:transform .3s ease; z-index:999; width:260px;}
+      #menuLateral.aberto{transform:translateX(0)}
+      main.conteudo-principal{margin-left:0; padding:20px}
+    }
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo { background:#f3e8da; border-radius:6px; font-weight:bold; }
+
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .toolbar label[for="selModelo"]{font-weight:600; margin-right:6px}
+    .toolbar select{min-width:220px; border:1px solid rgba(0,0,0,.1); border-radius:8px; padding:8px 10px; background:#fff; font-family:inherit}
+    .toolbar button{display:inline-flex; align-items:center; gap:8px; background:#c29a5d; color:#fff; padding:10px 14px; border-radius:10px; border:none; font-weight:700; letter-spacing:.2px; box-shadow:0 2px 0 rgba(0,0,0,.08); cursor:pointer}
+    .toolbar button i{width:18px;height:18px}
+
+    .alert{margin:10px 0 16px; padding:12px 14px; border-radius:10px; font-weight:600; display:none}
+    .alert.info{background:#fff4d6; color:#7a5a00; border:1px solid #f0d48a}
+    .alert.ok{background:#e6f7ec; color:#065f46; border:1px solid #8dd3a8}
+    .badge{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid rgba(0,0,0,.08); background:#fff}
+
+    .chips{display:flex; gap:8px; margin:10px 0; flex-wrap:wrap}
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; background:#efe7dc; color:#2b211a; border:1px solid rgba(0,0,0,.08)}
+    .chip .dot{width:8px; height:8px; border-radius:50%; background:#8f7b6c}
+    .chip.ok{background:#e6f7ec; color:#065f46; border-color:#8dd3a8}
+    .chip.ok .dot{background:#10b981}
+
+    #editorContrato{background:#fff; padding:28px; border-radius:16px; box-shadow:0 20px 40px rgba(0,0,0,.06);
+      min-height:66vh; line-height:1.6; font-size:16px; border:1px solid rgba(0,0,0,.08); color:#2b211a; white-space:pre-wrap}
+    #editorContrato h1,#editorContrato h2,#editorContrato h3{margin:0 0 12px}
+    #editorContrato p{margin:0 0 12px}
+    #editorContrato ul{margin:0 0 12px 20px}
+    #editorContrato .linha{margin-top:8px; border-bottom:1px solid #c9ced6; height:0}
+
+    .bloco-assinaturas{margin-top:28px; border-top:1px solid #ddd; padding-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:24px}
+    .assinatura-slot{text-align:center}
+    .assinatura-label{font-weight:700; margin-bottom:6px}
+    .assinatura-img{display:block; margin:8px auto 0; max-width:280px}
+    .assinatura-carimbo{margin-top:6px; font-size:12px; color:#555}
+
+    .assinatura-box{margin-top:18px; border:1px dashed #ccc; padding:12px; border-radius:12px; background:#fffaf1}
+    .assinatura-cols{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+    .assin-pad{width:100%; height:220px; border:1px solid #ddd; border-radius:8px; background:#fff; touch-action:none}
+    .assin-ctrls{display:flex; gap:8px; margin-top:8px}
+    .assin-ctrls button{background:#2b211a; color:#fff; border:none; padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer}
+    .assin-ctrls button + button{background:#c29a5d}
+
+    /* Lista agrupada de documentos (Contrato + Adendos) */
+    #listaDocs { display:none; margin:12px 0 18px; }
+    #listaDocs .grupo { background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.04); margin-bottom:10px; }
+    #listaDocs .linha { padding:10px 12px; border-top:1px solid rgba(0,0,0,.06); display:flex; align-items:center; gap:8px; }
+    #listaDocs .linha:first-child { border-top:none; }
+    #listaDocs .linha.base { font-weight:700; color:#5a3e2b; }
+    #listaDocs .linha.adendo { padding-left:28px; }
+    #listaDocs .pill { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:#efe7dc; border:1px solid rgba(0,0,0,.08) }
+
+    @media print{
+      body{background:#fff}
+      #hamburguer,.toolbar,.chips,.alert,#boxAssinatura,#listaDocs{display:none !important}
+      #editorContrato{box-shadow:none; border:none; padding:0; min-height:auto}
+    }
+        /* Backdrop e bloqueio de scroll para o menu mobile */
+    #menuBackdrop{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.35);
+      z-index:990;
+    }
+
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+  </style>
+</head>
+<body>
+
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+    <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo -->
+    <main class="conteudo-principal">
+
+      <div class="conteudo-central">
+        <h1><i data-lucide="file-text"></i> Contrato do Evento</h1>
+
+        <div class="toolbar">
+          <label for="selModelo">Modelo:</label>
+          <select id="selModelo"></select>
+          <button id="btnCarregarModelo"><i data-lucide="download"></i> Carregar modelo</button>
+
+          <!-- (removido) botão Inserir modelo -->
+
+          <button id="btnVisualizar"><i data-lucide="eye"></i> Visualizar</button>
+          <button id="btnGerarESalvar"><i data-lucide="file-down"></i> Gerar & Salvar</button>
+         <button id="btnZapSign"><i data-lucide="link-2"></i> Gerar link de assinatura</button>
+          <button id="btnWhatsapp"><i data-lucide="send"></i> WhatsApp</button>
+          <button id="btnEmail"><i data-lucide="mail"></i> E-mail</button>
+          <button id="btnAssinarPresencial"><i data-lucide="signature"></i> Assinar presencial</button>
+          <button id="btnSalvar"><i data-lucide="save"></i> Salvar</button>
+
+          <!-- Ver documentos agrupados (Contrato + Adendos) -->
+          <button id="btnVerDocs"><i data-lucide="list"></i> Documentos</button>
+          <!-- Novo: anexar PDF assinado manualmente -->
+<button id="btnUploadPdf"><i data-lucide="upload"></i> Anexar PDF</button>
+<input type="file" id="inputUploadPdf" accept="application/pdf" style="display:none" />
+
+        </div>
+
+        <div id="alertaAss" class="alert info">
+          Pendente de assinaturas
+          <span class="badge" id="badgeQuem">Empresa e Cliente</span>
+        </div>
+
+        <div class="chips">
+          <div style="display:flex;gap:10px;align-items:center;margin:10px 0;">
+  <span style="font-weight:600;color:#5a3e2b;">Status:</span>
+   <span id="chipStatus"  class="chip"><span class="dot"></span> rascunho</span>
+
+  <span style="font-weight:600;color:#5a3e2b;margin-left:14px;">Empresa:</span>
+  <span id="chipEmpresa" class="chip"><span class="dot"></span> pendente</span>
+
+  <span style="font-weight:600;color:#5a3e2b;margin-left:14px;">Cliente:</span>
+  <span id="chipCliente" class="chip"><span class="dot"></span> pendente</span>
+
+</div>
+
+<!-- INÍCIO: Lista de Adendos -->
+<section id="adendosBox" style="margin-top:12px;" hidden>
+  <h3 style="margin:0 0 6px;color:#5a3e2b;">Adendos</h3>
+  <table id="listaAdendos" class="tabela-simples" style="width:100%;background:#fff;border-collapse:collapse;">
+    <thead>
+      <tr style="border-bottom:1px solid #e8dcc9;">
+        <th style="text-align:left;padding:8px;">#</th>
+        <th style="text-align:left;padding:8px;">Título</th>
+        <th style="text-align:left;padding:8px;">Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+<!-- FIM: Lista de Adendos -->
+
+        </div>
+
+        <!-- Lista agrupada -->
+        <div id="listaDocs"></div>
+
+        <div id="editorContrato" contenteditable="true">
+          <p style="color:#777">Selecione um <strong>modelo</strong> e clique em <strong>Carregar modelo</strong> para preencher com os dados do evento. Para criar <strong>Adendos</strong>, basta escolher um modelo com “Adendo” no nome — o sistema identifica e salva/organiza junto do Contrato.</p>
+        </div>
+
+        <div class="assinatura-box" id="boxAssinatura" hidden>
+          <h3><i data-lucide="pen-line"></i> Assinatura Presencial</h3>
+          <div class="assinatura-cols">
+            <div>
+              <div class="assinatura-label">Assinatura da Contratada — <span id="nomeEmpresaLbl">Empresa</span></div>
+              <canvas id="padEmpresa" class="assin-pad"></canvas>
+              <div class="assin-ctrls">
+                <button id="limparEmpresa" type="button">Limpar</button>
+                <button id="inserirEmpresa" type="button">Inserir no contrato</button>
+              </div>
+            </div>
+            <div>
+              <div class="assinatura-label">Assinatura do Cliente — <span id="nomeClienteLbl">Cliente</span></div>
+              <canvas id="padCliente" class="assin-pad"></canvas>
+              <div class="assin-ctrls">
+                <button id="limparCliente" type="button">Limpar</button>
+                <button id="inserirCliente" type="button">Inserir no contrato</button>
+              </div>
+            </div>
+          </div>
+          <p style="margin:8px 0 0; font-size:12px; color:#7a5a00">Dica: você pode abrir esta tela em um celular/tablet para assinar com o dedo.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 1) Menu/Permissões -->
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+    aplicarPermissoesNaTela();
+  </script>
+
+
+<!-- === OVERRIDE LOCAL CONTRATOS (DEV) === -->
+<script>
+  window.__CONTRACTS_BASE__ = 'http://127.0.0.1:3334';
+  // compat: se o JS antigo usa CONTRACTS_BASE:
+  window.CONTRACTS_BASE = window.__CONTRACTS_BASE__;
+</script>
+
+<!-- === FIM PATCH BASE DO CONTRATO === -->
+
+  <!-- 4) Lógica principal -->
+  <script src="contrato.js"></script>
+
+  <script>
+(async () => {
+  try {
+    // 1) Pega o id do evento (contrato está associado ao evento)
+    const params = new URLSearchParams(location.search);
+    const eventId = params.get('id');
+    if (!eventId) return;
+
+    // 2) Busca o evento na API real (usa seu apiFetch, se existir; senão, fetch direto)
+    let ev;
+    if (typeof apiFetch === 'function') {
+      ev = await apiFetch(`/api/eventos/${eventId}`);
+    } else {
+      const r = await fetch(`https://kgb-api.onrender.com/api/eventos/${eventId}`);
+      ev = await r.json();
+    }
+
+    const contrato = ev?.contrato || {};
+    const adendos  = Array.isArray(contrato.adendos) ? contrato.adendos : [];
+
+    // 3) Helpers de cor
+    const setChip = (id, st) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const s = String(st || '').toLowerCase();
+      el.textContent = s || 'pendente';
+      // cores
+      let bg = '#6b7280'; // cinza (default)
+      if (s === 'assinado' || s === 'ok' || s === 'concluido' || s === 'concluído') bg = '#16a34a'; // verde
+      else if (s === 'pendente' || s === 'aguardando' || s === 'em_andamento' || s === 'em andamento') bg = '#f59e0b'; // laranja
+      el.style.cssText += `background:${bg};color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;`;
+    };
+
+    // 4) Preenche chips principais
+    // contrato.status vem do webhook (ex.: "assinado" | "pendente" | "rascunho")
+    setChip('chipStatus',  contrato.status || 'rascunho');
+    setChip('chipEmpresa', contrato.empresaStatus || contrato.internalStatus || 'pendente');
+    setChip('chipCliente', contrato.clienteStatus || (contrato.status === 'assinado' ? 'assinado' : 'pendente'));
+
+    // 5) Lista de adendos (se houver)
+    const box = document.getElementById('adendosBox');
+    const tbody = document.querySelector('#listaAdendos tbody');
+    if (box && tbody && adendos.length) {
+      box.hidden = false;
+      tbody.innerHTML = '';
+      adendos.forEach((a, i) => {
+        const titulo  = a?.titulo || a?.nome || `Adendo ${i+1}`;
+        const status  = String(a?.status || 'pendente');
+        const color   = /assinado|ok/i.test(status) ? '#16a34a' :
+                        /pendente|aguardando|andamento/i.test(status) ? '#f59e0b' : '#6b7280';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:8px;border-bottom:1px solid #e8dcc9;">${i+1}</td>
+          <td style="padding:8px;border-bottom:1px solid #e8dcc9;">${titulo}</td>
+          <td style="padding:8px;border-bottom:1px solid #e8dcc9;">
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;color:#fff;background:${color};font-size:12px;">
+              ${status.toLowerCase()}
+            </span>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+  } catch (e) {
+    console.warn('[Contrato] Falha ao carregar status do contrato:', e);
+  }
+})();
+</script>
+
+  <script>
+    // Menu mobile (padrão agenda/configurações)
+    (function(){
+      const hb = document.getElementById('hamburguer');
+      const aside = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+      if (!hb || !aside || !backdrop) return;
+
+      const mq = window.matchMedia('(max-width:768px)');
+
+      function syncHamb(){
+        hb.style.display = mq.matches ? 'block' : 'none';
+
+        if (!mq.matches){
+          aside.classList.remove('aberto');
+          backdrop.hidden = true;
+          document.body.classList.remove('no-scroll');
+        }
+      }
+
+      mq.addEventListener('change', syncHamb);
+      syncHamb();
+
+      hb.addEventListener('click', () => {
+        const aberto = aside.classList.toggle('aberto');
+        backdrop.hidden = !aberto;
+        document.body.classList.toggle('no-scroll', aberto);
+      });
+
+      backdrop.addEventListener('click', () => {
+        aside.classList.remove('aberto');
+        backdrop.hidden = true;
+        document.body.classList.remove('no-scroll');
+      });
+    })();
+  </script>
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

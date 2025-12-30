@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:integracoes.html">
+  <meta charset="UTF-8" />
+  <title>Integrações / Pagamentos – Sistema Buffet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
+
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Desenvolvimento local
+      var DEV_API  = "http://127.0.0.1:3333";
+
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
+
+      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <!-- === INÍCIO PATCH: helpers globais (precisa antes de qualquer guard) === -->
+  <script type="module" src="./kgb-common.js"></script>
+  <!-- === FIM PATCH === -->
+
+  <!-- Ícones Lucide -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    :root{
+      --bg: #f8f1e8;
+      --brown: #5a3e2b;
+      --gold: #c29a5d;
+      --gold-hover: #b38a50;
+      --chip: #f3e8da;
+    }
+
+    /* NÃO definir fonte global para não afetar o menu */
+    html, body { margin:0; padding:0; background:var(--bg); }
+
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Conteúdo principal */
+    main.conteudo-principal{
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto; transition: margin-left .2s ease;
+    }
+    .conteudo-central{ max-width:1000px; margin:0 auto; }
+
+    /* Tipografia apenas na ÁREA PRINCIPAL (menu tem fonte própria) */
+    main.conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1, .conteudo-principal h2, .conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    /* Título */
+    h1{ font-size:28px; color:var(--brown); display:flex; align-items:center; gap:10px; margin:0 0 20px; }
+
+    /* Botão hambúrguer só no mobile; comportamento do menu fica no menu-lateral.js */
+    #hamburguer{
+      position:fixed; top:12px; left:12px;
+      background:var(--gold); border:none; color:#fff; font-size:24px;
+      padding:6px 12px; border-radius:8px; z-index:1001; display:none;
+      box-shadow:0 6px 16px rgba(0,0,0,.12);
+    }
+
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+
+    /* Realce local do item ativo no menu (ok repetir) */
+    .menu-lateral a.ativo, .menu-lateral .submenu a.ativo{
+      background:var(--chip); border-radius:6px; font-weight:bold;
+    }
+
+    .btn-gold{
+      background:var(--gold); color:#fff; border:none; border-radius:10px;
+      padding:12px 16px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+      font-weight:600;
+    }
+    .btn-gold:hover{ background:var(--gold-hover); }
+  </style>
+</head>
+<body>
+
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado via JS do projeto) -->
+    <aside id="menuLateral"></aside>
+    <!-- Backdrop para mobile/off-canvas -->
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="link"></i> Configurações de Integrações / Pagamentos</h1>
+
+        <form id="integracoesForm" style="margin-top: 20px;">
+          <h2 style="margin-bottom: 10px;">Configurações de Pagamentos / PIX</h2>
+
+          <div style="margin-bottom: 12px;">
+            <label for="paymentsGateway">Gateway de pagamento</label><br>
+            <input
+              type="text"
+              id="paymentsGateway"
+              placeholder="Ex.: asaas, gerencianet, efi..."
+              style="width: 100%; max-width: 400px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;"
+            >
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label for="paymentsPixKey">Chave PIX da empresa</label><br>
+            <input
+              type="text"
+              id="paymentsPixKey"
+              placeholder="Informe a chave PIX que irá receber os pagamentos"
+              style="width: 100%; max-width: 400px; padding: 8px; border-radius: 6px; border: 1px solid #ccc;"
+            >
+          </div>
+
+          <div style="margin-top: 15px;">
+            <button type="submit" class="btn-gold">
+              <i data-lucide="save"></i> Salvar configurações
+            </button>
+
+            <button type="button" id="btnTestPayments" class="btn-gold" style="margin-left: 8px;">
+              <i data-lucide="check-circle-2"></i> Testar conexão
+            </button>
+
+            <span id="paymentsTestResult" style="margin-left: 10px; font-size: 14px;"></span>
+          </div>
+        </form>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu como MÓDULO (necessário por usar import.meta) -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <!-- Novo JS de configurações de integrações -->
+  <script src="integracoes-config.js"></script>
+
+  <script>
+    // Ícones
+    document.addEventListener("DOMContentLoaded", () => { window.lucide?.createIcons?.(); });
+
+    // ===== Espaço para o menu no DESKTOP (>=1024px) =====
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          // largura real do menu (após injeção do HTML/CSS do próprio menu)
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          // no mobile, não desloca o conteúdo (off-canvas)
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      // Aplica quando o menu for injetado
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+
+      // Aplica em resize/orientação
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+
+      // Chamada inicial (caso o menu já esteja pronto)
+      aplicar();
+    })();
+
+    // Recria ícones após a injeção do menu (garantia extra)
+    try {
+      const alvo = document.getElementById('menuLateral');
+      if (alvo) {
+        const obs = new MutationObserver((muts, o) => {
+          if (alvo.firstElementChild && window.lucide?.createIcons) {
+            lucide.createIcons(); o.disconnect();
+          }
+        });
+        obs.observe(alvo, { childList: true });
+      }
+    } catch {}
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+  <script type="module" src="/api/proteger-pagina.js"></script>
+</body>
+</html>

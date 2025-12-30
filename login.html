@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="page-permission" content="page:login.html">
+  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    (function(){
+      // Produção (Netlify) -> API na Render
+      var PROD_API = "https://kgb-api.onrender.com";
+
+      // Em DEV, preferimos usar location.origin quando o backend roda em :3333
+      var DEV_API = (location.port === '3333')
+        ? location.origin
+        : 'http://localhost:3333';
+
+      // Exporta helper consistente para o restante do app
+      window.__getApiBase = function () {
+        if (location.port === '3333') return location.origin;
+        return DEV_API;
+      };
+
+      // Mantemos também a variável legada para compatibilidade
+      try { window.__API_BASE__ = window.__getApiBase(); } catch(e){}
+      console.log('[KGB] __getApiBase ->', window.__API_BASE__);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+  <title>Login - Sistema Buffet</title>
+
+  <script>
+    // Import helper para padronizar API_BASE (exposto em window.__getApiBase)
+    (function(){
+      try {
+        var s=document.createElement('script'); s.src='js/auth-helper.js'; document.head.appendChild(s);
+      } catch(e){}
+    })();
+    /* Impede bloqueio no login */
+    window.__KGB_GUARD_BYPASS__ = true;
+  </script>
+
+  <style>
+    :root {
+      --marrom: #4a2c18;
+      --dourado: #f8d57e;
+      --dourado-hover: #e0bc66;
+      --branco: #ffffff;
+      --sombra: rgba(0, 0, 0, 0.1);
+      --fonte: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #fdf6ee;
+      font-family: var(--fonte);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .login-box {
+      background-color: var(--branco);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 0 30px var(--sombra);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .login-box img {
+      width: 140px;
+      margin-bottom: 20px;
+    }
+
+    .login-box h2 {
+      margin-bottom: 24px;
+      color: var(--marrom);
+      font-weight: bold;
+    }
+
+    .campo {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+
+    .campo label {
+      display: block;
+      font-size: 12px;
+      color: #705542;
+      margin: 0 0 6px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background: #fff;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: var(--dourado);
+      color: var(--marrom);
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      margin-top: 6px;
+    }
+
+    button:hover {
+      background-color: var(--dourado-hover);
+    }
+
+    .link-esqueci {
+      margin-top: 8px;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .link-esqueci a {
+      color: #a16b1f;
+      text-decoration: none;
+    }
+
+    .link-esqueci a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-box">
+    <img src="logo.png" alt="Logo KGB" />
+    <h2>Entrar no Sistema</h2>
+
+    <form id="formLogin" autocomplete="on" novalidate>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" placeholder="seu@email.com" required />
+      </div>
+
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" placeholder="Sua senha" required />
+      </div>
+
+      <button type="submit">Entrar</button>
+
+      <div class="link-esqueci">
+        <a href="esqueci-senha.html">Esqueci minha senha</a>
+      </div>
+    </form>
+  </div>
+
+<script>
+  // Login simples SOMENTE PARA USO NA SUA MÁQUINA (desenvolvimento)
+  (function () {
+    const form = document.getElementById("formLogin");
+    const emailInput = document.getElementById("email");
+    const senhaInput = document.getElementById("senha");
+
+    if (!form || !emailInput || !senhaInput) return;
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const email = String(emailInput.value || "").trim().toLowerCase();
+      const senha = String(senhaInput.value || "").trim();
+
+      if (!email || !senha) {
+        alert("Informe e-mail e senha.");
+        return;
+      }
+
+      // Tenta autenticar no backend via /auth/login (cookie httpOnly)
+      try {
+        // normaliza localStorage.API_BASE se apontar para 127.0.0.1
+        try {
+          const maybe = (localStorage.getItem && localStorage.getItem('API_BASE')) || '';
+          if (maybe && maybe.indexOf('127.0.0.1') !== -1) {
+            localStorage.setItem('API_BASE', 'http://localhost:3333');
+          }
+        } catch (e) { /* ignore */ }
+
+        const base = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (window.__API_BASE__ || (localStorage.getItem && localStorage.getItem('API_BASE')) || '');
+        const isSameOrigin3333 = String(location.port || '') === '3333' || base === location.origin;
+        const loginUrl = isSameOrigin3333 ? '/auth/login' : (base || '') + '/auth/login';
+
+        const payload = { email, senha };
+        console.log('[LOGIN] payload sent', payload);
+
+        const resp = await fetch(loginUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+          const errJson = await resp.json().catch(() => null);
+          console.warn('[LOGIN] /auth/login failed', resp.status, errJson);
+          // mostra resultado na tela para depuração
+          let dbg = document.getElementById('login-debug');
+          if (!dbg) {
+            dbg = document.createElement('pre');
+            dbg.id = 'login-debug';
+            dbg.style.whiteSpace = 'pre-wrap';
+            dbg.style.background = '#111';
+            dbg.style.color = '#fff';
+            dbg.style.padding = '8px';
+            dbg.style.borderRadius = '6px';
+            dbg.style.marginTop = '12px';
+            form.appendChild(dbg);
+          }
+          dbg.textContent = JSON.stringify({ payload, status: resp.status, response: errJson }, null, 2);
+          alert('Login falhou: ' + (errJson && errJson.error ? errJson.error : 'ver console para detalhes'));
+          return;
+        }
+
+        // sucesso inicial — confirma sessão via /auth/me antes de redirecionar
+        const j = await resp.json().catch(() => null);
+        if (j && (j.ok || j.status === 200)) {
+          const is3333 = String(location.port || '') === '3333' || base === location.origin;
+          const meUrl = is3333 ? '/auth/me' : (base || '') + '/auth/me';
+          const maxAttempts = 6;
+          const delayMs = 300;
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+              const meResp = await fetch(meUrl, { credentials: 'include' });
+              console.log('[LOGIN] /auth/me attempt', attempt, 'status=', meResp.status);
+              if (meResp.ok) {
+                const dest = (is3333 ? location.origin : (base || location.origin)) + '/dashboard.html';
+                window.location.assign(dest);
+                return;
+              }
+            } catch (e) {
+              console.warn('[LOGIN] /auth/me attempt error', attempt, e);
+            }
+            await new Promise(r => setTimeout(r, delayMs));
+          }
+          alert('Falha ao confirmar sessão após login. Verifique o console e tente novamente.');
+          return;
+        }
+
+        // Fallback dev: se o backend não responder, ainda aceitamos credenciais dev
+      } catch (err) {
+        console.warn('Autenticação via API falhou, tentando fallback dev', err);
+      }
+
+      // Fallback legacy (apenas para desenvolvimento local)
+      const EMAIL_FIXO = "admin@buffet.com";
+      const SENHA_FIXA = "123456";
+      if (email === EMAIL_FIXO && senha === SENHA_FIXA) {
+        try {
+          const tokenFake = 'dev-token-' + Date.now();
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          localStorage.setItem('token', tokenFake);
+          localStorage.setItem('auth.token', tokenFake);
+          const perfisLista = ['Administrador'];
+          localStorage.setItem('auth.roles', perfisLista.join(','));
+          localStorage.setItem('perfil', perfisLista[0]);
+          const sessao = { id: 'dev', nome: 'Admin Buffet', email: EMAIL_FIXO, perfil: perfisLista[0], perfis: perfisLista };
+          // OBS: Mantemos este armazenamento apenas para compatibilidade com telas antigas em dev
+          localStorage.setItem('auth:user', JSON.stringify(sessao));
+        } catch (e) { console.error(e); alert('Erro ao salvar sessão no navegador.'); return; }
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
+      alert('E-mail ou senha inválidos.');
+    });
+  })();
+</script>
+
+
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

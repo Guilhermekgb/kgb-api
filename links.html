@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta name="page-permission" content="page:links.html">
+  <meta charset="UTF-8" />
+  <title>Links Públicos do Sistema</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Ícones -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos base do projeto -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="menu-lateral.css" />
+
+  <style>
+    /* NÃO definir fonte global para não afetar o menu */
+    html, body { margin:0; padding:0; background:#f8f1e8; height:100%; }
+
+    .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+
+    /* Conteúdo principal: margem-left dinâmica só no desktop (via JS) */
+    main.conteudo-principal {
+      flex-grow:1; padding:40px; height:100vh; overflow-y:auto;
+      transition: margin-left .2s ease;
+    }
+    .conteudo-central { max-width:1000px; margin:0 auto; }
+
+    /* Tipografia SOMENTE da área principal (menu tem o próprio CSS) */
+    .conteudo-principal,
+    .conteudo-principal input,
+    .conteudo-principal select,
+    .conteudo-principal textarea,
+    .conteudo-principal button {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans";
+    }
+    .conteudo-principal h1,
+    .conteudo-principal h2,
+    .conteudo-principal h3 {
+      font-family: "Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    h1{
+      font-size:28px; color:#5a3e2b;
+      display:flex; align-items:center; gap:10px; margin-bottom:30px;
+    }
+
+    .link-card{
+      background:#fff; border-radius:14px; padding:20px 25px;
+      box-shadow:0 4px 12px rgba(0,0,0,.08);
+      margin-bottom:20px; display:flex; align-items:center; justify-content:space-between;
+      transition: box-shadow .2s ease;
+    }
+    .link-card:hover{ box-shadow:0 6px 16px rgba(0,0,0,.12); }
+    .link-card .info{ display:flex; align-items:center; gap:14px; color:#5a3e2b; }
+    .link-card i{ color:#c29a5d; width:26px; height:26px; }
+    .link-card .descricao{ font-size:16px; }
+    .link-card a{
+      background:#c29a5d; color:#fff; padding:10px 18px; border-radius:8px;
+      font-weight:600; text-decoration:none;
+    }
+    .link-card a:hover{ background:#a8783b; }
+
+    /* Botão hambúrguer só no mobile (menu vira off-canvas) */
+    #hamburguer{
+      position:fixed; top:12px; left:12px; background:#c29a5d; border:none; color:#fff;
+      font-size:24px; padding:6px 12px; border-radius:8px; z-index:1001; display:none;
+    }
+    @media (max-width: 768px){
+      #hamburguer{ display:block; }
+      main.conteudo-principal{ padding:20px; }
+    }
+/* ===== MENU LATERAL OFF-CANVAS (mobile) ===== */
+@media (max-width: 768px){
+  #menuLateral{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 999;
+  }
+  #menuLateral.aberto{
+    transform: translateX(0);
+  }
+}
+
+    /* Backdrop do menu (off-canvas) */
+    #menuBackdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      z-index:998; opacity:0; pointer-events:none; transition:opacity .2s ease;
+    }
+    #menuBackdrop.visivel{ opacity:1; pointer-events:auto; }
+    body.no-scroll{
+      overflow:hidden;
+    }
+
+    /* Realce local do item ativo no menu */
+    .menu-lateral a.ativo,
+    .menu-lateral .submenu a.ativo{
+      background:#f3e8da; border-radius:6px; font-weight:700;
+    }
+  </style>
+</head>
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <!-- Menu lateral (injetado via JS do projeto) -->
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="link"></i> Links Públicos do Sistema</h1>
+
+        <div class="link-card">
+          <div class="info">
+            <i data-lucide="form-input"></i>
+            <div class="descricao">Formulário de Orçamento (Lead)</div>
+          </div>
+          <a href="formulario-lead.html" target="_blank" rel="noopener">Acessar</a>
+        </div>
+
+        <div class="link-card">
+          <div class="info">
+            <i data-lucide="file-text"></i>
+            <div class="descricao">Formulário do Cliente Completo</div>
+          </div>
+          <a href="formulario-cliente.html" target="_blank" rel="noopener">Acessar</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Menu como MÓDULO (necessário por usar import.meta) -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script>
+    // Tudo só roda quando o DOM estiver pronto
+    document.addEventListener("DOMContentLoaded", () => {
+      // Ícones
+      window.lucide?.createIcons?.();
+
+      const btn      = document.getElementById('hamburguer');
+      const menu     = document.getElementById('menuLateral');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (!btn || !menu) {
+        console.warn('[menu-mobile] Botão ou menu não encontrados');
+        return;
+      }
+
+      function fecharMenu(){
+        menu.classList.remove('aberto');
+        btn.setAttribute('aria-expanded','false');
+        if (backdrop){
+          backdrop.classList.remove('visivel');
+          backdrop.hidden = true;
+        }
+        document.body.classList.remove('no-scroll');
+      }
+
+      function toggleMenu(ev){
+        if (ev) ev.stopPropagation();
+        const aberto = menu.classList.toggle('aberto');
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+
+        if (backdrop){
+          backdrop.hidden = !aberto;
+          backdrop.classList.toggle('visivel', aberto);
+        }
+
+        document.body.classList.toggle('no-scroll', aberto);
+      }
+
+      // Clicar no hambúrguer ABRE/FECHA o menu
+      btn.addEventListener('click', toggleMenu);
+
+      // Clicar no fundo escuro fecha
+      backdrop?.addEventListener('click', fecharMenu);
+
+      // Clicar fora do menu fecha (no mobile)
+      document.addEventListener('click', (e) => {
+        if (!menu.classList.contains('aberto')) return;
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+          fecharMenu();
+        }
+      });
+
+      // Se trocar pra tela grande, garante o layout normal
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+          fecharMenu();
+        }
+      });
+    });
+
+    // ===== Espaço para o menu no DESKTOP (>=1024px) =====
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main.conteudo-principal');
+
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+
+      aplicar();
+    })();
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+  <script type="module" src="/api/proteger-pagina.js"></script>
+</body>
+</html>

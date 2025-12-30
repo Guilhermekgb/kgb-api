@@ -31,6 +31,7 @@
 <!-- Helpers globais (precisa vir antes do guard) -->
 <script type="module" src="./kgb-common.js"></script>
 <!-- Guard / RBAC -->
+<script src="js/auth-helper.js"></script>
 <script type="module" src="./api/proteger-pagina.js"></script>
 <script type="module">
   import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
@@ -793,6 +794,8 @@ window.addEventListener("storage", (e) => {
 });
 </script>
 
+
+  <script src="/api/api-fetch.js"></script>
 </body>
 </html>
 

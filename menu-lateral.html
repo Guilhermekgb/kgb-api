@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Menu Lateral</title>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos (ordem IMPORTA: global antes, menu depois) -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+</head>
+
+<body>
+  <!-- Botão Mobile -->
+  <button id="hamburguer" aria-label="Abrir menu" aria-controls="menuLateral" aria-expanded="false">
+    <i data-lucide="menu"></i>
+  </button>
+
+  <!-- Wrapper geral -->
+  <div class="wrapper">
+    <!-- Menu lateral -->
+    <aside id="menuLateral">
+      <div class="menu-lateral">
+        <div class="menu-scroll">
+          <img src="logo.png" alt="Logo KGB" class="logo" />
+
+          <a href="javascript:history.back();">
+            <i data-lucide="arrow-left"></i> VOLTAR
+          </a>
+
+          <!-- TELA INICIAL -->
+          <a href="dashboard.html" data-permissao="page:dashboard.html">
+            <i data-lucide="home"></i> TELA INICIAL
+          </a>
+
+          <!-- NOTIFICAÇÕES -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-notificacoes')">
+            <i data-lucide="bell"></i> NOTIFICAÇÕES
+          </div>
+          <div class="submenu" id="submenu-notificacoes">
+            <a href="notificacoes.html" data-permissao="page:notificacoes.html">Notificações</a>
+            <a href="notificacoes-internas.html" data-permissao="page:notificacoes-internas.html">Notificações Internas</a>
+            <a href="alertas.html" data-permissao="page:alertas.html">Alertas</a>
+            <a href="agenda-equipe.html" data-permissao="page:agenda-equipe.html">Agenda</a>
+          </div>
+
+          <!-- ORÇAMENTOS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-orcamentos')">
+            <i data-lucide="clipboard-list"></i> ORÇAMENTOS
+          </div>
+          <div class="submenu" id="submenu-orcamentos">
+            <a href="funil-leads.html" data-permissao="page:funil-leads.html">Funil de Leads</a>
+            <a href="orcamento.html" data-permissao="page:orcamento.html">Novo Orçamento</a>
+            <a href="lista-propostas.html" data-permissao="page:lista-propostas.html">Lista de Orçamentos</a>
+            <a href="degustacoes-disponiveis.html" data-permissao="page:degustacoes-disponiveis.html">Degustações</a>
+            <a href="comissoes.html" data-permissao="page:comissoes.html">Comissões</a>
+            <a href="notificacoes-vendedor.html" data-permissao="page:notificacoes-vendedor.html">Notificações Vendedor</a>
+          </div>
+
+          <!-- EVENTOS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-eventos')">
+            <i data-lucide="calendar"></i> EVENTOS
+          </div>
+          <div class="submenu" id="submenu-eventos">
+            <a href="cadastro-evento.html" data-permissao="page:cadastro-evento.html">Cadastrar Evento</a>
+            <a href="lista-evento.html" data-permissao="page:lista-evento.html">Lista de Eventos</a>
+          </div>
+
+          <!-- CLIENTES -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-clientes')">
+            <i data-lucide="user"></i> CLIENTES
+          </div>
+          <div class="submenu" id="submenu-clientes">
+            <a href="cadastro-cliente.html" data-permissao="page:cadastro-cliente.html">Cadastrar Cliente</a>
+            <a href="clientes-lista.html" data-permissao="page:clientes-lista.html">Lista de Clientes</a>
+          </div>
+
+          <!-- FINANCEIRO -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-financeiro')">
+            <i data-lucide="dollar-sign"></i> FINANCEIRO
+          </div>
+          <div class="submenu" id="submenu-financeiro">
+            <a href="financeiro-lancamentos.html" data-permissao="page:financeiro-lancamentos.html">Lançamentos</a>
+            <a href="financeiro-analises.html" data-permissao="page:financeiro-analises.html">Análises</a>
+            <a href="financeiro-resumo.html" data-permissao="page:financeiro-resumo.html">Resumo</a>
+            <a href="financeiro-categorias.html" data-permissao="page:financeiro-categorias.html">Categorias</a>
+            <a href="custos-fixo.html" data-permissao="page:custos-fixo.html">Custos Fixos</a>
+          </div>
+
+          <!-- SERVIÇOS E PRODUTOS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-servicos')">
+            <i data-lucide="concierge-bell"></i> SERVIÇOS E PRODUTOS
+          </div>
+          <div class="submenu" id="submenu-servicos">
+            <a href="cardapios-e-produtos.html" data-permissao="page:cardapios-e-produtos.html">Cardápios e Produtos</a>
+            <a href="montagem-cardapio.html" data-permissao="page:montagem-cardapio.html">Montagem de Cardápio</a>
+          </div>
+
+          <!-- ESTOQUE -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-estoque')">
+            <i data-lucide="boxes"></i> ESTOQUE
+          </div>
+          <div class="submenu" id="submenu-estoque">
+            <a href="fichas-tecnicas.html" data-permissao="page:fichas-tecnicas.html">Fichas Técnicas</a>
+            <a href="estoque-materiais.html" data-permissao="page:estoque-materiais.html">Materiais</a>
+            <a href="estoque-insumos.html" data-permissao="page:estoque-insumos.html">Insumos</a>
+            <a href="estoque-setores.html" data-permissao="page:estoque-setores.html">Setores</a>
+          </div>
+
+          <!-- EQUIPE -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-equipe')">
+            <i data-lucide="users"></i> EQUIPE
+          </div>
+          <div class="submenu" id="submenu-equipe">
+            <a href="detalhes-responsavel-evento.html" data-permissao="page:detalhes-responsavel-evento.html">Responsáveis por Evento</a>
+            <a href="equipe.html" data-permissao="page:equipe.html">Equipe</a>
+            <a href="colaboradores.html" data-permissao="page:colaboradores.html">Colaboradores</a>
+            <a href="notificacoes-responsavel.html" data-permissao="page:notificacoes-responsavel.html">Notificações Eventos</a>
+          </div>
+
+          <!-- FORNECEDORES -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-fornecedores')">
+            <i data-lucide="truck"></i> FORNECEDORES
+          </div>
+          <div class="submenu" id="submenu-fornecedores">
+            <a href="fornecedores.html" data-permissao="page:fornecedores.html">Fornecedores</a>
+          </div>
+
+          <!-- MODELOS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-modelos')">
+            <i data-lucide="file-text"></i> MODELOS
+          </div>
+          <div class="submenu" id="submenu-modelos">
+            <a href="modelos.html" data-permissao="page:modelos.html">Modelos</a>
+            <a href="modelos-checklist.html" data-permissao="page:modelos-checklist.html">Modelos de Checklist</a>
+            <a href="contrato.html" data-permissao="page:contrato.html">Contratos</a>
+          </div>
+
+          <!-- FEIRAS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-feiras')">
+            <i data-lucide="megaphone"></i> FEIRAS
+          </div>
+          <div class="submenu" id="submenu-feiras">
+            <a href="feiras.html" data-permissao="page:feiras.html">Feiras</a>
+          </div>
+
+          <!-- RELATÓRIOS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-relatorios')">
+            <i data-lucide="bar-chart-3"></i> RELATÓRIOS
+          </div>
+          <div class="submenu" id="submenu-relatorios">
+            <a href="relatorio-evento.html" data-permissao="page:relatorio-evento.html">Relatórios de Eventos</a>
+            <a href="painel-cobrancas.html" data-permissao="page:painel-cobrancas.html">Painel de Cobranças</a>
+            <a href="planilha-eventos.html" data-permissao="page:planilha-eventos.html">Planilha de Eventos</a>
+          </div>
+
+          <!-- FORMATURAS -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-formaturas')">
+            <i data-lucide="graduation-cap"></i> FORMATURAS
+          </div>
+          <div class="submenu" id="submenu-formaturas">
+            <a href="kgb-formaturas-dashboard.html" data-permissao="page:kgb-formaturas-dashboard.html">Formaturas</a>
+          </div>
+
+          <!-- PDV -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-pdv')">
+            <i data-lucide="shopping-cart"></i> PDV / VENDAS
+          </div>
+          <div class="submenu" id="submenu-pdv">
+            <a href="eventos-pagos.html" data-permissao="page:eventos-pagos.html">Eventos Pagos</a>
+            <a href="gerenciar-convites.html" data-permissao="page:gerenciar-convites.html">Gerenciar Convites</a>
+            <a href="checkin.html" data-permissao="page:checkin.html">Check-in</a>
+            <a href="pdv.html" data-permissao="page:pdv.html">PDV</a>
+            <a href="entradas-saidas.html" data-permissao="page:entradas-saidas.html">Entradas/Saídas</a>
+            <a href="layout-editor.html" data-permissao="page:layout-editor.html">Layout Editor</a>
+            <a href="etiquetas.html" data-permissao="page:etiquetas.html">Etiquetas</a>
+          </div>
+
+          <!-- CONFIGURAÇÕES -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-configuracoes')">
+            <i data-lucide="settings"></i> CONFIGURAÇÕES
+          </div>
+          <div class="submenu" id="submenu-configuracoes">
+            <a href="cadastro-usuario.html" data-permissao="page:cadastro-usuario.html">Cadastro de Usuários</a>
+            <a href="usuarios.html" data-permissao="page:usuarios.html">Usuários</a>
+            <a href="perfis.html" data-permissao="page:perfis.html">Perfis</a>
+            <a href="permissoes.html" data-permissao="page:permissoes.html">Permissões</a>
+            <a href="categorias-gerais.html" data-permissao="page:categorias-gerais.html">Categorias Gerais</a>
+            <a href="links.html" data-permissao="page:links.html">Links</a>
+            <a href="orcamento-arquivado.html" data-permissao="page:orcamento-arquivado.html">Orçamentos Arquivados</a>
+            <a href="eventos-arquivados.html" data-permissao="page:eventos-arquivados.html">Eventos Arquivados</a>
+            <a href="variaveis-modelos.html" data-permissao="page:variaveis-modelos.html">Variáveis de Modelos</a>
+            <a href="financeiro-config.html" data-permissao="page:financeiro-config.html">Configurações Financeiras</a>
+            <a href="configuracoes.html" data-permissao="page:configuracoes.html">Configurações do Sistema</a>
+          </div>
+
+          <!-- BLOCO TÉCNICO -->
+          <div class="menu-title" onclick="toggleSubmenu('submenu-bloco')">
+            <i data-lucide="wrench"></i> BLOCO TÉCNICO
+          </div>
+          <div class="submenu" id="submenu-bloco">
+            <a href="documentacao-api.html" data-permissao="page:documentacao-api.html">Documentação da API</a>
+            <a href="backup.html" data-permissao="page:backup.html">Backup</a>
+            <a href="logs.html" data-permissao="page:logs.html">Logs</a>
+            <a href="logs-tecnicos.html" data-permissao="page:logs-tecnicos.html">Logs Técnicos</a>
+            <a href="integracoes.html" data-permissao="page:integracoes.html">Integrações</a>
+            <a href="seguranca.html" data-permissao="page:seguranca.html">Segurança</a>
+            <a href="auditoria.html" data-permissao="page:auditoria.html">Auditoria</a>
+          </div>
+
+          <!-- SAIR -->
+          <a href="login.html" class="sair" data-logout>
+            <i data-lucide="log-out"></i> SAIR
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <div id="menuBackdrop" hidden></div>
+
+    <!-- Conteúdo principal (só para manter padrão do modelo-base) -->
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1 style="margin:0 0 12px;">Menu Lateral</h1>
+        <p>Este arquivo é um “preview” do menu no padrão do modelo-base.</p>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Submenu simples (caso seu projeto use isso em menu-lateral.js, aqui funciona sozinho)
+    function toggleSubmenu(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle("aberto");
+      el.style.display = (el.classList.contains("aberto")) ? "block" : "";
+      try { window.lucide?.createIcons?.(); } catch {}
+    }
+
+    // Menu mobile (preview)
+    document.addEventListener("DOMContentLoaded", function () {
+      try { window.lucide?.createIcons?.(); } catch {}
+
+      var btn = document.getElementById("hamburguer");
+      var aside = document.getElementById("menuLateral");
+      var backdrop = document.getElementById("menuBackdrop");
+
+      function openMenu() {
+        aside.classList.add("aberto");
+        backdrop.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+        document.body.style.overflow = "hidden";
+      }
+      function closeMenu() {
+        aside.classList.remove("aberto");
+        backdrop.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+        document.body.style.overflow = "";
+      }
+
+      btn?.addEventListener("click", function () {
+        if (aside.classList.contains("aberto")) closeMenu();
+        else openMenu();
+      });
+      backdrop?.addEventListener("click", closeMenu);
+
+      window.addEventListener("resize", function () {
+        if (window.innerWidth > 768) closeMenu();
+      });
+    });
+  </script>
+</body>
+</html>

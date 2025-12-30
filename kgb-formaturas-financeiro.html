@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KGB FORMATURAS - Financeiro Geral</title>
+
+  <!-- PERMISSÃO DA PÁGINA (para o guard) -->
+  <meta name="page-permission" content="page:kgb-formaturas-financeiro.html">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Estilos globais do sistema -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="menu-lateral.css?v=espresso12">
+
+  <style>
+    :root{
+      --sidebar-w:260px;
+    }
+
+    html, body{
+      margin:0;
+      padding:0;
+      background:#f8f1e8;
+      height:100%;
+    }
+
+    main.conteudo-principal,
+    input, select, textarea, button{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    }
+    h1, h2, h3{
+      font-family:"Playfair Display", ui-serif, Georgia, "Times New Roman", serif;
+    }
+
+    body{
+      display:flex;
+      flex-direction:column;
+      min-height:100vh;
+      color:#3c2415;
+    }
+
+    .wrapper{
+      display:flex;
+      min-height:100vh;
+    }
+
+    main.conteudo-principal{
+      flex:1;
+      padding:24px 24px 32px;
+      margin-left:var(--sidebar-w);
+    }
+    .conteudo-central{
+      max-width:1200px;
+      margin:0 auto;
+    }
+
+    .subtitulo{
+      margin-top:4px;
+      margin-bottom:18px;
+      color:#7a5a3c;
+      font-size:14px;
+      max-width:780px;
+    }
+
+    /* Botão menu mobile */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:1100;
+      width:36px;
+      height:36px;
+      border-radius:18px;
+      border:none;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background:#4a280f;
+      color:#f6e9d8;
+      box-shadow:0 4px 10px rgba(0,0,0,0.35);
+      cursor:pointer;
+    }
+    #hamburguer i{
+      width:18px; height:18px;
+    }
+
+    @media (max-width:900px){
+      main.conteudo-principal{
+        margin-left:0;
+        padding:76px 12px 24px;
+      }
+      #hamburguer{
+        display:inline-flex;
+      }
+    }
+
+    /* Cards de resumo */
+    .grid-resumo{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:14px;
+      margin-bottom:18px;
+    }
+    @media (max-width:800px){
+      .grid-resumo{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card-resumo{
+      background:#fff7ee;
+      border-radius:16px;
+      padding:12px 14px;
+      border:1px solid #e2c9a9;
+      box-shadow:0 12px 24px rgba(0,0,0,0.06);
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .card-resumo-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      font-size:13px;
+      color:#7a5a3c;
+    }
+    .card-resumo-header i{
+      width:18px; height:18px;
+    }
+    .card-resumo-valor{
+      font-size:20px;
+      font-weight:600;
+      color:#3b2411;
+    }
+    .card-resumo-legenda{
+      font-size:12px;
+      color:#8b6b46;
+    }
+
+    /* Área filtros + formulário */
+    .grid-topo-fin{
+      display:grid;
+      grid-template-columns:2fr 1.6fr;
+      gap:18px;
+      margin-bottom:20px;
+    }
+    @media (max-width:1000px){
+      .grid-topo-fin{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .card{
+      background:#fffaf4;
+      border-radius:18px;
+      padding:14px 16px 16px;
+      border:1px solid #e2c9a9;
+      box-shadow:0 14px 30px rgba(0,0,0,0.07);
+    }
+    .card h2{
+      font-size:16px;
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      color:#3b2612;
+    }
+    .card h2 i{
+      width:18px; height:18px;
+    }
+    .card .texto-suporte{
+      font-size:12px;
+      color:#8b6b46;
+      margin-bottom:10px;
+    }
+
+    .linha-filtros{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0,1fr));
+      gap:8px;
+      margin-bottom:8px;
+    }
+    .linha-filtros .campo{
+      margin-bottom:0;
+    }
+    @media (max-width:900px){
+      .linha-filtros{
+        grid-template-columns:repeat(2, minmax(0,1fr));
+      }
+    }
+    @media (max-width:600px){
+      .linha-filtros{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .campo{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      margin-bottom:8px;
+      font-size:12px;
+    }
+    .campo label{
+      color:#774726;
+      font-weight:500;
+    }
+    .campo input,
+    .campo select,
+    .campo textarea{
+      border-radius:8px;
+      border:1px solid #d9c2a7;
+      padding:6px 7px;
+      font-size:13px;
+      background:#fffcf7;
+    }
+    .campo textarea{
+      min-height:52px;
+      resize:vertical;
+    }
+
+    .linha-botoes{
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      margin-top:6px;
+    }
+
+    .btn-primario,
+    .btn-secundario{
+      border-radius:999px;
+      border:none;
+      font-size:13px;
+      padding:6px 12px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .btn-primario{
+      background:#b9762e;
+      color:#fffdf8;
+      box-shadow:0 8px 16px rgba(0,0,0,0.2);
+    }
+    .btn-primario:hover{
+      filter:brightness(0.94);
+    }
+    .btn-secundario{
+      background:#f5e4d2;
+      color:#6b4528;
+    }
+    .btn-primario i,
+    .btn-secundario i{
+      width:16px; height:16px;
+    }
+
+    /* Tabelas */
+    .area-tabelas{
+      display:grid;
+      grid-template-columns:2.1fr 1.2fr;
+      gap:18px;
+    }
+    @media (max-width:1050px){
+      .area-tabelas{
+        grid-template-columns:1fr;
+      }
+    }
+
+    .tabela-simples{
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+    }
+    .tabela-simples thead{
+      background:#f4e1cd;
+    }
+    .tabela-simples thead th{
+      text-align:left;
+      padding:6px 8px;
+      font-weight:600;
+      color:#5c371a;
+      border-bottom:1px solid #dfc4a2;
+      font-size:11px;
+      text-transform:uppercase;
+    }
+    .tabela-simples tbody td{
+      padding:6px 8px;
+      border-bottom:1px solid #f0e1cf;
+      vertical-align:middle;
+    }
+    .tabela-simples tbody tr:nth-child(odd){
+      background:#fffaf4;
+    }
+
+    .badge-tipo{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      border-radius:999px;
+      padding:2px 8px;
+      font-size:11px;
+      font-weight:500;
+    }
+    .badge-entrada{
+      background:#e4f7ec;
+      color:#195f34;
+    }
+    .badge-saida{
+      background:#fdeae5;
+      color:#94412d;
+    }
+    .badge-tipo i{
+      width:13px; height:13px;
+    }
+
+    .valor-positivo{
+      color:#1f6b3b;
+      font-weight:600;
+    }
+    .valor-negativo{
+      color:#8f2a1c;
+      font-weight:600;
+    }
+
+    .btn-acao-mini{
+      border:none;
+      border-radius:999px;
+      padding:3px 8px;
+      font-size:11px;
+      cursor:pointer;
+      background:#f5e7d8;
+      color:#6c4b30;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      margin:0 2px 4px 0;
+    }
+    .btn-acao-mini i{
+      width:13px; height:13px;
+    }
+
+    .dif-badge{
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      background:#f5e7d8;
+      color:#6c4b30;
+    }
+    .dif-credito{
+      background:#e4f7ec;
+      color:#1f6b3b;
+    }
+    .dif-debito{
+      background:#fff8e2;
+      color:#7a5a00;
+    }
+
+    .nenhum-registro{
+      font-size:12px;
+      color:#8b6b46;
+      padding:8px 0;
+    }
+  </style>
+</head>
+<body>
+  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+  <div class="wrapper">
+    <aside id="menuLateral"></aside>
+    <div id="menuBackdrop" hidden></div>
+
+    <main class="conteudo-principal">
+      <div class="conteudo-central">
+        <h1><i data-lucide="wallet-cards"></i> Financeiro geral – KGB FORMATURAS</h1>
+        <p class="subtitulo">
+          Acompanhe todas as <strong>entradas</strong> e <strong>saídas</strong> relacionadas às formaturas,
+          separadas por tipo de evento. Você pode registrar lançamentos manuais e visualizar o saldo geral.
+        </p>
+
+        <!-- RESUMO GERAL -->
+        <section class="grid-resumo" aria-label="Resumo financeiro">
+          <div class="card-resumo">
+            <div class="card-resumo-header">
+              <span>Entradas totais</span>
+              <i data-lucide="arrow-down-circle"></i>
+            </div>
+            <div class="card-resumo-valor" id="resumoEntradas">R$ 0,00</div>
+            <div class="card-resumo-legenda">Tudo o que entrou (todos os eventos)</div>
+          </div>
+
+          <div class="card-resumo">
+            <div class="card-resumo-header">
+              <span>Saídas totais</span>
+              <i data-lucide="arrow-up-circle"></i>
+            </div>
+            <div class="card-resumo-valor" id="resumoSaidas">R$ 0,00</div>
+            <div class="card-resumo-legenda">Custos, despesas e pagamentos gerais</div>
+          </div>
+
+          <div class="card-resumo">
+            <div class="card-resumo-header">
+              <span>Saldo geral</span>
+              <i data-lucide="scale"></i>
+            </div>
+            <div class="card-resumo-valor" id="resumoSaldo">R$ 0,00</div>
+            <div class="card-resumo-legenda" id="resumoSaldoLegenda">Saldo final das formaturas</div>
+          </div>
+        </section>
+
+        <!-- FILTROS + LANÇAMENTO RÁPIDO -->
+        <section class="grid-topo-fin">
+          <!-- FILTROS -->
+          <section class="card" aria-label="Filtros do financeiro">
+            <h2><i data-lucide="filter"></i> Filtros de visualização</h2>
+            <p class="texto-suporte">
+              Filtre os lançamentos por período, tipo (entrada/saída), evento ou forma de pagamento.
+            </p>
+
+            <div class="linha-filtros">
+              <div class="campo">
+                <label for="fFinTipoMov">Tipo de movimento</label>
+                <select id="fFinTipoMov">
+                  <option value="todos">Entradas e saídas</option>
+                  <option value="entrada">Somente entradas</option>
+                  <option value="saida">Somente saídas</option>
+                </select>
+              </div>
+              <div class="campo">
+                <label for="fFinDataIni">Data inicial</label>
+                <input type="date" id="fFinDataIni">
+              </div>
+              <div class="campo">
+                <label for="fFinDataFim">Data final</label>
+                <input type="date" id="fFinDataFim">
+              </div>
+              <div class="campo">
+                <label for="fFinForma">Forma de pagamento</label>
+                <select id="fFinForma">
+                  <option value="todas">Todas</option>
+                  <option value="PIX">PIX</option>
+                  <option value="Cartão">Cartão</option>
+                  <option value="Boleto">Boleto</option>
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Transferência">Transferência</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="linha-filtros">
+              <div class="campo">
+                <label for="fFinEvento">Evento / tipo de formatura</label>
+                <input type="text" id="fFinEvento" placeholder="Ex: Baile de Formatura, Colação...">
+              </div>
+              <div class="campo">
+                <label for="fFinBusca">Buscar por nome / descrição</label>
+                <input type="text" id="fFinBusca" placeholder="Ex: João, decoração, buffet...">
+              </div>
+              <div class="campo">
+                <label>&nbsp;</label>
+                <button type="button" class="btn-secundario" id="btnLimparFiltros">
+                  <i data-lucide="eraser"></i> Limpar filtros
+                </button>
+              </div>
+              <div class="campo">
+                <label>&nbsp;</label>
+                <button type="button" class="btn-primario" id="btnAplicarFiltros">
+                  <i data-lucide="refresh-cw"></i> Aplicar filtros
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- LANÇAMENTO NOVO -->
+          <section class="card" aria-label="Novo lançamento">
+            <h2><i data-lucide="plus-circle"></i> Novo lançamento</h2>
+            <p class="texto-suporte">
+              Registre um lançamento de <strong>entrada</strong> (recebimento) ou
+              <strong>saída</strong> (custo, despesa), vinculando a um tipo de evento.
+            </p>
+
+            <div class="campo">
+              <label for="finNovoTipo">Tipo</label>
+              <select id="finNovoTipo">
+                <option value="entrada">Entrada (valor que entra)</option>
+                <option value="saida">Saída (custo / despesa)</option>
+              </select>
+            </div>
+
+            <div class="campo">
+              <label for="finNovoValor">Valor (R$)</label>
+              <input type="number" step="0.01" id="finNovoValor" placeholder="0,00">
+            </div>
+
+            <div class="campo">
+              <label for="finNovoData">Data do lançamento</label>
+              <input type="date" id="finNovoData">
+            </div>
+
+            <div class="campo">
+              <label for="finNovoEvento">Tipo de evento</label>
+              <input type="text" id="finNovoEvento" placeholder="Ex: Baile de Formatura, Colação de Grau...">
+            </div>
+
+            <div class="campo">
+              <label for="finNovoNome">Nome / descrição</label>
+              <input type="text" id="finNovoNome" placeholder="Ex: Mensalidade João, Decoração salão, DJ...">
+            </div>
+
+            <div class="campo">
+              <label for="finNovoForma">Forma de pagamento</label>
+              <select id="finNovoForma">
+                <option value="PIX">PIX</option>
+                <option value="Cartão">Cartão</option>
+                <option value="Boleto">Boleto</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Transferência">Transferência</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+
+            <div class="campo">
+              <label for="finNovoObs">Observações (opcional)</label>
+              <textarea id="finNovoObs" placeholder="Ex: Referente à turma de Enfermagem 2025, ajuste de parcela, fornecedor X..."></textarea>
+            </div>
+
+            <div class="linha-botoes">
+              <button type="button" class="btn-secundario" id="btnLimparFormLanc">
+                <i data-lucide="rotate-ccw"></i> Limpar
+              </button>
+              <button type="button" class="btn-primario" id="btnSalvarLancamento">
+                <i data-lucide="save"></i> Salvar lançamento
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <!-- TABELAS -->
+        <section class="area-tabelas" aria-label="Lançamentos e resumo por evento">
+          <!-- TABELA DETALHES -->
+          <section class="card">
+            <h2><i data-lucide="list-details"></i> Lançamentos detalhados</h2>
+            <p class="texto-suporte">
+              Todos os lançamentos de entradas e saídas registrados no sistema, com possibilidade de edição e exclusão.
+            </p>
+
+            <div style="overflow-x:auto;">
+              <table class="tabela-simples">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Tipo</th>
+                    <th>Evento</th>
+                    <th>Nome / descrição</th>
+                    <th>Forma</th>
+                    <th>Valor</th>
+                    <th style="width:190px;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyLancamentos"></tbody>
+              </table>
+            </div>
+            <div id="msgSemLancamentos" class="nenhum-registro" style="display:none;">
+              Nenhum lançamento cadastrado ainda. Comece registrando uma entrada ou saída ao lado.
+            </div>
+          </section>
+
+          <!-- RESUMO POR EVENTO -->
+          <section class="card">
+            <h2><i data-lucide="pie-chart"></i> Resumo por evento</h2>
+            <p class="texto-suporte">
+              Veja quanto entrou e saiu em cada tipo de evento de formatura (por exemplo: Colação, Baile, Churrasco...).
+            </p>
+
+            <div style="overflow-x:auto;">
+              <table class="tabela-simples">
+                <thead>
+                  <tr>
+                    <th>Evento</th>
+                    <th>Entradas</th>
+                    <th>Saídas</th>
+                    <th>Saldo</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyResumoEventos"></tbody>
+              </table>
+            </div>
+            <div id="msgSemResumo" class="nenhum-registro" style="display:none;">
+              Nenhum lançamento encontrado para o filtro atual.
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- JS PRINCIPAL DA PÁGINA -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // MENU LATERAL (mobile)
+      const menu = document.getElementById('menuLateral');
+      const btnMenu = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (btnMenu && menu && backdrop){
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+        btnMenu.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+
+      // --------- CONSTANTES / ESTADO ---------
+      const STORAGE_KEY = 'kgb_financeiro_movimentos';
+      let movimentos = [];
+
+      const tbodyLanc = document.getElementById('tbodyLancamentos');
+      const tbodyResumoEventos = document.getElementById('tbodyResumoEventos');
+      const msgSemLanc = document.getElementById('msgSemLancamentos');
+      const msgSemResumo = document.getElementById('msgSemResumo');
+
+      const lblEntradas = document.getElementById('resumoEntradas');
+      const lblSaidas = document.getElementById('resumoSaidas');
+      const lblSaldo = document.getElementById('resumoSaldo');
+      const lblSaldoLeg = document.getElementById('resumoSaldoLegenda');
+
+      const fTipo = document.getElementById('fFinTipoMov');
+      const fDataIni = document.getElementById('fFinDataIni');
+      const fDataFim = document.getElementById('fFinDataFim');
+      const fForma = document.getElementById('fFinForma');
+      const fEvento = document.getElementById('fFinEvento');
+      const fBusca = document.getElementById('fFinBusca');
+      const btnAplicarFiltros = document.getElementById('btnAplicarFiltros');
+      const btnLimparFiltros = document.getElementById('btnLimparFiltros');
+
+      const novoTipo = document.getElementById('finNovoTipo');
+      const novoValor = document.getElementById('finNovoValor');
+      const novoData = document.getElementById('finNovoData');
+      const novoEvento = document.getElementById('finNovoEvento');
+      const novoNome = document.getElementById('finNovoNome');
+      const novoForma = document.getElementById('finNovoForma');
+      const novoObs = document.getElementById('finNovoObs');
+      const btnSalvarLanc = document.getElementById('btnSalvarLancamento');
+      const btnLimparForm = document.getElementById('btnLimparFormLanc');
+
+      function criarId(prefixo = 'mov_'){
+        return prefixo + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+      }
+
+      // >>> AQUI FOI CORRIGIDO: NÃO CRIA MAIS DADOS FICTÍCIOS <<<
+      function carregarMovimentos(){
+        try{
+          const raw = localStorage.getItem(STORAGE_KEY);
+          let arr = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(arr)) arr = [];
+          // não gera exemplos; usa apenas o que foi gravado de verdade
+          movimentos = arr;
+        }catch(e){
+          console.warn('Erro ao carregar movimentos financeiros:', e);
+          movimentos = [];
+        }
+      }
+
+      function salvarMovimentos(){
+        try{
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(movimentos));
+        }catch(e){
+          console.warn('Erro ao salvar movimentos financeiros:', e);
+        }
+      }
+
+      function formatarMoeda(v){
+        const num = Number(v || 0);
+        return num.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+      }
+
+      function normalizarData(str){
+        if (!str) return null;
+        const d = new Date(str + 'T00:00:00');
+        if (Number.isNaN(d.getTime())) return null;
+        return d;
+      }
+
+      // --------- FILTROS / RESUMOS ---------
+      function aplicarFiltros(listaBase){
+        const tipo = fTipo?.value || 'todos';
+        const forma = fForma?.value || 'todas';
+        const evFiltro = (fEvento?.value || '').trim().toLowerCase();
+        const busca = (fBusca?.value || '').trim().toLowerCase();
+        const dataIni = normalizarData(fDataIni?.value || '');
+        const dataFim = normalizarData(fDataFim?.value || '');
+
+        return (listaBase || movimentos).filter(m => {
+          if (tipo !== 'todos' && m.tipo !== tipo) return false;
+
+          if (forma !== 'todas' && (m.forma || '') !== forma) return false;
+
+          if (evFiltro){
+            const evTxt = (m.evento || '').toLowerCase();
+            if (!evTxt.includes(evFiltro)) return false;
+          }
+
+          if (busca){
+            const texto = `${m.nome || ''} ${m.obs || ''}`.toLowerCase();
+            if (!texto.includes(busca)) return false;
+          }
+
+          if (dataIni || dataFim){
+            const d = normalizarData(m.data);
+            if (!d) return false;
+            if (dataIni && d < dataIni) return false;
+            if (dataFim && d > dataFim) return false;
+          }
+
+          return true;
+        });
+      }
+
+      function calcularResumo(lista){
+        let ent = 0;
+        let sai = 0;
+
+        (lista || movimentos).forEach(m => {
+          const v = Number(m.valor || 0);
+          if (m.tipo === 'entrada') ent += v;
+          else if (m.tipo === 'saida') sai += v;
+        });
+
+        return { entradas: ent, saidas: sai, saldo: ent - sai };
+      }
+
+      function atualizarResumoGeral(lista){
+        const { entradas, saidas, saldo } = calcularResumo(lista);
+
+        if (lblEntradas) lblEntradas.textContent = formatarMoeda(entradas);
+        if (lblSaidas) lblSaidas.textContent = formatarMoeda(saidas);
+        if (lblSaldo) lblSaldo.textContent = formatarMoeda(saldo);
+
+        if (lblSaldoLeg){
+          if (saldo > 0.009) lblSaldoLeg.textContent = 'Saldo geral POSITIVO das formaturas.';
+          else if (saldo < -0.009) lblSaldoLeg.textContent = 'Saldo geral NEGATIVO (mais saídas que entradas).';
+          else lblSaldoLeg.textContent = 'Entradas e saídas empatadas neste período.';
+        }
+      }
+
+      // --------- RENDERS ---------
+      function renderTabelaLancamentos(lista){
+        if (!tbodyLanc) return;
+        const dados = lista || [];
+
+        tbodyLanc.innerHTML = '';
+        if (!dados.length){
+          if (msgSemLanc) msgSemLanc.style.display = 'block';
+          return;
+        }
+        if (msgSemLanc) msgSemLanc.style.display = 'none';
+
+        dados.sort((a,b) => (a.data || '').localeCompare(b.data || ''));
+
+        dados.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.dataset.id = m.id;
+
+          const dataBr = m.data
+            ? (() => {
+                const [y,mm,d] = m.data.split('-');
+                if (!y || !mm || !d) return m.data;
+                return `${d}/${mm}/${y}`;
+              })()
+            : '-';
+
+          const badgeTipo =
+            m.tipo === 'entrada'
+              ? '<span class="badge-tipo badge-entrada"><i data-lucide="arrow-down-right"></i> Entrada</span>'
+              : '<span class="badge-tipo badge-saida"><i data-lucide="arrow-up-right"></i> Saída</span>';
+
+          const valorCls = m.tipo === 'entrada' ? 'valor-positivo' : 'valor-negativo';
+          const sinal = m.tipo === 'entrada' ? '' : '-';
+
+          tr.innerHTML = `
+            <td>${dataBr}</td>
+            <td>${badgeTipo}</td>
+            <td>${m.evento || '-'}</td>
+            <td title="${m.obs || ''}">${m.nome || '-'}</td>
+            <td>${m.forma || '-'}</td>
+            <td class="${valorCls}">${sinal}${formatarMoeda(m.valor || 0)}</td>
+            <td>
+              <button type="button" class="btn-acao-mini" data-acao="editar"><i data-lucide="edit-3"></i> Editar</button>
+              <button type="button" class="btn-acao-mini" data-acao="excluir"><i data-lucide="trash-2"></i> Excluir</button>
+            </td>
+          `;
+          tbodyLanc.appendChild(tr);
+        });
+
+        if (window.lucide) window.lucide.createIcons();
+      }
+
+      function renderResumoPorEvento(lista){
+        if (!tbodyResumoEventos) return;
+        const dados = lista || [];
+
+        tbodyResumoEventos.innerHTML = '';
+        if (!dados.length){
+          if (msgSemResumo) msgSemResumo.style.display = 'block';
+          return;
+        }
+        if (msgSemResumo) msgSemResumo.style.display = 'none';
+
+        const mapa = {};
+        dados.forEach(m => {
+          const ev = m.evento || 'Sem evento informado';
+          if (!mapa[ev]) mapa[ev] = { entradas:0, saidas:0 };
+          const v = Number(m.valor || 0);
+          if (m.tipo === 'entrada') mapa[ev].entradas += v;
+          else if (m.tipo === 'saida') mapa[ev].saidas += v;
+        });
+
+        Object.keys(mapa)
+          .sort()
+          .forEach(ev => {
+            const info = mapa[ev];
+            const saldo = info.entradas - info.saidas;
+            const clsSaldo =
+              saldo > 0.009 ? 'valor-positivo' :
+              saldo < -0.009 ? 'valor-negativo' :
+              '';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${ev}</td>
+              <td>${formatarMoeda(info.entradas)}</td>
+              <td>${formatarMoeda(info.saidas)}</td>
+              <td class="${clsSaldo}">${formatarMoeda(saldo)}</td>
+            `;
+            tbodyResumoEventos.appendChild(tr);
+          });
+      }
+
+      function aplicarFiltrosERender(){
+        const filtrados = aplicarFiltros(movimentos);
+        renderTabelaLancamentos(filtrados);
+        renderResumoPorEvento(filtrados);
+        atualizarResumoGeral(filtrados);
+      }
+
+      // --------- FORMULÁRIO NOVO LANÇAMENTO ---------
+      function limparFormularioLanc(){
+        if (novoTipo) novoTipo.value = 'entrada';
+        if (novoValor) novoValor.value = '';
+        if (novoData) novoData.value = '';
+        if (novoEvento) novoEvento.value = '';
+        if (novoNome) novoNome.value = '';
+        if (novoForma) novoForma.value = 'PIX';
+        if (novoObs) novoObs.value = '';
+      }
+
+      if (btnLimparForm){
+        btnLimparForm.addEventListener('click', limparFormularioLanc);
+      }
+
+      if (btnSalvarLanc){
+        btnSalvarLanc.addEventListener('click', () => {
+          const tipo = novoTipo?.value || 'entrada';
+          const valorStr = (novoValor?.value || '').trim();
+          const data = novoData?.value || '';
+          const evento = (novoEvento?.value || '').trim();
+          const nome = (novoNome?.value || '').trim();
+          const forma = novoForma?.value || 'PIX';
+          const obs = (novoObs?.value || '').trim();
+
+          if (!valorStr){
+            alert('Informe o valor do lançamento.');
+            return;
+          }
+          const valor = parseFloat(valorStr.replace(',', '.'));
+          if (isNaN(valor) || valor <= 0){
+            alert('Valor inválido.');
+            return;
+          }
+          if (!data){
+            alert('Informe a data do lançamento.');
+            return;
+          }
+
+          const novo = {
+            id: criarId(),
+            tipo,
+            data,
+            valor,
+            evento,
+            nome,
+            forma,
+            obs
+          };
+          movimentos.push(novo);
+          salvarMovimentos();
+          limparFormularioLanc();
+          aplicarFiltrosERender();
+        });
+      }
+
+      // --------- AÇÕES NA TABELA ---------
+      if (tbodyLanc){
+        tbodyLanc.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('button[data-acao]');
+          if (!btn) return;
+          const acao = btn.dataset.acao;
+          const tr = btn.closest('tr');
+          if (!tr) return;
+          const id = tr.dataset.id;
+          if (!id) return;
+
+          const idx = movimentos.findIndex(m => m.id === id);
+          if (idx < 0) return;
+          const mov = movimentos[idx];
+
+          if (acao === 'excluir'){
+            const ok = confirm('Deseja realmente excluir este lançamento?');
+            if (!ok) return;
+            movimentos.splice(idx, 1);
+            salvarMovimentos();
+            aplicarFiltrosERender();
+          } else if (acao === 'editar'){
+            const novoValor = prompt('Novo valor (R$):', String(mov.valor).replace('.', ','));
+            if (novoValor === null) return;
+            const v = parseFloat(novoValor.replace(',', '.'));
+            if (!isNaN(v) && v > 0) mov.valor = v;
+
+            const novaData = prompt('Nova data (AAAA-MM-DD):', mov.data || '');
+            if (novaData !== null && novaData.trim()) mov.data = novaData.trim();
+
+            const novoEventoTxt = prompt('Tipo de evento:', mov.evento || '');
+            if (novoEventoTxt !== null) mov.evento = novoEventoTxt.trim();
+
+            const novoNomeTxt = prompt('Nome / descrição:', mov.nome || '');
+            if (novoNomeTxt !== null) mov.nome = novoNomeTxt.trim();
+
+            const novaForma = prompt('Forma de pagamento:', mov.forma || 'PIX');
+            if (novaForma !== null) mov.forma = novaForma.trim();
+
+            salvarMovimentos();
+            aplicarFiltrosERender();
+          }
+        });
+      }
+
+      // --------- FILTROS ---------
+      function limparFiltros(){
+        if (fTipo) fTipo.value = 'todos';
+        if (fForma) fForma.value = 'todas';
+        if (fDataIni) fDataIni.value = '';
+        if (fDataFim) fDataFim.value = '';
+        if (fEvento) fEvento.value = '';
+        if (fBusca) fBusca.value = '';
+      }
+
+      if (btnLimparFiltros){
+        btnLimparFiltros.addEventListener('click', () => {
+          limparFiltros();
+          aplicarFiltrosERender();
+        });
+      }
+      if (btnAplicarFiltros){
+        btnAplicarFiltros.addEventListener('click', aplicarFiltrosERender);
+      }
+
+      [fTipo, fForma, fDataIni, fDataFim, fEvento, fBusca].forEach(el => {
+        if (!el) return;
+        el.addEventListener('change', aplicarFiltrosERender);
+        el.addEventListener('input', () => {
+          if (el === fEvento || el === fBusca){
+            aplicarFiltrosERender();
+          }
+        });
+      });
+
+      // --------- INICIALIZAÇÃO ---------
+      carregarMovimentos();
+      aplicarFiltrosERender();
+    });
+  </script>
+
+  <!-- MENU MOBILE: abre e fecha o menu lateral no celular -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menu     = document.getElementById('menuLateral');
+      const btn      = document.getElementById('hamburguer');
+      const backdrop = document.getElementById('menuBackdrop');
+
+      if (menu && btn && backdrop) {
+        const toggleMenu = () => {
+          const aberto = menu.classList.toggle('aberto');
+          backdrop.hidden = !aberto;
+        };
+
+        btn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+      }
+    });
+  </script>
+
+  <!-- MENU LATERAL + GUARD -->
+  <script type="module" src="menu-lateral.js"></script>
+
+  <script type="module">
+    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) guard({ permissao });
+
+    aplicarPermissoesNaTela();
+  </script>
+
+  <script src="/js/auth-helper.js"></script>
+  <script src="/api/api-fetch.js"></script>
+</body>
+</html>

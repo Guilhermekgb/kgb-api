@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Assinatura do Contrato</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Biblioteca para gerar PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --primary: #16a34a;
+      --primary-dark: #15803d;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --danger: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+      padding: 24px;
+    }
+
+    @media (min-width: 768px) {
+      .card {
+        padding: 32px 36px;
+      }
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .sub {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .alert {
+      display: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+    .alert.info {
+      background: #ecfdf3;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .alert.err {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .contrato-box {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 16px;
+      max-height: 420px;
+      overflow-y: auto;
+      margin-bottom: 24px;
+    }
+
+    .assinaturas-wrapper {
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      margin-top: 4px;
+    }
+
+    .assinaturas-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .assinaturas-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 768px) {
+      .assinaturas-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .assinatura-bloco {
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 10px 10px 6px;
+      background: #f9fafb;
+    }
+
+    .assinatura-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .assinatura-canvas-container {
+      position: relative;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    canvas {
+      width: 100%;
+      height: 160px;
+      display: block;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .assinatura-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+      gap: 8px;
+    }
+
+    .assinatura-status {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .btn-mini {
+      border: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .btn-mini:hover {
+      background: #d1d5db;
+    }
+
+    .btn-row {
+      margin-top: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    @media (min-width: 560px) {
+      .btn-row {
+        flex-direction: row;
+        justify-content: flex-end;
+      }
+    }
+
+    .btn-primary {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: 1rem;
+      cursor: pointer;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    @media (min-width: 560px) {
+      .btn-primary {
+        flex: 0 0 auto;
+      }
+    }
+
+    .btn-secondary {
+      border-radius: 999px;
+      padding: 12px 18px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      font-size: 0.95rem;
+      cursor: pointer;
+      color: #374151;
+    }
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #166534;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .status-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+    }
+     /* Estilos para a imagem e carimbo dentro do contrato */
+  .assinatura-img {
+    display: block;
+    margin: 8px auto 0;
+    max-width: 280px;
+  }
+
+  .assinatura-carimbo {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #555;
+    text-align: center;
+  }
+  </style>
+</head>
+<body>
+
+<div class="page">
+  <div class="card">
+    <h1>Assinatura do Contrato</h1>
+    <p class="sub">Leia o contrato abaixo, depois assine como <strong>cliente</strong> e como <strong>empresa</strong> para concluir.</p>
+
+    <div id="alert" class="alert"></div>
+
+    <div class="contrato-box" id="contratoBox">
+      Carregando contrato...
+    </div>
+
+    <div class="assinaturas-wrapper">
+      <div class="assinaturas-title">
+        Assinaturas eletrônicas
+        <span id="statusAssinatura" class="status-pill" style="display:none;">
+          <span class="status-pill-dot"></span> Assinado
+        </span>
+      </div>
+
+      <div class="assinaturas-grid">
+        <!-- Cliente -->
+        <div class="assinatura-bloco">
+          <div class="assinatura-label">Assinatura do Cliente</div>
+          <div class="assinatura-canvas-container">
+            <canvas id="canvasCliente"></canvas>
+          </div>
+          <div class="assinatura-footer">
+            <span class="assinatura-status" id="statusCliente">Desenhe sua assinatura com o dedo ou mouse.</span>
+            <button type="button" class="btn-mini" id="btnLimparCliente">Limpar</button>
+          </div>
+        </div>
+
+        <!-- Empresa -->
+        <div class="assinatura-bloco">
+          <div class="assinatura-label">Assinatura da Empresa</div>
+          <div class="assinatura-canvas-container">
+            <canvas id="canvasEmpresa"></canvas>
+          </div>
+          <div class="assinatura-footer">
+            <span class="assinatura-status" id="statusEmpresa">Assine como responsável do buffet.</span>
+            <button type="button" class="btn-mini" id="btnLimparEmpresa">Limpar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="btn-secondary" id="btnBaixarPdf">
+        Baixar contrato assinado (PDF)
+      </button>
+      <button type="button" class="btn-primary" id="btnConfirmar">
+        Confirmar assinaturas
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const alertBox         = document.getElementById('alert');
+  const contratoBox      = document.getElementById('contratoBox');
+  const statusAssinatura = document.getElementById('statusAssinatura');
+
+  const canvasCliente    = document.getElementById('canvasCliente');
+  const canvasEmpresa    = document.getElementById('canvasEmpresa');
+  const btnLimparCliente = document.getElementById('btnLimparCliente');
+  const btnLimparEmpresa = document.getElementById('btnLimparEmpresa');
+  const btnConfirmar     = document.getElementById('btnConfirmar');
+  const btnBaixarPdf     = document.getElementById('btnBaixarPdf');
+
+  // Descobre base da API
+  const API_BASE = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__.trim())
+    || (function () { try { return (localStorage.getItem('API_BASE') || '').trim(); } catch { return ''; } })()
+       || 'http://127.0.0.1:3002';
+
+
+  // Lê token da URL
+  const URL_PARAMS       = new URLSearchParams(location.search);
+  const TOKEN_ASSINATURA = URL_PARAMS.get('token') || null;
+
+  let tokenGlobal               = TOKEN_ASSINATURA;
+  let contratoHtmlOriginal      = '';
+  let dadosCliente              = null;
+
+  let assinaturaClienteDataUrl  = null;
+  let assinaturaEmpresaDataUrl  = null;
+
+  let clienteAssinou            = false;
+  let empresaAssinou            = false;
+
+  let clienteJaSalvo            = false;
+  let empresaJaSalvo            = false;
+
+  function showAlert(msg, tipo) {
+    alertBox.textContent = msg;
+    alertBox.style.display = 'block';
+    alertBox.classList.remove('info', 'err');
+    alertBox.classList.add(tipo === 'err' ? 'err' : 'info');
+  }
+
+  function normalizarDataUrl(str) {
+    if (!str) return null;
+    const s = String(str);
+    if (s.startsWith('data:image')) return s;
+    return 'data:image/png;base64,' + s;
+  }
+
+  async function carregarDadosAssinaturaDoServidor() {
+    if (!tokenGlobal) return null;
+
+    try {
+      const resp = await fetch(
+        API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal),
+        { method: 'GET' }
+      );
+
+      if (!resp.ok) {
+        console.warn('[Assinatura] backend retornou erro ao buscar dados:', resp.status);
+        return null;
+      }
+
+      const dados = await resp.json();
+      return dados;
+    } catch (e) {
+      console.error('[Assinatura] erro ao buscar dados no backend:', e);
+      return null;
+    }
+  }
+
+  function desenharImagemNoCanvas(canvas, dataUrl) {
+    if (!dataUrl) return;
+    const ctx  = canvas.getContext('2d');
+    const img  = new Image();
+    img.onload = () => {
+      const rect  = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width  = rect.width * ratio;
+      canvas.height = 160 * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.clearRect(0, 0, rect.width, 160);
+      ctx.drawImage(img, 0, 0, rect.width, 160);
+    };
+    img.src = dataUrl;
+  }
+  // Insere a assinatura dentro do HTML do contrato exibido em cima
+  function inserirAssinaturaNoContrato(quem, dataUrl) {
+    if (!dataUrl) return;
+
+    // Procura o bloco de assinaturas dentro do contrato carregado
+    const bloco = contratoBox.querySelector('[data-assinaturas-bloco]');
+    if (!bloco) {
+      console.warn('[Assinatura] Contrato não tem bloco de assinaturas (data-assinaturas-bloco).');
+      return;
+    }
+
+    // Slot da empresa ou do cliente
+    const slot = bloco.querySelector(`[data-slot="${quem}"]`) || bloco;
+
+    // Limpa qualquer coisa antiga
+    const linha = slot.querySelector('.linha');
+    if (linha) linha.remove();
+
+    slot.querySelectorAll('img.assinatura-img').forEach(el => el.remove());
+    slot.querySelectorAll('.assinatura-carimbo').forEach(el => el.remove());
+
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.className = 'assinatura-img';
+    img.alt = 'Assinatura ' + quem;
+
+    // força o carregamento antes do PDF
+    img.loading  = 'eager';
+    img.decoding = 'sync';
+
+    slot.appendChild(img);
+
+  }
+
+  async function carregarContrato() {
+    if (!tokenGlobal) {
+      showAlert('Link de assinatura inválido. Token ausente.', 'err');
+      contratoBox.textContent = 'Contrato não encontrado.';
+      btnConfirmar.disabled = true;
+      btnBaixarPdf.disabled = true;
+      return;
+    }
+
+    const dadosServidor = await carregarDadosAssinaturaDoServidor();
+    if (!dadosServidor || !dadosServidor.contratoHtml) {
+      showAlert('Contrato não encontrado no servidor. Peça um novo link ao buffet.', 'err');
+      contratoBox.textContent = 'Contrato não encontrado.';
+      btnConfirmar.disabled = true;
+      btnBaixarPdf.disabled  = true;
+      return;
+    }
+
+       contratoHtmlOriginal = dadosServidor.contratoHtml;
+    dadosCliente         = dadosServidor.dadosCliente || null;
+
+    contratoBox.innerHTML = contratoHtmlOriginal;
+
+    // Recarrega assinaturas já salvas
+    if (dadosServidor.assinaturaClienteBase64) {
+      assinaturaClienteDataUrl = normalizarDataUrl(dadosServidor.assinaturaClienteBase64);
+      clienteAssinou   = true;
+      clienteJaSalvo   = true;
+
+      desenharImagemNoCanvas(canvasCliente, assinaturaClienteDataUrl);
+      document.getElementById('statusCliente').textContent = 'Cliente já assinou este contrato.';
+      canvasCliente.style.opacity        = '0.5';
+      canvasCliente.style.pointerEvents  = 'none';
+      btnLimparCliente.disabled          = true;
+
+      // *** NOVO: insere dentro do contrato ***
+      inserirAssinaturaNoContrato('cliente', assinaturaClienteDataUrl);
+    }
+
+    if (dadosServidor.assinaturaEmpresaBase64) {
+      assinaturaEmpresaDataUrl = normalizarDataUrl(dadosServidor.assinaturaEmpresaBase64);
+      empresaAssinou   = true;
+      empresaJaSalvo   = true;
+
+      desenharImagemNoCanvas(canvasEmpresa, assinaturaEmpresaDataUrl);
+      document.getElementById('statusEmpresa').textContent = 'Empresa já assinou este contrato.';
+      canvasEmpresa.style.opacity        = '0.5';
+      canvasEmpresa.style.pointerEvents  = 'none';
+      btnLimparEmpresa.disabled          = true;
+
+      // *** NOVO: insere dentro do contrato ***
+      inserirAssinaturaNoContrato('empresa', assinaturaEmpresaDataUrl);
+    }
+
+
+    if (clienteJaSalvo && empresaJaSalvo) {
+      statusAssinatura.style.display = 'inline-flex';
+      btnBaixarPdf.disabled          = false;
+    }
+
+    showAlert('Contrato carregado com sucesso. Role até o fim e assine nas caixas abaixo.', 'info');
+  }
+  // Salva o PDF assinado na lista de documentos do evento (tela de contrato)
+  function salvarPdfNoLocalStorage(pdfDataUri, dadosServidor) {
+    try {
+      if (!pdfDataUri) return;
+      if (!dadosServidor) return;
+
+      const eid = String(dadosServidor.eventoId || "").trim();
+      if (!eid) return;
+
+      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const iEvento = eventos.findIndex(ev => String(ev.id) === eid);
+      if (iEvento === -1) return;
+
+      const docs = Array.isArray(eventos[iEvento].documentos)
+        ? eventos[iEvento].documentos
+        : [];
+
+      if (!docs.length) return;
+
+      // 1º tentativa: se backend mandar id do documento
+      let doc = null;
+      if (dadosServidor.documentoId) {
+        doc = docs.find(d => d && d.id === dadosServidor.documentoId);
+      }
+
+      // 2ª tentativa: pega o CONTRATO base desse evento
+      if (!doc) {
+        doc = docs.find(d =>
+          d &&
+          d.categoria === "contrato" &&
+          (d.tipo || "contrato") === "contrato"
+        );
+      }
+
+      if (!doc) return;
+
+      doc.meta = doc.meta || {};
+      doc.meta.pdfDataUri = pdfDataUri;
+
+      eventos[iEvento].documentos = docs;
+      localStorage.setItem("eventos", JSON.stringify(eventos));
+
+      console.log("[Assinatura] PDF assinado salvo em eventos/documentos.");
+    } catch (e) {
+      console.error("[Assinatura] Erro ao salvar PDF no localStorage:", e);
+    }
+  }
+
+  // ====== Canvas de assinatura ======
+  function setupCanvas(canvas, onChangeStatus) {
+    const ctx = canvas.getContext('2d');
+    let desenhando = false;
+    let temTraço   = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function resize() {
+      const rect  = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width  = rect.width * ratio;
+      canvas.height = 160 * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+      // >>> AQUI deixamos o traço mais grosso para não ficar apagado no PDF
+      ctx.lineWidth   = 4;      // antes era 2
+      ctx.lineCap     = 'round';
+      ctx.strokeStyle = '#111827';
+    }
+
+
+    function getPos(evt) {
+      const rect = canvas.getBoundingClientRect();
+      if (evt.touches && evt.touches[0]) {
+        return {
+          x: evt.touches[0].clientX - rect.left,
+          y: evt.touches[0].clientY - rect.top
+        };
+      }
+      return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+      };
+    }
+
+    function start(evt) {
+      if (canvas.style.pointerEvents === 'none') return;
+      evt.preventDefault();
+      desenhando = true;
+      const p = getPos(evt);
+      lastX = p.x;
+      lastY = p.y;
+    }
+
+    function move(evt) {
+      if (!desenhando) return;
+      evt.preventDefault();
+      const p = getPos(evt);
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      lastX   = p.x;
+      lastY   = p.y;
+      temTraço = true;
+      onChangeStatus(true);
+    }
+
+    function end() {
+      desenhando = false;
+    }
+
+    function limpar() {
+      const rect  = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, rect.width * ratio, 160 * ratio);
+      resize();
+      temTraço = false;
+      onChangeStatus(false);
+    }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove',  move,  { passive: false });
+    window.addEventListener('touchend',   end);
+
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(resize);
+
+    return {
+      hasDraw:  () => temTraço,
+      clear:    limpar,
+      getDataUrl: () => temTraço ? canvas.toDataURL('image/png') : null
+    };
+  }
+
+  const assinaturaCliente = setupCanvas(canvasCliente, (ok) => {
+    clienteAssinou = ok || clienteJaSalvo;
+    document.getElementById('statusCliente').textContent = ok
+      ? 'Assinatura registrada.'
+      : (clienteJaSalvo ? 'Cliente já assinou este contrato.' : 'Desenhe sua assinatura com o dedo ou mouse.');
+  });
+
+  const assinaturaEmpresa = setupCanvas(canvasEmpresa, (ok) => {
+    empresaAssinou = ok || empresaJaSalvo;
+    document.getElementById('statusEmpresa').textContent = ok
+      ? 'Assinatura registrada.'
+      : (empresaJaSalvo ? 'Empresa já assinou este contrato.' : 'Assine como responsável do buffet.');
+  });
+
+  btnLimparCliente.addEventListener('click', () => {
+    if (clienteJaSalvo) return;
+    assinaturaCliente.clear();
+    clienteAssinou = false;
+  });
+
+  btnLimparEmpresa.addEventListener('click', () => {
+    if (empresaJaSalvo) return;
+    assinaturaEmpresa.clear();
+    empresaAssinou = false;
+  });
+
+  // ====== Confirmar (salva no backend) ======
+  btnConfirmar.addEventListener('click', async () => {
+    if (!tokenGlobal) {
+      alert('Token de assinatura ausente.');
+      return;
+    }
+
+    let algoPraSalvar = false;
+
+    try {
+      // Cliente
+      if (!clienteJaSalvo && clienteAssinou) {
+        const dataUrl = assinaturaCliente.getDataUrl();
+        if (!dataUrl) {
+          alert('Assinatura do cliente não foi desenhada corretamente.');
+          return;
+        }
+        const respCli = await fetch(
+          API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/cliente',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assinaturaBase64: dataUrl })
+          }
+        );
+        if (!respCli.ok) {
+          const txt = await respCli.text().catch(() => '');
+          throw new Error('Erro ao salvar assinatura do cliente: ' + txt);
+        }
+        clienteJaSalvo           = true;
+        assinaturaClienteDataUrl = dataUrl;
+        algoPraSalvar            = true;
+        document.getElementById('statusCliente').textContent = 'Cliente já assinou este contrato.';
+        canvasCliente.style.opacity       = '0.5';
+        canvasCliente.style.pointerEvents = 'none';
+        btnLimparCliente.disabled         = true;
+                // *** NOVO: insere assinatura do cliente no contrato exibido ***
+        inserirAssinaturaNoContrato('cliente', dataUrl);
+
+      }
+
+      // Empresa
+      if (!empresaJaSalvo && empresaAssinou) {
+        const dataUrlEmp = assinaturaEmpresa.getDataUrl();
+        if (!dataUrlEmp) {
+          alert('Assinatura da empresa não foi desenhada corretamente.');
+          return;
+        }
+        const respEmp = await fetch(
+          API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/empresa',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assinaturaBase64: dataUrlEmp })
+          }
+        );
+        if (!respEmp.ok) {
+          const txt = await respEmp.text().catch(() => '');
+          throw new Error('Erro ao salvar assinatura da empresa: ' + txt);
+        }
+        empresaJaSalvo           = true;
+        assinaturaEmpresaDataUrl = dataUrlEmp;
+        algoPraSalvar            = true;
+        document.getElementById('statusEmpresa').textContent = 'Empresa já assinou este contrato.';
+        canvasEmpresa.style.opacity       = '0.5';
+        canvasEmpresa.style.pointerEvents = 'none';
+        btnLimparEmpresa.disabled         = true;
+                // *** NOVO: insere assinatura da empresa no contrato exibido ***
+        inserirAssinaturaNoContrato('empresa', dataUrlEmp);
+
+      }
+
+      if (!algoPraSalvar) {
+        alert('Nenhuma assinatura nova para salvar. Desenhe a assinatura do cliente ou da empresa.');
+        return;
+      }
+
+      if (clienteJaSalvo && empresaJaSalvo) {
+        statusAssinatura.style.display = 'inline-flex';
+        btnBaixarPdf.disabled          = false;
+        showAlert('Assinaturas registradas. Agora você pode baixar o contrato assinado em PDF.', 'info');
+      } else {
+        showAlert('Assinatura salva com sucesso. Falta a outra parte assinar.', 'info');
+      }
+
+    } catch (e) {
+      console.error('[Assinatura] Erro ao salvar assinaturas:', e);
+      alert('Erro ao salvar assinaturas. Tente novamente.');
+    }
+  });
+
+// ====== Gerar PDF assinado (usa o contrato exibido, com as assinaturas) ======
+btnBaixarPdf.addEventListener('click', async () => {
+  // pequena pausa pro navegador terminar de desenhar tudo
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  const dadosServidor = await carregarDadosAssinaturaDoServidor();
+
+  if (!dadosServidor) {
+    alert('Não foi possível carregar os dados de assinatura no servidor. Tente novamente.');
+    return;
+  }
+
+  const contratoHtml =
+    contratoHtmlOriginal ||
+    dadosServidor.contratoHtml ||
+    '';
+
+  // Usa o contrato COMO ESTÁ NA TELA (com as assinaturas dentro)
+  const contratoHtmlParaPdf =
+    (contratoBox && contratoBox.innerHTML && contratoBox.innerHTML.trim())
+      ? contratoBox.innerHTML
+      : contratoHtml;
+
+  if (!contratoHtmlParaPdf) {
+    alert('Contrato não carregado.');
+    return;
+  }
+
+  let imgCliente = assinaturaClienteDataUrl;
+  let imgEmpresa = assinaturaEmpresaDataUrl;
+
+  if (!imgCliente && dadosServidor.assinaturaClienteBase64) {
+    imgCliente = normalizarDataUrl(dadosServidor.assinaturaClienteBase64);
+  }
+  if (!imgEmpresa && dadosServidor.assinaturaEmpresaBase64) {
+    imgEmpresa = normalizarDataUrl(dadosServidor.assinaturaEmpresaBase64);
+  }
+
+  if (!imgCliente || !imgEmpresa) {
+    alert('Ainda não existem as duas assinaturas salvas. Verifique se cliente e empresa já assinaram.');
+    return;
+  }
+
+  const nomeCliente =
+    (dadosServidor.dadosCliente && dadosServidor.dadosCliente.nome) ||
+    (dadosCliente && dadosCliente.nome) ||
+    'cliente';
+
+  const agora   = new Date();
+  const dataStr = agora.toLocaleDateString('pt-BR');
+  const horaStr = agora.toLocaleTimeString('pt-BR').slice(0, 5);
+
+  // 🔹 Wrapper com tamanho de página A4, igual ao do contrato.js
+  const wrapper = document.createElement('div');
+  wrapper.style.boxSizing  = 'border-box';
+  wrapper.style.width      = '190mm';     // área útil dentro da A4
+  wrapper.style.maxWidth   = '190mm';
+  wrapper.style.margin     = '0 auto';
+  wrapper.style.padding    = '15mm 15mm 18mm 15mm';
+  wrapper.style.background = '#ffffff';
+  wrapper.style.fontFamily = 'Arial, sans-serif';
+  wrapper.style.fontSize   = '11pt';
+  wrapper.style.lineHeight = '1.4';
+  wrapper.style.color      = '#000';
+
+  // Regras de quebra de página (evita cortar parágrafos no meio)
+  const style = document.createElement('style');
+  style.textContent = `
+    p, h1, h2, h3, h4, h5, h6, li {
+      page-break-inside: avoid;
+      break-inside: avoid-page;
+    }
+    .no-break {
+      page-break-inside: avoid;
+      break-inside: avoid-page;
+    }
+    table { page-break-inside: auto; }
+    tr, td, th {
+      page-break-inside: avoid;
+      break-inside: avoid-page;
+    }
+  `;
+  wrapper.appendChild(style);
+
+  // Conteúdo do contrato + bloco de assinaturas
+  const content = document.createElement('div');
+  content.innerHTML = `
+    ${contratoHtmlParaPdf}
+
+    <hr style="margin: 5mm 0 0 0; border:none; border-top:1px solid #ccc;" />
+    <h3 style="margin: 2mm 0 1mm 0; font-size:16px;">Assinaturas eletrônicas</h3>
+    <p style="margin: 0 0 4mm 0;">
+      Gerado em ${dataStr} às ${horaStr}.
+    </p>
+
+    <div style="display:flex; gap:40px; margin-top: 8mm;">
+      <div style="flex:1; text-align:center;">
+        <div style="
+          border-bottom:1px solid #000;
+          height:80px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          margin-bottom:8px;
+        ">
+          <img
+            src="${imgCliente}"
+            alt="Assinatura do cliente"
+            style="max-height:70px; max-width:100%; object-fit:contain;"
+          />
+        </div>
+        <div style="font-size:12px;">${nomeCliente}</div>
+        <div style="font-size:11px;color:#555;">Contratante</div>
+      </div>
+
+      <div style="flex:1; text-align:center;">
+        <div style="
+          border-bottom:1px solid #000;
+          height:80px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          margin-bottom:8px;
+        ">
+          <img
+            src="${imgEmpresa}"
+            alt="Assinatura da empresa"
+            style="max-height:70px; max-width:100%; object-fit:contain;"
+          />
+        </div>
+        <div style="font-size:12px;">KGB Buffet</div>
+        <div style="font-size:11px;color:#555;">Contratada</div>
+      </div>
+    </div>
+  `;
+  wrapper.appendChild(content);
+
+  const opt = {
+    // margens em mm: [topo, esquerda, baixo, direita]
+    margin: [10, 10, 15, 10],
+
+    filename: `contrato-${dadosServidor.eventoId || 'evento'}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      scrollX: 0,
+      scrollY: 0,
+      backgroundColor: '#ffffff'
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: {
+      mode: ['css', 'legacy'] // respeita as regras de CSS acima
+    }
+  };
+
+  // Usa o html2pdf em "modo promessa" pra conseguir o dataURI
+  const worker = window.html2pdf().set(opt).from(wrapper).toPdf();
+
+  worker.get('pdf').then(pdf => {
+    // 1) pega o PDF como dataURI
+    const dataUri = pdf.output('datauristring');
+
+    // 2) salva na lista de documentos do evento (tela de contrato)
+    salvarPdfNoLocalStorage(dataUri, dadosServidor);
+
+    // 3) baixa o arquivo pro usuário normalmente
+    pdf.save(opt.filename);
+  });
+});
+
+  document.addEventListener('DOMContentLoaded', carregarContrato);
+})();
+</script>
+
+
+</body>
+</html>
