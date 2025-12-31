@@ -1,4 +1,3 @@
-import { handleRequest as handleRemote } from './api/remote-adapter.js';
 // clientes-lista.js — robusto: API + fallbacks locais
 import guard from './api/proteger-pagina.js';
 
@@ -10,15 +9,43 @@ const KEY_TIPOS_EVENTO = 'categorias:tiposEvento';
 const api = (endpoint, method = 'GET', body = {}) =>
   new Promise(async (resolve) => {
     const forceLocal = (typeof window !== 'undefined') && window.__FORCE_LOCAL__ === true;
-    const temRemoto  = !forceLocal && (typeof window !== 'undefined') && !!window.__API_BASE__;
-    if (temRemoto) {
+    const hasApiBase = (typeof window !== 'undefined') && (!!window.__API_BASE__ || typeof window.__getApiBase === 'function');
+
+    if (!forceLocal && (window.apiFetch || hasApiBase)) {
       try {
-        await handleRemote(endpoint, { method, body }, resolve);
-        return;
+        // Preferir window.apiFetch (já configura credentials e serializa JSON)
+        if (window.apiFetch) {
+          const path = String(endpoint || '');
+          const payload = await window.apiFetch(path, { method, body });
+          resolve(payload);
+          return;
+        }
+
+        // Se não há apiFetch, construir URL absoluta a partir do API base
+        const base = window.__API_BASE__ || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || (window.location && window.location.origin ? window.location.origin : '');
+        const url = base.replace(/\/+$/, '') + (String(endpoint || '').startsWith('/') ? String(endpoint || '') : '/' + String(endpoint || ''));
+
+        const opts = { method };
+        if (method !== 'GET' && method !== 'HEAD') {
+          opts.headers = { 'Content-Type': 'application/json' };
+          opts.body = body;
+        }
+
+        try {
+          const res = await fetch(url, { ...opts, credentials: 'include' });
+          const ct = res.headers.get('content-type') || '';
+          const data = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
+          resolve(data);
+          return;
+        } catch (e) {
+          console.warn('[API] fetch direto falhou, usando rotas locais:', e);
+        }
       } catch (e) {
-        console.warn('[API] remoto falhou, usando rotas locais:', e);
+        console.warn('[API] erro ao chamar apiFetch, fallback local:', e);
       }
     }
+
+    // Fallback para rotas locais se tudo mais falhar
     handleLocal(endpoint, { method, body }, resolve);
   });
 // FIM PATCH API-LOCAL 2/2
