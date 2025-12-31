@@ -538,20 +538,27 @@ window.__API_BASE__ = base;
       const baseHeaders = (typeof __kgbAuthHeaders === 'function') ? __kgbAuthHeaders() : {};
       const headers = new Headers({ ...baseHeaders, ...(opts.headers || {}) });
 
-      // Se body for objeto (e não FormData) e não houver content-type, serialize como JSON
+      // Se method for GET/HEAD, remover body e não setar Content-Type
+      const method = (opts.method || (opts.body ? 'POST' : 'GET')).toUpperCase();
       let body = opts.body;
-      if (body && typeof body === 'object' && !(body instanceof FormData) && !headers.has('content-type')) {
-        headers.set('content-type', 'application/json');
-        try { body = JSON.stringify(body); } catch {}
+      if (method === 'GET' || method === 'HEAD') {
+        body = undefined;
+        if (headers.has('content-type')) headers.delete('content-type');
+      } else {
+        // Se body for objeto (e não FormData) e não houver content-type, serialize como JSON
+        if (body && typeof body === 'object' && !(body instanceof FormData) && !headers.has('content-type')) {
+          headers.set('content-type', 'application/json');
+          try { body = JSON.stringify(body); } catch {}
+        }
       }
 
       const fetchOpts = {
-        method: opts.method || (body ? 'POST' : 'GET'),
+        method,
         headers,
-        body,
         signal: ctrl.signal,
         credentials: opts.credentials || 'include'
       };
+      if (body !== undefined) fetchOpts.body = body;
 
       const res = await fetch(url, fetchOpts);
       clearTimeout(timer);

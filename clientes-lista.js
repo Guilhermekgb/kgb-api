@@ -11,12 +11,18 @@ const api = (endpoint, method = 'GET', body = {}) =>
     const forceLocal = (typeof window !== 'undefined') && window.__FORCE_LOCAL__ === true;
     const hasApiBase = (typeof window !== 'undefined') && (!!window.__API_BASE__ || typeof window.__getApiBase === 'function');
 
+    // garantir que GET/HEAD não enviem body
+    const m = (method || 'GET').toUpperCase();
+    const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
+
     if (!forceLocal && (window.apiFetch || hasApiBase)) {
       try {
         // Preferir window.apiFetch (já configura credentials e serializa JSON)
         if (window.apiFetch) {
           const path = String(endpoint || '');
-          const payload = await window.apiFetch(path, { method, body });
+          const callOpts = { method: m };
+          if (safeBody !== undefined) callOpts.body = safeBody;
+          const payload = await window.apiFetch(path, callOpts);
           resolve(payload);
           return;
         }
@@ -25,10 +31,10 @@ const api = (endpoint, method = 'GET', body = {}) =>
         const base = window.__API_BASE__ || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || (window.location && window.location.origin ? window.location.origin : '');
         const url = base.replace(/\/+$/, '') + (String(endpoint || '').startsWith('/') ? String(endpoint || '') : '/' + String(endpoint || ''));
 
-        const opts = { method };
-        if (method !== 'GET' && method !== 'HEAD') {
+        const opts = { method: m };
+        if (m !== 'GET' && m !== 'HEAD' && safeBody !== undefined) {
           opts.headers = { 'Content-Type': 'application/json' };
-          opts.body = body;
+          opts.body = safeBody;
         }
 
         try {
@@ -46,7 +52,7 @@ const api = (endpoint, method = 'GET', body = {}) =>
     }
 
     // Fallback para rotas locais se tudo mais falhar
-    handleLocal(endpoint, { method, body }, resolve);
+    handleLocal(endpoint, { method: m, body: safeBody }, resolve);
   });
 // FIM PATCH API-LOCAL 2/2
 

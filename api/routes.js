@@ -1,11 +1,16 @@
 // api/routes.js - compat/shim (same-origin)
 export async function handleRequest(path, opts = {}) {
 	const method = (opts.method || 'GET').toUpperCase();
-	const body = opts.body ?? null;
+	let body = opts.body ?? undefined;
+
+	// evita enviar body em GET/HEAD
+	if (method === 'GET' || method === 'HEAD') body = undefined;
 
 	// usa apiFetch se existir
 	if (typeof window !== 'undefined' && window.apiFetch) {
-		const data = await window.apiFetch(path, { method, body });
+		const callOpts = { method };
+		if (body !== undefined) callOpts.body = body;
+		const data = await window.apiFetch(path, callOpts);
 		return { status: 200, data };
 	}
 
@@ -15,12 +20,12 @@ export async function handleRequest(path, opts = {}) {
 		(window.location?.origin || '');
 
 	const url = String(path).startsWith('http') ? path : (base + path);
-	const r = await fetch(url, {
-		method,
-		credentials: 'include',
-		headers: { 'Content-Type': 'application/json' },
-		body: body ? JSON.stringify(body) : undefined
-	});
+	const fetchOpts = { method, credentials: 'include' };
+	if (body !== undefined) {
+		fetchOpts.headers = { 'Content-Type': 'application/json' };
+		fetchOpts.body = JSON.stringify(body);
+	}
+	const r = await fetch(url, fetchOpts);
 	const txt = await r.text();
 	let data;
 	try { data = JSON.parse(txt); } catch { data = txt; }
