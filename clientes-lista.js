@@ -5,6 +5,8 @@ import { handleRequest as handleLocal } from './api/routes.js';
 
 
 const KEY_TIPOS_EVENTO = 'categorias:tiposEvento';
+// fonte atual dos dados: 'clientes' ou 'leads' (usado para escolher endpoints de delete/put)
+let clientesSource = 'clientes';
 // INÍCIO PATCH API-LOCAL 2/2
 const api = (endpoint, method = 'GET', body = {}) =>
   new Promise(async (resolve) => {
@@ -179,15 +181,22 @@ if (el.hasAttribute('data-edit')) {
 
     if (el.hasAttribute('data-del')) {
       if (!confirm('Deseja realmente excluir este cliente?')) return;
-      const r = await api('/clientes', 'DELETE', { id });
-      if (r.status !== 200) return alert(r.error || 'Erro ao excluir');
+      // escolher endpoint conforme fonte dos dados
+      const base = (clientesSource === 'clientes') ? '/clientes' : '/leads';
+      const endpoint = base + '/' + encodeURIComponent(id);
+      const r = await api(endpoint, 'DELETE');
+      const status = (r && typeof r.status === 'number') ? r.status : (r ? 200 : 500);
+      if (status !== 200) return alert((r && r.error) || 'Erro ao excluir');
       carregarClientes(); return;
     }
     if (el.hasAttribute('data-toggle')) {
       const atual = (el.getAttribute('data-status') || '').toLowerCase();
       const proximo = atual === 'inativo' ? 'ativo' : 'inativo';
-      const r = await api('/clientes', 'PUT', { id, status: proximo });
-      if (r.status !== 200) return alert(r.error || 'Erro ao atualizar status');
+      const base = (clientesSource === 'clientes') ? '/clientes' : '/leads';
+      const endpoint = base + '/' + encodeURIComponent(id);
+      const r = await api(endpoint, 'PUT', { status: proximo });
+      const status = (r && typeof r.status === 'number') ? r.status : (r ? 200 : 500);
+      if (status !== 200) return alert((r && r.error) || 'Erro ao atualizar status');
       carregarClientes(); return;
     }
   });
@@ -280,6 +289,7 @@ async function carregarClientes() {
 
     if (clientesStatus === 200 && (clientesArr && clientesArr.length > 0)) {
       clientesRemotos = clientesArr;
+      clientesSource = 'clientes';
     } else {
       // se /clientes retornou 200 mas vazio, ou não retornou 200, tentar /leads
       try {
@@ -301,6 +311,7 @@ async function carregarClientes() {
           return false;
         });
         console.log('[clientes-lista] filtered from /leads count=', clientesRemotos.length);
+        clientesSource = 'leads';
       } catch (e) {
         console.warn('[clientes] erro ao buscar /leads:', e);
       }
