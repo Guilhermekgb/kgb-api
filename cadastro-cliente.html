@@ -426,11 +426,8 @@ body.no-scroll{
     </main>
   </div>
 
-  <script src="./api/firebase-config.js"></script>
-<script type="module" src="./api/firebase-clientes.js"></script>
-
-<!-- Adapter de API -->
-<script type="module" src="./api/remote-adapter.js"></script>
+  <!-- firebase config removed: not required for same-origin API -->
+  <!-- removed firebase-clientes and remote-adapter to use same-origin apiFetch -->
 <!-- storage-adapter centralizado via kgb-common.js loader -->
 
 <!-- O que já existia -->
