@@ -1345,6 +1345,36 @@ app.put('/leads/:id', requireAuth, (req, res) => {
   }
 });
 
+// DELETE /leads/:id — remove um lead
+app.delete('/leads/:id', requireAuth, (req, res) => {
+  try {
+    const tenantId = String(req.user?.tenantId || 'default');
+    const id = String(req.params.id || '').trim();
+
+    if (!id) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const all = loadJSON(LEADS_FILE, []);
+    const leads = Array.isArray(all) ? all : [];
+
+    const restantes = leads.filter(
+      l => !(String(l.id) === id && String(l.tenantId || 'default') === tenantId)
+    );
+
+    if (restantes.length === leads.length) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    saveJSON(LEADS_FILE, restantes);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /leads/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao remover lead' });
+  }
+});
+
 // GET /leads/metrics → indicadores do funil (usado pelo funil-leads.js)
 app.get('/leads/metrics', requireAuth, (req, res) => {
   try {
