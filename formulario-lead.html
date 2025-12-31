@@ -252,10 +252,12 @@
         origem_referrer: utm.referrer
       };
 
-      const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || '';
-      const url = API_BASE ? API_BASE.replace(/\/+$/, '') + '/leads' : '';
-        const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || '';
-        const url = API_BASE ? API_BASE.replace(/\/+$, '') + '/public/leads' : '';
+      const apiBase =
+        window.__API_BASE__ ||
+        (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') ||
+        (window.location && window.location.origin ? window.location.origin : '');
+      const url = apiBase ? apiBase.replace(/\/+$/, '') + '/public/leads' : '';
+      let criadoNaApi = false;
       if (url) {
         try {
           const resp = await fetch(url, {
