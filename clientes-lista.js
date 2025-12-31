@@ -254,41 +254,60 @@ async function carregarClientes() {
   // 1) Busca na NUVEM: tentar /clientes primeiro; se falhar, cair para /leads
   let clientesRemotos = [];
   try {
-    // tentar /clientes
+    // tentar /clientes primeiro
+    let clientesArr = [];
+    let clientesStatus = null;
     try {
       const r = await api('/clientes', 'GET');
-      // r pode ser um array direto ou um objeto { status, data }
       if (Array.isArray(r)) {
-        clientesRemotos = r;
-      } else if (r && Array.isArray(r.data)) {
-        clientesRemotos = r.data;
+        clientesArr = r; clientesStatus = 200;
+      } else if (r && typeof r.status === 'number' && Array.isArray(r.data)) {
+        clientesArr = r.data; clientesStatus = r.status;
       } else if (r && Array.isArray(r?.data?.data)) {
-        clientesRemotos = r.data.data;
+        clientesArr = r.data.data; clientesStatus = r.status ?? 200;
+      } else {
+        // unknown shape, try to coerce
+        clientesArr = Array.isArray(r) ? r : [];
+        clientesStatus = (r && r.status) || 200;
       }
     } catch (errClientes) {
-      console.warn('[clientes] /clientes failed, falling back to /leads:', errClientes);
-      // tentar /leads
-      const r2 = await api('/leads', 'GET');
-      let arr = [];
-      if (Array.isArray(r2)) arr = r2;
-      else if (r2 && Array.isArray(r2.data)) arr = r2.data;
-      else if (r2 && Array.isArray(r2?.data?.data)) arr = r2.data.data;
+      console.warn('[clientes] /clientes request failed:', errClientes);
+      clientesStatus = errClientes?.status || null;
+      clientesArr = [];
+    }
 
-      // filtrar apenas registros marcados como cliente
-      clientesRemotos = (arr || []).filter(c => {
-        try {
-          if (c && c.isCliente === true) return true;
-          // fallback heurístico: considera cliente se tiver cpf/rg/email/tipoPessoa
-          if (c && (c.cpf || c.rg || c.email || c.tipoPessoa || c.tipoCliente || c.tipo_cliente)) return true;
-        } catch {}
-        return false;
-      });
+    console.log('[clientes-lista] /clientes status=', clientesStatus, 'count=', (clientesArr||[]).length);
+
+    if (clientesStatus === 200 && (clientesArr && clientesArr.length > 0)) {
+      clientesRemotos = clientesArr;
+    } else {
+      // se /clientes retornou 200 mas vazio, ou não retornou 200, tentar /leads
+      try {
+        const r2 = await api('/leads', 'GET');
+        let arr = [];
+        if (Array.isArray(r2)) arr = r2;
+        else if (r2 && Array.isArray(r2.data)) arr = r2.data;
+        else if (r2 && Array.isArray(r2?.data?.data)) arr = r2.data.data;
+
+        console.log('[clientes-lista] /leads status assumed; count=', (arr||[]).length);
+
+        // filtrar apenas registros marcados como cliente
+        clientesRemotos = (arr || []).filter(c => {
+          try {
+            if (c && c.isCliente === true) return true;
+            // fallback heurístico: considera cliente se tiver cpf/rg/email/tipoPessoa
+            if (c && (c.cpf || c.rg || c.email || c.tipoPessoa || c.tipoCliente || c.tipo_cliente)) return true;
+          } catch {}
+          return false;
+        });
+        console.log('[clientes-lista] filtered from /leads count=', clientesRemotos.length);
+      } catch (e) {
+        console.warn('[clientes] erro ao buscar /leads:', e);
+      }
     }
   } catch (e) {
     console.warn('[clientes] erro ao buscar clientes na nuvem:', e);
   }
-
-  console.log('[clientes-lista] clientesRemotos count', (clientesRemotos || []).length);
 
 // clientes locais (fallbacks variados)
 const clientesLocais = lerClientesLocalPorChaves() || scanLocalStoragePorClientes() || [];
