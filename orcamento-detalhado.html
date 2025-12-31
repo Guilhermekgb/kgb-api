@@ -22,7 +22,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // não gravar automaticamente em localStorage; manter apenas em runtime
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
