@@ -251,14 +251,44 @@ async function carregarClientes() {
 
   lista.innerHTML = 'Carregando...';
 
- // 1) Busca na NUVEM (via API /leads)
-let clientesRemotos = [];
-try {
-  const r = await api('/leads', 'GET', {});
-  if (r && r.status === 200 && Array.isArray(r.data)) clientesRemotos = r.data;
-} catch (e) {
-  console.warn('[clientes] erro ao buscar /leads:', e);
-}
+  // 1) Busca na NUVEM: tentar /clientes primeiro; se falhar, cair para /leads
+  let clientesRemotos = [];
+  try {
+    // tentar /clientes
+    try {
+      const r = await api('/clientes', 'GET');
+      // r pode ser um array direto ou um objeto { status, data }
+      if (Array.isArray(r)) {
+        clientesRemotos = r;
+      } else if (r && Array.isArray(r.data)) {
+        clientesRemotos = r.data;
+      } else if (r && Array.isArray(r?.data?.data)) {
+        clientesRemotos = r.data.data;
+      }
+    } catch (errClientes) {
+      console.warn('[clientes] /clientes failed, falling back to /leads:', errClientes);
+      // tentar /leads
+      const r2 = await api('/leads', 'GET');
+      let arr = [];
+      if (Array.isArray(r2)) arr = r2;
+      else if (r2 && Array.isArray(r2.data)) arr = r2.data;
+      else if (r2 && Array.isArray(r2?.data?.data)) arr = r2.data.data;
+
+      // filtrar apenas registros marcados como cliente
+      clientesRemotos = (arr || []).filter(c => {
+        try {
+          if (c && c.isCliente === true) return true;
+          // fallback heurístico: considera cliente se tiver cpf/rg/email/tipoPessoa
+          if (c && (c.cpf || c.rg || c.email || c.tipoPessoa || c.tipoCliente || c.tipo_cliente)) return true;
+        } catch {}
+        return false;
+      });
+    }
+  } catch (e) {
+    console.warn('[clientes] erro ao buscar clientes na nuvem:', e);
+  }
+
+  console.log('[clientes-lista] clientesRemotos count', (clientesRemotos || []).length);
 
 // clientes locais (fallbacks variados)
 const clientesLocais = lerClientesLocalPorChaves() || scanLocalStoragePorClientes() || [];

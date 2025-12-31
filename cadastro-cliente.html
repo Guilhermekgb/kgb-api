@@ -445,6 +445,7 @@ body.no-scroll{
 
   <!-- Scripts da página (seu JS original – inalterado) -->
   <script type="module">
+    console.log('[cadastro-cliente] submit existe?', typeof window.__submitCliente);
     /* =================== HELPERS =================== */
     function mascaraCPF(v){ return String(v||'').replace(/\D/g,'').slice(0,11)
       .replace(/^(\d{3})(\d)/,'$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3')
@@ -593,11 +594,23 @@ body.no-scroll{
       const api = (endpoint, method = 'GET', body = {}) => {
         const headers = auth();
 
-        // Tenta usar o backend REAL (Render) primeiro
-        if (!forceLocal && temRemoto && typeof window.handleRequest === 'function') {
-          return new Promise((resolve) => {
-            window.handleRequest(endpoint, { method, body, headers }, resolve);
-          });
+        // Preferir window.apiFetch (same-origin + credentials)
+        if (!forceLocal && typeof window !== 'undefined') {
+          if (window.apiFetch) {
+            const m = (method || 'GET').toUpperCase();
+            const callOpts = { method: m };
+            if (m !== 'GET' && m !== 'HEAD') callOpts.body = body;
+            return window.apiFetch(String(endpoint || ''), callOpts)
+              .then(data => ({ status: 200, data }))
+              .catch(err => { console.warn('[cadastro-cliente] apiFetch failed', err); throw err; });
+          }
+
+          // then try window.handleRequest if provided
+          if (!forceLocal && temRemoto && typeof window.handleRequest === 'function') {
+            return new Promise((resolve) => {
+              window.handleRequest(endpoint, { method, body, headers }, resolve);
+            });
+          }
         }
 
         // Fallback: mini-API local em cima do localStorage (apenas este navegador)
@@ -722,6 +735,7 @@ body.no-scroll{
       }
 
       async function onSubmitCliente(e){
+        console.log('[cadastro-cliente] clicou salvar');
         e?.preventDefault();
 
         const form = document.getElementById('formCliente');
@@ -758,12 +772,14 @@ body.no-scroll{
           cep: val('#cep'), numero: val('#numero'), rua: val('#rua'),
           bairro: val('#bairro'), cidade: val('#cidade'), estado: val('#estado'),
           relacao2: val('#relacao2'), obsRelacao2: val('#obsRelacao2'), whatsRelacao2: val('#whatsRelacao2'),
-          documentos, tipoPessoa, cnpj, cpfCnpj: (tipoPessoa === 'pj') ? cnpj : cpf
+          documentos, tipoPessoa, cnpj, cpfCnpj: (tipoPessoa === 'pj') ? cnpj : cpf,
+          isCliente: true
         };
 
      // Salva via API /leads (cria ou atualiza). Se falhar, usa fallback local (payload).
       let rdata = null;
       try {
+        console.log('[cadastro-cliente] payload', payload);
         if (editId) {
           const res = await api('/leads/' + encodeURIComponent(editId), 'PUT', payload);
           rdata = (res && (res.data || res.lead)) ? (res.data || res.lead) : null;
@@ -771,8 +787,8 @@ body.no-scroll{
           const res = await api('/leads', 'POST', payload);
           rdata = (res && (res.data || res.lead)) ? (res.data || res.lead) : null;
         }
-      } catch (e) {
-        console.warn('[Cadastro Cliente] falha ao salvar em /leads:', e);
+      } catch (err) {
+        console.error('[cadastro-cliente] erro ao salvar', err);
       }
 
       const novoCliente = {
@@ -825,6 +841,7 @@ body.no-scroll{
 
       window.__submitCliente = onSubmitCliente;
       document.getElementById('btnSalvarCliente')?.addEventListener('click', onSubmitCliente);
+      console.log('[cadastro-cliente] submit assigned', typeof window.__submitCliente);
     }
 
 
