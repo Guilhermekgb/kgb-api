@@ -1069,11 +1069,35 @@ app.delete('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, re
   app.post('/fotosClientes', express.json({ limit: '5mb' }), requireAuth, (req, res) => {
     try {
       const body = req.body || {};
-      saveJSON(FOTOS_FILE, body || {});
-      return res.status(201).json({ ok: true, data: body });
+      if (!body || Object.keys(body).length === 0) {
+        return res.status(400).json({ ok: false, error: 'payload vazio' });
+      }
+      // Fazer merge para manter compatibilidade com PUT (append/overwrite)
+      const all = loadJSON(FOTOS_FILE, {});
+      const merged = { ...all, ...body };
+      saveJSON(FOTOS_FILE, merged);
+      return res.status(201).json({ ok: true, data: merged });
     } catch (e) {
       console.error('[POST /fotosClientes] erro:', e);
       return res.status(500).json({ ok: false, error: 'Erro ao salvar fotos' });
+    }
+  });
+
+  // PUT /fotosClientes — merge/atualiza chaves enviadas no mapa existente
+  app.put('/fotosClientes', express.json({ limit: '5mb' }), requireAuth, (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body || Object.keys(body).length === 0) {
+        return res.status(400).json({ ok: false, error: 'payload vazio' });
+      }
+      const all = loadJSON(FOTOS_FILE, {});
+      // sobrescreve as chaves enviadas, mantém as demais
+      const merged = { ...all, ...body };
+      saveJSON(FOTOS_FILE, merged);
+      return res.json({ ok: true, data: merged });
+    } catch (e) {
+      console.error('[PUT /fotosClientes] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao atualizar fotos' });
     }
   });
 
