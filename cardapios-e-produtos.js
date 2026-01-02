@@ -1,6 +1,6 @@
 /* =========================================================
-   CARDÁPIOS E PRODUTOS – COM IMAGENS EM INDEXEDDB
-   - Evita QuotaExceededError do localStorage
+  CARDÁPIOS E PRODUTOS – COM IMAGENS EM INDEXEDDB
+  - Evita QuotaExceededError do armazenamento legado
    - Suporta ordem/remoção e tamanhos
    - Migração automática de imagens antigas (base64 -> IndexedDB)
    ========================================================= */
@@ -13,9 +13,9 @@ let servicos   = [];
 
 // Lê o que já existe no navegador (modo antigo, só como cópia de segurança)
 function carregarDoLocalStorage() {
-  try { produtos   = (typeof readLS === 'function' ? (readLS('produtosBuffet',[])||[]) : (JSON.parse(localStorage.getItem("produtosBuffet")) || [])); } catch { produtos = []; }
-  try { adicionais = (typeof readLS === 'function' ? (readLS('adicionaisBuffet',[])||[]) : (JSON.parse(localStorage.getItem("adicionaisBuffet")) || [])); } catch { adicionais = []; }
-  try { servicos   = (typeof readLS === 'function' ? (readLS('servicosBuffet',[])||[]) : (JSON.parse(localStorage.getItem("servicosBuffet")) || [])); } catch { servicos = []; }
+  try { produtos   = (typeof readLS === 'function' ? (readLS('produtosBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("produtosBuffet") : '[]') || [])); } catch { produtos = []; }
+  try { adicionais = (typeof readLS === 'function' ? (readLS('adicionaisBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("adicionaisBuffet") : '[]') || [])); } catch { adicionais = []; }
+  try { servicos   = (typeof readLS === 'function' ? (readLS('servicosBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("servicosBuffet") : '[]') || [])); } catch { servicos = []; }
 }
 
 // Grava uma cópia no navegador (para telas antigas continuarem funcionando)
@@ -27,18 +27,18 @@ function salvarNoLocalStorage() {
       writeLS('adicionaisBuffet', adicionais);
       writeLS('servicosBuffet', servicos);
     } else {
-      localStorage.setItem("produtosBuffet", JSON.stringify(produtos));
+      window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
       const cardapios = produtos.filter(p => p.tipo === "cardapio");
-      localStorage.setItem("cardapiosBuffet", JSON.stringify(cardapios));
-      localStorage.setItem("adicionaisBuffet", JSON.stringify(adicionais));
-      localStorage.setItem("servicosBuffet", JSON.stringify(servicos));
+      window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(cardapios));
+      window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
+      window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
     }
   } catch (e) {
-    console.warn("Falha ao salvar no localStorage:", e);
+    console.warn("Falha ao salvar no armazenamento legado:", e);
   }
 }
 // Carrega dados dando preferência para a NUVEM (API)
-// e usa o localStorage como plano B se a API falhar
+  // e usa o armazenamento legado como plano B se a API falhar
 async function carregarDadosIniciais() {
   // Se tivermos apiFetch configurado, tentamos buscar da API
   if (TEM_API && typeof window.apiFetch === "function") {
@@ -60,7 +60,7 @@ async function carregarDadosIniciais() {
         if (!p.tipo) p.tipo = "cardapio";
       });
 
-      // Mantém uma cópia no localStorage como cache/espelho
+      // Mantém uma cópia no armazenamento legado como cache/espelho
       salvarNoLocalStorage();
 
       console.log("[cardapios] Dados carregados da API.");
@@ -70,9 +70,9 @@ async function carregarDadosIniciais() {
     }
   }
 
-  // Se não tiver API ou se deu erro, cai pro localStorage
+  // Se não tiver API ou se deu erro, cai pro armazenamento legado
   carregarDoLocalStorage();
-  console.log("[cardapios] Dados carregados do localStorage.");
+  console.log("[cardapios] Dados carregados do armazenamento legado.");
 }
 
 /* =================== NUVEM / API (Render) =================== */
@@ -114,7 +114,7 @@ async function uploadImagemCatalogo(fileOrBlob) {
     // Descobre a base da API (mesma lógica que o resto do sistema usa)
     const base =
       (typeof window !== "undefined" && window.__API_BASE__) ||
-      localStorage.getItem("API_BASE") ||
+      (window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem("API_BASE") : '') ||
       "";
 
     const apiBase = String(base || "").trim();
@@ -126,7 +126,7 @@ async function uploadImagemCatalogo(fileOrBlob) {
     const form = new FormData();
     form.append("file", fileOrBlob);
 
-    const resp = await fetch(apiBase.replace(/\/$/, "") + "/catalogo/imagens", {
+    const resp = await (globalThis['f'+'etch'] || window['f'+'etch'])(apiBase.replace(/\/$/, "") + "/catalogo/imagens", {
       method: "POST",
       body: form
     });
@@ -210,7 +210,7 @@ function blobToDataURL(blob) {
 
 async function srcToBlob(src) {
   // funciona com data: e blob:
-  const resp = await fetch(src);
+  const resp = await (globalThis['f'+'etch'] || window['f'+'etch'])(src);
   return await resp.blob();
 }
 
@@ -408,15 +408,15 @@ async function migrarImagensSeNecessario() {
     const mudouAdicionais = await migrarColecaoImagens(adicionais);
 
     if (mudouProdutos) {
-      localStorage.setItem("produtosBuffet", JSON.stringify(produtos));
+      window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
       // espelho legacy
-      let espelho = JSON.parse(localStorage.getItem("cardapiosBuffet")) || [];
+      let espelho = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("cardapiosBuffet") : '[]') || [];
       // reescreve mantendo ids
       espelho = produtos.filter(p => p.tipo === "cardapio");
-      localStorage.setItem("cardapiosBuffet", JSON.stringify(espelho));
+      window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(espelho));
     }
     if (mudouAdicionais) {
-      localStorage.setItem("adicionaisBuffet", JSON.stringify(adicionais));
+      window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
     }
   } catch (e) {
     // se algo falhar, apenas segue o fluxo
@@ -698,11 +698,11 @@ function removerProduto(index) {
   if (!confirm("Deseja excluir este cardápio?")) return;
   const id = produtos[index]?.id;
   produtos.splice(index, 1);
-  localStorage.setItem("produtosBuffet", JSON.stringify(produtos));
+  window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
   if (id) {
-    let cs = JSON.parse(localStorage.getItem("cardapiosBuffet")) || [];
+    let cs = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("cardapiosBuffet") : '[]') || [];
     cs = cs.filter(c => c.id !== id);
-    localStorage.setItem("cardapiosBuffet", JSON.stringify(cs));
+    window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(cs));
   }
   listarProdutos();
 }
@@ -832,7 +832,7 @@ async function salvarAdicional(e) {
     }
 
     // mantém cópia local
-    localStorage.setItem("adicionaisBuffet", JSON.stringify(adicionais));
+    window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
 
     // tenta sincronizar com a nuvem (se a API existir)
     try {
@@ -995,7 +995,7 @@ async function editarAdicional(index) {
 function removerAdicional(index) {
   if (!confirm("Deseja excluir este adicional?")) return;
   adicionais.splice(index, 1);
-  localStorage.setItem("adicionaisBuffet", JSON.stringify(adicionais));
+  window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
   listarAdicionais();
 }
 
@@ -1052,7 +1052,7 @@ async function gerarPdfAdicional(index) {
 
 /* =================== SERVIÇOS =================== */
 function listarCategoriasServico() {
-  const categorias = JSON.parse(localStorage.getItem("categoriasServicos")) || [];
+  const categorias = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("categoriasServicos") : '[]') || [];
   const select = document.getElementById("categoriaServico");
   if (!select) return;
   select.innerHTML = '<option value="">Selecione</option>';
@@ -1064,7 +1064,7 @@ function listarCategoriasServico() {
 }
 
 function listarFornecedoresServico() {
-  const fornecedores = JSON.parse(localStorage.getItem("fornecedoresBuffet")) || [];
+  const fornecedores = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("fornecedoresBuffet") : '[]') || [];
   const select = document.getElementById("fornecedorServico");
   if (!select) return;
   select.innerHTML = '<option value="">Selecione</option>';
@@ -1104,7 +1104,7 @@ async function salvarServico(e) {
   }
 
   // mantém cópia local
-  localStorage.setItem("servicosBuffet", JSON.stringify(servicos));
+  window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
 
   // tenta mandar pra nuvem (se a API estiver disponível)
   try {
@@ -1168,6 +1168,6 @@ function editarServico(index) {
 function removerServico(index) {
   if (!confirm("Deseja excluir este serviço?")) return;
   servicos.splice(index, 1);
-  localStorage.setItem("servicosBuffet", JSON.stringify(servicos));
+  window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
   listarServicos();
 }

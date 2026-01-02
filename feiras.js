@@ -3,8 +3,26 @@
   // ---------- Helpers ----------
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
-  const read = (k, fb=null) => { try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{ return fb; } };
-  const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  // memStore + sync (Phase 1)
+  window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+  const mem = window.__MEM_CACHE__;
+  let __BC__ = null;
+  try { __BC__ = new BroadcastChannel('kgb-ui-sync'); } catch(e){ __BC__ = null; }
+  function sendSync(key, value){ try{ if(__BC__) __BC__.postMessage({ key, value }); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value } })); }catch(e){} }
+  function onSync(handler){ if(__BC__){ __BC__.onmessage = (ev)=>{ try{ handler(ev.data); }catch{} }; } else { window.addEventListener('kgb-ui-sync', (ev)=>{ try{ handler(ev.detail); }catch{} }); } }
+
+  const getJSON = (k, fb)=>{ try{ return (mem[k]===undefined?fb:mem[k]); }catch{return fb;} };
+  const setJSON = (k, v)=>{ try{ mem[k]=v; sendSync(k,v); }catch{} };
+
+  // API wrappers — use window['apiFetch'] for real I/O when available
+  const apiGet = (u)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'GET' }); return Promise.reject(new Error('no apiFetch')); };
+  const apiPost = (u,b)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'POST', body: JSON.stringify(b), headers:{ 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); };
+  const apiPut = (u,b)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'PUT', body: JSON.stringify(b), headers:{ 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); };
+
+  function isPortalMode(){ try{ const qp = new URLSearchParams(location.search); return !!(qp.get('token') || qp.get('portal') || window.__PORTAL__); }catch(e){ return !!window.__PORTAL__; } }
+
+  const read = (k, fb=null) => { try{ if (isPortalMode()) return getJSON(k, fb); return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{ return fb; } };
+  const write = (k, v) => { try{ setJSON(k, v); }catch{}; try{ if (!isPortalMode()) localStorage.setItem(k, JSON.stringify(v)); }catch{} };
   const uid = (p='id_') => (crypto.randomUUID?.() || (p + Math.random().toString(36).slice(2,10)));
   const soDig = (s='') => String(s).replace(/\D+/g,'');
   const norm  = (s) => String(s||'').trim().toLowerCase();
@@ -16,7 +34,12 @@ function getUsuarioLogado(){
       if (u) return u;
     }
     if (window.__KGB_USER_CACHE) return window.__KGB_USER_CACHE;
-    return JSON.parse(localStorage.getItem('usuarioLogado') || sessionStorage.getItem('usuarioLogado') || '{}');
+    // prefer memStore in portal; fall back to local/session for legacy
+    try{
+      const v = isPortalMode() ? getJSON('usuarioLogado', null) : null;
+      if (v) return v;
+    }catch{}
+    return JSON.parse(localStorage.getItem('usuarioLogado') || '{}');
   }catch{ return {}; }
 }
 function getPerfil(){
@@ -47,7 +70,11 @@ function canVerLeads(){
         if (u) return u;
       }
       if (window.__KGB_USER_CACHE) return window.__KGB_USER_CACHE;
-      return JSON.parse(localStorage.getItem("usuarioLogado") || sessionStorage.getItem("usuarioLogado") || "{}") || {};
+      try{
+        const v = isPortalMode() ? getJSON('usuarioLogado', null) : null;
+        if (v) return v;
+      }catch{}
+      return JSON.parse(localStorage.getItem("usuarioLogado") || "{}") || {};
     }catch{ return {}; }
   }
   function isAdmin(u){
@@ -64,12 +91,37 @@ function canVerLeads(){
   const KEY_LEADS      = 'leads';
   const KEY_EVENTOS    = 'eventos';
 
+  // Phase 2 loaders: try to fetch canonical data from server and cache in memStore
+  async function loadFeirasFromServer(){
+    if(!isPortalMode()) return;
+    try{
+      const r = await apiGet('/feiras');
+      if(r && r.ok && Array.isArray(r.data)) setJSON(KEY_FEIRAS, r.data);
+    }catch(e){ console.warn('[feiras] loadFeirasFromServer failed', e); }
+  }
+  async function loadFeiraLeadsFromServer(){
+    if(!isPortalMode()) return;
+    try{
+      const r = await apiGet('/feiraLeads');
+      if(r && r.ok && Array.isArray(r.data)) setJSON(KEY_FEIRA_LEAD, r.data);
+    }catch(e){ console.warn('[feiras] loadFeiraLeadsFromServer failed', e); }
+  }
+  async function loadLeadsFromServer(){
+    if(!isPortalMode()) return;
+    try{
+      const r = await apiGet('/leads');
+      if(r && r.ok && Array.isArray(r.data)) setJSON(KEY_LEADS, r.data);
+    }catch(e){ console.warn('[feiras] loadLeadsFromServer failed', e); }
+  }
+
   // ---------- Boot ----------
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     window.lucide?.createIcons?.();
     bindTopbar();
     bindFormCaptura();
     bindDialogs();
+    // Phase 2: preload canonical data from server when running in portal mode
+    await Promise.all([loadFeirasFromServer(), loadFeiraLeadsFromServer(), loadLeadsFromServer()]);
     popularFeiras();
     popularVendedoresFiltro();
     renderTabela();
@@ -106,7 +158,7 @@ function canVerLeads(){
       .map(f => `<option value="${f.id}">${escapeHtml(f.nome)}${f.dataFeira?` — ${formatBR(f.dataFeira)}`:''}</option>`)
       .join('');
 
-    const last = localStorage.getItem('feiraSelecionada') || '';
+    const last = read('feiraSelecionada', '');
     if(last && arr.some(f=>String(f.id)===String(last))) sel.value = last;
 
     renderInfoFeira();
@@ -144,6 +196,20 @@ function renderInfoFeira(){
       const feira = { id: uid('fx_'), nome, dataFeira: data || '', criadoEm: new Date().toISOString(), criadoPor: vendedorId(u) };
       const arr = read(KEY_FEIRAS, []);
       arr.push(feira); write(KEY_FEIRAS, arr);
+
+      // Phase 2: persist feira to server when in portal mode
+      if (isPortalMode()){
+        (async ()=>{
+          try{
+            const resp = await apiPost('/feiras', feira);
+            if(resp && resp.ok && resp.data){
+              const cur = getJSON(KEY_FEIRAS, []);
+              const updated = Array.isArray(cur) ? cur.map(x => String(x.id)===String(resp.data.id) ? resp.data : x) : cur;
+              setJSON(KEY_FEIRAS, updated);
+            }
+          }catch(e){ console.warn('[feiras] failed saving feira to server', e); }
+        })();
+      }
       $('#dlgFeira')?.close();
       popularFeiras();
       const sel = $('#selFeira');
@@ -179,7 +245,7 @@ function renderInfoFeira(){
     });
 
     // Submit
-    $('#formCaptura')?.addEventListener('submit', (ev) => {
+    $('#formCaptura')?.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const feira = getFeiraSelecionada();
       if(!feira){ alert('Selecione uma feira no topo antes de captar.'); return; }
@@ -224,6 +290,20 @@ function renderInfoFeira(){
       });
       write(KEY_FEIRA_LEAD, arr);
 
+      // Phase 2: attempt to persist feiraLead to server (portal mode)
+      if (isPortalMode()){
+        (async ()=>{
+          try{
+            const saved = await apiPost('/feiraLeads', arr[arr.length-1]);
+            if(saved && saved.ok && saved.data){
+              const cur = getJSON(KEY_FEIRA_LEAD, []);
+              const updated = Array.isArray(cur) ? cur.map(x => (String(x.id)===String(saved.data.id) ? saved.data : x)) : cur;
+              setJSON(KEY_FEIRA_LEAD, updated);
+            }
+          }catch(e){ console.warn('[feiras] failed saving feiraLead to server', e); }
+        })();
+      }
+
       // 2) FUNIL
       const leadId = upsertLeadFunil({
         nome, telefone: tel, dataEvento: data, tipoEvento: tipo, qtd,
@@ -237,8 +317,26 @@ function renderInfoFeira(){
       const idx = arr2.findIndex(x => x.id === idLeadFeira);
       if(idx > -1){ arr2[idx].leadIdNoFunil = leadId; write(KEY_FEIRA_LEAD, arr2); }
 
-      localStorage.setItem('funil_focus_lead', leadId);
-localStorage.setItem('funil_reset_filters', '1');
+      write('funil_focus_lead', leadId);
+      write('funil_reset_filters', '1');
+
+      // Phase 2: attempt to persist lead to server (portal mode)
+      if (isPortalMode()){
+        (async ()=>{
+          try{
+            const leadsLocal = getJSON(KEY_LEADS, []);
+            const savedLocal = Array.isArray(leadsLocal) ? leadsLocal.find(l => String(l.id)===String(leadId)) : null;
+            if(savedLocal){
+              const saved = await apiPost('/leads', savedLocal);
+              if(saved && saved.ok && saved.data){
+                const cur = getJSON(KEY_LEADS, []);
+                const updated = Array.isArray(cur) ? cur.map(x=> String(x.id)===String(saved.data.id) ? saved.data : x) : cur;
+                setJSON(KEY_LEADS, updated);
+              }
+            }
+          }catch(e){ console.warn('[feiras] failed saving lead to server', e); }
+        })();
+      }
       // limpar UI
       $('#formCaptura')?.reset();
       if (vendInput) vendInput.value = vendedorDisplayAuto;

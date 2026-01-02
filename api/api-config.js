@@ -4,18 +4,13 @@
   try {
     // If user has manually saved an API_BASE (via set-api.html), respect it.
     // Otherwise do not force an API base here — runtime code should fall back to same-origin.
-    var saved = null;
-    try { saved = localStorage.getItem('API_BASE'); } catch (e) { saved = null; }
-    if (saved) {
-      try {
-        Object.defineProperty(window, '__API_BASE__', { value: saved, writable: false, configurable: false, enumerable: true });
-      } catch (e) {
-        window.__API_BASE__ = saved;
-      }
+    // Não ler/gravar em localStorage neste arquivo de infra.
+    // Se a aplicação já definiu `window.__API_BASE__`, apenas logamos; caso contrário deixamos o runtime decidir.
+    if (typeof window !== 'undefined' && window.__API_BASE__) {
+      try { Object.defineProperty(window, '__API_BASE__', { value: window.__API_BASE__, writable: false, configurable: false, enumerable: true }); } catch(e){ /* ignore */ }
       console.log('[KGB] api-config loaded, __API_BASE__ =', window.__API_BASE__);
     } else {
-      // No saved API_BASE — leave runtime to use window.location.origin when needed.
-      console.log('[KGB] api-config loaded, no saved API_BASE; using same-origin at runtime');
+      console.log('[KGB] api-config loaded, no explicit __API_BASE__; using same-origin at runtime');
     }
   } catch(e) {
     console.error('[KGB] erro ao carregar api-config.js', e);

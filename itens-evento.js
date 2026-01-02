@@ -2,19 +2,18 @@
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
 function callApi(endpoint, method = 'GET', body = {}) {
-  return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
-  );
+  if (!window.apiFetch) throw new Error('window.apiFetch não encontrado');
+  return window.apiFetch(endpoint, { method, body });
 }
 
-// Carrega um evento do backend (com fallback para o localStorage)
+// Carrega um evento do backend (com fallback para a memória local runtime)
 async function carregarEventoDoBackend(evId) {
   if (!evId) return null;
 
   if (!IS_REMOTE) {
-    // modo antigo: só local
+    // modo antigo: só memória
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON("eventos", []);
       return eventos.find(e => String(e.id) === String(evId)) || null;
     } catch {
       return null;
@@ -25,19 +24,19 @@ async function carregarEventoDoBackend(evId) {
     const resp = await callApi(`/eventos/${encodeURIComponent(evId)}`, 'GET', {});
     const evento = resp?.data || resp;
 
-    // Atualiza cache local
+    // Atualiza cache em memória
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON("eventos", []);
       const idx = eventos.findIndex(e => String(e.id) === String(evento.id));
       if (idx > -1) eventos[idx] = evento; else eventos.push(evento);
-      localStorage.setItem("eventos", JSON.stringify(eventos));
+      memSetJSON("eventos", eventos);
     } catch {}
 
     return evento;
   } catch (err) {
     console.warn('[itens-evento] Falha ao carregar evento da API, usando cache local', err);
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON("eventos", []);
       return eventos.find(e => String(e.id) === String(evId)) || null;
     } catch {
       return null;
@@ -51,10 +50,10 @@ async function salvarEventoNoBackend(evAtualizado) {
 
   // 1) Atualiza cache local primeiro
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     const idx = eventos.findIndex(e => String(e.id) === String(evAtualizado.id));
     if (idx > -1) eventos[idx] = evAtualizado; else eventos.push(evAtualizado);
-    localStorage.setItem("eventos", JSON.stringify(eventos));
+    memSetJSON("eventos", eventos);
   } catch {}
 
   // 2) Se não tiver API, para por aqui mesmo
@@ -69,10 +68,10 @@ async function salvarEventoNoBackend(evAtualizado) {
 
     // reforça cache com o que veio da API
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON("eventos", []);
       const idx = eventos.findIndex(e => String(e.id) === String(fromApi.id));
       if (idx > -1) eventos[idx] = fromApi; else eventos.push(fromApi);
-      localStorage.setItem("eventos", JSON.stringify(eventos));
+      memSetJSON("eventos", eventos);
     } catch {}
 
     return fromApi;
@@ -102,7 +101,7 @@ function _ie_normalizarItem(it, categoriaPadrao, cobrancaPadrao){
 
 async function salvarSelecaoItensEvento(){
   const usp = new URLSearchParams(location.search);
-  const eid = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (usp.get("id") || localStorage.getItem("eventoSelecionado") || "");
+  const eid = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (usp.get("id") || memGet("eventoSelecionado") || "");
 
   // 1) Coletar itens diretamente da UI (checkboxes marcados)
   const marcados = Array.from(document.querySelectorAll("input[type='checkbox'][data-key]:checked"));
@@ -131,24 +130,24 @@ async function salvarSelecaoItensEvento(){
   try {
     if (itens.length === 0) {
       if (eid) {
-        const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+        const eventos = memGetJSON("eventos", []);
         const ev = eventos.find(e => String(e.id) === String(eid));
         if (ev?.itensSelecionados?.length) itens = ev.itensSelecionados.slice();
       }
       if (!itens.length) {
-        const temp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+        const temp = memGetJSON("eventoTemp", {});
         if (temp?.itensSelecionados?.length) itens = temp.itensSelecionados.slice();
       }
     }
   } catch {}
 
   // 3) Ponte (para o cadastro ler na volta) — NÃO limpar aqui
-  try { localStorage.setItem("itensSelecionadosEvento", JSON.stringify(itens)); } catch {}
+  try { memSetJSON("itensSelecionadosEvento", itens); } catch {}
 
   // 4) Convidados (input -> LS)
   const qtdInput = document.getElementById("quantidadeConvidados")?.value ?? "";
-  const qtdStr   = qtdInput !== "" ? String(qtdInput) : (localStorage.getItem("quantidadeConvidadosEvento") || "");
-  if (qtdStr !== "") { try { localStorage.setItem("quantidadeConvidadosEvento", qtdStr); } catch {} }
+  const qtdStr   = qtdInput !== "" ? String(qtdInput) : (memGet("quantidadeConvidadosEvento") || "");
+  if (qtdStr !== "") { try { memSet("quantidadeConvidadosEvento", qtdStr); } catch {} }
   const qtd = Number(qtdStr) || 0;
 
   // 5) Persistir seleção no evento (nuvem ou rascunho)
@@ -157,8 +156,8 @@ async function salvarSelecaoItensEvento(){
       // Evento já existe -> salva dentro do próprio evento
       let ev = await carregarEventoDoBackend(eid);
       if (!ev) {
-        // fallback: tenta pegar só do localStorage
-        const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+        // fallback: tenta pegar só da memória
+        const eventos = memGetJSON("eventos", []);
         ev = eventos.find(e => String(e.id) === String(eid)) || null;
       }
 
@@ -175,13 +174,13 @@ async function salvarSelecaoItensEvento(){
       }
     } else {
       // ainda não tem evento criado -> mantém somente no rascunho (eventoTemp)
-      const temp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+      const temp = memGetJSON("eventoTemp", {});
       temp.itensSelecionados = itens;
       if (qtd > 0) {
         temp.quantidadeConvidados = qtd;
-        temp.qtdConvidados = qtd;
+        temp.qtdConvidos = qtd;
       }
-      localStorage.setItem("eventoTemp", JSON.stringify(temp));
+      memSetJSON("eventoTemp", temp);
     }
   } catch (err) {
     console.warn("[itens-evento] Erro ao salvar itens do evento", err);
@@ -190,7 +189,7 @@ async function salvarSelecaoItensEvento(){
 
   // 6) Voltar para a tela correta
   const qsFrom = usp.get("from") || usp.get("origem");
-  let memFrom = ""; try { memFrom = localStorage.getItem("itensEvento:returnTo") || ""; } catch {}
+  let memFrom = ""; try { memFrom = memGet("itensEvento:returnTo") || ""; } catch {}
   const ref = document.referrer || "";
   const veioDoDetalhado = (qsFrom && /detalhado/i.test(qsFrom))
     || /evento-detalhado\.html/i.test(ref)
@@ -200,7 +199,7 @@ async function salvarSelecaoItensEvento(){
     ? `evento-detalhado.html?id=${encodeURIComponent(eid)}`
     : `cadastro-evento.html?id=${encodeURIComponent(eid)}`;
 
-  try { localStorage.removeItem("itensEvento:returnTo"); } catch {}
+  try { memRemove("itensEvento:returnTo"); } catch {}
   // ⚠️ NÃO remover "itensSelecionadosEvento" aqui — o cadastro lê na volta
   window.location.href = back;
 }
@@ -269,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 (function hydrateSelecionadosFromEvento(){
   const usp = new URLSearchParams(location.search);
-  const eid = usp.get("id") || localStorage.getItem("eventoSelecionado") || "";
+  const eid = usp.get("id") || memGet("eventoSelecionado") || "";
   if (!eid) return;
 
   function cat(it){
@@ -310,9 +309,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (evFromApi) {
           aplicarNaTela(evFromApi);
         } else {
-          // fallback para o cache local
+          // fallback para o cache em memória
           try {
-            const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+            const eventos = memGetJSON("eventos", []);
             const evLocal = eventos.find(e => String(e.id) === String(eid)) || null;
             aplicarNaTela(evLocal);
           } catch {
@@ -323,7 +322,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .catch(err => {
         console.warn("[itens-evento] erro ao carregar evento da API", err);
         try {
-          const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+          const eventos = memGetJSON("eventos", []);
           const evLocal = eventos.find(e => String(e.id) === String(eid)) || null;
           aplicarNaTela(evLocal);
         } catch {
@@ -331,9 +330,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
   } else {
-    // modo antigo: apenas localStorage
+    // modo antigo: apenas memória
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON("eventos", []);
       const evLocal = eventos.find(e => String(e.id) === String(eid)) || null;
       aplicarNaTela(evLocal);
     } catch {

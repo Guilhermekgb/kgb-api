@@ -32,12 +32,12 @@ function getLeadsFromCache() {
 }
 
 // Salva leads no cache em memória
-// (e opcionalmente num cache localStorage, só para não perder se recarregar a página)
+  // (opcionalmente poderia persistir em storage externa, mas aqui mantemos apenas cache em memória)
 function setLeadsInCache(leads) {
   const arr = Array.isArray(leads) ? leads : [];
   window.__LEADS_CACHE__ = arr;
 
-  // Mantemos apenas cache em memória; não persistir os dados dos leads no localStorage.
+  // Mantemos apenas cache em memória; não persistir os dados dos leads fora da aba.
   try {
     // sinaliza outras abas/janelas se suportado
     try {
@@ -54,6 +54,27 @@ function setLeadsInCache(leads) {
 // agora lê do cache em memória (fonte principal)
 function __getLeadsLS() {
   return getLeadsFromCache();
+}
+
+// ======= Memória local (substitui storage persistente para este módulo) =======
+window.__FUNIL_MEM__ = window.__FUNIL_MEM__ || {};
+function readLS(key){
+  try { return typeof window.__FUNIL_MEM__[key] === 'undefined' ? null : window.__FUNIL_MEM__[key]; }
+  catch(e){ return null; }
+}
+function writeLS(key, val){
+  try { window.__FUNIL_MEM__[key] = typeof val === 'string' ? val : JSON.stringify(val); }
+  catch(e){}
+}
+function removeLS(key){ try { delete window.__FUNIL_MEM__[key]; } catch(e){} }
+
+// Helper para requisicoes — exige window.apiFetch
+async function apiRequest(method, path, body){
+  if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível');
+  const opts = { method };
+  if (body !== undefined) opts.body = body;
+  const r = await window.apiFetch(path, opts);
+  return r;
 }
 
 // === helper: publica/atualiza "Próxima ação" do lead na Agenda Unificada ===
@@ -149,8 +170,14 @@ function showToast({title="Pronto!",message="",type="success",timeout=3600}={}){
 
 // ========== Usuário / Visibilidade ==========
 function getUsuarioAtual(){
-  try{ return JSON.parse(localStorage.getItem("usuarioLogado") || sessionStorage.getItem("usuarioLogado") || "{}") || {}; }
-  catch{ return {}; }
+  try{
+    if (window.__usuarioLogado__) return window.__usuarioLogado__;
+    const s = readLS('usuarioLogado') || null;
+    if (s) {
+      try { return JSON.parse(s); } catch { return {} }
+    }
+    return {};
+  } catch { return {}; }
 }
 function isAdmin(u){
   const p = String(u?.perfil||"").toLowerCase().trim();
@@ -166,52 +193,27 @@ function filterLeadsByUser(leads){
 
 // ========== Colunas (vêm do categorias-gerais) ==========
 
-// Base da API (vem do patch do HTML ou do localStorage)
-const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
-// --- Compat wrapper: handleRequest / apiFetch fallback
-if (!window.handleRequest) {
-  window.handleRequest = async function(path, method = 'GET', body) {
-    try {
-      // prefer window.apiFetch if available
-      if (typeof window.apiFetch === 'function') {
-        const opts = { method };
-        if (body) opts.body = body;
-        const r = await window.apiFetch(path, opts).catch(e => { throw e; });
-        return { status: r && r.status ? r.status : 200, data: r && (r.data || r) };
-      }
-
-      // fallback fetch using credentials include
-      const url = (API_BASE ? API_BASE.replace(/\/+$/, '') : '') + path;
-      const resp = await fetch(url, {
-        method,
-        credentials: 'include',
-        headers: body ? { 'Content-Type': 'application/json' } : {},
-        body: body ? JSON.stringify(body) : undefined
-      });
-      let data = null;
-      try { data = await resp.json(); } catch(e){ data = null; }
-      return { status: resp.status, data };
-    } catch (err) {
-      return { status: err && err.status ? err.status : 0, data: err && (err.payload || { error: err.message || String(err) }) };
-    }
-  };
-}
+// Base da API (vem do patch do HTML)
+const API_BASE = window.__API_BASE__ || '';
+// --- Compat wrapper: apiFetch required
+// NOTE: este módulo exige window.apiFetch; não há fallback.
 
 // getLeadsAll helper: always returns an array (never throws)
 if (!window.getLeadsAll) {
   window.getLeadsAll = async function(){
     try {
-      // use handleRequest above
-      const r = await window.handleRequest('/leads', 'GET');
-      if (r && Array.isArray(r.data)) return r.data;
-      if (r && r.data && Array.isArray(r.data.data)) return r.data.data;
+      const r = await apiRequest('GET', '/leads');
+      if (!r) return [];
+      if (Array.isArray(r)) return r;
+      if (Array.isArray(r.data)) return r.data;
+      if (Array.isArray(r.data?.data)) return r.data.data;
       return [];
     } catch (e) { return []; }
   };
 }
 /* ------------------ API: Listas Auxiliares ------------------ */
 
-// Mapeia as chaves do localStorage para os endpoints da API
+// Mapeia as chaves da memória do módulo para os endpoints da API
 const LISTA_ENDPOINTS = {
     comoConheceu: "/listas/como-conheceu",
   motivosArquivamento: "/listas/motivos-arquivamento",
@@ -223,19 +225,13 @@ const LISTA_ENDPOINTS = {
 };
 
 /**
- * Salva uma lista no localStorage e, se possível, também na API.
+ * Salva uma lista na memória do módulo e, se possível, também na API.
  */
 function salvarListaLocalEApi(chaveLocal, valores) {
   const arr = Array.isArray(valores) ? valores : [];
-  try {
-    localStorage.setItem(chaveLocal, JSON.stringify(arr));
-  } catch (e) {
-    console.warn("[Categorias] Não foi possível salvar lista no localStorage:", chaveLocal, e);
-  }
-
+  try { writeLS(chaveLocal, arr); } catch(e){ console.warn('[Categorias] mem save failed', e); }
   const endpointPath = LISTA_ENDPOINTS[chaveLocal];
-  if (!endpointPath || !API_BASE) return;
-
+  if (!endpointPath) return;
   salvarListaNaApi(endpointPath, arr);
 }
 
@@ -245,125 +241,73 @@ function salvarListaLocalEApi(chaveLocal, valores) {
  */
 async function salvarListaNaApi(endpointPath, valores) {
   try {
-    await fetch(`${API_BASE}${endpointPath}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itens: valores }),
-    });
-    console.log("[Categorias] Lista salva na API:", endpointPath);
-  } catch (e) {
-    console.warn("[Categorias] Falha ao salvar lista na API:", endpointPath, e);
-  }
+    await apiRequest('PUT', endpointPath, JSON.stringify({ itens: valores }));
+    console.log('[Categorias] Lista salva na API:', endpointPath);
+  } catch (e) { console.warn('[Categorias] Falha ao salvar lista na API:', endpointPath, e); }
 }
 
 /**
- * Busca a lista na API e salva no localStorage.
+ * Busca a lista na API e salva na memória do módulo.
  * Se falhar, mantém o que já estiver no navegador.
  */
 async function syncListaFromApiToLocal(chaveLocal) {
-  if (!API_BASE) return;
-
   const endpointPath = LISTA_ENDPOINTS[chaveLocal];
   if (!endpointPath) return;
-
   try {
-    const resp = await fetch(`${API_BASE}${endpointPath}`, { method: "GET" });
-    if (!resp.ok) {
-      console.warn("[Categorias] Erro ao buscar lista da API:", endpointPath, resp.status);
-      return;
-    }
-
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-
-    const itens = Array.isArray(data)
-      ? data
-      : (Array.isArray(data?.itens) ? data.itens : []);
-
+    const resp = await apiRequest('GET', endpointPath);
+    const data = resp && (resp.data || resp);
+    const itens = Array.isArray(data) ? data : (Array.isArray(data?.itens) ? data.itens : []);
     if (!itens || !itens.length) return;
-
-    localStorage.setItem(chaveLocal, JSON.stringify(itens));
-    console.log("[Categorias] Lista sincronizada da API:", chaveLocal);
-  } catch (e) {
-    console.warn("[Categorias] Falha ao buscar lista da API:", chaveLocal, e);
-  }
+    writeLS(chaveLocal, itens);
+    console.log('[Categorias] Lista sincronizada da API:', chaveLocal);
+  } catch (e) { console.warn('[Categorias] Falha ao buscar lista da API:', chaveLocal, e); }
 }
 
 /**
- * Busca colunas do funil na API e joga no localStorage.colunasLead.
+ * Busca colunas do funil na API e joga em `colunasLead` na memória do módulo.
  * Se não existir API ou der erro, não quebra nada.
  */
 async function syncColunasFromApiToLocal(){
-  if (!API_BASE) return;
-
   try {
-    const resp = await fetch(`${API_BASE}/funil/colunas`, { method: "GET" });
-    if (!resp.ok) {
-      console.warn("[FUNIL] Erro ao buscar colunas da API:", resp.status);
-      return;
-    }
-
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-
-    const lista = Array.isArray(data)
-      ? data
-      : (Array.isArray(data?.colunas) ? data.colunas : []);
-
+    const resp = await apiRequest('GET', '/funil/colunas');
+    const data = resp && (resp.data || resp);
+    const lista = Array.isArray(data) ? data : (Array.isArray(data?.colunas) ? data.colunas : []);
     if (!lista || !lista.length) return;
-
-    localStorage.setItem("colunasLead", JSON.stringify(lista));
-    console.log("[FUNIL] Colunas do funil sincronizadas da API.");
-  } catch (e) {
-    console.warn("[FUNIL] Falha ao buscar colunas da API:", e);
-  }
+    writeLS('colunasLead', lista);
+    console.log('[FUNIL] Colunas do funil sincronizadas da API.');
+  } catch (e) { console.warn('[FUNIL] Falha ao buscar colunas da API:', e); }
 }
 
 function getColunasFromStorage(){
-  try { return JSON.parse(localStorage.getItem("colunasLead") || "[]") || []; }
-  catch { return []; }
+  try { const s = readLS('colunasLead') || '[]'; return JSON.parse(s || '[]') || []; } catch { return []; }
 }
 
 /** Só garante "Novo Lead". As demais colunas vêm de categorias-gerais.html */
 function ensureColunas(){
   let cols = getColunasFromStorage();
   // garante "Novo Lead" no topo (sem duplicar)
-  if (!cols.some(c => (String(c?.nome||"").trim().toLowerCase()) === "novo lead")){
+  if (!cols.some(c => (String(c?.nome||"").trim().toLowerCase()) === "novo lead")) {
     cols.unshift({ nome: "Novo Lead", icone: "user-plus" });
-    try {
-      localStorage.setItem("colunasLead", JSON.stringify(cols));
-    } catch (e) {
-      console.warn("[FUNIL] Não foi possível salvar colunas no localStorage:", e);
-    }
+    try { writeLS('colunasLead', cols); } catch(e){ console.warn('[FUNIL] Não foi possível salvar colunas na memória:', e); }
   }
-  return cols;
-}
-
-function pertenceColuna(lead, nomeColuna){
-  const status=String(lead.status||"Novo Lead");
-  if(equivalenteStatus(nomeColuna,"Fechados"))   return equivalenteStatus(status,"Fechados");
-  if(equivalenteStatus(nomeColuna,"Arquivados")) return equivalenteStatus(status,"Arquivados");
-  const cols = ensureColunas();
-  const existeStatus = cols.some(c => normaliza(c.nome)===normaliza(status));
-  if(existeStatus) return normaliza(status)===normaliza(nomeColuna);
-  const primeira = cols[0]?.nome || "Novo Lead";
-  return normaliza(nomeColuna)===normaliza(primeira);
-}
-
-
-/** prioriza vencidos (0), hoje (1), futuro (2), sem data (3); desempate pela data */
-function retornoScore(lead){
-  const d = parseDataFlex(lead?.proximoContato);
-  const today = new Date();
-  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-
-  if (!d || isNaN(d)) return [3, 9e12]; // sem data → sempre por último
-  const dd0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-
-  if (dd0 <  t0) return [0, dd0]; // vencido
-  if (dd0 === t0) return [1, dd0]; // hoje
-  return [2, dd0];                 // futuro
-}
+    try {
+      const usuarioAtual = (typeof getUsuarioAtual === "function" ? getUsuarioAtual() : {}) || {};
+      const responsavelNome = usuarioAtual.nome || usuarioAtual.email || null;
+      const agoraISO = new Date().toISOString();
+      apiRequest('POST', '/leads/historico', {
+        leadId: String(lead.id),
+        item: {
+          dataISO: agoraISO,
+          tipo: "Movimentação",
+          observacao: `Movido de "${de}" para "${para}" no funil.`,
+          responsavel: responsavelNome,
+          de: de,
+          para: para
+        }
+      }).catch(function(e){ console.warn('[HIST] Falha ao enviar movimentação para API:', e); });
+    } catch (e) {
+      console.warn('[HIST] Erro ao preparar envio de movimentação para API:', e);
+    }
 function isArquivado(ld){
   return equivalenteStatus(ld?.status, "Arquivados") || ld?.arquivado === true;
 }
@@ -715,8 +659,6 @@ function atualizarIndicadores(leads, colunas){
   //    Endpoint sugerido: GET /leads/metrics
   // ==========================================
   try {
-    if (!window.handleRequest) return;
-
     var ids = leads
       .map(function(l){ return l.id; })
       .filter(function(id){ return !!id; });
@@ -724,15 +666,11 @@ function atualizarIndicadores(leads, colunas){
     // Se não tiver leads na tela, não precisa chamar a API
     if (!ids.length) return;
 
-    window.handleRequest("/leads/metrics", {
-      method: "GET",
-      // sugestão: backend pode usar esses IDs para calcular métricas já filtradas
-      body: { ids: ids }
-    })
-    .then(function(resp){
+    (async function(){
       try {
-        if (!resp || resp.status !== 200 || !resp.data) return;
-        var d = resp.data;
+        const resp = await apiRequest('GET', '/leads/metrics', { ids: ids });
+        const d = resp && (resp.data || resp);
+        if (!d) return;
 
         var elTot2 = document.getElementById("indTotalMes");
         if (elTot2 && d.totalMes != null) {
@@ -762,12 +700,9 @@ function atualizarIndicadores(leads, colunas){
           elConv2.textContent = nCv + "%";
         }
       } catch (e) {
-        console.warn("[FUNIL] Erro ao aplicar métricas da API:", e);
+        console.warn("[FUNIL] Falha ao buscar /leads/metrics:", e);
       }
-    })
-    .catch(function(e){
-      console.warn("[FUNIL] Falha ao buscar /leads/metrics:", e);
-    });
+    })();
   } catch (e) {
     console.warn("[FUNIL] Erro inesperado em atualizarIndicadores/API:", e);
   }
@@ -840,33 +775,23 @@ if (typeof window.showToast !== "function") {
 }
 function enviarHistoricoMovimentacaoApi(lead, de, para){
   try {
-    if (!window.handleRequest) return;
     if (!lead || !lead.id) return;
-
     const usuarioAtual = (typeof getUsuarioAtual === "function" ? getUsuarioAtual() : {}) || {};
     const responsavelNome = usuarioAtual.nome || usuarioAtual.email || null;
-
     const agoraISO = new Date().toISOString();
-
-    window.handleRequest("/leads/historico", {
-      method: "POST",
-      body: {
-        leadId: String(lead.id),
-        item: {
-          dataISO: agoraISO,
-          tipo: "Movimentação",
-          observacao: `Movido de "${de}" para "${para}" no funil.`,
-          responsavel: responsavelNome,
-          de: de,
-          para: para
-        }
+    apiRequest('POST', '/leads/historico', {
+      leadId: String(lead.id),
+      item: {
+        dataISO: agoraISO,
+        tipo: "Movimentação",
+        observacao: `Movido de "${de}" para "${para}" no funil.`,
+        responsavel: responsavelNome,
+        de: de,
+        para: para
       }
-    })
-    .catch(function(e){
-      console.warn("[HIST] Falha ao enviar movimentação para API:", e);
-    });
+    }).catch(function(e){ console.warn('[HIST] Falha ao enviar movimentação para API:', e); });
   } catch (e) {
-    console.warn("[HIST] Erro ao preparar envio de movimentação para API:", e);
+    console.warn('[HIST] Erro ao preparar envio de movimentação para API:', e);
   }
 }
 
@@ -925,7 +850,7 @@ function moverLead(id, novaColuna){
     lead.dataFechamento = new Date().toISOString().slice(0,10);
   }
 
-    // 4) Salva no cache em memória (e cache opcional no localStorage)
+    // 4) Salva no cache em memória (memória local do módulo)
   leads[idx] = lead;
   setLeadsInCache(leads);
 
@@ -944,20 +869,12 @@ function moverLead(id, novaColuna){
 
   // 6) Sincroniza com o BACKEND (PUT /leads/{id}), se a API estiver disponível
   try {
-    if (window.handleRequest) {
-      window.handleRequest(`/leads/${id}`, {
-        method: "PUT",
-        body: {
-          status: para,
-          dataFechamento: lead.dataFechamento || null
-          // aqui você pode enviar mais campos se quiser, ex:
-          // proximoContato: lead.proximoContato,
-          // responsavel: lead.responsavel
-        }
-      });
-    }
+    apiRequest('PUT', `/leads/${id}`, {
+      status: para,
+      dataFechamento: lead.dataFechamento || null
+    }).catch(e => console.warn('[FUNIL] Falha ao sincronizar movimentação na API', e));
   } catch (e) {
-    console.warn("[FUNIL] Falha ao sincronizar movimentação na API", e);
+    console.warn('[FUNIL] Falha ao sincronizar movimentação na API', e);
   }
 
   // 7) Feedback visual
@@ -999,7 +916,7 @@ function safeSetLeads(leads){
   try {
     // compacta só com os campos usados no funil
     const arrAll = Array.isArray(leads) ? leads.map(compactLeadForLS) : [];
-    // salva no cache em memória + cache opcional no localStorage
+    // salva no cache em memória (cache persistente removido)
     setLeadsInCache(arrAll);
   } catch (e) {
     console.warn('[FUNIL] safeSetLeads falhou:', e);
@@ -1011,11 +928,11 @@ function safeSetLeads(leads){
 (function migrateLeadsOnce(){
   try {
     try {
-      if (localStorage.getItem('__leads_migrado') === '1') return;
+      if (readLS('__leads_migrado') === '1') return;
     } catch {}
     const atuais = readLS('leads', []) || [];
     if (atuais.length) safeSetLeads(atuais); // compacta e grava
-    try { localStorage.setItem('__leads_migrado', '1'); } catch {}
+    try { writeLS('__leads_migrado', '1'); } catch {}
   } catch {}
 })();
 // === FIM PATCH FL-QUOTA (revisado) ===
@@ -1070,7 +987,7 @@ async function syncLeadsFromApiToLocal(){
     });
   }
 
-  // 6) Salva a união (no cache + cache opcional localStorage)
+  // 6) Salva a união (no cache em memória)
   const unidos = Array.from(mapa.values());
   safeSetLeads(unidos);
 }
@@ -1093,7 +1010,7 @@ function popularFiltroResponsavel(){
 
   // usuários cadastrados (apenas admin + vendedor)
   try{
-    const usuarios = JSON.parse(localStorage.getItem("usuarios")||"[]") || [];
+    const usuarios = (() => { try { const s = readLS('usuarios') || '[]'; return JSON.parse(s||'[]') || []; } catch { return []; } })();
     usuarios
       .filter(us => ["administrador","vendedor"].includes(String(us?.perfil||"").toLowerCase()))
       .forEach(us=>{
@@ -1144,8 +1061,8 @@ function popularFiltroStatus(){
    =========================================================== */
 document.addEventListener("DOMContentLoaded", async () => {
   // --- handshake vindo da tela de Feiras ---
-const focusId   = localStorage.getItem('funil_focus_lead');
-const mustReset = localStorage.getItem('funil_reset_filters') === '1';
+const focusId   = readLS('funil_focus_lead') || '';
+const mustReset = (readLS('funil_reset_filters') === '1');
 
 // 2.1) Zerar filtros que podem esconder o lead
 if (mustReset) {
@@ -1156,14 +1073,14 @@ if (mustReset) {
   limpa('#filtroResponsavel', 'todos');
   limpa('#filtroOrigem', 'todas');
   // …inclua aqui os seus outros selects/inputs de filtro do funil
-  localStorage.removeItem('funil_reset_filters');
+  removeLS('funil_reset_filters');
 }
 
 // 2.2) Guarde o id para destacar após o render
 if (focusId) {
   // deixe em memória até o fim do render
   window.__FUNIL_FOCUS_ID__ = focusId;
-  localStorage.removeItem('funil_focus_lead');
+  removeLS('funil_focus_lead');
 }
   // Antes de pintar as colunas/leads, sincroniza a partir da API (se estiver disponível)
   await syncColunasFromApiToLocal();
@@ -1172,7 +1089,7 @@ if (focusId) {
   // 1) pinta as colunas e prepara coluna "Novo Lead"
   ensureColunas();
 
-  // === PATCH C2: fallback - garantir "Novo Lead" no board a partir dos leads do localStorage
+  // === PATCH C2: fallback - garantir "Novo Lead" no board a partir dos leads em memória
   (function ensureNovoLeadFromLocal(){
     try{
       // helpers locais (auto-contidos)
@@ -1244,7 +1161,7 @@ if (focusId) {
         // OBS: No seu render, inclua (window.FUNIL._fallbackNovos || []) na 1ª coluna.
       }
     }catch(e){
-      console.warn("fallback Novo Lead do localStorage falhou:", e);
+      console.warn("fallback Novo Lead do cache em memória falhou:", e);
     }
   })();
   atualizarFunil();
@@ -1306,8 +1223,8 @@ if (false && typeof atualizarBadgeNotificacoes === "function") {
 // === PATCH: reset de filtros + foco no lead recém-criado ===
 (function(){
   try{
-    const doReset = localStorage.getItem("funil_reset_filters") === "1";
-    const focusId = localStorage.getItem("funil_focus_lead");
+    const doReset = (readLS("funil_reset_filters") === "1");
+    const focusId = readLS("funil_focus_lead") || '';
 
     if (doReset) {
       // zere seus filtros aqui (exemplos; ajuste para seus IDs reais de filtro):
@@ -1316,7 +1233,7 @@ if (false && typeof atualizarBadgeNotificacoes === "function") {
       try { document.getElementById("filtroPeriodo").value = ""; } catch {}
       // se seu código usa algum objeto de estado, limpe-o aqui também.
 
-      localStorage.removeItem("funil_reset_filters");
+      removeLS("funil_reset_filters");
     }
 
 if (focusId) {
@@ -1337,7 +1254,7 @@ if (focusId) {
       el.scrollIntoView({behavior:"smooth", block:"center"});
     }
   }, 250);
-  localStorage.removeItem("funil_focus_lead");
+  removeLS("funil_focus_lead");
 }
 
   }catch{}
@@ -1374,7 +1291,7 @@ if (focusId) {
   }
   function shouldRun(){
     const t = todayISO();
-    const last = localStorage.getItem(KEY)||'';
+    const last = readLS(KEY) || '';
     if (last===t) return false;
     return new Date().getHours() >= 9; // depois das 09:00
   }
@@ -1404,9 +1321,9 @@ if (focusId) {
       }
     }
 
-    // marca que já rodou hoje e pinga
-    localStorage.setItem(KEY, todayISO());
-    try { localStorage.setItem('notificationsFeed:ping', String(Date.now())); } catch {}
+    // marca que já rodou hoje e pinga (memória do módulo)
+    writeLS(KEY, todayISO());
+    try { writeLS('notificationsFeed:ping', String(Date.now())); } catch {}
     try { bc?.postMessage({type:'notificationsFeed:ping', at: Date.now()}); } catch {}
   }
 

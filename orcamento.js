@@ -12,31 +12,61 @@ function mostrarToast(msg){
 }
 
 const $ = (id) => document.getElementById(id);
+// In-memory store (não usar storage do navegador)
+const memoryStore = {
+  leads: [],
+  propostasIndex: [],
+  orcamentos: [],
+  usuarios: [],
+  modelos_index: [],
+  modelos: {},
+  produtosBuffet: [],
+  adicionaisBuffet: [],
+  servicosBuffet: [],
+  agenda: [],
+  eventos: [],
+  notificacoes: [],
+  propostaLogs: [],
+  API_BASE: window.__API_BASE__ || "",
+  _kv: {}
+};
+
+function memGet(key, def = null) {
+  try {
+    if (Object.prototype.hasOwnProperty.call(memoryStore, key)) return JSON.parse(JSON.stringify(memoryStore[key] ?? def));
+    return JSON.parse(JSON.stringify(memoryStore._kv[key] ?? def));
+  } catch { return def; }
+}
+function memSet(key, value) {
+  if (Object.prototype.hasOwnProperty.call(memoryStore, key)) {
+    memoryStore[key] = value;
+  } else {
+    memoryStore._kv = memoryStore._kv || {};
+    memoryStore._kv[key] = value;
+  }
+}
+
 const getJSON = (k, def = []) => {
   try {
-    // chaves relacionadas a orçamentos usam sessionStorage como cache
+    // se temos em memória, devolve
+    const val = memGet(k, undefined);
+    if (val !== undefined && val !== null) return val;
+
+    // para chaves orcamentistas, tentamos carregar em background via apiFetch
     const ORC = ['leads','propostasIndex','notificacoes','propostaLogs','orcamentos'];
     if (ORC.includes(k)) {
-      try { return JSON.parse(sessionStorage.getItem(k) || (Array.isArray(def) ? '[]' : '{}')) || def; } catch {}
-      // background fetch
       try {
-        if (window.__API_BASE__) {
+        if (window.__API_BASE__ && window.apiFetch) {
           (async ()=>{
             try {
               const base = window.__API_BASE__;
               if (k === 'leads' || k === 'propostasIndex') {
-                const r = await fetch(base + '/leads', { credentials: 'same-origin' });
-                if (r.ok) {
-                  const d = await r.json();
-                  sessionStorage.setItem('leads', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
-                  sessionStorage.setItem('propostasIndex', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
-                }
+                const d = await window.apiFetch(base + '/leads', { method: 'GET' });
+                memSet('leads', Array.isArray(d) ? d : (d?.data||[]));
+                memSet('propostasIndex', Array.isArray(d) ? d : (d?.data||[]));
               } else if (k === 'orcamentos') {
-                const r = await fetch(base + '/orcamentos', { credentials: 'same-origin' });
-                if (r.ok) {
-                  const d = await r.json();
-                  sessionStorage.setItem('orcamentos', JSON.stringify(Array.isArray(d) ? d : (d?.data||[])));
-                }
+                const d = await window.apiFetch(base + '/orcamentos', { method: 'GET' });
+                memSet('orcamentos', Array.isArray(d) ? d : (d?.data||[]));
               }
             } catch(e){}
           })();
@@ -44,50 +74,44 @@ const getJSON = (k, def = []) => {
       } catch(e){}
       return def;
     }
-    const raw = localStorage.getItem(k) || (Array.isArray(def) ? "[]" : "{}");
-    const v = JSON.parse(raw);
-    return v ?? def;
+
+    return def;
   } catch {
     return def;
   }
 };
 
-// Helpers para persistência de leads (sessionStorage + sync com API)
-function readLeadsCache(){ try { return JSON.parse(sessionStorage.getItem('leads') || '[]') || []; } catch { return []; } }
-function persistLeadsArray(leads){ try { sessionStorage.setItem('leads', JSON.stringify(leads)); } catch {};
-  try { if (window.__API_BASE__) {
-    (async ()=>{ try { const base = window.__API_BASE__; for(const l of Array.isArray(leads)?leads:[leads]){ await fetch(base + '/leads', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(l) }); } } catch(e){} })(); } } catch(e){} }
+// Helpers para persistência de leads (em memória + sync com API)
+function readLeadsCache(){ try { return memGet('leads', []) || []; } catch { return []; } }
+function persistLeadsArray(leads){
+  try { memSet('leads', leads); } catch {}
+  try { if (window.__API_BASE__ && window.apiFetch) {
+    (async ()=>{ try { const base = window.__API_BASE__; for(const l of Array.isArray(leads)?leads:[leads]){ await window.apiFetch(base + '/leads', { method: 'POST', body: l }); } } catch(e){} })(); } } catch(e){} }
 function persistLead(l){ persistLeadsArray([l]); }
 // === API – salvar lead no backend ===
-const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+const API_BASE = window.__API_BASE__ || (memGet("API_BASE", "") || "") || "";
+
+// Helper genérico para chamadas ao backend usando window.apiFetch (sem fallback direto para fetch)
+async function postToApi(path, opts = {}){
+  try{
+    if (window.apiFetch) return await window.apiFetch(path, opts);
+    console.warn('[postToApi] window.apiFetch não disponível para', path);
+  }catch(e){ console.warn('[postToApi] erro', e); }
+  return null;
+}
 
 async function salvarLeadNaApi(novoLead) {
   const base = window.__API_BASE__ || API_BASE || "";
   if (!base) return null;
 
   try {
-    // usa window.apiFetch quando disponível (serializa body automaticamente)
     if (window.apiFetch) {
       const payload = await window.apiFetch(base + '/leads', { method: 'POST', body: novoLead });
       return payload?.data || payload || null;
     }
-
-    // fallback: fetch com credentials para enviar cookie httpOnly
-    const resp = await fetch(base + '/leads', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(novoLead)
-    });
-
-    if (!resp.ok) {
-      console.warn('[ORÇAMENTO] Erro ao salvar lead na API:', resp.status);
-      return null;
-    }
-
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    return data?.data || data || null;
+    // sem window.apiFetch: não prosseguir (regra: sempre usar window.apiFetch no frontend)
+    console.warn('[ORÇAMENTO] window.apiFetch não disponível — não enviar via fetch direto');
+    return null;
   } catch (e) {
     console.warn('[ORÇAMENTO] Falha ao chamar /leads:', e);
     return null;
@@ -104,22 +128,8 @@ async function salvarOrcamentoNaApi(leadId, dadosOrcamento) {
       const payload = await window.apiFetch(base + '/orcamentos', { method: 'POST', body: { leadId: String(leadId), dados: dadosOrcamento } });
       return payload?.orcamento || payload || null;
     }
-
-    const resp = await fetch(base + '/orcamentos', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ leadId: String(leadId), dados: dadosOrcamento })
-    });
-
-    if (!resp.ok) {
-      console.warn('[ORÇAMENTO] Erro ao salvar orçamento na API:', resp.status);
-      return null;
-    }
-
-    let data = null;
-    try { data = await resp.json(); } catch { data = null; }
-    return data?.orcamento || data || null;
+    console.warn('[ORÇAMENTO] window.apiFetch não disponível — não enviar via fetch direto');
+    return null;
   } catch (e) {
     console.warn('[ORÇAMENTO] Falha ao chamar /orcamentos:', e);
     return null;
@@ -183,7 +193,7 @@ document.getElementById("form-orcamento")?.addEventListener("submit", (e) => {
 
 function trySetLS(key, value){
   // tenta gravar; se falhar, lança erro pra quem chamou lidar
-  localStorage.setItem(key, value);
+  memSet(key, JSON.parse(value));
 }
 
 function safeWriteLeads(leadsArr){
@@ -211,10 +221,10 @@ function safeWriteLeads(leadsArr){
         trySetLS("leads", JSON.stringify(lastOnly));
         alert("O armazenamento local está cheio. Mantive apenas o último lead salvo. Considere exportar/limpar dados antigos.");
       } catch (e3) {
-        // fallback: sessionStorage (temporário na aba)
+        // fallback: armazenamento temporário em memória (aba)
         try {
-          sessionStorage.setItem("leads_buffer", JSON.stringify(lastOnly));
-          alert("O armazenamento local está cheio. Salvei este lead temporariamente (sessionStorage).");
+          memSet("leads_buffer", lastOnly);
+          alert("O armazenamento local está cheio. Salvei este lead temporariamente (em memória da aba).");
         } catch {
           alert("Não foi possível salvar o lead: armazenamento do navegador está cheio.");
         }
@@ -224,8 +234,7 @@ function safeWriteLeads(leadsArr){
 }
 
 function saveLead(novoLead){
-  let leads = [];
-  try { leads = JSON.parse(sessionStorage.getItem('leads') || '[]') || []; } catch {}
+  let leads = memGet('leads', []) || [];
   leads.push(novoLead);
   try { persistLeadsArray(leads); } catch { safeWriteLeads(leads); }
 }
@@ -271,8 +280,7 @@ function compactLead(l){
 }
 
 function migrateLeadsStorage(){
-  let leads = [];
-  try { leads = JSON.parse(localStorage.getItem("leads") || "[]") || []; } catch {}
+  let leads = memGet('leads', []) || [];
   if (!Array.isArray(leads) || leads.length === 0) return [];
 
   const compacted = leads.map(compactLead);
@@ -298,10 +306,10 @@ function safeSaveLeads(leadsArr){
       const last = compactLead(compactArr[compactArr.length - 1]);
       try { persistLeadsArray([last]); } catch {}
       try {
-        const idx = JSON.parse(sessionStorage.getItem("leadsOverflowIndex") || "[]");
+        const idx = memGet("leadsOverflowIndex", []) || [];
         idx.push(last.id);
-        sessionStorage.setItem("leadsOverflowIndex", JSON.stringify(idx));
-        sessionStorage.setItem("lead:"+last.id, JSON.stringify(last));
+        memSet("leadsOverflowIndex", idx);
+        memSet("lead:"+last.id, last);
       } catch {}
       alert("O armazenamento local estava cheio. Compactei os leads e mantive o mais recente.");
     }
@@ -313,7 +321,7 @@ window._compactLeads = migrateLeadsStorage;
 
 // >>> CORRIGIDO: usuário logado pode estar salvo como string simples
 const usuarioLogado = parseMaybeJSON(
-  localStorage.getItem("usuarioLogado") ?? sessionStorage.getItem("usuarioLogado"),
+  JSON.stringify(memGet('usuarioLogado', {}) ) ,
   {} // fallback objeto vazio
 );
 
@@ -330,7 +338,7 @@ function notificarResponsavel(destinatarioNomeOuEmail, titulo, leadId){
     leadId,
     destinatarioNome: destinatarioNomeOuEmail
   });
-  try { sessionStorage.setItem("notificacoes", JSON.stringify(notificacoes)); } catch {}
+  try { memSet("notificacoes", notificacoes); } catch {}
 
   const quem = (usuarioLogado?.nome || usuarioLogado?.email || "").trim();
   if(quem && destinatarioNomeOuEmail && quem === destinatarioNomeOuEmail){
@@ -344,11 +352,30 @@ function formatarDataBR(iso){
   return (d && m && y) ? `${d}/${m}/${y}` : iso;
 }
 
-// --------- catálogos ----------
-let cardapiosDisponiveis = (getJSON("produtosBuffet", []) || [])
-  .filter(p => String(p?.tipo || "").toLowerCase() === "cardapio");
-let adicionaisDisponiveis = getJSON("adicionaisBuffet", []);
-let servicosDisponiveis   = getJSON("servicosBuffet", []);
+// --------- catálogos (carregar da nuvem) ----------
+let cardapiosDisponiveis = [];
+let adicionaisDisponiveis = [];
+let servicosDisponiveis   = [];
+
+async function carregarCatalogosDaNuvem() {
+  try {
+    if (!window.apiFetch) return;
+    const [c1, c2, c3] = await Promise.all([
+      window.apiFetch('/catalogo/cardapios', { method: 'GET' }),
+      window.apiFetch('/catalogo/adicionais', { method: 'GET' }),
+      window.apiFetch('/catalogo/servicos', { method: 'GET' }),
+    ]);
+
+    cardapiosDisponiveis  = Array.isArray(c1?.data) ? c1.data : (Array.isArray(c1) ? c1 : (c1?.items||[]));
+    adicionaisDisponiveis = Array.isArray(c2?.data) ? c2.data : (Array.isArray(c2) ? c2 : (c2?.items||[]));
+    servicosDisponiveis   = Array.isArray(c3?.data) ? c3.data : (Array.isArray(c3) ? c3 : (c3?.items||[]));
+  } catch (e) {
+    console.warn('[CATÁLOGO] Falha ao carregar catálogos da nuvem', e);
+    cardapiosDisponiveis = cardapiosDisponiveis || [];
+    adicionaisDisponiveis = adicionaisDisponiveis || [];
+    servicosDisponiveis = servicosDisponiveis || [];
+  }
+}
 
 // =========================================
 //      Render: Cardápios / Faixas
@@ -732,7 +759,7 @@ function __abrirPropostaPreview(novoLead){
   const token = (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36)))
               + "-" + Math.random().toString(36).slice(2,6);
 
-  // lead leve para a página de proposta (mantém o lead salvo completo em localStorage)
+  // lead leve para a página de proposta (mantém o lead salvo completo em memória)
   const payloadLead = {
     id: String(novoLead.id),
     token,
@@ -752,8 +779,8 @@ function __abrirPropostaPreview(novoLead){
     email: novoLead.email || ""
   };
 
-  // guarda o pacote em sessionStorage para a proposta ler
-  sessionStorage.setItem(`proposta:${token}`, JSON.stringify({ lead: payloadLead }));
+  // guarda o pacote em memória para a proposta ler
+  try { memSet(`proposta:${token}`, { lead: payloadLead }); } catch {}
 
   // também guarda um link público simples (se quiser compartilhar depois)
   const payloadPublico = btoa(unescape(encodeURIComponent(JSON.stringify({
@@ -764,7 +791,7 @@ function __abrirPropostaPreview(novoLead){
   urlPublico.searchParams.set("t", token);
   urlPublico.searchParams.set("p", payloadPublico);
   urlPublico.searchParams.delete("preview");
-  try { sessionStorage.setItem(`linkPublico:${novoLead.id}`, urlPublico.toString()); } catch {}
+  try { memSet(`linkPublico:${novoLead.id}`, urlPublico.toString()); } catch {}
 
   // abre a página de proposta em modo preview
   const urlPreview = new URL("proposta.html", location.href);
@@ -908,28 +935,28 @@ async function salvarLeadFunil(nextAction) {
   }
 
   // ===== persistência segura =====
-    // ===== persistência via API (sem usar localStorage) =====
-    // Se não houver `API_BASE` configurado, mantemos em sessionStorage temporariamente
+    // ===== persistência via API (sem usar armazenamento do navegador) =====
+    // Se não houver `API_BASE` configurado, mantemos em memória temporariamente
     if (!API_BASE) {
       try {
-        const buf = JSON.parse(sessionStorage.getItem('leads_buffer') || '[]');
+        const buf = memGet('leads_buffer', []) || [];
         buf.unshift(novoLead);
-        sessionStorage.setItem('leads_buffer', JSON.stringify(buf.slice(0,200)));
-        alert('API não configurada: lead salvo temporariamente na sessão. Configure a API para persistência permanente.');
+        memSet('leads_buffer', buf.slice(0,200));
+        alert('API não configurada: lead salvo temporariamente em memória. Configure a API para persistência permanente.');
       } catch (e) {
-        console.warn('Não foi possível salvar lead temporariamente na sessão', e);
+        console.warn('Não foi possível salvar lead temporariamente em memória', e);
         alert('Não foi possível salvar o lead: API não configurada e armazenamento temporário indisponível.');
       }
     }
 
-  // Fallback: garante que ficou em localStorage.leads
+  // Fallback: garante que ficou em memória (leads)
   try {
     const k = "leads";
-    const arr = JSON.parse(localStorage.getItem(k) || "[]") || [];
+    const arr = memGet(k, []) || [];
     const ix = arr.findIndex(l => String(l.id) === String(novoLead.id));
     if (ix >= 0) arr[ix] = { ...arr[ix], ...novoLead };
     else arr.unshift(novoLead);
-    localStorage.setItem(k, JSON.stringify(arr));
+    memSet(k, arr);
   } catch(e){ console.warn("fallback write leads:", e); }
   // >>> NOVO: salvar orçamento na API quando for "Gerar Proposta"
   if (String(nextAction || '').toLowerCase() === 'proposta') {
@@ -985,7 +1012,7 @@ async function salvarLeadFunil(nextAction) {
   } catch(e){ console.warn('hook lead:new', e); }
 
   // ===== Lista de Propostas (índice) — sem duplicar =====
-  // Observação: índice de propostas agora é servido pela API; não gravamos mais em localStorage.
+  // Observação: índice de propostas agora é servido pela API; não gravamos mais em storage persistente.
 
   // ===== notificações locais =====
   try {
@@ -1060,7 +1087,7 @@ async function salvarLeadFunil(nextAction) {
   if (typeof window.saveLead !== "function") {
     window.saveLead = function(lead){
       try {
-        const arr = JSON.parse(sessionStorage.getItem("leads") || "[]") || [];
+        const arr = memGet("leads", []) || [];
         const ix = arr.findIndex(l => String(l.id) === String(lead.id));
         if (ix >= 0) arr[ix] = { ...arr[ix], ...lead };
         else arr.unshift(lead);
@@ -1138,8 +1165,8 @@ function adicionarPacotesSelecionados() {
 // ===== Degustação via Orçamento =====
 (function(){
   function $(id){ return document.getElementById(id); }
-  function getLS(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } }
-  function setLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function getLS(k, fb){ try { return memGet(k, fb) ?? fb; } catch { return fb; } }
+  function setLS(k, v){ try { memSet(k, v); } catch {} }
 
   function toBR(iso){
     var m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1185,8 +1212,8 @@ function adicionarPacotesSelecionados() {
  })();
 
 function confirmarDegustacao(){
-  const getJSON = (k, fb=[]) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fb; } catch { return fb; } };
-  const setJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const getJSON = (k, fb=[]) => { try { return memGet(k, fb) ?? fb; } catch { return fb; } };
+  const setJSON = (k, v) => { try { memSet(k, v); } catch {} };
   const pad = n => String(n).padStart(2,'0');
   const toISO = (s) => {
     // aceita "YYYY-MM-DD" ou "DD/MM/YYYY"
@@ -1317,8 +1344,8 @@ function toISODateLoose(s){
 // =========================================
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 function lerLeads(){  try{ return readLS('leads', []) || []; }catch{ return []; } }
-function lerAgenda(){ try{ return JSON.parse(localStorage.getItem('agenda') || '[]'); }catch{ return []; } }
-function lerEventos(){try{ return JSON.parse(localStorage.getItem('eventos')|| '[]'); }catch{ return []; } }
+function lerAgenda(){ try{ return memGet('agenda', []) || []; }catch{ return []; } }
+function lerEventos(){try{ return memGet('eventos', []) || []; }catch{ return []; } }
 
 function montarListaConflitos(conf){
   const lista = $('listaConflitosData');
@@ -1370,7 +1397,7 @@ function atualizarConflitosParaData(dataISO){
 //           Mensagem (WhatsApp)
 // =========================================
 function getModelo(slug, padrao = "") {
-  const v = localStorage.getItem(`modelo_${slug}`);
+  const v = memGet(`modelo_${slug}`, null);
   return (v ?? padrao);
 }
 function htmlToText(s){
@@ -1423,7 +1450,7 @@ function enviarMensagemOrcamento(){
   try{
     const leads = readLS('leads', []) || [];
     const ultimo = leads[leads.length-1];
-    const link = ultimo ? sessionStorage.getItem(`linkPublico:${ultimo.id}`) : "";
+    const link = ultimo ? memGet(`linkPublico:${ultimo.id}`, '') : "";
     if(link) values.linkProposta = link;
   }catch{}
 
@@ -1457,8 +1484,10 @@ function initTabs(){
 // =========================================
 //                 Boot
 // =========================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   window.lucide?.createIcons?.();
+
+  await carregarCatalogosDaNuvem();
 
   preencherSelects();
   preencherCardapios();
@@ -1517,12 +1546,12 @@ const MODELOS_PREFIX    = 'modelo_';
 
 function readModelIndex(){
   try {
-    const arr = JSON.parse(localStorage.getItem(MODELOS_INDEX_KEY) || '[]');
+    const arr = memGet(MODELOS_INDEX_KEY, []);
     return Array.isArray(arr) ? arr : [];
   } catch { return []; }
 }
 function getModelContent(slug){
-  return localStorage.getItem(MODELOS_PREFIX + slug) || '';
+  return memGet(MODELOS_PREFIX + slug, '') || '';
 }
 
 

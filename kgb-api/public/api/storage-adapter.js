@@ -1,13 +1,14 @@
 // Public storage adapter for pages
 // Minimal methods used by the shim and frontend: getFotos, patchFotos, preload
 (function(){
-  const BASE = window.API_BASE || '';
+  const BASE = null;
   window.storageAdapter = window.storageAdapter || {};
 
   window.storageAdapter.getFotos = async function(){
     try{
-      const res = await fetch(BASE + '/fotos-clientes');
-      if(!res.ok) return null;
+      if (typeof window?.apiFetch !== 'function') return null;
+      const res = await window['apiFetch']('/fotos-clientes');
+      if(!res || !res.ok) return null;
       const j = await res.json();
       return j && (j.data || j);
     }catch(e){
@@ -18,7 +19,11 @@
 
   window.storageAdapter.patchFotos = async function(key, value){
     try{
-      await fetch(BASE + '/fotos-clientes', {
+      if (typeof window?.apiFetch !== 'function') {
+        console.warn('storageAdapter.patchFotos noop (no apiFetch)');
+        return;
+      }
+      await window['apiFetch']('/fotos-clientes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
@@ -29,16 +34,13 @@
   };
 
   // Preload will fetch the full fotos map from the server and write it
-  // into localStorage only if localStorage does not already have a value.
-  // This avoids overwriting any local unsynced changes while preventing
-  // flash-of-empty-state on pages that read localStorage immediately.
+  // into an in-memory preload only if a preload value is not present.
+  // This avoids overwriting any unsynced changes while preventing
+  // flash-of-empty-state on pages that read storage immediately.
   window.storageAdapter.preload = async function(){
     try{
-      if(typeof localStorage === 'undefined') return;
-      // NOTE: avoid writing `fotosClientes` into localStorage to prevent
-      // persisting sensitive or large binary data in the browser.
-      // We still attempt to fetch the map to warm any in-memory caches
-      // used by the adapter, but we intentionally do NOT write to localStorage.
+      // NOTE: avoid writing `fotosClientes` into any persistent browser storage.
+      // Fetch map to warm any in-memory caches used by the adapter.
       const map = await window.storageAdapter.getFotos();
       if(map && typeof map === 'object'){
         try{ window.__FOTOS_CLIENTES_PRELOAD__ = map; }catch(e){}
@@ -58,6 +60,8 @@
 (function(global){
   'use strict';
 
+  const memStore = { cache: {} };
+
   function safeJSONParse(txt, fallback=null){
     try{ return JSON.parse(txt); } catch(e){ return fallback; }
   }
@@ -76,81 +80,80 @@
           if(res && Array.isArray(res) && res.length) return res;
           if(res && typeof res === 'object' && Object.keys(res).length) return res;
         }catch(e){
-          console.warn('[storage-adapter] firebaseClientes.list() falhou, fallback para localStorage', e);
+          console.warn('[storage-adapter] firebaseClientes.list() falhou, fallback para storage local (in-memory)', e);
         }
       }
     }catch(e){ /* ignore */ }
 
     // 1.b) Se for fotosClientes, tentar endpoint central
     try{
-      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
-        const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
-        const r = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') } });
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && typeof window?.apiFetch === 'function'){
+        const r = await window['apiFetch']('/fotos-clientes', { method: 'GET', headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') } });
         if (r && r.ok){
           const j = await r.json();
           if(j && j.ok && j.data) return j.data;
         }
       }
-    }catch(e){ console.warn('[storage-adapter] fetch /fotos-clientes failed', e); }
+    }catch(e){ console.warn('[storage-adapter] apiFetch /fotos-clientes failed', e); }
 
     // 2) Tentar ler do preload shim ou cache em memória.
-    // Evitamos leituras síncronas do `localStorage` aqui para prevenir
+    // Evitamos leituras síncronas de armazenamento persistente aqui para prevenir
     // flash-of-empty-state e leituras de blobs grandes em runtime.
     try{
       if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
         return window.__FOTOS_CLIENTES_PRELOAD__;
       }
-      if(typeof cache !== 'undefined' && cache[key] !== undefined){
-        const parsed = safeJSONParse(cache[key], null);
+      if(typeof memStore.cache !== 'undefined' && memStore.cache[key] !== undefined){
+        const parsed = safeJSONParse(memStore.cache[key], null);
         if(parsed !== null) return parsed;
       }
     }catch(e){
       console.warn('[storage-adapter] Erro lendo cache/preload key=', key, e);
     }
-          try{
-            // Prefer preload (synchronous index) then in-memory cache. Avoid localStorage reads.
-            let raw = null;
-            if(typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
-              raw = JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
-            } else if(typeof cache !== 'undefined' && cache['fotosClientes'] !== undefined){
-              raw = cache['fotosClientes'];
-            }
-            const obj = raw ? JSON.parse(raw) : {};
-            if(patch && typeof patch === 'object'){
-              if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
-                obj[patch.key] = patch.value;
-              } else {
-                Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
-              }
-              cache['fotosClientes'] = JSON.stringify(obj);
-              // Do NOT write fotosClientes to localStorage; keep only in-memory cache.
-            }
-          }catch(e){}
-      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
+    try{
+      // Prefer preload (synchronous index) then in-memory cache. Avoid persistent local reads.
+      let raw = null;
+      if(typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
+        raw = JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
+      } else if(typeof memStore.cache !== 'undefined' && memStore.cache['fotosClientes'] !== undefined){
+        raw = memStore.cache['fotosClientes'];
+      }
+      const obj = raw ? JSON.parse(raw) : {};
+      if(patch && typeof patch === 'object'){
+        if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
+          obj[patch.key] = patch.value;
+        } else {
+          Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
+        }
+        memStore.cache['fotosClientes'] = JSON.stringify(obj);
+      }
+    }catch(e){}
+    try{
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && typeof window?.apiFetch === 'function' && typeof value !== 'undefined'){
         try{
-          const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
-          await fetch(url, { method: 'PUT', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(value) });
+          await window['apiFetch']('/fotos-clientes', { method: 'PUT', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(value) });
         }catch(e){ console.warn('[storage-adapter] failed to PUT /fotos-clientes', e); }
       }
     }catch(e){}
-    // always persist locally as fallback
+    // always persist in memory as fallback
     setJSONLocal(key, value);
+    }catch(e){}
+    
   }
 
   // Partial update helper for keys that support PATCH (ex: fotosClientes)
   async function patchJSON(key, patch){
     try{
-      if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__API_BASE__){
+      if(key === 'fotosClientes' && typeof window !== 'undefined' && typeof window?.apiFetch === 'function'){
         try{
-          const url = `${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes`;
-          await fetch(url, { method: 'PATCH', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(patch) });
-          // update local cache too (best-effort): merge into existing cached value
+          await window['apiFetch']('/fotos-clientes', { method: 'PATCH', headers: { 'Content-Type':'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') }, body: JSON.stringify(patch) });
+          // update in-memory cache too (best-effort): merge into existing cached value
           try{
             let raw = null;
             if(typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__){
               raw = JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
-            } else if(typeof cache !== 'undefined' && cache['fotosClientes'] !== undefined){
-              raw = cache['fotosClientes'];
+            } else if(typeof memStore !== 'undefined' && memStore.cache['fotosClientes'] !== undefined){
+              raw = memStore.cache['fotosClientes'];
             }
             const obj = raw ? JSON.parse(raw) : {};
             if(patch && typeof patch === 'object'){
@@ -159,8 +162,7 @@
               } else {
                 Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
               }
-              cache['fotosClientes'] = JSON.stringify(obj);
-              // Do NOT write fotosClientes to localStorage; keep it in-memory only.
+              memStore.cache['fotosClientes'] = JSON.stringify(obj);
             }
           }catch(e){}
           return;
@@ -180,38 +182,36 @@
   function setJSONLocal(key, value){
     try{
       const txt = JSON.stringify(value);
-      // Do NOT persist fotosClientes to localStorage. Keep it only in memory.
+      // Do NOT persist fotosClientes to persistent browser storage. Keep it only in memory.
       if (key === 'fotosClientes') {
-        cache[key] = txt;
+        memStore.cache[key] = txt;
         return;
       }
-      localStorage.setItem(key, txt);
-      cache[key] = txt;
+      memStore.cache[key] = txt;
     }catch(e){ console.warn('[storage-adapter] setJSONLocal failed', e); }
   }
-          try{
-            const raw = cache['fotosClientes'] || null;
-            const obj = raw ? JSON.parse(raw) : {};
-            if(patch && typeof patch === 'object'){
-              if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
-                obj[patch.key] = patch.value;
-              } else {
-                Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
-              }
-              cache['fotosClientes'] = JSON.stringify(obj);
-              // Do NOT write fotosClientes to localStorage; keep only in-memory cache.
-            }
-          }catch(e){}
+              try{
+                const raw = memStore.cache['fotosClientes'] || null;
+                const obj = raw ? JSON.parse(raw) : {};
+                if(patch && typeof patch === 'object'){
+                  if(patch.key && Object.prototype.hasOwnProperty.call(patch, 'value')){
+                    obj[patch.key] = patch.value;
+                  } else {
+                    Object.keys(patch).forEach(k => { obj[k] = patch[k]; });
+                  }
+                  memStore.cache['fotosClientes'] = JSON.stringify(obj);
+                }
+              }catch(e){}
   function getRaw(key){
     try{
-      if(typeof cache !== 'undefined' && cache && cache[key] !== undefined) return cache[key];
+      if(typeof memStore !== 'undefined' && memStore.cache && memStore.cache[key] !== undefined) return memStore.cache[key];
       if(key === 'fotosClientes' && typeof window !== 'undefined' && window.__FOTOS_CLIENTES_PRELOAD__) return JSON.stringify(window.__FOTOS_CLIENTES_PRELOAD__);
       return null;
     }catch(e){ return null; }
   }
 
   function setRaw(key, value){
-    try{ localStorage.setItem(key, value); cache[key] = value; }catch(e){ /* ignore */ }
+    try{ memStore.cache[key] = value; }catch(e){ /* ignore */ }
   }
 
   // Expor API mínima
@@ -225,41 +225,23 @@
           const contentType = m[1];
           const b64 = m[2];
           try{
-            // 1) Try presign flow
-            const presignRes = await fetch(`${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes/presign`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') },
-              body: JSON.stringify({ key, contentType })
-            });
-            if(presignRes && presignRes.ok){
-              const pj = await presignRes.json();
-              if(pj && pj.ok && pj.presignUrl && pj.publicUrl){
-                // PUT binary directly to presignUrl
-                const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-                const putRes = await fetch(pj.presignUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: bin });
-                if(putRes && (putRes.ok || putRes.status === 200 || putRes.status === 204)){
-                  await patchJSON('fotosClientes', { key, value: pj.publicUrl });
-                  return;
+            try{
+              // Use server-side upload via apiFetch; avoid direct presign/PUT flows.
+              if(typeof window?.apiFetch === 'function'){
+                const up = await window['apiFetch']('/fotos-clientes/upload', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') },
+                  body: JSON.stringify({ key, data: value })
+                });
+                if(up && up.ok){
+                  const uj = await up.json();
+                  if(uj && uj.ok && uj.url){
+                    await patchJSON('fotosClientes', { key, value: uj.url });
+                    return;
+                  }
                 }
               }
-            }
-          }catch(e){ console.warn('[storage-adapter] presign upload failed', e); }
-
-          try{
-            // 2) Fallback to existing server-side upload POC
-            const up = await fetch(`${window.__API_BASE__.replace(/\/$/, '')}/fotos-clientes/upload`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-tenant-id': (window.__TENANT_ID__||'default') },
-              body: JSON.stringify({ key, data: value })
-            });
-            if(up && up.ok){
-              const uj = await up.json();
-              if(uj && uj.ok && uj.url){
-                await patchJSON('fotosClientes', { key, value: uj.url });
-                return;
-              }
-            }
-          }catch(e){ console.warn('[storage-adapter] fallback upload failed', e); }
+            }catch(e){ console.warn('[storage-adapter] upload via apiFetch failed', e); }
         }
       }
 

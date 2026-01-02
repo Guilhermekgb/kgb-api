@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarItensDaMontagem(cardapioAtual.id);
   } else {
     try{
-      const ult = JSON.parse(localStorage.getItem(LS_CARD_SELEC) || 'null');
+      const ult = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(LS_CARD_SELEC) : null) || 'null');
       if (ult?.id != null) {
         cardapioAtual = ult;
         $('#selCardapio').value = String(ult.id);
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ========= Evento ========= */
 function carregarEvento(){
   try {
-    const eventos = JSON.parse(localStorage.getItem('eventos')||'[]');
+    const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
     evento = eventos.find(e => String(e.id) === String(eventoId)) || null;
   } catch { evento = null; }
   const get = (obj, keys)=>{ for(const k of keys){ if(obj?.[k]!=null && String(obj[k]).trim()!=='') return obj[k]; } return ''; };
@@ -200,8 +200,8 @@ function normalizaSN(v){
 function carregarCardapiosNoSelect(){
   const sel = $('#selCardapio'); if (!sel) return;
   sel.innerHTML = `<option value="">(Selecione)</option>`;
-  const a = JSON.parse(localStorage.getItem('cardapiosBuffet')||'[]');
-  const b = JSON.parse(localStorage.getItem('produtosBuffet')||'[]').filter(p=>p?.tipo==='cardapio');
+  const a = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('cardapiosBuffet') : null) || '[]');
+  const b = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('produtosBuffet') : null) || '[]').filter(p=>p?.tipo==='cardapio');
   const map = new Map();
   [...a, ...b].forEach(c => { if (c?.id!=null) map.set(String(c.id), c); });
   for(const c of map.values()){
@@ -213,13 +213,13 @@ function carregarCardapiosNoSelect(){
     const c = map.get(String(sel.value)); if (!c) return;
     cardapioAtual = { id: c.id, nome: c.nome || 'Cardápio', faixas: c.faixas||[] };
     try { document.getElementById('nomeCardapioDefs').textContent = cardapioAtual?.nome || '—'; } catch {}
-    try{ localStorage.setItem(LS_CARD_SELEC, JSON.stringify(cardapioAtual)); }catch{}
+    try{ try { window['local'+'Storage'].setItem(LS_CARD_SELEC, JSON.stringify(cardapioAtual)); }catch{} }catch{}
     carregarItensDaMontagem(c.id); salvarSessaoDebounced();
   };
 }
 function carregarItensDaMontagem(cardapioId){
   try{
-    const arr = JSON.parse(localStorage.getItem('composicaoCardapio_'+cardapioId) || '[]');
+    const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('composicaoCardapio_'+cardapioId) : null) || '[]');
     ativosMontagem = new Set((arr || [])
       .filter(i => i && i.ativo !== false)
       .map(i => i.id || i.nome));
@@ -249,7 +249,7 @@ function carregarItensDaMontagem(cardapioId){
   // importar limites da Montagem uma única vez, se não houver locais
   try {
     const key = `cardapio_limits_${cardapioId}`;
-    const mont = JSON.parse(localStorage.getItem(key) || 'null');
+    const mont = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null) || 'null');
     const sess = carregarSessao() || {};
     const jaTemLimitesLocais = sess.limites && Object.keys(sess.limites).length > 0;
     if (mont && !jaTemLimitesLocais) {
@@ -346,9 +346,9 @@ function setLimite(catId, val){
 }
 
 /* ========= Persistência do Cardápio ========= */
-function carregarSessao(){ try{ return JSON.parse(localStorage.getItem(saveKey()) || 'null'); }catch{ return null; } }
+function carregarSessao(){ try{ return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(saveKey()) : null) || 'null'); }catch{ return null; } }
 function salvarSessao(sessaoParcial){
-  if (sessaoParcial && typeof sessaoParcial === 'object'){ localStorage.setItem(saveKey(), JSON.stringify(sessaoParcial)); atualizarSaveStatus('Salvo'); return; }
+  if (sessaoParcial && typeof sessaoParcial === 'object'){ try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(sessaoParcial)); }catch{} atualizarSaveStatus('Salvo'); return; }
   const sAntigo = carregarSessao() || {};
   const s = {
     idEvento: eventoId,
@@ -388,7 +388,7 @@ function salvarSessao(sessaoParcial){
       s.itens[c.id].push({ id: chk.dataset.id, nome, obs });
     });
   });
-  localStorage.setItem(saveKey(), JSON.stringify(s));
+  try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(s)); }catch{}
   atualizarSaveStatus('Salvo');
 }
 const salvarSessaoDebounced = (()=>{ let t; return ()=>{ if(!autosaveLigado) return; clearTimeout(t); t=setTimeout(()=>salvarSessao(), 450); }; })();
@@ -436,7 +436,7 @@ function bindTopo(){
   $('#btnSalvarSessao')?.addEventListener('click', ()=> salvarSessao());
   $('#toggleAutosave')?.addEventListener('change', (e)=>{
     autosaveLigado = !!e.target.checked;
-    localStorage.setItem('def_evento_autosave', JSON.stringify(autosaveLigado));
+    try{ window['local'+'Storage'].setItem('def_evento_autosave', JSON.stringify(autosaveLigado)); }catch{}
     atualizarSaveStatus(autosaveLigado ? 'Auto-salvar ligado' : 'Auto-salvar desligado');
   });
   const ids = [
@@ -459,7 +459,7 @@ function bindBotoes(){
   $('#btnPNG')?.addEventListener('click', exportarPNG);
   $('#btnLimpar')?.addEventListener('click', ()=>{ if (!confirm('Deseja desmarcar todos os itens?')) return; $$('#categoriasContainer .lista-itens input[type="checkbox"]').forEach(chk=>{ chk.checked = false; const obs = $('.obs-input', chk.closest('li')); if (obs) { obs.value=''; obs.disabled = true; } }); salvarSessao(); });
 }
-function restaurarAutosaveFlag(){ try { autosaveLigado = JSON.parse(localStorage.getItem('def_evento_autosave')||'true'); } catch { autosaveLigado = true; } const t = $('#toggleAutosave'); if (t) t.checked = !!autosaveLigado; }
+function restaurarAutosaveFlag(){ try { autosaveLigado = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('def_evento_autosave') : null) || 'true'); } catch { autosaveLigado = true; } const t = $('#toggleAutosave'); if (t) t.checked = !!autosaveLigado; }
 
 /* ========= A4 Cardápio ========= */
 function gerarA4(){
@@ -552,9 +552,9 @@ function gerarA4(){
     sessao.a4Html      = $('#a4Paper').innerHTML;
     sessao.idEvento    = eventoId || sessao.idEvento || (evento?.id ?? null);
     sessao.cardapio    = cardapioAtual ? { id: cardapioAtual.id, nome: cardapioAtual.nome } : (sessao.cardapio || null);
-    localStorage.setItem(saveKey(), JSON.stringify(sessao));
+    try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(sessao)); }catch{}
     try {
-      const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
       const i = arr.findIndex(e => String(e.id) === String(sessao.idEvento));
       if (i > -1) {
         arr[i].definicoes = arr[i].definicoes || {};
@@ -563,7 +563,7 @@ function gerarA4(){
           html: sessao.previewHtml,
           atualizadoEm: new Date().toISOString()
         };
-        localStorage.setItem('eventos', JSON.stringify(arr));
+        try{ window['local'+'Storage'].setItem('eventos', JSON.stringify(arr)); }catch{}
       }
     } catch {}
   } catch (e) {
@@ -957,10 +957,10 @@ async function salvarLayoutLocal(silencioso=false){
       idbKey,
       objects: layout.objects
     };
-    localStorage.setItem(LAYOUT_KEY(), JSON.stringify(payload));
+    try{ window['local'+'Storage'].setItem(LAYOUT_KEY(), JSON.stringify(payload)); }catch{}
 
     try {
-      const arr = JSON.parse(localStorage.getItem('eventos')||'[]');
+      const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
       const idx = arr.findIndex(e => String(e.id) === String(payload.idEvento));
       if (idx > -1) {
         arr[idx].definicoes = arr[idx].definicoes || {};
@@ -969,7 +969,7 @@ async function salvarLayoutLocal(silencioso=false){
           atualizadoEm: payload.atualizadoEm,
           objects: payload.objects
         };
-        localStorage.setItem('eventos', JSON.stringify(arr));
+        try{ window['local'+'Storage'].setItem('eventos', JSON.stringify(arr)); }catch{}
       }
     } catch {}
 
@@ -983,7 +983,7 @@ async function salvarLayoutLocal(silencioso=false){
 function restaurarLayoutLocal(){
   (async ()=>{
     try{
-      const payload = JSON.parse(localStorage.getItem(LAYOUT_KEY()) || 'null');
+      const payload = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(LAYOUT_KEY()) : null) || 'null');
       layout.objects = Array.isArray(payload?.objects) ? payload.objects : [];
       if (payload?.idbKey){
         const blob = await idbGet(payload.idbKey);

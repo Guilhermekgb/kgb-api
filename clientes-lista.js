@@ -1,7 +1,58 @@
 // clientes-lista.js — robusto: API + fallbacks locais
 import guard from './api/proteger-pagina.js';
 
-import { handleRequest as handleLocal } from './api/routes.js';
+// local route handler import removed — Phase 1 uses memStore or window.apiFetch as fallback
+
+// === PATCH PHASE 1: memStore + sync + api wrappers ===
+if (typeof window !== 'undefined') {
+  window.__MEM_CACHE__ = window.__MEM_CACHE__ || Object.create(null);
+}
+
+const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : Object.create(null);
+
+// BroadcastChannel sync (fallback to CustomEvent)
+let bc = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+}
+
+function sendSync(key, value) {
+  try {
+    const msg = { k: key, v: value };
+    if (bc) bc.postMessage(msg);
+    else if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kgb-ui-sync', { detail: msg }));
+  } catch {}
+}
+
+function onSync(fn) {
+  if (bc) bc.addEventListener('message', ev => fn(ev.data));
+  else if (typeof window !== 'undefined') window.addEventListener('kgb-ui-sync', ev => fn(ev.detail));
+}
+
+function getJSON(key, fallback) {
+  try {
+    const raw = mem[key];
+    if (raw === undefined) return typeof fallback === 'function' ? fallback() : fallback;
+    return raw;
+  } catch { return typeof fallback === 'function' ? fallback() : fallback; }
+}
+
+function setJSON(key, value) {
+  try {
+    mem[key] = value;
+    sendSync(key, value);
+  } catch {}
+}
+
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__ === true); } catch { return false; }
+}
+
+async function apiGet(path) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'GET' }) : null); }
+async function apiPost(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'POST', body }) : null); }
+async function apiPut(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'PUT', body }) : null); }
+
+// === END PATCH PHASE 1 ===
 
 
 const KEY_TIPOS_EVENTO = 'categorias:tiposEvento';
@@ -40,21 +91,36 @@ const api = (endpoint, method = 'GET', body = {}) =>
         }
 
         try {
-          const res = await fetch(url, { ...opts, credentials: 'include' });
-          const ct = res.headers.get('content-type') || '';
-          const data = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
-          resolve(data);
-          return;
+          // Only perform real network I/O via window.apiFetch. If not available,
+          // abort to fallback to local route handling.
+          if (typeof window !== 'undefined' && window.apiFetch) {
+            const path = String(endpoint || '');
+            const callOpts = { method: m };
+            if (safeBody !== undefined) callOpts.body = safeBody;
+            const payload = await window.apiFetch(path, callOpts);
+            resolve(payload);
+            return;
+          }
+          // No apiFetch available — force fallback to local routes
+          throw new Error('no apiFetch available');
         } catch (e) {
-          console.warn('[API] fetch direto falhou, usando rotas locais:', e);
+          console.warn('[API] fetch direto falhou ou apiFetch ausente, usando rotas locais:', e);
         }
       } catch (e) {
         console.warn('[API] erro ao chamar apiFetch, fallback local:', e);
       }
     }
 
-    // Fallback para rotas locais se tudo mais falhar
-    handleLocal(endpoint, { method: m, body: safeBody }, resolve);
+    // Fallback para rotas locais se tudo mais falhar: preferir memStore local, senão retornar null
+    try {
+      const memKey = 'fallback:' + String(endpoint || '').replace(/^\/+/, '');
+      if (typeof mem !== 'undefined' && mem[memKey] !== undefined) {
+        resolve(mem[memKey]);
+        return;
+      }
+    } catch {}
+    // sem handleLocal: não há handler local disponível aqui, resolve com null para fallback do chamador
+    resolve(null);
   });
 // FIM PATCH API-LOCAL 2/2
 
@@ -72,9 +138,15 @@ function lerClientesLocalPorChaves(){
   const chaves = ['clientesBase','clientes','clientes_lista','clientes:base','clientesSalvos'];
   for (const k of chaves){
     try{
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      const data = JSON.parse(raw);
+      let data = null;
+      if (isPortalMode()) {
+        data = getJSON(k, null);
+      } else {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        data = JSON.parse(raw);
+      }
+      if (!data) continue;
       if (Array.isArray(data) && data.length) return data;
       if (Array.isArray(data?.clientes) && data.clientes.length) return data.clientes;
     }catch{}
@@ -83,6 +155,8 @@ function lerClientesLocalPorChaves(){
 }
 
 function scanLocalStoragePorClientes(){
+  // In portal mode we must not scan localStorage
+  if (isPortalMode()) return [];
   let melhor = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -125,9 +199,15 @@ function scanLocalStoragePorClientes(){
 /* Tipos de evento (Google Fonts NÃO aqui; menu preservado) */
 function lerTiposDeEventoDasCategorias() {
   try {
-    const rawKey = localStorage.getItem(KEY_TIPOS_EVENTO);
+    let rawKey = null;
+    if (isPortalMode()) rawKey = getJSON(KEY_TIPOS_EVENTO, null);
+    else rawKey = localStorage.getItem(KEY_TIPOS_EVENTO);
     if (rawKey) {
-      const arr = JSON.parse(rawKey);
+      let arr = [];
+      if (Array.isArray(rawKey)) arr = rawKey;
+      else {
+        try { arr = JSON.parse(rawKey); } catch { arr = []; }
+      }
       if (Array.isArray(arr) && arr.length) {
         return arr.map(v => typeof v === 'string' ? v : (v?.nome || v?.label || ''))
                   .map(s => String(s).trim()).filter(Boolean);
@@ -135,8 +215,16 @@ function lerTiposDeEventoDasCategorias() {
     }
     const candidatos = ['categoriasGerais','categorias-gerais','tiposEvento','tipos_de_evento','eventTypes'];
     for (const k of candidatos) {
-      const raw = localStorage.getItem(k); if (!raw) continue;
-      const data = JSON.parse(raw); let arr = [];
+      let raw = null;
+      if (isPortalMode()) raw = getJSON(k, null);
+      else raw = localStorage.getItem(k);
+      if (!raw) continue;
+      let data = null;
+      if (Array.isArray(raw) || typeof raw === 'object') data = raw;
+      else {
+        try { data = JSON.parse(raw); } catch { data = null; }
+      }
+      let arr = [];
       if (Array.isArray(data)) arr = data;
       else if (Array.isArray(data?.tiposEvento)) arr = data.tiposEvento;
       else if (Array.isArray(data?.['Tipos de Evento'])) arr = data['Tipos de Evento'];
@@ -220,7 +308,7 @@ function getEventoIdParaCliente(c) {
 
   // 2) Procura no localStorage "eventos"
   try {
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = isPortalMode() ? (getJSON('eventos', []) || []) : JSON.parse(localStorage.getItem('eventos') || '[]');
     const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
     const dig  = s => String(s||'').replace(/\D+/g,'');
 

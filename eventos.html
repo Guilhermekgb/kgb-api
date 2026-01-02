@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Eventos</title>
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <main id="app">
+    <h1>Eventos</h1>
+    <div id="lista"></div>
+  </main>
+  <script src="/kgb-common.js"></script>
+  <script>
+    // mínimo: tenta renderizar evento selecionado se existir
+    (function(){ try{
+      document.addEventListener('DOMContentLoaded', ()=>{
+        try{
+          const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
+          const sel = localStorage.getItem('eventoSelecionado');
+          const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0];
+          if (ev){
+            const d = document.getElementById('lista');
+            const img = document.createElement('img');
+            img.id = 'fotoCliente';
+            img.style.maxWidth = '320px';
+            if (window.__FOTOS_CLIENTES_PRELOAD__){
+              const k = ev.fotoClienteKey;
+              const map = window.__FOTOS_CLIENTES_PRELOAD__;
+              if (k && map && map[k]) img.src = map[k];
+            }
+            const p = document.createElement('p'); p.textContent = ev.nomeEvento || 'Evento';
+            d.appendChild(p); d.appendChild(img);
+          }
+        }catch(e){}
+      });
+    }catch(e){} })();
+  </script>
+</body>
+</html>

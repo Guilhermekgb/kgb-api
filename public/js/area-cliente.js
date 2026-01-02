@@ -36,7 +36,15 @@
   };
 
   /* ===================== Branding ===================== */
-  let app={}; try{ app=JSON.parse(localStorage.getItem('app_config')||'{}'); }catch{}
+  const app = (function(){
+    try{
+      if (typeof isPortalMode === 'function' && isPortalMode()){
+        const v = (window.__MEM_CACHE__ && window.__MEM_CACHE__['app_config']);
+        return (v===undefined || v===null) ? {} : v;
+      }
+      return JSON.parse(localStorage.getItem('app_config')||'{}');
+    }catch{ return {}; }
+  })();
   const setVar=(k,v)=>{ if(v) document.documentElement.style.setProperty(k,v); };
   setVar('--brand',  app.brand  ||'#5a3e2b');
   setVar('--brand-2',app.brand2 ||'#c29a5d');
@@ -55,8 +63,38 @@
 
   const API_BASE =
     (typeof window.__API_BASE__ === 'string' && window.__API_BASE__) ||
-    localStorage.getItem('API_BASE') ||
-    '';
+    (typeof isPortalMode === 'function' && isPortalMode()
+      ? ((window.__MEM_CACHE__ && window.__MEM_CACHE__['API_BASE']) || '')
+      : (localStorage.getItem('API_BASE') || ''));
+
+  // === memStore + sync helpers (fase 1: encapsular storage e sync) ===
+  window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+  const mem = window.__MEM_CACHE__;
+  let __BC__ = null;
+  try { __BC__ = new BroadcastChannel('kgb-ui-sync'); } catch(e){ __BC__ = null; }
+  function sendSync(key, value){
+    try{ if(__BC__) __BC__.postMessage({ key, value }); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value } })); }catch(e){}
+  }
+  function onSync(handler){
+    if(__BC__){ __BC__.onmessage = (ev)=>{ try{ handler(ev.data); }catch{} }; }
+    else { window.addEventListener('kgb-ui-sync', (ev)=>{ try{ handler(ev.detail); }catch{} }); }
+  }
+
+  const getJSON = (k, fb)=>{ try{ return (mem[k]===undefined?fb:mem[k]); }catch{return fb;} };
+  const setJSON = (k, v)=>{ try{ mem[k]=v; sendSync(k,v); }catch{} };
+
+  // API wrappers — usam sempre window['apiFetch']
+  const apiGet = (u)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'GET' }); return Promise.reject(new Error('no apiFetch')); };
+  const apiPost = (u,b)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'POST', body: JSON.stringify(b), headers:{ 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); };
+  const apiPut = (u,b)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'PUT', body: JSON.stringify(b), headers:{ 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); };
+
+  // Detecta se estamos no modo portal (token na URL ou janela explicitamente marcada)
+  function isPortalMode(){
+    try{
+      const qp = new URLSearchParams(location.search);
+      return !!(qp.get('token') || qp.get('portal') || window.__PORTAL__);
+    }catch(e){ return !!window.__PORTAL__; }
+  }
 
   let ev  = {};   // evento atual (preenchido pela API ou pelo localStorage)
   let eid = '';   // id do evento (vem do backend ou do localStorage)
@@ -78,7 +116,7 @@
 
       try {
         const url = API_BASE.replace(/\/+$/,'') + '/portal/me?token=' + encodeURIComponent(portalToken);
-        const resp = await fetch(url, {
+        const resp = await window['apiFetch'](url, {
           method: 'GET',
           headers: {
             'accept': 'application/json'
@@ -107,13 +145,13 @@
           const base = API_BASE.replace(/\/+$/,'');
 
           const [finResp, parcResp] = await Promise.all([
-            fetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`, {
+            window['apiFetch'](`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`, {
               method: 'GET',
               headers: {
                 'accept': 'application/json'
               }
             }),
-            fetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`, {
+            window['apiFetch'](`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`, {
               method: 'GET',
               headers: {
                 'accept': 'application/json'
@@ -135,8 +173,8 @@
         } catch (e) {
           console.warn('[Portal] Erro ao carregar financeiro/parcelas do portal', e);
         }
-        // cache leve só para esta aba/sessão (opcional)
-        try { sessionStorage.setItem('portal_me', JSON.stringify(ev)); } catch {}
+        // cache leve só para esta aba/sessão (opcional) — agora em memória (memStore)
+        try { setJSON('portal_me', ev); } catch {}
 
       } catch (err) {
         console.error('[Portal] Erro ao carregar evento do portal', err);
@@ -148,22 +186,25 @@
         }
         throw err;
       }
-      return;
-    }
+          if (finResp.ok) {
+            portalFinanceiro = await finResp.json();
+          } else {
+            console.warn('GET /portal/eventos/:id/financeiro falhou:', finResp.status);
+          }
 
-    // 2) modo antigo (interno): usa id + localStorage
-    const eidFromQuery = qs.get('id') || '';
-    const eidFromLS    = localStorage.getItem('eventoSelecionado') || '';
-    eid = eidFromQuery || eidFromLS || '';
-
-    let eventos = [];
-    try {
-      eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+          if (parcResp.ok) {
+            portalParcelas = await parcResp.json();
+          } else {
+            console.warn('GET /portal/eventos/:id/parcelas falhou:', parcResp.status);
+          }
     } catch {
       eventos = [];
     }
     ev = eventos.find(e => String(e.id) === String(eid)) || {};
-  }
+        try { setJSON('portal_me', ev); } catch {}
+        try { setJSON('portal_evento', ev); } catch {}
+        try { setJSON('portal_fin_'+String(eid), portalFinanceiro); } catch {}
+        try { setJSON('portal_parc_'+String(eid), portalParcelas); } catch {}
 
   // carrega o evento assim que o script inicia (portal online ou modo antigo)
   await carregarEventoDoPortal();
@@ -186,18 +227,22 @@
           return {};
         })();
         const fromMap = map[key];
-        if (fromMap && typeof fromMap === 'string' && fromMap.trim()){
-          return fromMap;
-        }
-      }
-    }catch{}
-    const tries = [
-      ev.fotoClienteURL, ev.avatarClienteURL, ev.fotoClienteUrl, ev.fotoCliente,
-      ev.imagemCliente, ev.imageCliente, ev.avatar, ev.avatarUrl,
-      (ev.cliente && (ev.cliente.foto || ev.cliente.imagem || ev.cliente.avatar))
-    ].filter(Boolean);
-    for (const v of tries){
-      const s = String(v || '').trim();
+          if (!isPortalMode()){
+            for(let i=0;i<localStorage.length;i++){
+              const k=localStorage.key(i)||'';
+              if(!/^proposta_visualizacoes/i.test(k)) continue;
+              const arr=getArrLS(k).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
+              if(!arr.length) continue;
+              const preferKey = eid && k.indexOf(String(eid))>-1;
+              if(preferName){
+                const n1=normCard(preferName);
+                const ex = arr.find(c=>normCard(c.nome||'')===n1) ||
+                           arr.find(c=>{const p=normCard(c.nome||''); return p.includes(n1)||n1.includes(p);});
+                if(ex){ bestStrict=ex; if(preferKey) return ex; }
+              }
+              if(!best || preferKey) best=arr[0];
+            }
+          }
       if (!s) continue;
       if (/^data:image\//i.test(s))   return s;
       if (/^blob:/i.test(s))          return s;
@@ -246,11 +291,16 @@
     }, 0);
   }
   function lerSnapshotFinanceiro(eventoId){
-    try{ return JSON.parse(localStorage.getItem(`financeiroEvento:${eventoId}`)||'null'); }catch{ return null; }
+    try{
+      if (isPortalMode()) {
+        return getJSON('portal_fin_'+String(eventoId), null);
+      }
+      return JSON.parse(localStorage.getItem(`financeiroEvento:${eventoId}`)||'null');
+    }catch{ return null; }
   }
   function valorRecebidoPorParcelas(eventoId){
     try{
-      const parcelas = JSON.parse(localStorage.getItem(`parcelas:${eventoId}`)||'[]');
+      const parcelas = (isPortalMode() ? (getJSON('portal_parc_'+String(eventoId),[])||[]) : JSON.parse(localStorage.getItem(`parcelas:${eventoId}`)||'[]'));
       return parcelas.reduce((acc,p)=>{
         const st=String(p.status||'').toLowerCase();
         const pago=(st==='pago'||st==='recebido');
@@ -444,23 +494,25 @@
       }
       return hit||null;
     }
-    function getArrLS(key){ try{ const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; }catch{ return []; } }
+    function getArrLS(key){ try{ if (isPortalMode()){ const v = getJSON(key,[]); return Array.isArray(v)?v:[]; } const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; }catch{ return []; } }
     function fromPropostas(eid, preferName){
       try{
         let best=null, bestStrict=null;
-        for(let i=0;i<localStorage.length;i++){
-          const k=localStorage.key(i)||'';
-          if(!/^proposta_visualizacoes/i.test(k)) continue;
-          const arr=getArrLS(k).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
-          if(!arr.length) continue;
-          const preferKey = eid && k.indexOf(String(eid))>-1;
-          if(preferName){
-            const n1=normCard(preferName);
-            const ex = arr.find(c=>normCard(c.nome||'')===n1) ||
-                       arr.find(c=>{const p=normCard(c.nome||''); return p.includes(n1)||n1.includes(p);});
-            if(ex){ bestStrict=ex; if(preferKey) return ex; }
+        if (!isPortalMode()){
+          for(let i=0;i<localStorage.length;i++){
+            const k=localStorage.key(i)||'';
+            if(!/^proposta_visualizacoes/i.test(k)) continue;
+            const arr=getArrLS(k).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
+            if(!arr.length) continue;
+            const preferKey = eid && k.indexOf(String(eid))>-1;
+            if(preferName){
+              const n1=normCard(preferName);
+              const ex = arr.find(c=>normCard(c.nome||'')===n1) ||
+                         arr.find(c=>{const p=normCard(c.nome||''); return p.includes(n1)||n1.includes(p);});
+              if(ex){ bestStrict=ex; if(preferKey) return ex; }
+            }
+            if(!best || preferKey) best=arr[0];
           }
-          if(!best || preferKey) best=arr[0];
         }
         return bestStrict||best||null;
       }catch{ return null; }
@@ -603,11 +655,11 @@
     const has=(v)=>v!==undefined && v!==null && String(v).trim()!=='';    
 
     const qs  = new URLSearchParams(location.search);
-    const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+    const eid = qs.get('id') || (isPortalMode() ? (String((getJSON('portal_evento',{})||{}).id || '')) : localStorage.getItem('eventoSelecionado')) || '';
 
-    const readFG = ()=>{ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } };
-    const getCompLanc = (lancId)=>{ try{ return localStorage.getItem(`fg.comp:${lancId}`)||null; }catch{ return null; } };
-    const getCompParc = (parcId)=>{ try{ return localStorage.getItem(`fg.comp.parc:${parcId}`)||null; }catch{ return null; } };
+    const readFG = ()=>{ try{ return isPortalMode() ? (getJSON('financeiroGlobal',{})||{}) : (JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}); }catch{ return {}; } };
+    const getCompLanc = (lancId)=>{ try{ return isPortalMode() ? (getJSON(`fg.comp:${lancId}`, null)) : (localStorage.getItem(`fg.comp:${lancId}`)||null); }catch{ return null; } };
+    const getCompParc = (parcId)=>{ try{ return isPortalMode() ? (getJSON(`fg.comp.parc:${parcId}`, null)) : (localStorage.getItem(`fg.comp.parc:${parcId}`)||null); }catch{ return null; } };
 
     function montarLinhas(){
       const linhas=[]; const seen=new Set();
@@ -763,13 +815,14 @@
 
     render();
 
-    // no modo interno ainda escutamos mudanças de LS;
-    // no modo portal, isso basicamente não mexe em nada.
-    window.addEventListener('storage', (e)=>{
-      const k = String(e.key||'');
-      if (k==='financeiroGlobal' || k.startsWith('parcelas:') || k.startsWith('fg.comp:') || k.startsWith('fg.comp.parc:')){
-        render();
-      }
+    // no modo interno ainda escutamos mudanças de LS via sync channel;
+    onSync((msg)=>{
+      try{
+        const k = String(msg?.key||'');
+        if (k==='financeiroGlobal' || k.startsWith('parcelas:') || k.startsWith('fg.comp:') || k.startsWith('fg.comp.parc:')){
+          render();
+        }
+      }catch{}
     });
   })();
 
@@ -781,12 +834,12 @@
     if (fechar) fechar.addEventListener('click', ()=>modal.classList.remove('open'));
     if (modal)  modal.addEventListener('click',(e)=>{ if(e.target===modal) modal.classList.remove('open'); });
 
-    const loadDefsFromLS=(eid)=>{ try{ return JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}; }catch{ return {}; } };
+    const loadDefsFromLS=(eid)=>{ try{ return isPortalMode() ? (getJSON('definicoes_evento_'+eid,{})||{}) : (JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}); }catch{ return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     function renderDefCardapioBox(){
       const el=$id('defCardapioInfo'); if(!el) return;
-      const eid = new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+      const eid = new URLSearchParams(location.search).get('id') || (isPortalMode() ? (String((getJSON('portal_evento',{})||{}).id || '')) : localStorage.getItem('eventoSelecionado')) || '';
       const s = loadDefsFromLS(eid);
       if(!s || !s.a4Html){
         el.innerHTML='<span class="badge warn">Pendente</span>'; return;
@@ -906,7 +959,7 @@
   /* ===================== Etapas do Evento ===================== */
   (function etapas(){
     const toISOdate=(v)=>{ if(!v) return null; const d=new Date(v); return isFinite(d)?d:null; };
-    const loadDefsFromLS=(eid)=>{ try{ return JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}; }catch{ return {}; } };
+    const loadDefsFromLS=(eid)=>{ try{ return isPortalMode() ? (getJSON('definicoes_evento_'+eid,{})||{}) : (JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}); }catch{ return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     const contratoAssinado=(_ev)=>{
@@ -919,7 +972,7 @@
       if (_ev.cardapioContratado || _ev.menu || _ev.menuContracted) return true;
       if (has(_ev.cardapioId) || has(_ev.cardapioNome) || has(_ev.nomeCardapio)) return true;
       try{
-        const c=JSON.parse(localStorage.getItem('cardapioSelecionado')||'null');
+        const c = isPortalMode() ? (getJSON('cardapioSelecionado', null)) : (JSON.parse(localStorage.getItem('cardapioSelecionado')||'null'));
         if (c && (String(c.eventoId||_eid)===String(_eid)) && (has(c.id)||has(c.nome))) return true;
       }catch{}
       if (Array.isArray(_ev.itensSelecionados)){
@@ -1043,7 +1096,7 @@ const financeiroEmDia = (_ev) => {
     async function carregarTimeline(){
       try {
         const url = `${base}/portal/eventos/${encodeURIComponent(eid)}/timeline`;
-        const resp = await fetch(url, {
+        const resp = await window['apiFetch'](url, {
           method:'GET',
           headers:{
             'x-tenant-id':'default',
@@ -1058,6 +1111,7 @@ const financeiroEmDia = (_ev) => {
         }
 
         const data = await resp.json();
+        try{ setJSON('portal_tl_'+String(eid), data); }catch{}
         const eventosTL = Array.isArray(data)
           ? data
           : (data.eventos || data.timeline || []);
@@ -1112,12 +1166,18 @@ const financeiroEmDia = (_ev) => {
     if (ev.clientNotes?.ideias && txi) txi.value=ev.clientNotes.ideias;
 
     const save = (key, val, hintEl)=>{
-      let arr=[]; try{ arr=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}
+      let arr=[];
+      try{
+        arr = isPortalMode() ? (getJSON('eventos',[])||[]) : (JSON.parse(localStorage.getItem('eventos')||'[]'));
+      }catch{}
       const i = arr.findIndex(x=>String(x.id)===String(eid));
       if (i>-1){
         arr[i].clientNotes = arr[i].clientNotes || {};
         arr[i].clientNotes[key] = val;
-        localStorage.setItem('eventos', JSON.stringify(arr));
+        try{
+          if (isPortalMode()){ setJSON('eventos', arr); }
+          else { localStorage.setItem('eventos', JSON.stringify(arr)); }
+        }catch(e){}
         if (hintEl){ hintEl.textContent='Salvo!'; setTimeout(()=>{hintEl.textContent='';}, 1200); }
       }
     };
@@ -1141,25 +1201,25 @@ const financeiroEmDia = (_ev) => {
     if (elMsg && nomeCli) elMsg.textContent = 'Obrigada pela confiança, '+nomeCli+' — é um prazer fazer parte desse sonho!';
   })();
 
-    // Mantém o listener de storage, se quiser que outras abas atualizem KPIs
-  window.addEventListener('storage', (e)=>{
-    const k=String(e.key||'');
-    if (
-      k.startsWith('financeiroEvento:') ||
-      k.startsWith('parcelas:') ||
-      k==='eventos' ||
-      k==='fotosClientes' ||
-      k.startsWith('evt:update:')
-    ){
-      try{
+    // Mantém o listener via channel de sync, para outras abas atualizarem KPIs
+  onSync((msg)=>{
+    try{
+      const k = String(msg?.key||'');
+      if (
+        k.startsWith('financeiroEvento:') ||
+        k.startsWith('parcelas:') ||
+        k==='eventos' ||
+        k==='fotosClientes' ||
+        k.startsWith('evt:update:')
+      ){
         // se ainda estivermos no modo antigo, recarrega de LS
         if (!portalToken) {
           let eventos=[]; try{ eventos=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}
           ev = eventos.find(e=>String(e.id)===String(eid)) || ev || {};
         }
-        renderKpis();
-      }catch{}
-    }
+        try{ renderKpis(); }catch{}
+      }
+    }catch{}
   });
 })();
 

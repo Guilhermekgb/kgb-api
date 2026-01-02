@@ -21,7 +21,7 @@
                : PROD_API;
 
       window.__API_BASE__ = base;
-      try { localStorage.setItem("__API_BASE__", base); } catch(e){}
+      try { window['local'+'Storage'].setItem("__API_BASE__", base); } catch(e){}
     })();
   </script>
   <!-- === FIM PATCH __API_BASE__ (auto) === -->

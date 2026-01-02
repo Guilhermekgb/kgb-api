@@ -49,7 +49,7 @@ window.parseBR = window.parseBR || function (s) {
 
 // Storage keys
 // Storage keys
-// --- Chave padrão do banco financeiro no localStorage ---
+// --- Chave padrão do banco financeiro ---
 // Se outra página já exportou window.FG_KEY, reutiliza.
 // Caso contrário, usa o padrão 'financeiroGlobal'.
 const FG_KEY = (typeof window !== 'undefined' && typeof window.FG_KEY === 'string')
@@ -61,6 +61,13 @@ try { if (typeof window !== 'undefined') window.FG_KEY = FG_KEY; } catch {}
 
 const CFG_KEY = 'configFinanceiro';
 const ATRASO_KEY = 'fin.cobranca.regras';
+// In-memory store helpers (transient)
+const __memoryStore_finModal = window.__memoryStore_finModal || (window.__memoryStore_finModal = {});
+function memGetModal(k, fb = null){ try { return (__memoryStore_finModal[k] ?? fb); } catch { return fb; } }
+function memSetModal(k, v){ try { __memoryStore_finModal[k] = v; return true; } catch { return false; } }
+function memGetJSONModal(k, fb = null){ try { const v = __memoryStore_finModal[k]; return v == null ? fb : (typeof v === 'object' ? v : JSON.parse(String(v))); } catch { return fb; } }
+function memSetJSONModal(k, v){ try { __memoryStore_finModal[k] = v; return true; } catch { return false; } }
+function memRemoveModal(k){ try { delete __memoryStore_finModal[k]; return true; } catch { return false; } }
 
 
 // helpers
@@ -87,7 +94,7 @@ const onlyDigits = (s='') => String(s).replace(/\D+/g,'');
 const fmtBR = (v) => Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
 
 // === Helpers para categorias do formulário (modal) ===
-function __getCFG(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } }
+// __getCFG moved above to use in-memory store
 function __popularCategoriasDoForm(tipoSel, escopoSel, root=document) {
 const tRaw  = String(tipoSel || '').toLowerCase();
 // [C1] usar normalizador canônico importado
@@ -103,7 +110,7 @@ const t = tNorm || (tRaw.includes('sai') ? 'saida' : 'entrada');
 }
 function getUsuariosVendedores() {
   try {
-    const arr = JSON.parse(localStorage.getItem('usuarios') || '[]') || [];
+    const arr = memGetJSONModal('usuarios', []) || [];
     return arr.filter(u => String(u.perfil || '').toLowerCase() === 'vendedor');
   } catch {
     return [];
@@ -150,9 +157,9 @@ function toNumberInput(v){
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 
-function readLS(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{ return fb; } }
-function writeLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
-function ping(){ try{ localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }catch{} }
+function readLS(k, fb){ try{ return memGetJSONModal(k, fb); }catch{ return fb; } }
+function writeLS(k, v){ memSetJSONModal(k, v); }
+function ping(){ try{ memSetModal('financeiroGlobal:ping', String(Date.now())); }catch{} }
 
 // Aviso padrão quando a conta (e/ou forma) está vazia.
 function __maybeContaWarning({ exigeForma=false, onProceed, bypass=false } = {}){
@@ -214,7 +221,7 @@ function writeFG(g){
 
   // salva (leve) já normalizado
   try {
-    localStorage.setItem(FG_KEY, JSON.stringify(leve));
+    memSetJSONModal(FG_KEY, leve);
   } catch (e) {
     try {
       (leve.lancamentos || []).forEach(l => {
@@ -224,7 +231,7 @@ function writeFG(g){
           l.hasComprovante = true;
         }
       });
-      localStorage.setItem(FG_KEY, JSON.stringify(leve));
+      memSetJSONModal(FG_KEY, leve);
     } catch (e2) {
       alert("Seu histórico financeiro ficou muito grande para o navegador. Remova anexos grandes ou limpe lançamentos antigos.");
       console.error("QuotaExceeded ao salvar FG:", e2);
@@ -238,7 +245,7 @@ function writeFG(g){
    // === Rebuild de movimentos + saldos, SEM depender de outras páginas ===
   try {
     // 1) garantir arrays + merge de contas do config
-    const cfg = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}} })();
+    const cfg = (function(){ try{ return memGetJSONModal('configFinanceiro', {}) || {}; }catch{return {}} })();
     leve.contas     = Array.isArray(leve.contas)     ? leve.contas     : [];
     leve.lancamentos= Array.isArray(leve.lancamentos)? leve.lancamentos: [];
     leve.parcelas   = Array.isArray(leve.parcelas)   ? leve.parcelas   : [];
@@ -350,8 +357,8 @@ function writeFG(g){
 
     // persistir resultado + ping + broadcast
     try {
-      localStorage.setItem(FG_KEY, JSON.stringify(leve));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      memSetJSONModal(FG_KEY, leve);
+      memSetModal('financeiroGlobal:ping', String(Date.now()));
     } catch {}
 
     try {
@@ -377,7 +384,7 @@ function writeFG(g){
 }
 // === NOVO: faz diff entre oldFG e newFG e chama a API (/fin/lancamentos e /fin/parcelas)
 async function syncFGDiffToApi(oldFG, newFG){
-  if (typeof window === 'undefined' || typeof window.handleRequest !== 'function') {
+  if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') {
     // se ainda não estiver no modo online, não faz nada
     return;
   }
@@ -459,7 +466,7 @@ async function syncFGDiffToApi(oldFG, newFG){
     }
 
     try {
-      await window.handleRequest(url, req);
+      await window.apiFetch(url, req);
     } catch (e) {
       console.warn('[syncFGDiffToApi] erro em', op.method, url, e);
       // aqui eu não dou throw pra não travar a tela; só loga
@@ -469,8 +476,8 @@ async function syncFGDiffToApi(oldFG, newFG){
 
 function mirrorToM14(g){
   try{
-    localStorage.setItem('m14.lancs', JSON.stringify(g.lancamentos||[]));
-    localStorage.setItem('m14.parcelas', JSON.stringify(g.parcelas||[]));
+    memSetJSONModal('m14.lancs', g.lancamentos||[]);
+    memSetJSONModal('m14.parcelas', g.parcelas||[]);
   }catch{}
 }
 function recalcSaldos(g){
@@ -504,7 +511,7 @@ function ensureFgContasBaseline(g){
   if (!g || typeof g !== 'object') return;
   g.contas = Array.isArray(g.contas) ? g.contas : [];
   const cfg = (typeof getCfg === 'function') ? getCfg() : (function(){
-    try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; }
+    try{ return memGetJSONModal('configFinanceiro', {}) || {}; }catch{ return {}; }
   })();
 
   const cfgContas = Array.isArray(cfg.contas) ? cfg.contas : [];
@@ -637,17 +644,17 @@ function genLancId(eventoId) {
 }
 
 // ==== comprovantes separados (leve) ====
-function saveComprovanteSeparado(lancId, base64) { if (!lancId || !base64) return; try { localStorage.setItem(`fg.comp:${lancId}`, base64); } catch {} }
-function loadComprovanteSeparado(lancId) { try { return localStorage.getItem(`fg.comp:${lancId}`) || null; } catch { return null; } }
-function saveParcelaComprovanteSeparado(parcelaId, base64) { if (!parcelaId || !base64) return; try { localStorage.setItem(`fg.comp.parc:${parcelaId}`, base64); } catch {} }
-function loadParcelaComprovanteSeparado(parcelaId) { try { return localStorage.getItem(`fg.comp.parc:${parcelaId}`) || null; } catch { return null; } }
+function saveComprovanteSeparado(lancId, base64) { if (!lancId || !base64) return; try { memSetModal(`fg.comp:${lancId}`, base64); } catch {} }
+function loadComprovanteSeparado(lancId) { try { return memGetModal(`fg.comp:${lancId}`, null) || null; } catch { return null; } }
+function saveParcelaComprovanteSeparado(parcelaId, base64) { if (!parcelaId || !base64) return; try { memSetModal(`fg.comp.parc:${parcelaId}`, base64); } catch {} }
+function loadParcelaComprovanteSeparado(parcelaId) { try { return memGetModal(`fg.comp.parc:${parcelaId}`, null) || null; } catch { return null; } }
 // ==== NOVO: helpers para enviar/remover comprovante de PARCELA no backend ====
-// Usa a mesma window.handleRequest que o resto do sistema está usando.
+// Usa a mesma janela `window.apiFetch` para chamadas de upload/remoção.
 
 window.apiFinUploadParcelaComprovante = async function (parcelaId, file) {
   try {
     if (!parcelaId || !file) return null;
-    if (typeof window.handleRequest !== 'function') return null;
+    if (typeof window.apiFetch !== 'function') return null;
 
     const fd = new FormData();
     fd.append('file', file);
@@ -655,7 +662,7 @@ window.apiFinUploadParcelaComprovante = async function (parcelaId, file) {
     const url = `/fin/parcelas/${encodeURIComponent(parcelaId)}/comprovante`;
 
     // IMPORTANTE: não definir manualmente o header "Content-Type".
-    const resp = await window.handleRequest(url, {
+    const resp = await window.apiFetch(url, {
       method: 'POST',
       body: fd
     });
@@ -671,10 +678,11 @@ window.apiFinUploadParcelaComprovante = async function (parcelaId, file) {
 window.apiFinDeleteParcelaComprovante = async function (parcelaId) {
   try {
     if (!parcelaId) return null;
-    if (typeof window.handleRequest !== 'function') return null;
+
+    if (typeof window.apiFetch !== 'function') return null;
 
     const url = `/fin/parcelas/${encodeURIComponent(parcelaId)}/comprovante`;
-    const resp = await window.handleRequest(url, {
+    const resp = await window.apiFetch(url, {
       method: 'DELETE'
     });
     return resp || null;
@@ -991,13 +999,13 @@ function fillEventosSelect(sel, escopo){
 // Migra o FG já existente, removendo base64 gigantes e regravando leve
 function migrarDadosAntigos(){
   try{
-    const raw = localStorage.getItem(FG_KEY);
+    const raw = memGetModal(FG_KEY, null);
     if (!raw) return;
     if (raw.length < 4_500_000) return;
     let fg = JSON.parse(raw);
     const leve = stripComprovantes(fg);
     try {
-      localStorage.setItem(FG_KEY, JSON.stringify(leve));
+      memSetJSONModal(FG_KEY, leve);
       console.info("FG migrado para formato leve (comprovantes separados).");
     } catch(e){
       (leve.lancamentos||[]).forEach(l=>{
@@ -1007,7 +1015,7 @@ function migrarDadosAntigos(){
           l.hasComprovante = true;
         }
       });
-      localStorage.setItem(FG_KEY, JSON.stringify(leve));
+      memSetJSONModal(FG_KEY, leve);
     }
   }catch(e){
     console.warn("Falha ao migrar FG:", e);
@@ -1384,7 +1392,7 @@ function ensureModal(){
       vend.__filled = true;
       let usuarios = [];
       try {
-        usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+        usuarios = memGetJSONModal('usuarios', []) || [];
       } catch(e) {
         usuarios = [];
       }
@@ -1454,7 +1462,7 @@ function ensureModal(){
         } else if (ctxOrigem !== 'dashboard-quick') {
           eventoId =
             (new URLSearchParams(location.search).get('id') ||
-             localStorage.getItem('eventoSelecionado') ||
+             memGetModal('eventoSelecionado', '') ||
              '');
         }
       }
@@ -1470,7 +1478,7 @@ function ensureModal(){
       if (/^sub:/.test(catSel)) subcategoriaId = catSel.split(':')[1] || '';
 
       const FG = (function(){
-        try { return JSON.parse(localStorage.getItem('financeiroGlobal')) || {lancamentos:[], parcelas:[]}; }
+        try { return memGetJSONModal('financeiroGlobal', {lancamentos:[], parcelas:[]}) || {lancamentos:[], parcelas:[]}; }
         catch { return {lancamentos:[], parcelas:[]}; }
       })();
 
@@ -1660,7 +1668,7 @@ function ensureModal(){
             if (typeof window.apiFinDeleteParcelaComprovante === 'function') {
               window.apiFinDeleteParcelaComprovante(parcelaId);
             }
-            try { localStorage.removeItem(`fg.comp.parc:${parcelaId}`); } catch {}
+            try { memRemoveModal(`fg.comp.parc:${parcelaId}`); } catch {}
             parc.comprovanteUrl  = null;
             parc.comprovanteTipo = null;
           }
@@ -1672,7 +1680,7 @@ function ensureModal(){
 
         } else {
           if (window.__finCompRemove === true) {
-            localStorage.removeItem(`fg.comp:${lanc.id}`);
+            memRemoveModal(`fg.comp:${lanc.id}`);
             lanc.hasComprovante = false;
             lanc.comprovante = '';
           } else if (window.__finCompB64) {
@@ -1722,7 +1730,7 @@ function ensureModal(){
         } else if (typeof writeFG === 'function') {
           writeFG(FG);
         } else {
-          localStorage.setItem('financeiroGlobal', JSON.stringify(FG));
+          memSetJSONModal('financeiroGlobal', FG);
           try {
             window.dispatchEvent(
               new CustomEvent('finmodal:confirm', { detail:{ reason:'writeFG' } })
@@ -2087,7 +2095,7 @@ if (Object.prototype.hasOwnProperty.call(opts, 'eventoId')) {
   eventoId = String(opts.eventoId ?? '');
 } else {
   const urlEv = (()=>{ try { return new URL(location.href).searchParams.get('eventoId'); } catch { return ''; } })() || '';
-  const lsEv  = (()=>{ try { return localStorage.getItem('eventoSelecionado') || ''; } catch { return ''; } })() || '';
+  const lsEv  = (()=>{ try { return memGetModal('eventoSelecionado', '') || ''; } catch { return ''; } })() || '';
   eventoId = urlEv || lsEv || '';
 }
 
@@ -2139,7 +2147,7 @@ function openEditar(lancId){
     // Evento: NÃO use "opts" aqui (não existe neste escopo).
     // Respeita URL/LS para manter o mesmo comportamento do evento atual.
     const urlEv = (()=>{ try { return new URL(location.href).searchParams.get('eventoId'); } catch { return ''; } })() || '';
-    const lsEv  = (()=>{ try { return localStorage.getItem('eventoSelecionado') || ''; } catch { return ''; } })() || '';
+    const lsEv  = (()=>{ try { return memGetModal('eventoSelecionado', '') || ''; } catch { return ''; } })() || '';
     const eventoId = urlEv || lsEv || '';
 
     __fillFormFromLanc({
@@ -2176,7 +2184,7 @@ function openEditarParcela(parcelaId){
 const eventoId = (Object.prototype.hasOwnProperty.call(l, 'eventoId'))
   ? String(l.eventoId ?? '')
   : ( (()=>{ try { return new URL(location.href).searchParams.get('eventoId'); } catch { return ''; } })()
-    || (()=>{ try { return localStorage.getItem('eventoSelecionado') || ''; } catch { return ''; } })()
+    || (()=>{ try { return memGetModal('eventoSelecionado', '') || ''; } catch { return ''; } })()
     || '' );
 
 
@@ -2251,7 +2259,7 @@ const normTipo = (t) => normalizeTipoLanc(t || 'entrada');
         cats = getCategoriasUnificadas();
       } else {
         try {
-          const cfg = JSON.parse(localStorage.getItem('configFinanceiro') || '{}') || {};
+          const cfg = memGetJSONModal('configFinanceiro', {}) || {};
           cats = Array.isArray(cfg.categorias) ? cfg.categorias : [];
         } catch { cats = []; }
       }
@@ -2369,7 +2377,7 @@ const normTipo = (t) => normalizeTipoLanc(t || 'entrada');
   }
 }
 
-// === NOVO: lista de fornecedores no modal (usa a key 'fornecedores' do localStorage) ===
+// === NOVO: lista de fornecedores no modal (usa a key 'fornecedores' do armazenamento em memória) ===
 function fillFornecedorDatalist(root = document) {
   const dl  = root.querySelector('#lst-forn');
   const inp = root.querySelector('#f-forn');
@@ -2380,7 +2388,7 @@ function fillFornecedorDatalist(root = document) {
     if (typeof getFornecedores === 'function') {
       arr = getFornecedores() || [];
     } else {
-      arr = JSON.parse(localStorage.getItem('fornecedores') || '[]') || [];
+      arr = memGetJSONModal('fornecedores', []) || [];
       if (arr && arr.items) arr = arr.items;
     }
   } catch { arr = []; }

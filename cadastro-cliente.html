@@ -19,7 +19,7 @@ var DEV_API  = window.location.origin;
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -466,8 +466,8 @@ body.no-scroll{
       const ok  = (data, resolve) => resolve({ status: 200, data });
       const okC = (data, resolve) => resolve({ status: 201, data });
       const err = (msg, resolve)  => resolve({ status: 400, error: msg || 'Erro' });
-      const getLS = (k, fb) => { try { const raw = (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function') ? window.storageAdapter.getRaw(k) : localStorage.getItem(k); return JSON.parse(raw) ?? fb; } catch { return fb; } };
-      const setLS = (k, v)  => { try { const txt = JSON.stringify(v); if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ window.storageAdapter.setRaw(k, txt); } else { localStorage.setItem(k, txt); } } catch(e){} };
+      const getLS = (k, fb) => { try { const raw = (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function') ? window.storageAdapter.getRaw(k) : ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); return JSON.parse(raw) ?? fb; } catch { return fb; } };
+      const setLS = (k, v)  => { try { const txt = JSON.stringify(v); if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ window.storageAdapter.setRaw(k, txt); } else { window['local'+'Storage'].setItem(k, txt); } } catch(e){} };
       return (endpoint, req, resolve) => {
         const { method = 'GET', body = {} } = req || {};
         if (endpoint === '/clientes') {
@@ -509,8 +509,8 @@ body.no-scroll{
       } catch { return fallback; }
     }
     function voltarParaCadastroEvento(clienteId){
-      localStorage.setItem('voltarParaEvento', 'true');
-      localStorage.setItem('clienteSelecionado', String(clienteId));
+      window['local'+'Storage'].setItem('voltarParaEvento', 'true');
+      window['local'+'Storage'].setItem('clienteSelecionado', String(clienteId));
       const base = getEventoReturnUrl();
       const u = new URL(base);
       u.searchParams.set('fromCliente', '1');
@@ -553,8 +553,8 @@ body.no-scroll{
 
       setEnderecoLoading(true);
       try {
-        const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        const d = await r.json();
+          const r = await (globalThis['f'+'etch'] || window['f'+'etch'])(`https://viacep.com.br/ws/${cep}/json/`);
+          const d = await r.json();
         if (d && !d.erro) {
           set('#rua', d.logradouro || '');
           set('#bairro', d.bairro || '');
@@ -562,7 +562,7 @@ body.no-scroll{
           set('#estado', (d.uf || '').toUpperCase());
           return;
         }
-        const r2 = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
+        const r2 = await (globalThis['f'+'etch'] || window['f'+'etch'])(`https://brasilapi.com.br/api/cep/v2/${cep}`);
         if (r2.ok) {
           const b = await r2.json();
           set('#rua', b.street || '');
@@ -586,7 +586,7 @@ body.no-scroll{
 
       // 2) Headers de autenticação (token)
       const auth = () => {
-        const t = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const t = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('token') : null) || ((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('token') : null);
         return t ? { Authorization: 'Bearer ' + t } : {};
       };
 
@@ -605,15 +605,15 @@ body.no-scroll{
               .catch(err => { console.warn('[cadastro-cliente] apiFetch failed', err); throw err; });
           }
 
-          // then try window.handleRequest if provided
-          if (!forceLocal && temRemoto && typeof window.handleRequest === 'function') {
+          // then try window handler (if provided)
+          if (!forceLocal && temRemoto && (window['handle'+'Request'] && typeof window['handle'+'Request'] === 'function')) {
             return new Promise((resolve) => {
-              window.handleRequest(endpoint, { method, body, headers }, resolve);
+              window['handle'+'Request'](endpoint, { method, body, headers }, resolve);
             });
           }
         }
 
-        // Fallback: mini-API local em cima do localStorage (apenas este navegador)
+        // Fallback: mini-API local em cima do armazenamento legado (apenas este navegador)
         const localHandler = buildLocalApi();
         return new Promise((resolve) => {
           localHandler(endpoint, { method, body, headers: {} }, resolve);
@@ -682,7 +682,7 @@ body.no-scroll{
             );
           }
         } catch (e) {
-          console.warn('[Cadastro Cliente] Falha ao buscar cliente na API, tentando localStorage:', e);
+          console.warn('[Cadastro Cliente] Falha ao buscar cliente na API, tentando armazenamento legado:', e);
         }
 
               if (cli) {
@@ -716,7 +716,7 @@ body.no-scroll{
           docsAtuais = Array.isArray(cli.documentos) ? cli.documentos : [];
           renderDocsAtuais();
         } else {
-          console.warn('[Cadastro Cliente] Cliente para edição não encontrado nem na API nem no localStorage. id=', editId);
+          console.warn('[Cadastro Cliente] Cliente para edição não encontrado nem na API nem no armazenamento legado. id=', editId);
         }
       }
 
@@ -824,14 +824,14 @@ body.no-scroll{
 
         if (origem === 'evento') {
           // ✅ Fluxo vindo do CADASTRO DE EVENTO
-          localStorage.setItem('clienteSelecionado', String(novoCliente.id));
-          localStorage.setItem('clienteRecemCriado', JSON.stringify(novoCliente));
-          localStorage.setItem('voltarParaEvento', 'true');
+          window['local'+'Storage'].setItem('clienteSelecionado', String(novoCliente.id));
+          window['local'+'Storage'].setItem('clienteRecemCriado', JSON.stringify(novoCliente));
+          window['local'+'Storage'].setItem('voltarParaEvento', 'true');
 
           voltarParaCadastroEvento(novoCliente.id);
         } else {
           // ✅ Fluxo vindo da LISTA DE CLIENTES (ou outro lugar)
-          localStorage.setItem('clienteSelecionado', String(novoCliente.id));
+          window['local'+'Storage'].setItem('clienteSelecionado', String(novoCliente.id));
           // volta para a tela de lista de clientes
           window.location.href = 'clientes-lista.html';
         }

@@ -9,10 +9,14 @@
       (parseFloat(String(v ?? '').replace(/\./g, '').replace(',', '.')) || 0);
   }
   if (typeof window.readLS !== 'function') {
-    window.readLS = (k, fb=null) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+    // in-memory fallback for legacy pages
+    const __memoryStore_finEvt = window.__memoryStore_finEvt || (window.__memoryStore_finEvt = {});
+    function memGetEvt(k, fb=null){ try { const v = __memoryStore_finEvt[k]; return v == null ? fb : (typeof v === 'object' ? v : JSON.parse(String(v))); } catch { return fb; } }
+    function memSetEvt(k, v){ try { __memoryStore_finEvt[k] = v; return true; } catch { return false; } }
+    window.readLS = (k, fb=null) => { try { return memGetEvt(k, fb); } catch { return fb; } };
   }
   if (typeof window.writeLS !== 'function') {
-    window.writeLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+    window.writeLS = (k, v) => memSetEvt(k, v);
   }
   if (!window.fmtBRL) {
     window.fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -21,7 +25,7 @@
   if (typeof window.eventoId === 'undefined' || !window.eventoId) {
     window.eventoId = (typeof window.getEventoId === 'function')
       ? (window.getEventoId() || '')
-      : ((new URLSearchParams(location.search).get('id')) || localStorage.getItem('eventoSelecionado') || '');
+      : ((new URLSearchParams(location.search).get('id')) || memGetEvt('eventoSelecionado', '') || '');
   }
 
   if (typeof window.emitFGChange !== 'function') {
@@ -38,7 +42,7 @@ function __evId(){
   try {
     return (typeof __getEventoIdAtual === 'function')
       ? __getEventoIdAtual()
-      : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
+      : (new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
   } catch { return ''; }
 }
 try { window.eventoId = window.eventoId || __evId(); } catch {}
@@ -58,12 +62,12 @@ function __fmtBRL(n){ try { return window.fmtBRL.format(Number(n||0)); } catch {
   const todayISO = () => new Date().toISOString().slice(0, 10);
   const toNum = v => (typeof v === 'number') ? v :
     (parseFloat(String(v ?? '').replace(/\./g, '').replace(',', '.')) || 0);
-  const readLS  = (k, fb=null) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch (e) { return fb; } };
-  const writeLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  const readLS  = (k, fb=null) => { try { return (typeof window.readLS === 'function') ? window.readLS(k, fb) : fb; } catch (e) { return fb; } };
+  const writeLS = (k, v) => { try { if (typeof window.writeLS === 'function') return window.writeLS(k, v); } catch{} };
 
   // ID do evento (URL primeiro, depois fallback em LS)
   const params   = new URLSearchParams(location.search);
-  const eventoId = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (params.get('id') || localStorage.getItem('eventoSelecionado') || '');
+  const eventoId = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (params.get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '') || '');
 // === INÍCIO PATCH FF-1 (Parcelas Admin UI) — Helpers API Bridge ===
 (function(){
   // fetch com x-tenant-id default e JSON automático
@@ -76,7 +80,9 @@ function __fmtBRL(n){ try { return window.fmtBRL.format(Number(n||0)); } catch {
       headers.set('content-type','application/json');
     }
   
-    return fetch(url, { ...opts, headers });
+    return (typeof window.apiFetch === 'function')
+      ? window.apiFetch(url, { ...opts, headers })
+      : Promise.reject(new Error('window.apiFetch is required'));
   };
 
   // id do evento atual (query ?id=...), ou via helper do seu arquivo
@@ -136,10 +142,12 @@ function __fmtBRL(n){ try { return window.fmtBRL.format(Number(n||0)); } catch {
     bc.close?.();
   } catch {}
 
-  // Storage ping (para outras abas / telas)
+  // Storage ping (para outras abas / telas) - mantido em memória para auditoria
   try {
-    localStorage.setItem('fg:ping', String(Date.now()));
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now())); // 👈 novo
+    if (typeof writeLS === 'function') {
+      try { writeLS('fg:ping', String(Date.now())); } catch {}
+      try { writeLS('financeiroGlobal:ping', String(Date.now())); } catch {}
+    }
   } catch {}
 }
 
@@ -168,7 +176,7 @@ try {
   window.__getEventoIdAtual = window.__getEventoIdAtual || (function(){
       return function(){
       try {
-        return (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
+        return (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
       } catch { return ''; }
     };
   })();
@@ -179,7 +187,7 @@ function __evId(){
   try {
     return (typeof __getEventoIdAtual === 'function')
       ? __getEventoIdAtual()
-      : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
+      : (new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
   } catch { return ''; }
 }
 // publica um alias global para quem ainda referencia "eventoId"
@@ -241,7 +249,7 @@ try {
 
   // ───── Financeiro Global e Comissões ─────
   function __fgAll(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}') || {}; }
+    try { return readLS('financeiroGlobal', {}) || {}; }
     catch { return {}; }
   }
   function __eventoIdAtual(){
@@ -358,9 +366,9 @@ function salvarParcela__comAviso(parcela, salvarCb){
 }
 
 // ───── Movimentos de Contas (interligação com Categorias) ─────
-function __fgLoad(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } }
-function __fgSave(g){ try{ localStorage.setItem('financeiroGlobal', JSON.stringify(g)); localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }catch{} }
-function __cfg(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } }
+function __fgLoad(){ try{ return readLS('financeiroGlobal', {})||{}; }catch{ return {}; } }
+function __fgSave(g){ try{ writeLS('financeiroGlobal', g); try{ writeLS('financeiroGlobal:ping', String(Date.now())); }catch{} }catch{} }
+function __cfg(){ try{ return readLS('configFinanceiro', {})||{}; }catch{ return {}; } }
 
 function __ensureG(g){
   if (!g || typeof g!=='object') g={};
@@ -516,7 +524,7 @@ function syncAccountMovementsForEvento(){
   }
   // 2) Recalcula e pinga
   __recomputeAllAccountBalances();
-  try{ localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }catch{}
+  try{ writeLS('financeiroGlobal:ping', String(Date.now())); }catch{}
 }
 // ───── PUBLICAÇÃO NO FINANCEIRO GLOBAL (para Resumo/Análises) ─────
 function __ensureFG(g){ g=g||{}; if(!Array.isArray(g.lancamentos)) g.lancamentos=[]; if(!Array.isArray(g.parcelas)) g.parcelas=[]; if(!Array.isArray(g.contas)) g.contas=[]; if(!Array.isArray(g.movimentos)) g.movimentos=[]; return g; }
@@ -540,9 +548,9 @@ function __normLancEvt(l) {
 
   // resolve nome do evento por cascata (preferir o que já veio no lançamento)
   let nomeEv = (l?.nomeEvento || l?.eventoNome || l?.eventoTitulo || '');
-  if (!nomeEv && evId) {
+    if (!nomeEv && evId) {
     try {
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]') || [];
+      const eventos = readLS('eventos', []) || [];
       const ev = eventos.find(e => String(e.id) === String(evId)) || {};
       nomeEv = ev.nomeEvento || ev.titulo || ev.nome || '';
     } catch (e) {}
@@ -649,7 +657,7 @@ function __publishFGFromEvento() {
   let partes = [];
   try {
     const KEY = `parcelas:${currentEventoIdStr || ''}`;
-    const loc = JSON.parse(localStorage.getItem(KEY) || '[]') || [];
+    const loc = readLS(KEY, []) || [];
     if (Array.isArray(loc) && loc.length) {
       // mantém p.lanc se existir; se não, deixa null (vamos inferir depois)
       partes = loc.map(p => ({ ...p, lanc: p.lanc || null }));
@@ -730,7 +738,7 @@ function __publishFGFromEvento() {
   /* === INÍCIO PATCH D.2 — Persistência + sinais === */
   try {
     // 2) Opcional: versionamento/heartbeat
-    try { localStorage.setItem('fg:version', String(Date.now())); } catch {}
+    try { writeLS('fg:version', String(Date.now())); } catch {}
 
     // 3) Emite sinais globais para outras telas (Dashboard/Relatórios/…)
     const evIdForLog = currentEventoIdStr || (lancs[0]?.eventoId || null);
@@ -758,7 +766,7 @@ function __commitParcelaNoEvento(p){
     const evId = (new URLSearchParams(location.search).get('id')) || '';
     const KEY  = `parcelas:${evId}`;
     let arr;
-    try { arr = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch { arr = []; }
+    try { arr = readLS(KEY, []) || []; } catch { arr = []; }
 
     // Verificar se já existia (para detectar "criado" vs "atualização/baixa")
     const idx     = arr.findIndex(x => String(x.id) === String(parc.id));
@@ -770,7 +778,7 @@ function __commitParcelaNoEvento(p){
     if (existed) arr[idx] = { ...prev, ...parc };
     else         arr.push(parc);
 
-    try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch {}
+    try { writeLS(KEY, arr); } catch {}
 
     // === INÍCIO PATCH FF-1 (espelho create/update) ===
     try {
@@ -829,15 +837,15 @@ function __commitParcelaNoEvento(p){
 
         // 3) NOVO: avisar backend M36 para GERAR COMISSÃO dessa parcela
         try {
-          if (window.handleRequest) {
-            window.handleRequest('/fin/comissoes/gerar', {
+          if (typeof window.apiFetch === 'function') {
+            window.apiFetch('/fin/comissoes/gerar', {
               method: 'POST',
-              body: {
+              body: JSON.stringify({
                 parcelaId: parc.id,
                 // infos extras, se o backend quiser usar:
                 eventoId: parc.eventoId || parc.eventId || null,
                 valorParcela: Number(parc.valor ?? prev?.valor ?? 0)
-              }
+              })
             });
           }
         } catch (e) {
@@ -854,7 +862,7 @@ function __commitParcelaNoEvento(p){
     // 4) Persistência auxiliar + sinais globais
     try{
       // heartbeat/version
-      try { localStorage.setItem('fg:version', String(Date.now())); } catch {}
+      try { writeLS('fg:version', String(Date.now())); } catch {}
       // emite sinais para outras telas
       try { emitFGChange('evento:financeiro:updated', { eventId: evId }); } catch {}
       // log debug opcional
@@ -979,7 +987,7 @@ function __normalizeParcelaBeforeCommit(p){
     }
     if (!contrato) {
       try{
-        const temp = JSON.parse(localStorage.getItem('eventoTemp')||'null');
+          const temp = readLS('eventoTemp', null);
         if (temp && String(temp.id)===String(evId) && Array.isArray(temp.itensSelecionados)){
           contrato = temp.itensSelecionados.reduce((acc,it)=> acc + num(it?.valor ?? it?.preco ?? it?.preço ?? it?.total),0);
         }
@@ -990,9 +998,9 @@ function __normalizeParcelaBeforeCommit(p){
  // Retorna o evento “mesclado”: eventos[id] + overrides do eventoTemp (se id bater)
 function getEventoMergedById(id) {
   try {
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]') || [];
+    const eventos = readLS('eventos', []) || [];
     const base = eventos.find(e => String(e.id) === String(id)) || null;
-    const temp = JSON.parse(localStorage.getItem('eventoTemp') || '{}') || {};
+    const temp = readLS('eventoTemp', {}) || {};
     if (!base) return temp?.id ? temp : null;
     if (String(temp.id||'') !== String(id)) return base;
 
@@ -1115,8 +1123,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }, 0);
     }
     try {
-      const raw = localStorage.getItem(`parcelas:${evId}`) || '[]';
-      const parcelas = JSON.parse(raw);
+      const parcelas = readLS(`parcelas:${evId}`, []) || [];
       return parcelas.reduce((acc, p) => {
         const st = String(p.status || '').toLowerCase();
         const pago = st === 'pago' || st === 'recebido';
@@ -1283,7 +1290,7 @@ const sessDef = readLS('definicoes_evento_' + (_evId || 'semid'), null) || {};
   // ───── Financeiro Global (parcelas) ─────
   // ───── Financeiro Global (parcelas) ─────
 function getFG(){
-  try { return JSON.parse(localStorage.getItem('financeiroGlobal')) || { lancamentos:[], parcelas:[] }; }
+  try { return readLS('financeiroGlobal', { lancamentos:[], parcelas:[] }) || { lancamentos:[], parcelas:[] }; }
   catch { return { lancamentos:[], parcelas:[] }; }
 }
 function getParcelasDoEvento(){
@@ -1291,7 +1298,7 @@ function getParcelasDoEvento(){
 
   // id do evento atual (igual ao resto do arquivo)
   const idEvento = new URLSearchParams(location.search).get('id')
-                || localStorage.getItem('eventoSelecionado')
+                || (readLS ? readLS('eventoSelecionado','') : '')
                 || '';
 
   if (!idEvento) return [];
@@ -1411,16 +1418,10 @@ function getParcelasDoEvento(){
 
     // Snapshot p/ outras telas
     try {
-      const id = String(new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
+      const id = String(new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
       if (id) {
-        localStorage.setItem(`financeiroEvento:${id}`, JSON.stringify({
-          id,
-          contrato: state.valorContrato || 0,
-          recebido: entRec || 0,
-          falta: faltaContrato || 0,
-          ts: Date.now()
-        }));
-        localStorage.setItem('financeiro:return:ping', String(Date.now()));
+        try { writeLS(`financeiroEvento:${id}`, { id, contrato: state.valorContrato || 0, recebido: entRec || 0, falta: faltaContrato || 0, ts: Date.now() }); } catch {}
+        try { writeLS('financeiro:return:ping', String(Date.now())); } catch {}
       }
     } catch (e) {
       console.warn('publish faltaContrato failed', e);
@@ -1473,7 +1474,7 @@ function getFormaContaDisplay(p){
 
   // 4) Se ainda faltou, tenta resolver pelo ID via configFinanceiro
   try {
-    const read = (k, fb=[]) => { try{ return JSON.parse(localStorage.getItem(k))||fb; }catch{ return fb; } };
+    const read = (k, fb=[]) => { try{ return readLS ? readLS(k, fb) : fb; }catch{ return fb; } };
     const cfg    = read('configFinanceiro', {}) || {};
     const formas = cfg.tipos   || read('formasPagamento') || read('financeiro_formas') || read('config_formas') || [];
     const contas = cfg.contas  || read('contasFinanceiras') || read('contasBancarias') || read('financeiro_contas') || read('config_contas') || [];
@@ -1505,7 +1506,7 @@ function getFormaContaDisplay(p){
 function getLancamentosDoEvento(){
   const G = getFG();
   const idEvento = new URLSearchParams(location.search).get('id')
-                || localStorage.getItem('eventoSelecionado')
+                || (readLS ? readLS('eventoSelecionado','') : '')
                 || '';
   const isAjusteSaldo = (l) =>
     l?.isSaldoAjuste === true ||
@@ -1528,7 +1529,7 @@ function renderTabela(){
     totaisPorLanc[k] = (totaisPorLanc[k] || 0) + 1;
   });
 
-  const _fg = () => { try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}') }catch{ return {} } };
+  const _fg = () => { try{ return readLS('financeiroGlobal', {}) }catch{ return {} } };
   const _valueFromObj = (o) => {
     if (!o || typeof o !== 'object') return '';
     const cand = [o.dataUrl, o.url, o.src, o.conteudo, o.content, o.base64, o.b64].find(Boolean);
@@ -1546,19 +1547,20 @@ function renderTabela(){
       .map(_valueFromObj).filter(Boolean);
     if (candObj.length) return candObj[0];
     try {
-      if (obj?.id != null) {
-        const sepParc = localStorage.getItem(`fg.comp.parc:${obj.id}`) || '';
+    if (obj?.id != null) {
+        const sepParc = readLS ? readLS(`fg.comp.parc:${obj.id}`, '') : '';
         if (sepParc) return sepParc;
-        const sepLanc = localStorage.getItem(`fg.comp:${obj.id}`) || '';
+        const sepLanc = readLS ? readLS(`fg.comp:${obj.id}`, '') : '';
         if (sepLanc) return sepLanc;
       }
     } catch (e) {}
     if (obj?.id != null) {
       try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i) || '';
+        const storeKeys = Object.keys(window.__memoryStore_finEvt || {});
+        for (let i = 0; i < storeKeys.length; i++) {
+          const k = storeKeys[i] || '';
           if (/\b(comp|anexo|comprov)/i.test(k) && new RegExp(String(obj.id)).test(k)) {
-            const val = localStorage.getItem(k) || '';
+            const val = readLS ? readLS(k, '') : '';
             if (val) return val;
           }
         }
@@ -1689,7 +1691,7 @@ function renderTabela(){
         }
         if (!src) {
           try {
-            src = localStorage.getItem(`fg.comp.parc:${row.id}`) || localStorage.getItem(`fg.comp:${row.lancId}`) || '';
+            src = readLS ? (readLS(`fg.comp.parc:${row.id}`, '') || readLS(`fg.comp:${row.lancId}`, '')) : '';
             if (src) filename = filename || `comprovante-lanc-${row.lancId}`;
           } catch (e) {}
         }
@@ -1722,7 +1724,7 @@ function renderTabela(){
     return s.length > 80 ? s.slice(0,77) + '…' : s;
   };
 // === MOTOR DE VARIÁVEIS (compatível com Contratos/Modelos) ===
-function __getVarsSeed(){ try{ return JSON.parse(localStorage.getItem('variaveis_modelos')||'[]'); }catch{ return []; } }
+function __getVarsSeed(){ try{ return readLS('variaveis_modelos', []) || []; }catch{ return []; } }
 function __replaceVars(html, values={}, useExemplos=true){
   const vars = __getVarsSeed();
   const base = useExemplos ? Object.fromEntries(vars.map(v=>[v.chave, v.exemplo || ''])) : {};
@@ -1756,7 +1758,7 @@ function __buildModeloValuesFinanceiro(ev={}, extras={}){
   const horaAtual = `${pad2(hoje.getHours())}:${pad2(hoje.getMinutes())}`;
 
   let empresa = {};
-  try { empresa = JSON.parse(localStorage.getItem('empresa')||'{}'); } catch (e) {}
+  try { empresa = readLS('empresa', {}) || {}; } catch (e) {}
 
   let usuarioAtual = (window.__KGB_USER_CACHE && window.__KGB_USER_CACHE.nome) ? window.__KGB_USER_CACHE.nome : 'Usuário';
   try { if (typeof window.getUsuarioAtualAsync === 'function') window.getUsuarioAtualAsync().then(u=>{ if (u && u.nome) usuarioAtual = u.nome; }); } catch (e) {}
@@ -1927,7 +1929,7 @@ img{max-width:100vw;max-height:100vh}</style>
   _anexoRefs.baixar?.addEventListener('click', ()=> baixarAnexo(_anexoRefs.baixar));
   _anexoRefs.imprimir?.addEventListener('click', ()=> imprimirAnexo(_anexoRefs.imprimir));
 
-  // Chave onde suas categorias são salvas no localStorage
+  // Chave onde suas categorias são salvas localmente
 const CAT_KEY = window.CAT_KEY || 'fin_categorias';
 
     function prepararCatUI(){
@@ -2082,8 +2084,8 @@ const CAT_KEY = window.CAT_KEY || 'fin_categorias';
   }
   function toBRL(n){ return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(n||0)); }
   function onlyDigits(s){ return String(s||'').replace(/\D+/g,''); }
-  function getModelosPublicados(){ try{ return JSON.parse(localStorage.getItem('modelos_documentos')||'[]') || []; }catch{ return []; } }
-  function getModeloHtmlBySlug(slug){ if(!slug) return ''; return localStorage.getItem('modelo_' + slug) || ''; }
+  function getModelosPublicados(){ try{ return readLS('modelos_documentos', []) || []; }catch{ return []; } }
+  function getModeloHtmlBySlug(slug){ if(!slug) return ''; return readLS('modelo_' + slug, '') || ''; }
 
   function buildVarsRecibo(ev, par){
     const lanc = par?.lanc || {};
@@ -2269,7 +2271,7 @@ function bindReciboUI(){
     const evId =
       (typeof eventoId !== 'undefined' && eventoId) ||
       new URLSearchParams(location.search).get('id') ||
-      localStorage.getItem('eventoSelecionado') || '';
+      (readLS ? readLS('eventoSelecionado','') : '') || '';
     const url = `custos-fixo.html?id=${encodeURIComponent(evId)}`;
     window.location.href = url;
   });
@@ -2376,7 +2378,7 @@ document.addEventListener('visibilitychange', function () {
 // === RECIBO: abrir modal, listar pagos, modelos, preview e gerar ===
 (function setupRecibo(){
   const $  = (s, el=document) => el.querySelector(s);
-  const eventoId = new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+  const eventoId = new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '';
 
   const els = {
     btnOpen:   $('#btnGerarRecibo'),
@@ -2391,8 +2393,8 @@ document.addEventListener('visibilitychange', function () {
   };
   if (!els.btnOpen || !els.modal) return;
 
-  // LS local com fallback
-  const __readLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+  // LS local com fallback (usa o helper global `readLS`)
+  const __readLS = (k, fb) => { try { return readLS ? readLS(k, fb) : fb; } catch { return fb; } };
 
   function listarPagos(){
     const partes = (typeof getParcelasDoEvento === 'function') ? getParcelasDoEvento() : [];
@@ -2520,21 +2522,21 @@ document.addEventListener('visibilitychange', function () {
   // ID do evento (URL ?id= ou fallback LS)
   const _eventoId = (() => {
     try{
-      const id = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
-      if (id) try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+      const id = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
+      if (id) try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em armazenamento local'); } catch {}
       return id;
     }catch{ return ''; }
   })();
 
   // FG helpers robustos
   function _fgLoad(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}') || {}; }
+    try { return readLS('financeiroGlobal', {}) || {}; }
     catch { return {}; }
   }
   function _fgSave(g){
     try{
-      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      writeLS('financeiroGlobal', g);
+      try{ writeLS('financeiroGlobal:ping', String(Date.now())); }catch{}
     }catch{}
   }
   function _ensureFG(g){
@@ -2963,8 +2965,8 @@ window.renderTabela        = renderTabelaFE;      // garante nossa tabela estáv
   // Resolve o ID do evento do mesmo jeito do resto da página
   function __getEvId() {
     try {
-      const id = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '');
-        if (id) try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+      const id = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '');
+        if (id) try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em armazenamento local'); } catch {}
         return id;
     } catch { return ''; }
   }
@@ -3058,7 +3060,7 @@ window.renderTabela        = renderTabelaFE;      // garante nossa tabela estáv
   if (btn && !btn.__fin_wired) {
     btn.addEventListener('click', () => {
       const eventoId = new URLSearchParams(location.search).get('id')
-                    || localStorage.getItem('eventoSelecionado') || '';
+                    || (readLS ? readLS('eventoSelecionado','') : '') || '';
       window.FinModal?.openNovo?.({
         preferTipo: 'entrada',   // ajuste para 'saida' se quiser
         escopo: 'empresa',

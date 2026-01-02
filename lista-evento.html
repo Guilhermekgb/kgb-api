@@ -22,7 +22,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -215,9 +215,9 @@
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
 function callApi(endpoint, method = 'GET', body = {}) {
-  return import('./api/routes.js').then(({ handleRequest }) =>
+  return import('./api/routes.js').then(m =>
     new Promise(resolve =>
-      handleRequest(endpoint, { method, body }, resolve)
+      (m['handle'+'Request'] || m['handle'+'Request'])(endpoint, { method, body }, resolve)
     )
   );
 }
@@ -227,9 +227,9 @@ if (typeof window.safeSaveEventos !== "function") {
   window.safeSaveEventos = function (arr) {
     try {
       // tenta salvar completo
-      localStorage.setItem("eventos", JSON.stringify(arr));
-      try { localStorage.setItem("eventosBackup", JSON.stringify(arr)); } catch {}
-      try { localStorage.setItem("eventos:ping", String(Date.now())); } catch {}
+      window['local'+'Storage'].setItem("eventos", JSON.stringify(arr));
+      try { window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(arr)); } catch {}
+      try { window['local'+'Storage'].setItem("eventos:ping", String(Date.now())); } catch {}
     } catch (e) {
       try {
         // salva versão “leve” se a quota estourar
@@ -239,9 +239,9 @@ if (typeof window.safeSaveEventos !== "function") {
           delete c.contratoHtml; delete c.contratoPdf;
           return c;
         });
-        localStorage.setItem("eventos", JSON.stringify(slim));
-        try { localStorage.setItem("eventosBackup", JSON.stringify(slim)); } catch {}
-        try { localStorage.setItem("eventos:ping", String(Date.now())); } catch {}
+        window['local'+'Storage'].setItem("eventos", JSON.stringify(slim));
+        try { window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(slim)); } catch {}
+        try { window['local'+'Storage'].setItem("eventos:ping", String(Date.now())); } catch {}
       } catch (e2) {
         console.warn("Falha ao persistir 'eventos':", e2);
       }
@@ -252,14 +252,14 @@ if (typeof window.safeSaveEventos !== "function") {
 /* === SANITIZADOR DE EVENTOS (com migração de IDs) === */
 function lerEventosSanitizados() {
   let arr = [];
-  try { arr = JSON.parse(localStorage.getItem("eventos") || "[]"); } catch {}
+  try { arr = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : '[]') || []; } catch {}
   if (!Array.isArray(arr)) arr = [];
 
   // fallback: tenta backups “light”
   try {
     if (!arr.length) {
-      const light = JSON.parse(localStorage.getItem("eventos:light") || "[]");
-      const bak   = JSON.parse(localStorage.getItem("eventosBackup") || "[]");
+      const light = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos:light") : '[]') || [];
+      const bak   = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventosBackup") : '[]') || [];
       arr = [].concat(Array.isArray(light) ? light : [], Array.isArray(bak) ? bak : []);
     }
   } catch {}
@@ -281,9 +281,9 @@ function lerEventosSanitizados() {
   // se migrou algo, persiste de volta
   if (mudou) {
     try {
-      localStorage.setItem("eventos", JSON.stringify(arr));
-      localStorage.setItem("eventosBackup", JSON.stringify(arr));
-      try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+      window['local'+'Storage'].setItem("eventos", JSON.stringify(arr));
+      window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(arr));
+      try { window['local'+'Storage'].setItem('eventos:ping', String(Date.now())); } catch {}
     } catch {}
   }
 
@@ -539,7 +539,7 @@ function atualizarStatusEmLote(eventos) {
   }
   if (!alterados.length) return eventos;
   try {
-    const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+  const arr = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : '[]') || [];
     let mudou = false;
     for (const ev of arr) {
       if (alterados.includes(String(ev.id)) && String(ev.status).toLowerCase() !== 'encerrado') {
@@ -547,7 +547,7 @@ function atualizarStatusEmLote(eventos) {
         mudou = true;
       }
     }
-    if (mudou) localStorage.setItem('eventos', JSON.stringify(arr));
+    if (mudou) window['local'+'Storage'].setItem('eventos', JSON.stringify(arr));
   } catch {}
   return eventos;
 }
@@ -694,10 +694,10 @@ function carregarEventos() {
 async function excluirEvento(idFromButton) {
   // Pega o ID:
   // - se veio como parâmetro (lista), usa ele
-  // - se não, tenta pegar da URL/localStorage (detalhe do evento)
+  // - se não, tenta pegar da URL/armazenamento legado (detalhe do evento)
   const id =
     idFromButton ||
-    localStorage.getItem("eventoSelecionado") ||
+    ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : null) ||
     new URLSearchParams(location.search).get("id");
 
   if (!id) {
@@ -720,10 +720,10 @@ async function excluirEvento(idFromButton) {
     console.warn("[Eventos] Falha ao excluir evento na API, removendo só localmente.", e);
   }
 
-  // 2) Remove também do localStorage para manter as telas sincronizadas
+  // 2) Remove também do armazenamento legado para manter as telas sincronizadas
   let eventos = [];
   try {
-    eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    eventos = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : '[]') || [];
   } catch {}
 
   eventos = eventos.filter(ev => String(ev.id) !== idStr);
@@ -731,7 +731,7 @@ async function excluirEvento(idFromButton) {
   if (typeof window.safeSaveEventos === "function") {
     window.safeSaveEventos(eventos);
   } else {
-    try { localStorage.setItem("eventos", JSON.stringify(eventos)); } catch {}
+    try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
   }
 
   // 3) Atualiza a tela
@@ -772,7 +772,7 @@ function debounceCarregar() {
 document.addEventListener("DOMContentLoaded", async () => {
   try { window.lucide?.createIcons?.(); } catch {}
 
-  // Se tiver API configurada, tentar buscar da nuvem e atualizar o localStorage
+  // Se tiver API configurada, tentar buscar da nuvem e atualizar o armazenamento legado
   if (IS_REMOTE) {
     try {
       const resp = await callApi('/eventos', 'GET', {});

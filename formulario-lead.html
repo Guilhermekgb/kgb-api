@@ -18,9 +18,18 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<script>
+  // MemStore do módulo formulario-lead
+  (function(){
+    window.__mem_formulario_lead = window.__mem_formulario_lead || new Map();
+    window.memGetFL = function(key){ try{ return window.__mem_formulario_lead.get(key) ?? null; }catch{return null;} };
+    window.memSetFL = function(key, value){ try{ window.__mem_formulario_lead.set(key, value); return true; }catch{return false;} };
+    window.memRemoveFL = function(key){ try{ return window.__mem_formulario_lead.delete(key); }catch{return false;} };
+    window.safeJSONFL = function(s, fb){ try{ if (typeof s === 'string') return JSON.parse(s); return s == null ? fb : s; }catch{return fb;} };
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
@@ -135,7 +144,7 @@
   <!-- Preencher opções de "como conheceu" -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const fontes = JSON.parse(localStorage.getItem("comoConheceu") || "[]");
+      const fontes = window.safeJSONFL(window.memGetFL('comoConheceu'), []);
       const select = document.getElementById("comoConheceu");
       fontes.forEach(f => {
         const opt = document.createElement("option");
@@ -143,8 +152,8 @@
         select.appendChild(opt);
       });
 
-      // Preencher "Tipo de Evento" com dados salvos no localStorage
-      const tipos = JSON.parse(localStorage.getItem("tiposEvento") || "[]");
+      // Preencher "Tipo de Evento" com dados do módulo (memStore)
+      const tipos = window.safeJSONFL(window.memGetFL('tiposEvento'), []);
       const selectTipo = document.getElementById("tipoEvento");
       tipos.forEach(tipo => {
         const opt = document.createElement("option");
@@ -174,23 +183,23 @@
 
     if (!form) return;
 
-    // utils para fallback local
+    // utils para armazenamento em memória do módulo
     const getArr = (k) => {
       try {
-        const v = JSON.parse(sessionStorage.getItem(k) || '[]');
+        const v = window.memGetFL(k);
         return Array.isArray(v) ? v : [];
       } catch {
         return [];
       }
     };
     const setArr = (k, v) => {
-      try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {}
+      try { window.memSetFL(k, v); } catch {}
     };
 
     function buildApiHeaders() {
       const base = { 'Content-Type': 'application/json' };
       try {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const token = (window.memGetFL ? window.memGetFL('token') : null) || null;
         if (token) return { ...base, Authorization: `Bearer ${token}` };
       } catch (e) {}
       return base;
@@ -260,22 +269,13 @@
       let criadoNaApi = false;
       if (url) {
         try {
-          const resp = await fetch(url, {
-            method: 'POST',
-            headers: buildApiHeaders(),
-            body: JSON.stringify(novoLead)
-          });
-          if (resp.ok) {
-            const data = await resp.json().catch(() => null);
-            if (data && (data.id || data._id || data.leadId)) {
-              novoLead.id = data.id || data._id || data.leadId;
-            }
-            criadoNaApi = true;
-          } else {
-            console.warn('Erro ao criar lead na API:', resp.status);
+          const data = await window.apiFetch(url, { method: 'POST', headers: buildApiHeaders(), body: novoLead });
+          if (data && (data.id || data._id || data.leadId)) {
+            novoLead.id = data.id || data._id || data.leadId;
           }
+          criadoNaApi = true;
         } catch (err) {
-          console.warn('Falha ao chamar API /leads:', err);
+          console.warn('Falha ao criar lead na API:', err);
         }
       }
 

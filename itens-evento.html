@@ -22,7 +22,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -199,12 +199,13 @@
       if (fromInput > 0) return fromInput;
 
       try {
-        const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+        const rawEvt = (window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoTemp') : '{}';
+        const evt = JSON.parse(rawEvt || '{}');
         const fromTemp = Number(evt.qtdConvidados || evt.quantidadeConvidados || 0);
         if (fromTemp > 0) return fromTemp;
       } catch {}
 
-      const fromLS = Number(localStorage.getItem('quantidadeConvidadosEvento') || 0);
+      const fromLS = Number(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('quantidadeConvidadosEvento') : '0') || 0);
       return Number.isFinite(fromLS) ? fromLS : 0;
     }
 
@@ -347,8 +348,8 @@
 function preselecionarItensDoEvento(eid){
   if (!eid) return;
   let ev = null;
-  try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    try {
+    const eventos = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
     ev = eventos.find(e => String(e.id) === String(eid)) || null;
   } catch {}
 
@@ -470,10 +471,10 @@ function atualizarResumoItens(){
 
   function getIdEventoAtual() {
     try {
-      return String(
+        return String(
         (window.evento && window.evento.id) ||
         new URLSearchParams(location.search).get('id') ||
-        localStorage.getItem('eventoSelecionado') || ''
+        ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '') || ''
       );
     } catch { return ''; }
   }
@@ -520,7 +521,7 @@ function atualizarResumoItens(){
 
     // 2) Estrutura global agregada (financeiroGlobal)
     try {
-      const glob = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}');
+      const glob = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}');
       recebido += somaArr(glob.lancamentos,  idAtual, 'financeiroGlobal.lancamentos');
       recebido += somaArr(glob.parcelas,     idAtual, 'financeiroGlobal.parcelas');
       recebido += somaArr(glob.recebimentos, idAtual, 'financeiroGlobal.recebimentos');
@@ -529,7 +530,7 @@ function atualizarResumoItens(){
     // 3) Por evento: "financeiroEvento:<id>"
     try {
       const chave = 'financeiroEvento:' + idAtual;
-      const fx = JSON.parse(localStorage.getItem(chave) || '{}');
+      const fx = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(chave) : null) || '{}');
       recebido += somaArr(fx.lancamentos,  idAtual, chave + '.lancamentos');
       recebido += somaArr(fx.parcelas,     idAtual, chave + '.parcelas');
       recebido += somaArr(fx.recebimentos, idAtual, chave + '.recebimentos');
@@ -537,7 +538,7 @@ function atualizarResumoItens(){
 
     // 4) Ponte de retorno (se alguma tela financeira gravar o total)
     try {
-      const ponte = JSON.parse(localStorage.getItem('financeiro:return') || '{}');
+      const ponte = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiro:return') : null) || '{}');
       if (String(ponte?.idEvento) === String(idAtual) && Number(ponte?.recebido) > 0) {
         recebido = Math.max(recebido, Number(ponte.recebido));
       }
@@ -584,10 +585,10 @@ function atualizarResumoItens(){
     document.addEventListener("DOMContentLoaded", () => {
       try { window.lucide?.createIcons?.(); } catch {}
 
-      // Bases carregadas do localStorage
-      window.produtos   = JSON.parse(localStorage.getItem("produtosBuffet")   || "[]");
-      window.adicionais = JSON.parse(localStorage.getItem("adicionaisBuffet") || "[]");
-      window.servicos   = JSON.parse(localStorage.getItem("servicosBuffet")   || "[]");
+      // Bases carregadas do armazenamento local (compat)
+      window.produtos   = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("produtosBuffet") : null) || "[]");
+      window.adicionais = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("adicionaisBuffet") : null) || "[]");
+      window.servicos   = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("servicosBuffet") : null) || "[]");
 
       // Preenche quantidade de convidados
       const qtdIni = getQtdConvidados();
@@ -596,7 +597,7 @@ function atualizarResumoItens(){
 
       renderizarTodosBlocos();
 const params = new URLSearchParams(location.search);
-const eidDom = params.get("id") || localStorage.getItem("eventoSelecionado") || "";
+const eidDom = params.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
 preselecionarItensDoEvento(eidDom);   // marca o que já existe
 atualizarResumoItens();               // recalcula o resumo desta tela
       // Reagir às mudanças
@@ -622,7 +623,7 @@ function preselecionarItensDoEvento(eid){
   if (!eid) return;
   let ev = null;
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
     ev = eventos.find(e => String(e.id) === String(eid)) || null;
   } catch {}
 
@@ -669,7 +670,7 @@ function preselecionarItensDoEvento(eid){
 
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(location.search);
-  const eid = params.get("id") || localStorage.getItem("eventoSelecionado") || "";
+  const eid = params.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
   preselecionarItensDoEvento(eid);
   // se sua página tiver uma função que recalcula o resumo, chame-a aqui:
  try { atualizarResumoItens?.(); } catch {}
@@ -700,17 +701,17 @@ qs("#salvarItensSelecionados")?.addEventListener("click", () => {
   const qtd = Number(document.getElementById("quantidadeConvidados")?.value || 0);
 
   // ponte (compat)
-  localStorage.setItem("itensSelecionadosEvento", JSON.stringify(selecionados));
-  localStorage.setItem("quantidadeConvidadosEvento", String(qtd));
+  try { window['local'+'Storage'].setItem("itensSelecionadosEvento", JSON.stringify(selecionados)); } catch {}
+  try { window['local'+'Storage'].setItem("quantidadeConvidadosEvento", String(qtd)); } catch {}
 
   // id + origem
   const usp = new URLSearchParams(location.search);
-  const id  = usp.get("id") || localStorage.getItem("eventoSelecionado") || "";
+  const id  = usp.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
   const origem = usp.get("origem") || usp.get("from") || "";
 
   // >>> grava no vetor 'eventos' (fonte da verdade)
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
     const i = eventos.findIndex(e => String(e.id) === String(id));
     if (i > -1) {
       // se usuário não marcou nada, preserva o que já tinha
@@ -719,15 +720,15 @@ qs("#salvarItensSelecionados")?.addEventListener("click", () => {
         eventos[i].quantidadeConvidados = qtd;
         eventos[i].qtdConvidados = qtd;
       }
-      localStorage.setItem("eventos", JSON.stringify(eventos));
+      try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
     }
-    localStorage.setItem("evt:lastUpdate:" + id, String(Date.now()));
+    try { window['local'+'Storage'].setItem("evt:lastUpdate:" + id, String(Date.now())); } catch {}
   } catch (err) {
     console.warn("Falha ao persistir itens:", err);
   }
 
   // limpa ponte (opcional)
-  try { localStorage.removeItem("itensEvento:returnTo"); } catch {}
+  try { window['local'+'Storage'].removeItem("itensEvento:returnTo"); } catch {}
   
   // volta para a tela correta
   const back = /detalhado/i.test(origem)

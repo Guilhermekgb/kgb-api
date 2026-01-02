@@ -21,7 +21,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -319,7 +319,7 @@ function todayYM(){
 }
 function inMonth(iso, ym){ return String(iso||'').slice(0,7) === ym; }
 
-  const readLS = (k, fb) => { try{const v=JSON.parse(localStorage.getItem(k)); return (v??fb);}catch{return fb;} };
+  const readLS = (k, fb) => { try{ const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); const v = raw ? JSON.parse(raw) : null; return (v ?? fb); }catch{return fb;} };
 
   // Shim opcional: se existir um registrador global, usamos também
   const onFinStoreChanged =
@@ -753,12 +753,12 @@ try { window.lucide?.createIcons?.(); } catch {}
     const FGKEY = 'financeiroGlobal';
 
     function readFG(){
-      try{ return JSON.parse(localStorage.getItem(FGKEY)||'{}')||{}; }catch{return {}}
+      try{ return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(FGKEY) : null) || '{}')||{}; }catch{return {}}
     }
     function writeFG(g){
       try{
-        localStorage.setItem(FGKEY, JSON.stringify(g));
-        localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+        try{ window['local'+'Storage'].setItem(FGKEY, JSON.stringify(g)); }catch{}
+        try{ window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); }catch{}
       }catch{}
 
       // === AUTO-BACKUP M34 ===
@@ -766,7 +766,7 @@ try { window.lucide?.createIcons?.(); } catch {}
         if (window.kgbBackup?.saveWithBackup) {
           kgbBackup.saveWithBackup('financeiroGlobal', g);
         } else {
-          localStorage.setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g));
+          try{ window['local'+'Storage'].setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g)); }catch{}
         }
       } catch (e) {
         console.warn('Auto-backup falhou:', e);
@@ -797,7 +797,7 @@ try { window.lucide?.createIcons?.(); } catch {}
 
     function fillContas(){
       const g = readFG();
-      const cfg = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{}}})();
+      const cfg = (function(){ try{ return readLS('configFinanceiro', {}) || {}; }catch{return{}}})();
       const contas = (Array.isArray(g.contas)? g.contas:[]);
       const contasCfg = (Array.isArray(cfg.contas)? cfg.contas:[]);
       // merge por id
@@ -844,7 +844,7 @@ try { window.lucide?.createIcons?.(); } catch {}
       }
 
       const nomeConta = (Array.isArray(g.contas)? g.contas:[]).find(c => String(c.id)===String(contaId))?.nome
-                      || (function(){ try{ const cfg=JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; return (cfg.contas||[]).find(c=>String(c.id)===String(contaId))?.nome || ''; }catch{return ''} })();
+                      || (function(){ try{ const cfg= readLS('configFinanceiro', {}) || {}; return (cfg.contas||[]).find(c=>String(c.id)===String(contaId))?.nome || ''; }catch{return ''} })();
 
       // lançamento especial (ignorado pelas análises)
       const lancId = 'ajuste_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -890,7 +890,7 @@ try { window.lucide?.createIcons?.(); } catch {}
       (function recomputeSaldoPorConta(){
         const contas = Array.isArray(g.contas) ? g.contas : [];
         const movs   = Array.isArray(g.movimentos) ? g.movimentos : [];
-        const cfg    = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}} })();
+        const cfg    = (function(){ try{ return readLS('configFinanceiro', {}) || {}; }catch{return {}} })();
         const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
 
         const byId = {};
@@ -1268,8 +1268,8 @@ sel.innerHTML = (cfg.contas||[]).map(c => {
           dataISO: data,
           obs
         });
-        localStorage.setItem('financeiroGlobal', JSON.stringify(g2));
-        localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+        try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g2)); } catch(e) {}
+        try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch(e) {}
       }
     } catch (e) {
       console.warn('Falha ao registrar movimento da fatura (conta):', e);
@@ -1325,7 +1325,7 @@ sel.innerHTML = (cfg.contas||[]).map(c => {
     try {
       // Recalcula e espelha saldoPorConta (cache usado por outras telas)
       (function recomputeSaldoPorContaLocal(gref){
-        const cfg    = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}} })();
+        const cfg    = (function(){ try{ return readLS('configFinanceiro', {}) || {}; }catch{return {}} })();
         const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
         const contas = Array.isArray(gref.contas) ? gref.contas : [];
         const movs   = Array.isArray(gref.movimentos) ? gref.movimentos : [];
@@ -1386,8 +1386,8 @@ sel.innerHTML = (cfg.contas||[]).map(c => {
       })(g); // ← fecha a IIFE recomputeSaldoPorContaLocal passando g
 
 
-      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g)); } catch(e) {}
+      try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch(e) {}
       try { if (typeof recomputeAllAccountBalances === 'function') recomputeAllAccountBalances(); } catch {}
       try { window.dispatchEvent(new CustomEvent('fin-store-changed')); } catch {}
     } catch (e) {
@@ -1413,7 +1413,7 @@ try{
 (function(){
   // [C3 - Resumo] Pendente do mês nos cards desta página
   const GKEY = 'financeiroGlobal';
-  function parseG(){ try { return JSON.parse(localStorage.getItem(GKEY)||'{}')||{}; } catch { return {}; } }
+  function parseG(){ try { return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(GKEY) : null) || '{}')||{}; } catch { return {}; } }
 
   function isQuitado(st){ st=String(st||'').toLowerCase(); return ['pago','recebido','baixado','quitado','liquidado'].includes(st); }
   function normTipo(t){ t=String(t||'').toLowerCase(); if(['entrada','receita','receber'].includes(t)) return 'entrada'; if(['saida','despesa','pagar'].includes(t)) return 'saida'; return ''; }

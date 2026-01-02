@@ -35,19 +35,36 @@ function __getBC(){
 (function(){
   'use strict';
 
+  // Memória efêmera para cache UI (cloud-only mode)
+  const memStore = { agendaUnified: null, notificacoes: null, ui: {} };
+  const API_BASE = null; // não ler de armazenamento local; a base é runtime-only via window.__API_BASE__
+
   // ===== Chaves de armazenamento =====
   const KEY_UNIFIED = 'agendaUnified';
   const KEY_FEED    = 'notificationsFeed';
 
-  // ===== Low-level (read/write + ping) =====
+  // ===== Low-level (in-memory read/write + ping) =====
   function __read(key, fb){
-    try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fb; } catch { return fb; }
+    try {
+      if (key === KEY_UNIFIED) return Array.isArray(memStore.agendaUnified) ? memStore.agendaUnified.slice() : (fb ?? []);
+      if (key === KEY_FEED)    return Array.isArray(memStore.notificacoes) ? memStore.notificacoes.slice() : (fb ?? []);
+      return (memStore.ui && typeof memStore.ui[key] !== 'undefined') ? memStore.ui[key] : fb;
+    } catch { return fb; }
   }
   function __write(key, val){
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    try {
+      if (key === KEY_UNIFIED) { memStore.agendaUnified = Array.isArray(val) ? val.slice() : (val || []); return; }
+      if (key === KEY_FEED)    { memStore.notificacoes = Array.isArray(val) ? val.slice() : (val || []); return; }
+      memStore.ui = memStore.ui || {};
+      memStore.ui[key] = val;
+    } catch {}
   }
   function __ping(key){
-    try { localStorage.setItem(key, String(Date.now())); } catch {}
+    try {
+      memStore.ui = memStore.ui || {};
+      memStore.ui[key] = String(Date.now());
+      try { __getBC()?.postMessage({ type: key, at: Date.now() }); } catch {}
+    } catch {}
   }
   function __keepAtMost(list, n){
     if (Array.isArray(list) && list.length > n) list.length = n;
@@ -115,14 +132,12 @@ function ensureISODate(d){
     __keepAtMost(arr, 800);
     __writeUnified(arr); // já pinga LS + BC
 
-    // 2) Envia para a API (nuvem) — fonte oficial
+    // 2) Envia para a API (nuvem) — fonte oficial (via window.apiFetch)
     try {
-      const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE');
-      if (API_BASE) {
-        fetch(`${API_BASE}/agenda/unified`, {
+      if (window && window['apiFetch']) {
+        window['apiFetch']('/agenda/unified', {
           method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({
+          body: {
             id: safe.id,
             src: safe.src,
             title: safe.title,
@@ -132,7 +147,7 @@ function ensureISODate(d){
             audience: safe.audience,
             entity: safe.entity,
             desc: safe.desc
-          })
+          }
         }).catch(err => console.warn('[bridge] erro ao salvar na nuvem /agenda/unified:', err));
       }
     } catch(e){
@@ -194,14 +209,12 @@ function ensureISODate(d){
       try { __getBC()?.postMessage({ type: 'notificationsFeed:ping', at: Date.now() }); } catch {}
       try { window.dispatchEvent(new CustomEvent('notificationsFeed:ping', { detail:{ at: Date.now() } })); } catch {}
 
-      // 2) Envia também para a API /notificacoes (nuvem)
+      // 2) Envia também para a API /notificacoes (nuvem) via window.apiFetch
       try {
-        const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE');
-        if (API_BASE) {
-          fetch(`${API_BASE}/notificacoes`, {
+        if (window && window['apiFetch']) {
+          window['apiFetch']('/notificacoes', {
             method: 'POST',
-            headers: { 'Content-Type':'application/json' },
-            body: JSON.stringify({
+            body: {
               id: norm.id,
               kind: ev.kind || null,
               title: norm.title,
@@ -210,7 +223,7 @@ function ensureISODate(d){
               audience: norm.audience || '',
               entityType: norm.entity?.type || null,
               entityId: norm.entity?.id || null
-            })
+            }
           }).catch(err => console.warn('[bridge] erro ao salvar na nuvem /notificacoes:', err));
         }
       } catch(e){

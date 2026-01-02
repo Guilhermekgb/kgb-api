@@ -8,10 +8,7 @@
   // Lê configurações salvas na tela Integrações (gateway, pixKey)
   function loadIntegracoesCfg() {
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      return readLS ? (readLS(LS_KEY, {}) || {}) : {};
     } catch (e) {
       console.warn('[fin-cobranca-integ] erro ao ler m14_integracoes', e);
       return {};
@@ -26,8 +23,8 @@
           return window.__API_BASE__.replace(/\/$/, '');
         }
       }
-      if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem('API_BASE');
+      if (typeof readLS === 'function') {
+        const raw = readLS('API_BASE', '') || '';
         if (raw) return String(raw).replace(/\/$/, '');
       }
     } catch (e) {
@@ -40,28 +37,16 @@
   async function apiCriarCobrancaOnline(body) {
     const base = getApiBase();          // ex.: same-origin (window.__API_BASE__)
     const url  = base + '/api/integracoes/payments/cobranca';
-
-    // Se o projeto estiver usando handleRequest, aproveita
-    if (typeof window.handleRequest === 'function') {
-      return await window.handleRequest(url, {
+    // Use window.apiFetch if disponível
+    if (typeof window.apiFetch === 'function') {
+      const res = await window.apiFetch(url, {
         method: 'POST',
-        body
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       });
+      return res;
     }
-
-    // Fallback simples com fetch
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    const data = await resp.json().catch(() => ({}));
-    if (!resp.ok || (data && data.ok === false)) {
-      const msg = (data && data.message) || 'Não foi possível criar a cobrança.';
-      throw new Error(msg);
-    }
-    return data;
+    throw new Error('window.apiFetch is required for criar cobrança online');
   }
 
 // Integração de cobrança bancária (Mercado Pago)

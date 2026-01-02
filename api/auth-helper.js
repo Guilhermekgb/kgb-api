@@ -15,13 +15,9 @@ export function getApiBase() {
         }
       } catch (e) { /* ignore and continue */ }
 
-      // Prefer explicit runtime config or saved value
+      // Prefer explicit runtime config
       if (window.__API_BASE__) return window.__API_BASE__;
       if (window.API_BASE) return window.API_BASE;
-      try {
-        const ls = localStorage.getItem('API_BASE') || '';
-        if (ls) return ls;
-      } catch (e) { /* ignore */ }
 
       // Fallback to same-origin when running in browser
       try { if (window.location && window.location.origin) return window.location.origin; } catch(e) {}

@@ -190,24 +190,15 @@
 
       // Tenta autenticar no backend via /auth/login (cookie httpOnly)
       try {
-        // normaliza localStorage.API_BASE se apontar para 127.0.0.1
-        try {
-          const maybe = (localStorage.getItem && localStorage.getItem('API_BASE')) || '';
-          if (maybe && maybe.indexOf('127.0.0.1') !== -1) {
-            // do not auto-set API_BASE from login; keep manual via set-api.html
-          }
-        } catch (e) { /* ignore */ }
-
-        const base = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (window.__API_BASE__ || (localStorage.getItem && localStorage.getItem('API_BASE')) || '');
+        const base = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (window.__API_BASE__ || '');
         const isSameOrigin3333 = String(location.port || '') === '3333' || base === location.origin;
         const loginUrl = isSameOrigin3333 ? '/auth/login' : (base || '') + '/auth/login';
 
         const payload = { email, senha };
         console.log('[LOGIN] payload sent', payload);
 
-        const resp = await fetch(loginUrl, {
+        const resp = await window['apiFetch'](loginUrl, {
           method: 'POST',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
@@ -242,12 +233,16 @@
           const delayMs = 300;
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-              const meResp = await fetch(meUrl, { credentials: 'include' });
-              console.log('[LOGIN] /auth/me attempt', attempt, 'status=', meResp.status);
-              if (meResp.ok) {
-                const dest = (is3333 ? location.origin : (base || location.origin)) + '/dashboard.html';
-                window.location.assign(dest);
-                return;
+              try {
+                const meResp = await window['apiFetch'](meUrl, { method: 'GET' });
+                console.log('[LOGIN] /auth/me attempt', attempt, 'status=', meResp && meResp.status);
+                if (meResp && meResp.ok) {
+                  const dest = (is3333 ? location.origin : (base || location.origin)) + '/dashboard.html';
+                  window.location.assign(dest);
+                  return;
+                }
+              } catch (e) {
+                console.warn('[LOGIN] /auth/me attempt error', attempt, e);
               }
             } catch (e) {
               console.warn('[LOGIN] /auth/me attempt error', attempt, e);
@@ -268,17 +263,15 @@
       const SENHA_FIXA = "123456";
       if (email === EMAIL_FIXO && senha === SENHA_FIXA) {
         try {
+          // Fallback DEV: não persiste nada no storage do navegador — usa memStore apenas
           const tokenFake = 'dev-token-' + Date.now();
-          localStorage.removeItem('token');
-          sessionStorage.removeItem('token');
-          localStorage.setItem('token', tokenFake);
-          localStorage.setItem('auth.token', tokenFake);
+          window.__ui_login = window.__ui_login || new Map();
+          window.__ui_login.set('auth.token', tokenFake);
           const perfisLista = ['Administrador'];
-          localStorage.setItem('auth.roles', perfisLista.join(','));
-          localStorage.setItem('perfil', perfisLista[0]);
+          window.__ui_login.set('auth.roles', perfisLista.join(','));
+          window.__ui_login.set('perfil', perfisLista[0]);
           const sessao = { id: 'dev', nome: 'Admin Buffet', email: EMAIL_FIXO, perfil: perfisLista[0], perfis: perfisLista };
-          // OBS: Mantemos este armazenamento apenas para compatibilidade com telas antigas em dev
-          localStorage.setItem('auth:user', JSON.stringify(sessao));
+          window.__ui_login.set('auth:user', JSON.stringify(sessao));
         } catch (e) { console.error(e); alert('Erro ao salvar sessão no navegador.'); return; }
         window.location.href = 'dashboard.html';
         return;

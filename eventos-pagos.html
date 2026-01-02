@@ -19,8 +19,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
+    // Não persista API_BASE no navegador em cloud-only mode; expõe apenas em runtime
+    try { window.__API_BASE__ = base; } catch(e){}
     console.log("[KGB] __API_BASE__ =", base);
   })();
 </script>
@@ -38,7 +38,7 @@
 <script src="js/auth-helper.js"></script>
 <script type="module" src="./api/proteger-pagina.js"></script>
 <script>
-  try{ localStorage.setItem('guard.enforce','1'); }catch(e){}
+  try{ console.warn('guard.enforce requested for preview (not persisted)'); }catch(e){}
 </script>
 
 <style>
@@ -257,11 +257,14 @@ aside#menuLateral .submenu{
 <div id="toast" class="toast">Salvo!</div>
 
 <script>
-/* ===== Fallbacks ===== */
+/* ===== Fallbacks (cloud-only) ===== */
+const memStore = { cache: {}, ui: {}, eventos: null, configFin: null, itens: null, ingressoTipos: null, tickets: null };
+const bc = ("BroadcastChannel" in window) ? new BroadcastChannel('kgb-ui-sync') : null;
 window.$  = window.$  || ((s, el=document)=> el.querySelector(s));
 window.$$ = window.$$ || ((s, el=document)=> Array.from(el.querySelectorAll(s)));
-window.readLS  = window.readLS  || ((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
-window.writeLS = window.writeLS || ((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
+// memStore-backed shims (no persistence)
+window.readLS  = window.readLS  || ((k,fb)=>{ try{ return (memStore.cache && typeof memStore.cache[k] !== 'undefined') ? memStore.cache[k] : fb; }catch{return fb;} });
+window.writeLS = window.writeLS || ((k,v)=> { try{ memStore.cache = memStore.cache || {}; memStore.cache[k] = v; }catch{} });
 window.uid = window.uid || ((p='id_')=> p + Math.random().toString(36).slice(2,9));
 window.fmtBRL = window.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 
@@ -293,9 +296,76 @@ window.K_KEYS = window.K_KEYS || {
 };
 
 // MIGRA/DEDUPE: remove duplicados e garante somente uma chave
+// Fetchers: try API first, fallback to memStore
+async function fetchEventos(){
+  try{
+    if (window && window['apiFetch']){
+      const r = await window['apiFetch']('/eventos', { method:'GET' });
+      memStore.eventos = Array.isArray(r) ? r : (r?.items || r?.data || []);
+      return memStore.eventos;
+    }
+  } catch(e){ console.warn('fetchEventos failed', e); }
+  memStore.eventos = memStore.eventos || [];
+  return memStore.eventos;
+}
+
+async function fetchConfigFinanceiro(){
+  try{
+    if (window && window['apiFetch']){
+      const r = await window['apiFetch']('/financeiro/config', { method:'GET' });
+      memStore.configFin = (r && r.config) ? r.config : (r?.data || r || {});
+      return memStore.configFin;
+    }
+  } catch(e){ console.warn('fetchConfigFinanceiro failed', e); }
+  memStore.configFin = memStore.configFin || {};
+  return memStore.configFin;
+}
+
+async function fetchItens(eventoId){
+  try{
+    if (!eventoId) throw new Error('eventoId required');
+    if (window && window['apiFetch']){
+      const path = '/itens?eventoId=' + encodeURIComponent(String(eventoId));
+      const r = await window['apiFetch'](path, { method:'GET' });
+      memStore.itens = Array.isArray(r) ? r : (r?.items || r?.data || []);
+      return memStore.itens;
+    }
+  } catch(e){ console.warn('fetchItens failed', e); }
+  memStore.itens = memStore.itens || [];
+  return memStore.itens;
+}
+
+async function fetchIngressoTipos(eventoId){
+  try{
+    if (!eventoId) throw new Error('eventoId required');
+    if (window && window['apiFetch']){
+      const path = '/ingresso-tipos?eventoId=' + encodeURIComponent(String(eventoId));
+      const r = await window['apiFetch'](path, { method:'GET' });
+      memStore.ingressoTipos = Array.isArray(r) ? r : (r?.items || r?.data || []);
+      return memStore.ingressoTipos;
+    }
+  } catch(e){ console.warn('fetchIngressoTipos failed', e); }
+  memStore.ingressoTipos = memStore.ingressoTipos || [];
+  return memStore.ingressoTipos;
+}
+
+async function fetchTickets(eventoId){
+  try{
+    if (!eventoId) throw new Error('eventoId required');
+    if (window && window['apiFetch']){
+      const path = '/tickets?eventoId=' + encodeURIComponent(String(eventoId));
+      const r = await window['apiFetch'](path, { method:'GET' });
+      memStore.tickets = Array.isArray(r) ? r : (r?.items || r?.data || []);
+      return memStore.tickets;
+    }
+  } catch(e){ console.warn('fetchTickets failed', e); }
+  memStore.tickets = memStore.tickets || [];
+  return memStore.tickets;
+}
+
 (function migrateAndDedupeItens(){
   const key = (window.K_KEYS?.ITENS) || 'm31.itens';
-  let xs = readLS(key, []) || readLS('itens', []) || [];
+  let xs = (window.readLS ? (window.readLS(key, []) || window.readLS('itens', [])) : []) || [];
   if (!Array.isArray(xs)) xs = [];
 
   // 1ª passada: dedupe por id
@@ -325,9 +395,9 @@ window.K_KEYS = window.K_KEYS || {
   try{ writeLS('itens', out); }catch{}
 })();
 
-window.listEventos = window.listEventos || (()=> readLS(K_KEYS.EVENTOS,[])||[]);
-window.listTipos   = window.listTipos   || (evtId => (readLS(K_KEYS.INGRESSO_TIPOS,[])||[]).filter(t=>t.eventoId===evtId));
-window.listItens   = window.listItens   || (evtId => (readLS(K_KEYS.ITENS,[])||[]).filter(i=>i.eventoId===evtId));
+window.listEventos = window.listEventos || (()=> Array.isArray(memStore.eventos) ? memStore.eventos : (readLS(K_KEYS.EVENTOS,[])||[]) );
+window.listTipos   = window.listTipos   || (evtId => (Array.isArray(memStore.ingressoTipos) ? memStore.ingressoTipos : (readLS(K_KEYS.INGRESSO_TIPOS,[])||[])).filter(t=>String(t.eventoId)===String(evtId)));
+window.listItens   = window.listItens   || (evtId => (Array.isArray(memStore.itens) ? memStore.itens : (readLS(K_KEYS.ITENS,[])||[])).filter(i=>String(i.eventoId)===String(evtId)));
 
 let currentEventoId = null;
 let snapshot = null;
@@ -345,7 +415,7 @@ const __iso   = (d)=>{ if(!d) return ''; const x=new Date(d);
 function __compactTicketsInPlace() {
   const TKEY = (window.K_KEYS && window.K_KEYS.INGRESSOS) || 'm30.tickets';
   let xs;
-  try { xs = JSON.parse(localStorage.getItem(TKEY) || '[]'); } catch { xs = []; }
+  try { xs = Array.isArray(memStore.tickets) ? memStore.tickets.slice() : JSON.parse(JSON.stringify(memStore.cache[TKEY] || '[]')) || []; } catch { xs = []; }
   if (!Array.isArray(xs) || !xs.length) return;
 
   const toCents = (v)=>{
@@ -373,26 +443,11 @@ function __compactTicketsInPlace() {
     };
   });
 
-  try { localStorage.setItem(TKEY, JSON.stringify(compact)); } catch {}
+  try { memStore.tickets = compact.slice(); memStore.cache[TKEY] = compact.slice(); } catch {}
 }
 
 function safeWriteLS(key, value){
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (e) {
-    if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
-      try { __compactTicketsInPlace(); } catch {}
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-        return true;
-      } catch (e2) {
-        alert('Armazenamento local cheio. Reduza o tamanho do lote de ingressos ou apague lotes antigos em "Gerenciar Convites".');
-        return false;
-      }
-    }
-    return false;
-  }
+  try { memStore.cache = memStore.cache || {}; memStore.cache[key] = value; return true; } catch(e){ console.warn('safeWriteLS failed', e); return false; }
 }
 function notifyEventoCriado(evento){
   if (!__ok()) return;
@@ -447,17 +502,19 @@ function fmtDataBR(iso){
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 // Reage a mudanças das categorias vindas de outras abas/janelas
-window.addEventListener('storage', (ev) => {
-  if (ev.key === 'configFinanceiro' || ev.key === 'configFinanceiro:ping') {
-    try {
-      const cur = (typeof getFormData === 'function') ? getFormData() : {};
-      hydrateEventoCategorias(cur);
-    } catch {}
-  }
-});
+if (bc) {
+  try{
+    bc.addEventListener('message', (ev) => {
+      const m = ev.data || {};
+      if (m.key === 'configFinanceiro' || m.key === 'configFinanceiro:ping' || m.type === 'configFinanceiro:ping') {
+        try { const cur = (typeof getFormData === 'function') ? getFormData() : {}; hydrateEventoCategorias(cur); } catch {}
+      }
+    });
+  }catch(e){}
+}
 
 /* ==== Categorias (Financeiro) ==== */
-function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return {}; } }
+function _cfgFin(){ try{ return (memStore.configFin && typeof memStore.configFin === 'object') ? memStore.configFin : {}; }catch{return {}; } }
 function listarCategoriasEntrada(){
   const cfg = _cfgFin();
   const xs = Array.isArray(cfg.categorias) ? cfg.categorias : [];
@@ -520,7 +577,7 @@ document.addEventListener('change', (ev)=>{
 (function fixPrecosAntigos_v2(){
   try{
     // roda uma única vez
-    if (localStorage.getItem('m30.fixPrecos:v1') === '1') return;
+    if (memStore.ui && memStore.ui['m30.fixPrecos:v1'] === '1') return;
 
     let mudouTipos = false;
     const tipos = readLS(K_KEYS.INGRESSO_TIPOS,[])||[];
@@ -551,7 +608,7 @@ document.addEventListener('change', (ev)=>{
       }
     }
 
-    localStorage.setItem('m30.fixPrecos:v1','1');
+    try{ memStore.ui = memStore.ui || {}; memStore.ui['m30.fixPrecos:v1'] = '1'; }catch(e){}
     console.log('[MIGRA] Preços normalizados (tipos:', mudouTipos, ', ingressos:', mudouIng, ')');
   }catch(e){
     console.warn('[MIGRA] falhou:', e);
@@ -579,20 +636,8 @@ function listContasSafe(){
 }
 
 /* Tickets helpers */
-function readTickets(){ return readLS(K_KEYS.INGRESSOS,[])||[]; }
-function writeTickets(arr){
-  const key = (K_KEYS && K_KEYS.INGRESSOS) || 'm30.tickets';
-  if (!safeWriteLS(key, arr)) {
-    try {
-      let xs = Array.isArray(arr) ? arr.slice() : [];
-      xs.sort((a,b) =>
-        (String(a.status).toLowerCase()==='pendente'?0:1) -
-        (String(b.status).toLowerCase()==='pendente'?0:1)
-      );
-      while (xs.length > 0 && !safeWriteLS(key, xs)) xs.shift();
-    } catch {}
-  }
-}
+function readTickets(){ return Array.isArray(memStore.tickets) ? memStore.tickets : (readLS(K_KEYS.INGRESSOS,[])||[]); }
+function writeTickets(arr){ try{ memStore.tickets = Array.isArray(arr) ? arr.slice() : []; }catch(e){ console.warn('writeTickets failed', e); } }
 
 function nextNumeroSequencial(eventoId){
   const all = readTickets().filter(t => t.eventoId === eventoId);
@@ -1228,12 +1273,28 @@ document.getElementById('btnEditorLayout').addEventListener('click', (ev)=>{
 // FIM PATCH
 
 /* Init */
-(function init(){
+(async function init(){
+  // 1) config financeiro + eventos
+  try { await fetchConfigFinanceiro(); } catch(e) { console.warn('init: fetchConfigFinanceiro failed', e); }
+  try { await fetchEventos(); } catch(e){ console.warn('init: fetchEventos failed', e); }
+
+  // 2) determina eventoId a partir da querystring ou seleção atual
+  try{
+    const qs = new URLSearchParams(window.location.search || '');
+    const qEvt = qs.get('evento') || qs.get('eventoId') || null;
+    const initialEventoId = qEvt || currentEventoId || (Array.isArray(memStore.eventos) && memStore.eventos[0] && memStore.eventos[0].id) || null;
+    if (initialEventoId) {
+      currentEventoId = initialEventoId;
+      try { await fetchItens(currentEventoId); } catch(e){ console.warn('init: fetchItens failed', e); }
+      try { await fetchIngressoTipos(currentEventoId); } catch(e){ console.warn('init: fetchIngressoTipos failed', e); }
+      try { await fetchTickets(currentEventoId); } catch(e){ console.warn('init: fetchTickets failed', e); }
+    }
+  }catch(e){ console.warn('init determine eventoId failed', e); }
+
+  // 3) hydrate UI
   hydrateContas();
   renderEventosSelect();
-  if(!loadEventos().some(e=>e.modulo==='eventos-pagos')){
-    lockHeader(false);
-  }
+  try{ if(!loadEventos().some(e=>e.modulo==='eventos-pagos')){ lockHeader(false); } }catch(e){}
 })();
 </script>
 <script type="module">

@@ -3,6 +3,17 @@
 <head>
   <meta name="page-permission" content="page:backup.html">
   <meta charset="UTF-8" />
+  <script>
+    // Memória volátil local para esta página (não persiste entre abas/reloads)
+    (function(){
+      if (!window.__mem_backup) window.__mem_backup = new Map();
+      const mem = window.__mem_backup;
+      window.__memGet = (k, d=null) => mem.has(k) ? mem.get(k) : d;
+      window.__memSet = (k, v) => (mem.set(k, v), v);
+      window.__memRemove = (k) => (mem.delete(k), undefined);
+      window.__safeJSON = (s, d=null) => { try { return JSON.parse(s); } catch { return d; } };
+    })();
+  </script>
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
   (function(){
@@ -18,7 +29,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { (window.__memSet||(()=>{}))('API_BASE', base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -302,48 +313,39 @@
       }
     })();
 
-    // Base da API
+    // Base da API (prefere __API_BASE__ global, depois memStore)
     function apiBase(){
-      return window.__API_BASE__ || localStorage.getItem('API_BASE') || 'http://localhost:3001';
+      return window.__API_BASE__ || (window.__memGet ? window.__memGet('API_BASE') : null) || 'http://localhost:3001';
     }
 
     /**
      * Chama a API real (server.js) sempre com x-tenant-id: default.
-     * - GET: se "body" vier, vira querystring (?k=v)
-     * - Outros métodos: envia JSON no corpo
-     * - Retorna JSON quando houver "application/json"; senão, texto
+     * Usa `window.apiFetch` exigindo que ele exista (sem fallback para fetch).
      */
     async function api(endpoint, method='GET', body){
+      if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível (migração necessária)');
       let url = apiBase() + String(endpoint || '');
-
       const isGet = String(method || 'GET').toUpperCase() === 'GET';
       const opts = { method: String(method || 'GET').toUpperCase(), headers: { 'x-tenant-id':'default' } };
-
-      if (isGet) {
+      if (!isGet) {
+        opts.headers['Content-Type'] = 'application/json';
+        if (body !== undefined) opts.body = body; // window.apiFetch will JSON.stringify
+      } else {
         if (body && typeof body === 'object' && Object.keys(body).length){
           const qs = new URLSearchParams(body).toString();
           url += (url.includes('?') ? '&' : '?') + qs;
         }
-      } else {
-        opts.headers['Content-Type'] = 'application/json';
-        if (body !== undefined) opts.body = JSON.stringify(body);
       }
-
-      const res = await fetch(url, opts);
-      if (!res.ok) {
-        const text = await res.text().catch(()=>String(res.status));
-        throw new Error(`API error: ${res.status} — ${text}`);
-      }
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      return ct.includes('application/json') ? res.json() : res.text();
+      const resp = await window.apiFetch(url, opts);
+      return resp;
     }
 
     /* ===================== CONFIG BÁSICA ===================== */
-    const SESSAO_TIMEOUT_MIN_PADRAO = Number(localStorage.getItem('sessao.timeout.min')) || 20;
-    const AUTO_BKP_FREQ_DIAS = Number(localStorage.getItem('frequenciaBackup')) || 7;
-    const AUTO_BKP_RETENCAO  = Number(localStorage.getItem('autoBackupRetencao')) || 10;
-    const AUTO_BKP_KEY       = '__autoBackups';      // anel de retenção local
-    const AUTO_BKP_META_KEY  = '__autoBackups.meta'; // meta local
+    const SESSAO_TIMEOUT_MIN_PADRAO = Number((window.__memGet && window.__memGet('sessao.timeout.min')) || 20) || 20;
+    const AUTO_BKP_FREQ_DIAS = Number((window.__memGet && window.__memGet('frequenciaBackup')) || 7) || 7;
+    const AUTO_BKP_RETENCAO  = Number((window.__memGet && window.__memGet('autoBackupRetencao')) || 10) || 10;
+    const AUTO_BKP_KEY       = '__autoBackups';      // anel de retenção local (mem)
+    const AUTO_BKP_META_KEY  = '__autoBackups.meta'; // meta local (mem)
 
     // Ícones iniciais
     document.addEventListener('DOMContentLoaded', () => { window.lucide?.createIcons?.(); });
@@ -356,9 +358,10 @@
       const fbSpan  = $('#fbDetect');
 
       const user = (()=>{ try{
-        const u = JSON.parse(localStorage.getItem('usuarioAtual')||'null');
-        return (u?.nome || u?.email || localStorage.getItem('usuario') || '—');
-      }catch{ return localStorage.getItem('usuario') || '—'; }})();
+        const raw = (window.__memGet && window.__memGet('usuarioAtual')) || null;
+        const u = (typeof raw === 'string') ? window.__safeJSON(raw, null) : raw;
+        return (u?.nome || u?.email || (window.__memGet && window.__memGet('usuario')) || '—');
+      }catch{ return (window.__memGet && window.__memGet('usuario')) || '—'; }})();
       usrSpan.textContent = user;
 
       fbSpan.textContent = (window.firebase && (firebase.firestore || firebase.database)) ? 'SIM' : 'NÃO';
@@ -368,7 +371,7 @@
 
       $('#btnAplicarSessao')?.addEventListener('click', ()=>{
         const v = Math.max(1, Number(input.value)||SESSAO_TIMEOUT_MIN_PADRAO);
-        localStorage.setItem('sessao.timeout.min', String(v));
+        try{ (window.__memSet||(()=>{}))('sessao.timeout.min', String(v)); } catch {}
         status.textContent = `Atual: ${v} min`;
         if (window.__idleLogout?.reset) {
           window.__idleLogout.reset();
@@ -383,7 +386,8 @@
       const $lista = $('#listaIPs');
       const $novo = $('#ipNovo');
       function render(){
-        const ips = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+        const raw = (window.__memGet && window.__memGet('ip.allowlist')) || '[]';
+        const ips = Array.isArray(raw) ? raw : (function(){ try { return JSON.parse(raw||'[]'); }catch{return [];} })();
         $lista.innerHTML = ips.length
           ? ips.map((ip,idx)=>`<span class="chip" title="Clique p/ remover" data-idx="${idx}"><i data-lucide="shield"></i>${esc(ip)}</span>`).join(' ')
           : '<span class="muted">Nenhum IP cadastrado.</span>';
@@ -391,9 +395,10 @@
         $lista.querySelectorAll('.chip').forEach(ch=>{
           ch.addEventListener('click', ()=>{
             const i = Number(ch.getAttribute('data-idx'));
-            const ips2 = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+            const raw2 = (window.__memGet && window.__memGet('ip.allowlist')) || '[]';
+            const ips2 = Array.isArray(raw2) ? raw2 : (function(){ try{return JSON.parse(raw2||'[]')}catch{return[];} })();
             ips2.splice(i,1);
-            localStorage.setItem('ip.allowlist', JSON.stringify(ips2));
+            try{ (window.__memSet||(()=>{}))('ip.allowlist', ips2); } catch {}
             render();
           });
         });
@@ -401,17 +406,22 @@
       $('#btnAddIP')?.addEventListener('click', ()=>{
         const v = ($novo.value||'').trim();
         if (!v) return;
-        const ips = JSON.parse(localStorage.getItem('ip.allowlist')||'[]');
+        const raw = (window.__memGet && window.__memGet('ip.allowlist')) || '[]';
+        const ips = Array.isArray(raw) ? raw : (function(){ try{return JSON.parse(raw||'[]')}catch{return[];} })();
         if (!ips.includes(v)) ips.push(v);
-        localStorage.setItem('ip.allowlist', JSON.stringify(ips));
+        try{ (window.__memSet||(()=>{}))('ip.allowlist', ips); } catch {}
         $novo.value = '';
         render();
       });
       $('#btnDetectarIP')?.addEventListener('click', async ()=>{
         try{
-          const r = await fetch('https://api.ipify.org?format=json');
-          const j = await r.json();
-          $novo.value = j.ip || '';
+          if (typeof window.apiFetch === 'function'){
+            const r = await window.apiFetch('https://api.ipify.org?format=json', { method:'GET' });
+            const j = await r.json();
+            $novo.value = j.ip || '';
+          } else {
+            alert('Recurso em migração: detecção de IP está temporariamente indisponível.');
+          }
         }catch{
           alert('Não foi possível detectar o IP agora.');
         }
@@ -455,9 +465,9 @@ btnBackupServidor?.addEventListener('click', async () => {
 
       btnBackupManual?.addEventListener("click", () => {
         try{
-          const dump = coletarDumpLocalStorage();
+          const dump = coletarDumpMemStore();
           downloadJSON(dump, gerarNomeArquivo('backup-sistema','json'));
-          localStorage.setItem("ultimoBackupManual", new Date().toISOString());
+          try{ (window.__memSet||(()=>{}))('ultimoBackupManual', new Date().toISOString()); } catch {}
           salvarLog("Backup manual (JSON)");
           tentarEnviarParaFirebase('manual', dump);
           atualizaInfo();
@@ -468,7 +478,7 @@ btnBackupServidor?.addEventListener('click', async () => {
 
       btnExcel?.addEventListener('click', ()=>{
         try{
-          const dump = coletarDumpLocalStorage();
+          const dump = coletarDumpMemStore();
           exportarExcelDoDump(dump);
           salvarLog("Backup manual (Excel)");
         }catch(e){
@@ -484,14 +494,14 @@ btnBackupServidor?.addEventListener('click', async () => {
         reader.onload = (evt) => {
           try {
             const dados = JSON.parse(String(evt.target?.result || '{}'));
-            if (!confirm("Isso substituirá dados atuais salvos no navegador. Deseja continuar?")) return;
-            for (const chave in dados) {
-              if (!Object.prototype.hasOwnProperty.call(dados, chave)) continue;
-              if (chave === '__backup_meta') continue;
-              localStorage.setItem(chave, dados[chave]);
-            }
-            localStorage.setItem("ultimaRestauracao", new Date().toISOString());
-            salvarLog("Restauração concluída");
+                if (!confirm("Isso substituirá dados atuais salvos no navegador. Deseja continuar?")) return;
+                for (const chave in dados) {
+                  if (!Object.prototype.hasOwnProperty.call(dados, chave)) continue;
+                  if (chave === '__backup_meta') continue;
+                  try{ (window.__memSet||(()=>{}))(chave, dados[chave]); } catch {}
+                }
+                try{ (window.__memSet||(()=>{}))('ultimaRestauracao', new Date().toISOString()); } catch {}
+                salvarLog("Restauração concluída");
             alert("Backup restaurado com sucesso!");
             location.reload();
           } catch {
@@ -505,17 +515,19 @@ btnBackupServidor?.addEventListener('click', async () => {
         if (!confirm('Remover caches temporários (layout/snapshot/_html/_imagem/cache/tmp/buffer)?')) return;
         const re = /(layout|snapshot|_html|_imagem|cache|tmp|buffer)/i;
         const removidas = [];
-        for (let i=localStorage.length-1;i>=0;i--){
-          const k = localStorage.key(i);
-          if (re.test(k)) { removidas.push(k); localStorage.removeItem(k); }
-        }
+        try{
+          const mem = window.__mem_backup || new Map();
+          for (const k of Array.from(mem.keys())){
+            if (re.test(k)) { removidas.push(k); mem.delete(k); }
+          }
+        }catch{}
         salvarLog('Limpeza de caches', { removidas });
         alert(`Removidas ${removidas.length} chaves de cache.`);
       });
 
       function atualizaInfo() {
-        const bkp = localStorage.getItem("ultimoBackupManual");
-        const res = localStorage.getItem("ultimaRestauracao");
+        const bkp = (window.__memGet && window.__memGet("ultimoBackupManual"));
+        const res = (window.__memGet && window.__memGet("ultimaRestauracao"));
         let html = "";
         if (bkp) html += `🕒 Último backup manual: ${esc(fmtBR(bkp))}<br>`;
         if (res) html += `🔁 Última restauração: ${esc(fmtBR(res))}`;
@@ -528,26 +540,30 @@ btnBackupServidor?.addEventListener('click', async () => {
       return `${prefixo}-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.${ext}`;
     }
 
-    function coletarDumpLocalStorage(){
+    function coletarDumpMemStore(){
       const dump = {};
-      for (let i = 0; i < localStorage.length; i++){
-        const k = localStorage.key(i);
-        dump[k] = localStorage.getItem(k);
-      }
+      try{
+        const mem = window.__mem_backup || new Map();
+        for (const k of Array.from(mem.keys())){
+          dump[k] = mem.get(k);
+        }
+      }catch{}
       const usuarioAtual = (()=>{ try{
-        const u = JSON.parse(localStorage.getItem('usuarioAtual') || 'null');
+        const raw = (window.__memGet && window.__memGet('usuarioAtual')) || null;
+        const u = (typeof raw === 'string') ? window.__safeJSON(raw, null) : raw;
         if (u && (u.id || u.nome)) return u.id || u.nome;
-      }catch{} return localStorage.getItem('usuario') || 'admin'; })();
-      const versaoSistema = localStorage.getItem('app.version') || '1.0.0';
+      }catch{} return (window.__memGet && window.__memGet('usuario')) || 'admin'; })();
+      const versaoSistema = (window.__memGet && window.__memGet('app.version')) || '1.0.0';
       dump.__backup_meta = { createdAt:new Date().toISOString(), origin:location.origin, usuario:usuarioAtual, versaoSistema };
       return dump;
     }
 
     function salvarLog(acao, extra){
       try{
-        const logs = JSON.parse(localStorage.getItem("logs") || "[]");
+        const raw = (window.__memGet && window.__memGet("logs")) || '[]';
+        const logs = Array.isArray(raw) ? raw : (function(){ try{return JSON.parse(raw||'[]')}catch{return[];} })();
         logs.push({ data: new Date().toISOString(), acao, ...(extra||{}) });
-        localStorage.setItem("logs", JSON.stringify(logs));
+        try{ (window.__memSet||(()=>{}))('logs', logs); } catch {}
       }catch{}
     }
 
@@ -583,10 +599,10 @@ btnBackupServidor?.addEventListener('click', async () => {
 
     /* ===================== Auto-backup (sombra com retenção + servidor) ===================== */
     (function autoBackup(){
-      function lerMeta(){ try { return JSON.parse(localStorage.getItem(AUTO_BKP_META_KEY)) || { lastRun:null, freqDias:7, ret:10 }; } catch { return { lastRun:null, freqDias:7, ret:10 }; } }
-      function salvarMeta(meta){ try { localStorage.setItem(AUTO_BKP_META_KEY, JSON.stringify(meta)); } catch {} }
-      function lerLista(){ try { return JSON.parse(localStorage.getItem(AUTO_BKP_KEY)) || []; } catch { return []; } }
-      function salvarLista(arr){ try { localStorage.setItem(AUTO_BKP_KEY, JSON.stringify(arr || [])); } catch {} }
+      function lerMeta(){ try { const raw = (window.__memGet && window.__memGet(AUTO_BKP_META_KEY)); return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : { lastRun:null, freqDias:7, ret:10 }; } catch { return { lastRun:null, freqDias:7, ret:10 }; } }
+      function salvarMeta(meta){ try { (window.__memSet||(()=>{}))(AUTO_BKP_META_KEY, meta); } catch {} }
+      function lerLista(){ try { const raw = (window.__memGet && window.__memGet(AUTO_BKP_KEY)); return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : []; } catch { return []; } }
+      function salvarLista(arr){ try { (window.__memSet||(()=>{}))(AUTO_BKP_KEY, arr || []); } catch {} }
 
       const btnAbrirModal  = $("#btnAbrirModalBackup");
       const btnFecharModal = $("#btnFecharModal");
@@ -663,8 +679,8 @@ btnBackupServidor?.addEventListener('click', async () => {
         meta.freqDias = Math.max(1, dias);
         meta.ret      = ret;
         salvarMeta(meta);
-        localStorage.setItem("frequenciaBackup", String(meta.freqDias));
-        localStorage.setItem("autoBackupRetencao", String(meta.ret));
+        try{ (window.__memSet||(()=>{}))("frequenciaBackup", String(meta.freqDias)); } catch {}
+        try{ (window.__memSet||(()=>{}))("autoBackupRetencao", String(meta.ret)); } catch {}
         if (modal) modal.style.display = 'none';
         atualizarResumo();
         alert(`Configurações salvas: ${meta.freqDias} dia(s), retenção ${meta.ret}.`);
@@ -775,18 +791,20 @@ btnBackupServidor?.addEventListener('click', async () => {
       // ========== 2) LOCAIS (auto + por chave) ==========
       function listarSnapshotsPorChave(){
         const out = [];
-        for (let i=0;i<localStorage.length;i++){
-          const k = localStorage.key(i);
-          if (k && k.startsWith('backup:')){
-            const [, chave, ts] = k.split(':');
-            const val = localStorage.getItem(k) || '';
-            out.push({ tipo:'chave', chave, ts:Number(ts)||Date.now(), key:k, bytes:new Blob([val]).size, data:val });
+        try{
+          const mem = window.__mem_backup || new Map();
+          for (const k of Array.from(mem.keys())){
+            if (k && k.startsWith('backup:')){
+              const [, chave, ts] = k.split(':');
+              const val = mem.get(k) || '';
+              out.push({ tipo:'chave', chave, ts:Number(ts)||Date.now(), key:k, bytes:new Blob([String(val)]).size, data:val });
+            }
           }
-        }
+        }catch{}
         return out.sort((a,b)=>b.ts-a.ts);
       }
-      const autos = JSON.parse(localStorage.getItem('__autoBackups') || '[]')
-        .map(a => ({ tipo:'auto', ts:new Date(a.createdAt).getTime(), name:a.name, data:a.data, bytes:new Blob([JSON.stringify(a.data)]).size }));
+      const autosRaw = (window.__memGet && window.__memGet('__autoBackups')) || [];
+      const autos = Array.isArray(autosRaw) ? autosRaw.map(a => ({ tipo:'auto', ts:new Date(a.createdAt).getTime(), name:a.name, data:a.data, bytes:new Blob([JSON.stringify(a.data)]).size })) : [];
       const chaves = listarSnapshotsPorChave();
 
       html += '<h3 style="margin:16px 0 6px;color:#5c4033;display:flex;align-items:center;gap:8px;"><i data-lucide="hard-drive"></i> Locais (navegador)</h3>';
@@ -841,7 +859,7 @@ btnBackupServidor?.addEventListener('click', async () => {
         btn.addEventListener('click', ()=>{
           const name = btn.closest('tr')?.getAttribute('data-name');
           if (!name) return;
-          const full = localStorage.getItem('backup:full:' + name);
+          const full = (window.__memGet && window.__memGet('backup:full:' + name));
           if (!full){ alert('Conteúdo completo não está em cache local deste navegador.'); return; }
           const blob = new Blob([full], { type:'application/json' });
           const a = document.createElement('a');
@@ -859,7 +877,7 @@ btnBackupServidor?.addEventListener('click', async () => {
           if (!confirm('Excluir o snapshot "' + name + '"?')) return;
           try{
             await api('/backup/snapshot','DELETE',{ name });
-            localStorage.removeItem('backup:full:' + name);
+            try{ (window.__memRemove||(()=>{}))('backup:full:' + name); } catch {}
             renderSnapshotsTable();
           }catch(e){
             const msg = (e && e.message) ? e.message : 'Erro ao excluir.';
@@ -872,16 +890,17 @@ btnBackupServidor?.addEventListener('click', async () => {
       wrap.querySelectorAll('button[data-act="rest-auto"]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const ts = Number(btn.getAttribute('data-ts'));
-          const lista = JSON.parse(localStorage.getItem('__autoBackups') || '[]');
+          const listaRaw = (window.__memGet && window.__memGet('__autoBackups')) || [];
+          const lista = Array.isArray(listaRaw) ? listaRaw : [];
           const item = lista.find(it => new Date(it.createdAt).getTime() === ts);
           if (!item) return alert('Auto-backup não encontrado.');
           const dump = item.data || {};
           if (!confirm('Restaurar o auto-backup inteiro? Isso sobrescreverá as chaves atuais.')) return;
           for (const k of Object.keys(dump)){
             if (k === '__backup_meta') continue;
-            localStorage.setItem(k, dump[k]);
+            try{ (window.__memSet||(()=>{}))(k, dump[k]); } catch {}
           }
-          localStorage.setItem('ultimaRestauracao', new Date().toISOString());
+          try{ (window.__memSet||(()=>{}))('ultimaRestauracao', new Date().toISOString()); } catch {}
           alert('Restauração concluída. Recarregando…');
           location.reload();
         });
@@ -893,12 +912,10 @@ btnBackupServidor?.addEventListener('click', async () => {
           if (!fullKey) return;
           const [, chave] = fullKey.split(':');
           if (!confirm(`Restaurar snapshot da chave "${chave}"?`)) return;
-          const val = localStorage.getItem(fullKey);
+          const val = (window.__memGet && window.__memGet(fullKey));
           if (val == null) return alert('Snapshot não encontrado.');
-          localStorage.setItem(chave, val);
-          const logs = JSON.parse(localStorage.getItem("logs") || "[]");
-          logs.push({ data: new Date().toISOString(), acao:'Restauração por chave', chave, fullKey });
-          localStorage.setItem("logs", JSON.stringify(logs));
+          try{ (window.__memSet||(()=>{}))(chave, val); } catch {}
+          salvarLog('Restauração por chave', { chave, fullKey });
           alert(`Chave "${chave}" restaurada.`);
           location.reload();
         });
@@ -951,16 +968,15 @@ btnBackupServidor?.addEventListener('click', async () => {
                 || document.querySelector('[data-bkp-criar]');
   btnCriar?.addEventListener('click', async () => {
     const nome = `snap-${new Date().toISOString().replace(/[:T\-\.Z]/g,'').slice(0,14)}.json`;
-    // pode enviar seus dados locais juntos, se quiser: const data = coletarDumpLocalStorage();
+    // pode enviar seus dados locais juntos, se quiser: const data = coletarDumpMemStore();
     try{
-      const r = await fetch(base + '/backup/snapshot', {
-        method:'PUT',
-        headers:{ 'content-type':'application/json', 'x-tenant-id':'default' },
-        body: JSON.stringify({ name: nome /*, data*/ })
-      });
-      if (!r.ok){ alert('Falha ao criar snapshot.'); return; }
-      alert('✅ Snapshot criado: ' + nome);
-      renderSnapshotsTable?.();
+      if (typeof window.apiFetch === 'function'){
+        await window.apiFetch(base + '/backup/snapshot', { method:'PUT', headers:{ 'content-type':'application/json', 'x-tenant-id':'default' }, body: { name: nome } });
+        alert('✅ Snapshot criado: ' + nome);
+        renderSnapshotsTable?.();
+      } else {
+        alert('Recurso em migração: criação de snapshot via API indisponível.');
+      }
     }catch(e){ alert('Não foi possível criar snapshot agora.'); }
   });
 
@@ -974,8 +990,8 @@ btnBackupServidor?.addEventListener('click', async () => {
 
     if (btn.classList.contains('js-open')){
       try{
-        const txt  = await fetch(base + '/backup/snapshot?name=' + encodeURIComponent(name),
-                                 { headers:{ 'x-tenant-id':'default' } }).then(r=>r.text());
+        const res = await api('/backup/snapshot','GET',{ name });
+        const txt = (typeof res === 'string') ? res : JSON.stringify(res, null, 2);
         const blob = new Blob([txt], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
         window.open(url, '_blank'); setTimeout(()=>URL.revokeObjectURL(url), 10000);
@@ -983,7 +999,7 @@ btnBackupServidor?.addEventListener('click', async () => {
     }
 
     if (btn.classList.contains('js-export')){
-      const full = localStorage.getItem('backup:full:' + name);
+      const full = (window.__memGet && window.__memGet('backup:full:' + name));
       if (!full){ alert('Conteúdo não está em cache local. Abra primeiro para cachear.'); return; }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([full], {type:'application/json'}));
@@ -992,11 +1008,13 @@ btnBackupServidor?.addEventListener('click', async () => {
 
     if (btn.classList.contains('js-delete')){
       if (!confirm('Excluir o snapshot "' + name + '"?')) return;
-      const r = await fetch(base + '/backup/snapshot?name=' + encodeURIComponent(name), {
-        method:'DELETE', headers:{ 'x-tenant-id':'default' }
-      });
-      if (r.ok){ localStorage.removeItem('backup:full:' + name); renderSnapshotsTable?.(); }
-      else { alert('Não foi possível excluir.'); }
+      try{
+        await api('/backup/snapshot','DELETE',{ name });
+        try{ (window.__memRemove||(()=>{}))('backup:full:' + name); } catch {}
+        renderSnapshotsTable?.();
+      }catch{
+        alert('Não foi possível excluir.');
+      }
     }
   });
 })();

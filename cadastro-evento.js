@@ -1,4 +1,4 @@
-// (removido) import { handleRequest } from './api/remote-adapter.js'
+// (removido) import from './api/remote-adapter.js'
 
 // >>> deixe a proteção para o final do projeto <<<
 // (mantém pronto, mas desativado)
@@ -10,12 +10,27 @@ if (window.__PROTEGER_PAGINA__ === true) {
 
 
 // chama a API universal do projeto (local x remoto)
-const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
+const IS_REMOTE = true; // frontend de evento deve usar sempre window.apiFetch (same-origin + cookies)
 
-const callApi = (endpoint, method = 'GET', body = {}) =>
-  import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
-  );
+// memória local em runtime (NÃO persiste dados de negócio)
+const memoryStore = {};
+function memGet(key) { return Object.prototype.hasOwnProperty.call(memoryStore, key) ? memoryStore[key] : null; }
+function memSet(key, value) { memoryStore[key] = String(value); }
+function memRemove(key) { delete memoryStore[key]; }
+function memGetJSON(key, fallback = null) {
+  try {
+    const v = memGet(key);
+    if (v == null) return fallback;
+    return JSON.parse(String(v));
+  } catch (e) { return fallback; }
+}
+function memSetJSON(key, obj) { try { memSet(key, JSON.stringify(obj)); } catch (e) {} }
+
+const callApi = async (endpoint, method = 'GET', body = {}) => {
+  if (!window.apiFetch) throw new Error('window.apiFetch não encontrado');
+  const opts = { method, body };
+  return window.apiFetch(endpoint, opts);
+};
 
 // URL normalizada
 const QS = new URLSearchParams(location.search);
@@ -26,12 +41,7 @@ function preencherOrigensCliente() {
   const sel = document.getElementById('origemCliente');
   if (!sel) return;
 
-  let fontes = [];
-  try {
-    fontes = JSON.parse(localStorage.getItem('comoConheceu') || '[]');
-  } catch {
-    fontes = [];
-  }
+  let fontes = memGetJSON('comoConheceu', []);
 
   // mantém sempre a primeira opção "Selecione"
   sel.innerHTML = '<option value="">Selecione</option>';
@@ -45,12 +55,10 @@ function preencherOrigensCliente() {
       sel.appendChild(opt);
     });
 
-  // se já existir um rascunho de eventoTemp com origemConheceu, reaplica
+  // se já existir um rascunho de eventoTemp em memória com origemConheceu, reaplica
   try {
-    const eventoTemp = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
-    if (eventoTemp.origemConheceu) {
-      sel.value = eventoTemp.origemConheceu;
-    }
+    const eventoTemp = memGetJSON('eventoTemp', {});
+    if (eventoTemp.origemConheceu) sel.value = eventoTemp.origemConheceu;
   } catch {}
 }
 
@@ -58,25 +66,20 @@ function preencherOrigensCliente() {
 let dadosItens = [];
 let eventoDoLead = null;
 
-// guarda no eventoTemp para uso entre telas
+// guarda no eventoTemp para uso entre telas (memória somente)
 if (leadId) {
   try {
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     evt.leadId = leadId;
-    localStorage.setItem('eventoTemp', JSON.stringify(evt));
+    memSetJSON('eventoTemp', evt);
   } catch {}
 }
 
-// ===== Fotos de clientes (armazenadas no localStorage) =====
+// ===== Fotos de clientes (armazenadas em memória runtime) =====
 const FOTOS_STORAGE_KEY = 'fotosClientes';
 
-function getFotosMap() {
-  try { return JSON.parse(localStorage.getItem(FOTOS_STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-function setFotosMap(map) {
-  localStorage.setItem(FOTOS_STORAGE_KEY, JSON.stringify(map));
-}
+function getFotosMap() { return memGetJSON(FOTOS_STORAGE_KEY, {}); }
+function setFotosMap(map) { memSetJSON(FOTOS_STORAGE_KEY, map); }
 function clienteFotoKeyCurrent() {
   const id = document.getElementById('clienteId')?.value?.trim();
   const nome = (document.getElementById('nomeCliente')?.value || '').trim().toLowerCase();
@@ -199,9 +202,9 @@ function notifyEventoCriado(evento){
 
 // ===== PUXAR ITENS/CONVIDADOS DA "PONTE" (priorizar a ponte) =====
 try {
-  const temp         = JSON.parse(localStorage.getItem("eventoTemp") || "{}") || {};
-  const itensDaPonte = JSON.parse(localStorage.getItem("itensSelecionadosEvento") || "null");
-  const qtdDaPonte   = localStorage.getItem("quantidadeConvidadosEvento");
+  const temp         = memGetJSON('eventoTemp', {}) || {};
+  const itensDaPonte = memGetJSON('itensSelecionadosEvento', null);
+  const qtdDaPonte   = memGet('quantidadeConvidadosEvento');
 
   // começamos do rascunho atual
   const evt = { ...temp };
@@ -225,12 +228,12 @@ try {
     evt.qtdConvidados = q; // compat
   }
 
-  // grava o rascunho consolidado
-  localStorage.setItem("eventoTemp", JSON.stringify(evt));
+  // grava o rascunho consolidado (em memória somente)
+  memSetJSON('eventoTemp', evt);
 
   // (opcional) limpar marcadores de navegação; NÃO limpe 'itensSelecionadosEvento' aqui
   // para o cadastro poder ler logo após a navegação. Se quiser limpar, faça só no final do submit.
-  try { localStorage.removeItem("itensEvento:returnTo"); } catch {}
+  try { memRemove('itensEvento:returnTo'); } catch {}
 } catch (e) {
   console.warn("Falha ao aplicar ponte de itens/convidados:", e);
 }
@@ -238,13 +241,13 @@ try {
 
 
 // helpers
-// Salva o array de eventos no localStorage com proteção
+// Salva o array de eventos em memória com proteção
 function safeSaveEventos(eventos) {
   try {
-    localStorage.setItem('eventos', JSON.stringify(eventos || []));
+    memSetJSON('eventos', eventos || []);
   } catch (err) {
-    console.error('Erro ao salvar eventos no localStorage:', err);
-    alert('Não foi possível salvar os eventos (armazenamento cheio ou indisponível).');
+    console.error('Erro ao salvar eventos em memória:', err);
+    alert('Não foi possível salvar os eventos em memória.');
   }
 }
 
@@ -253,11 +256,11 @@ function getQtdConvidados() {
   const fromInput = Number((el?.value || '').toString().replace(/\D/g, ''));
   if (fromInput > 0) return fromInput;
   try {
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     const fromTemp = Number(evt.qtdConvidados || evt.quantidadeConvidados || 0);
     if (fromTemp > 0) return fromTemp;
   } catch {}
-  const fromLS = Number(localStorage.getItem('quantidadeConvidadosEvento') || 0);
+  const fromLS = Number(memGet('quantidadeConvidadosEvento') || 0);
   return Number.isFinite(fromLS) ? fromLS : 0;
 }
 
@@ -284,7 +287,7 @@ function formatDateBR(s){
 function getFotoCliente(ev){
   try{
     if (ev?.fotoCliente) return ev.fotoCliente;
-    const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+    const map = memGetJSON('fotosClientes', {});
     const keys = [];
     if (ev?.fotoClienteKey) keys.push(ev.fotoClienteKey);
     if (ev?.clienteId)      keys.push(`id:${ev.clienteId}`);
@@ -375,18 +378,18 @@ window.aplicarCliente = function (c) {
   const nomeKey = c?.nome ? `nome:${String(c.nome).trim().toLowerCase()}` : '';
   const idKey   = c?.id ? `id:${c.id}` : '';
   const map     = getFotosMap();
-  const prev    = JSON.parse(localStorage.getItem('eventoTemp') || '{}').fotoClienteKey;
+  const prev    = (memGetJSON('eventoTemp', {}) || {}).fotoClienteKey;
   const fotoKeyAplicar = map[idKey] ? idKey : (map[nomeKey] ? nomeKey : (prev || idKey || nomeKey));
   carregarFotoDoClienteNaUI(fotoKeyAplicar);
 
   try {
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     evt.fotoClienteKey = fotoKeyAplicar;
     evt.clienteId      = c.id || '';
     evt.nomeCliente    = c.nome || '';
     evt.telefoneCliente= foneRaw || '';
     evt.emailCliente   = c.email || '';
-    localStorage.setItem('eventoTemp', JSON.stringify(evt));
+    memSetJSON('eventoTemp', evt);
   } catch {}
 
   renderAvisosCadastro();
@@ -401,7 +404,7 @@ window.atualizarListaItens = function () {
   lista.innerHTML = "";
 
   const qtdFromInput = parseInt(document.getElementById("quantidadeConvidados")?.value || "0", 10);
-  const qtdFromLS = parseInt(localStorage.getItem("quantidadeConvidadosEvento") || "0", 10);
+  const qtdFromLS = parseInt(memGet('quantidadeConvidadosEvento') || "0", 10);
   const qtdConvidados =
     (Number.isFinite(qtdFromInput) && qtdFromInput > 0) ? qtdFromInput :
     (Number.isFinite(qtdFromLS) && qtdFromLS > 0) ? qtdFromLS : 0;
@@ -466,11 +469,11 @@ window.atualizarListaItens = function () {
       return acc + Math.max(0, totalBase - descontoValor);
     }, 0);
 
-    const evtTemp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+    const evtTemp = memGetJSON('eventoTemp', {});
     evtTemp.totalContrato = totalContrato;
     evtTemp.resumoFinanceiro = { ...(evtTemp.resumoFinanceiro||{}), contratoTotal: totalContrato };
     evtTemp.valorContrato = totalContrato; // compat extra
-    localStorage.setItem("eventoTemp", JSON.stringify(evtTemp));
+    memSetJSON('eventoTemp', evtTemp);
   } catch {}
 
 
@@ -478,7 +481,7 @@ window.atualizarListaItens = function () {
 
 document.getElementById("quantidadeConvidados")?.addEventListener("input", (e) => {
   const v = parseInt(e.target.value || "0", 10);
-  localStorage.setItem("quantidadeConvidadosEvento", String(Number.isFinite(v) && v > 0 ? v : 0));
+  memSet('quantidadeConvidadosEvento', String(Number.isFinite(v) && v > 0 ? v : 0));
   window.atualizarListaItens();
 });
 
@@ -499,14 +502,14 @@ function renderResumoPorData() {
 
   let eventos = [];
   try {
-    eventos = (JSON.parse(localStorage.getItem('eventos') || '[]') || [])
+    eventos = (memGetJSON('eventos', []) || [])
       .filter(e => _normDate(e.data) === d)
       .filter(e => (e?.status || 'ativo') !== 'cancelado' && (e?.status || 'ativo') !== 'excluido');
   } catch {}
 
   let leads = [];
   try {
-    leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : (JSON.parse(localStorage.getItem('leads') || '[]') || []))
+    leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : memGetJSON('leads', []))
       .filter(l => _normDate(l.dataEvento) === d);
   } catch {}
 
@@ -580,9 +583,9 @@ function initFotoCliente() {
       carregarFotoDoClienteNaUI(key);
       URL.revokeObjectURL(objectURL);
 
-      const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+      const evt = memGetJSON('eventoTemp', {});
       evt.fotoClienteKey = key;
-      localStorage.setItem('eventoTemp', JSON.stringify(evt));
+      memSetJSON('eventoTemp', evt);
     } catch (err) {
       console.warn('Falha ao processar imagem:', err);
     } finally {
@@ -591,13 +594,13 @@ function initFotoCliente() {
   });
 
   btnRemover?.addEventListener('click', () => {
-    const key = clienteFotoKeyCurrent() || (JSON.parse(localStorage.getItem('eventoTemp') || '{}').fotoClienteKey);
+    const key = clienteFotoKeyCurrent() || (memGetJSON('eventoTemp', {}).fotoClienteKey);
     const map = getFotosMap();
     if (key && map[key]) { delete map[key]; setFotosMap(map); }
     carregarFotoDoClienteNaUI('');
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     delete evt.fotoClienteKey;
-    localStorage.setItem('eventoTemp', JSON.stringify(evt));
+    memSetJSON('eventoTemp', evt);
   });
 }
 
@@ -613,12 +616,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- IMPORTA itens escolhidos em itens-evento (cardápio/adicionais/serviços) ---
   (function importarItensSelecionadosSeTiver() {
     try {
-      // 1) ler o que a tela de itens deixou no localStorage
-      const itensSoltos   = JSON.parse(localStorage.getItem("itensSelecionadosEvento") || "null");
-      const cardapioSel   = JSON.parse(localStorage.getItem("cardapioSelecionado") || "null");
-      const addsSel       = JSON.parse(localStorage.getItem("adicionaisSelecionadosEvento") || localStorage.getItem("adicionaisSelecionados") || "null");
-      const servicosSel   = JSON.parse(localStorage.getItem("servicosSelecionadosEvento") || localStorage.getItem("servicosSelecionados") || "null");
-      const qtdLS         = localStorage.getItem("quantidadeConvidadosEvento");
+      // 1) ler o que a tela de itens deixou na memória de ponte
+      const itensSoltos   = memGetJSON('itensSelecionadosEvento', null);
+      const cardapioSel   = memGetJSON('cardapioSelecionado', null);
+      const addsSel       = memGetJSON('adicionaisSelecionadosEvento', memGetJSON('adicionaisSelecionados', null));
+      const servicosSel   = memGetJSON('servicosSelecionadosEvento', memGetJSON('servicosSelecionados', null));
+      const qtdLS         = memGet('quantidadeConvidadosEvento');
 
       // 2) normalizador compatível com várias telas
       const normalizarItem = (it, tipoPadrao) => ({
@@ -645,7 +648,7 @@ document.addEventListener("DOMContentLoaded", () => {
         atualizarListaItens();
 
         // 5) também guarda dentro do eventoTemp (para persistir o retorno)
-        const evt = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+        const evt = memGetJSON('eventoTemp', {});
         evt.itensSelecionados = escolhidos;
 
         // se a tela de itens gravou a qtd no LS, espelha no eventoTemp e no input
@@ -658,12 +661,12 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
-        localStorage.setItem("eventoTemp", JSON.stringify(evt));
+        memSetJSON('eventoTemp', evt);
       }
 
       // 6) limpar chaves de passagem (evita sujar próximas navegações)
       ["itensSelecionadosEvento","cardapioSelecionado","adicionaisSelecionadosEvento","adicionaisSelecionados","servicosSelecionadosEvento","servicosSelecionados"]
-        .forEach(k => { try{ localStorage.removeItem(k); }catch{} });
+        .forEach(k => { try{ memRemove(k); }catch{} });
     } catch (e) {
       console.warn("CadastroEvento: falha ao importar itens da tela de itens:", e);
     }
@@ -681,7 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById('data')?.addEventListener('change', renderResumoPorData);
   renderResumoPorData();
 
-  const evtTmp = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+  const evtTmp = memGetJSON('eventoTemp', {});
   if (evtTmp.fotoClienteKey) carregarFotoDoClienteNaUI(evtTmp.fotoClienteKey);
   else carregarFotoDoClienteNaUI(clienteFotoKeyCurrent());
 
@@ -693,22 +696,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const clienteIdQS   = qs.get('clienteId');
 
     if (clienteIdQS) {
-      localStorage.setItem('clienteSelecionado', String(clienteIdQS));
-      localStorage.setItem('voltarParaEvento', 'true');
+      memSet('clienteSelecionado', String(clienteIdQS));
+      memSet('voltarParaEvento', 'true');
     }
 
-    const deveAplicar = fromClienteQS || !!clienteIdQS || localStorage.getItem('voltarParaEvento') === 'true';
+    const deveAplicar = fromClienteQS || !!clienteIdQS || memGet('voltarParaEvento') === 'true';
     if (!deveAplicar) return;
 
-    const idSelecionado = clienteIdQS || localStorage.getItem('clienteSelecionado');
+    const idSelecionado = clienteIdQS || memGet('clienteSelecionado');
     if (!idSelecionado) return;
 
     try {
-      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+      const clientes = memGetJSON('clientes', []);
       const c = clientes.find(x => String(x.id) === String(idSelecionado));
       if (c) {
         window.aplicarCliente(c);
-        localStorage.removeItem('voltarParaEvento');
+        memRemove('voltarParaEvento');
       }
     } catch {}
   }
@@ -716,9 +719,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll('#qtdConvidados, #quantidadeConvidados, #convidados, [name="qtdConvidados"]').forEach(el => {
     el.addEventListener('input', () => {
       try {
-        const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+        const evt = memGetJSON('eventoTemp', {});
         evt.qtdConvidados = getQtdConvidados();
-        localStorage.setItem('eventoTemp', JSON.stringify(evt));
+        memSetJSON('eventoTemp', evt);
       } catch {}
       if (typeof calcularTotais === 'function') calcularTotais();
       if (typeof recalcItens === 'function') recalcItens();
@@ -730,7 +733,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function preencherEvento() {
-    const eventoTemp = JSON.parse(localStorage.getItem("eventoTemp") || "null");
+    const eventoTemp = memGetJSON("eventoTemp", null);
     if (!eventoTemp) return;
 
     document.getElementById("clienteId").value = eventoTemp.clienteId || "";
@@ -782,12 +785,12 @@ document.getElementById("origemObs").value        = eventoTemp.origemObs || "";
   // Junta histórico do lead + do cadastro
   let historicoInicial = [];
   try {
-    const evtTemp = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evtTemp = memGetJSON('eventoTemp', {});
    if (Array.isArray(evtTemp.historico)) historicoInicial = historicoInicial.concat(evtTemp.historico);
 
 
     if (leadId) {
-      const leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : JSON.parse(localStorage.getItem('leads') || '[]'));
+      const leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : memGetJSON('leads', []));
       const lead = leads.find(l => String(l.id) === String(leadId));
      if (Array.isArray(lead?.historico)) historicoInicial = historicoInicial.concat(lead.historico);
     }
@@ -812,19 +815,19 @@ async function postComFallbackDeRotas(evento) {
 
 function salvarEventoLocalEIr(evento, novoIdOverride) {
   try {
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]') || [];
+    const eventos = memGetJSON('eventos', []) || [];
     const novoId = String(novoIdOverride || evento.id || Date.now());
     const registro = { ...evento, id: novoId, status: 'ativo' };
     eventos.push(registro);
-    localStorage.setItem('eventos', JSON.stringify(eventos));
-    // limpa rascunhos e segue
-    localStorage.removeItem('eventoTemp');
-    localStorage.removeItem('voltarParaEvento');
-    localStorage.removeItem('clienteSelecionado');
+    memSetJSON('eventos', eventos);
+    // limpa rascunhos em memória e segue
+    try { memRemove('eventoTemp'); } catch {}
+    try { memRemove('voltarParaEvento'); } catch {}
+    try { memRemove('clienteSelecionado'); } catch {}
     location.href = `evento-detalhado.html?id=${encodeURIComponent(novoId)}`;
   } catch (e) {
-    console.error('Falha ao salvar local:', e);
-    alert('Não foi possível salvar o evento nem localmente.');
+    console.error('Falha ao salvar local (memória):', e);
+    alert('Não foi possível salvar o evento na memória.');
   }
 }
 // === FIM PATCH ===
@@ -834,7 +837,7 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
     renderAvisosCadastro(true);
 
     const fotoKeyFinal =
-      (JSON.parse(localStorage.getItem('eventoTemp') || '{}').fotoClienteKey)
+      (memGetJSON('eventoTemp', {})?.fotoClienteKey)
       || clienteFotoKeyCurrent();
 
     const fotoParaEnviar = IS_REMOTE ? montarFotoParaEnviar(fotoKeyFinal) : null;
@@ -910,9 +913,9 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
               console.warn('[KGB] Falha ao notificar criação de evento (remoto)', e);
             }
 
-            // espelha no localStorage para telas antigas
+            // espelha em memória para compatibilidade com telas antigas
             try {
-              const eventosLocais = JSON.parse(localStorage.getItem('eventos') || '[]');
+              const eventosLocais = memGetJSON('eventos', []);
               const registroLocal = {
                 ...evento,
                 id: novoIdRemoto,
@@ -923,10 +926,10 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
               if (typeof safeSaveEventos === 'function') {
                 safeSaveEventos(eventosLocais);
               } else {
-                localStorage.setItem('eventos', JSON.stringify(eventosLocais));
+                memSetJSON('eventos', eventosLocais);
               }
             } catch (e) {
-              console.warn('[KGB] Falha ao espelhar evento no localStorage (remoto)', e);
+              console.warn('[KGB] Falha ao espelhar evento em memória (remoto)', e);
             }
 
             salvouRemoto = true;
@@ -944,57 +947,29 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
 
       // Se salvou com sucesso na API, limpamos rascunho e vamos pro evento
       if (salvouRemoto && novoIdRemoto) {
-        try { localStorage.removeItem('eventoTemp'); } catch {}
-        try { localStorage.removeItem('voltarParaEvento'); } catch {}
-        try { localStorage.removeItem('clienteSelecionado'); } catch {}
+        try { memRemove('eventoTemp'); } catch {}
+        try { memRemove('voltarParaEvento'); } catch {}
+        try { memRemove('clienteSelecionado'); } catch {}
 
         window.location.href = `evento-detalhado.html?id=${encodeURIComponent(novoIdRemoto)}`;
         return;
       }
 
-      // ===== Salvamento LOCAL (fallback ou sem API) =====
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
-      const novoEventoId = String(evento.id || Date.now());
-
-      const registro = {
-        ...evento,
-        id: novoEventoId,
-        status: evento.status || 'ativo',
-      };
-
-      eventos.push(registro);
-
-      // salva lista de eventos no localStorage
-      try {
-        if (typeof safeSaveEventos === 'function') {
-          safeSaveEventos(eventos);
-        } else {
-          localStorage.setItem('eventos', JSON.stringify(eventos));
-        }
-      } catch (e) {
-        console.warn('[KGB] Falha ao salvar eventos no localStorage', e);
+      // Sem fallback local silencioso: aborta se não salvou remoto
+      if (!salvouRemoto) {
+        alert('Evento não salvo: falha na API de eventos. Operação cancelada.');
+        return;
       }
 
-      // notifica criação (local)
-      try {
-        if (typeof notifyEventoCriado === 'function') {
-          notifyEventoCriado({
-            ...registro,
-            dataISO: registro.data,
-            qtdPessoas: Number(registro.quantidadeConvidados || 0),
-          });
-        }
-      } catch (e) {
-        console.warn('[KGB] Falha ao notificar criação local do evento', e);
+      // limpa rascunhos em memória e redireciona para o evento remoto
+      try { memRemove('eventoTemp'); } catch {}
+      try { memRemove('voltarParaEvento'); } catch {}
+      try { memRemove('clienteSelecionado'); } catch {}
+
+      if (novoIdRemoto) {
+        window.location.href = `evento-detalhado.html?id=${encodeURIComponent(novoIdRemoto)}`;
+        return;
       }
-
-      // limpa rascunhos locais
-      try { localStorage.removeItem('eventoTemp'); } catch {}
-      try { localStorage.removeItem('voltarParaEvento'); } catch {}
-      try { localStorage.removeItem('clienteSelecionado'); } catch {}
-
-      // redireciona para o evento detalhado (modo local)
-      window.location.href = `evento-detalhado.html?id=${encodeURIComponent(novoEventoId)}`;
     } catch (err) {
       console.error('Falha ao salvar evento:', err);
       alert('Erro de rede ao salvar evento.');
@@ -1034,7 +1009,7 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
   setVal('quantidadeConvidados', data.convidados || data.qtd);
 
   try {
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     Object.assign(evt, {
       nomeCliente: document.getElementById('nomeCliente')?.value || '',
       telefoneCliente: document.getElementById('telefoneCliente')?.value || '',
@@ -1045,7 +1020,7 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
       local: document.getElementById('local')?.value || '',
       quantidadeConvidados: document.getElementById('quantidadeConvidados')?.value || ''
     });
-    localStorage.setItem('eventoTemp', JSON.stringify(evt));
+    memSetJSON('eventoTemp', evt);
   } catch {}
 })();
 
@@ -1102,46 +1077,28 @@ async function carregarVendedores() {
   let usuarios = [];
   if (window.__API_BASE__) {
     try {
-      const { handleRequest } = await import('./api/routes.js')
-      const res = await new Promise(resolve =>
-        handleRequest('/usuarios', { method: 'GET', body: {} }, resolve)
-      );
+      const res = await callApi('/usuarios', 'GET', {});
       if ((res?.status === 200 || res?.status === 201) && Array.isArray(res.data)) {
         usuarios = dedupeNormalize(res.data);
       }
     } catch (e) {
-      console.warn('Falha ao carregar vendedores via API, usando localStorage.', e);
+      console.warn('Falha ao carregar vendedores via API, usando memória interna.', e);
     }
   }
 
-  // 2) fallback localStorage (se remoto falhar ou vier vazio)
+  // 2) fallback em memória (se remoto falhar ou vier vazio)
   if (!usuarios.length) {
     const chavesProvaveis = [
       'usuarios', 'db_usuarios', 'usuarios_db',
       'usuariosData', 'tb_usuarios', 'kgb_usuarios', 'kgb:usuarios'
     ];
     const todos = [];
-
     for (const k of chavesProvaveis) {
       try {
-        const arr = JSON.parse(localStorage.getItem(k) || '[]');
-        if (Array.isArray(arr)) todos.push(...arr); // corrigido
+        const arr = memGetJSON(k, []);
+        if (Array.isArray(arr)) todos.push(...arr);
       } catch {}
     }
-
-    if (!todos.length) {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k || /usuarioLogado|token|perfis/i.test(k)) continue;
-        try {
-          const val = JSON.parse(localStorage.getItem(k) || 'null');
-          if (Array.isArray(val) && val.some(v => v && (v.email || v.nome))) {
-            todos.push(...val); // corrigido
-          }
-        } catch {}
-      }
-    }
-
     usuarios = dedupeNormalize(todos);
   }
 
@@ -1184,14 +1141,14 @@ async function getLeadById(id) {
       console.warn('Lead remoto indisponível, tentando local', e);
     }
   }
-  const leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : JSON.parse(localStorage.getItem('leads') || '[]'));
+  const leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : memGetJSON('leads', []));
   return leads.find(l => String(l.id) === String(id)) || null;
 }
 
 // Tipos de evento
 function lerTiposEvento() {
   try {
-    const rawOficial = localStorage.getItem('categorias:tiposEvento');
+    const rawOficial = memGet('categorias:tiposEvento');
     if (rawOficial) {
       const arr = JSON.parse(rawOficial);
       if (Array.isArray(arr)) {
@@ -1200,11 +1157,11 @@ function lerTiposEvento() {
                   .filter(Boolean);
       }
     }
-    const rawAntiga = localStorage.getItem('tiposEvento');
+    const rawAntiga = memGet('tiposEvento');
     if (rawAntiga) {
       const arr = JSON.parse(rawAntiga);
       if (Array.isArray(arr)) {
-        localStorage.setItem('categorias:tiposEvento', rawAntiga);
+        memSet('categorias:tiposEvento', rawAntiga);
         return arr.map(v => typeof v === 'string' ? v : (v?.nome || v?.label || ''))
                   .map(s => String(s).trim())
                   .filter(Boolean);
@@ -1212,7 +1169,7 @@ function lerTiposEvento() {
     }
     const candidatos = ['categoriasGerais', 'categorias-gerais', 'tiposEventoBuffet', 'eventTypes'];
     for (const k of candidatos) {
-      const raw = localStorage.getItem(k);
+      const raw = memGet(k);
       if (!raw) continue;
       const data = JSON.parse(raw);
       let arr = [];
@@ -1231,7 +1188,7 @@ function lerTiposEvento() {
 function montarFotoParaEnviar(fotoKey) {
   if (!fotoKey) return null;
   try {
-    const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})());
+    const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return memGetJSON('fotosClientes', {}); }catch(e){return {};}})());
     const rec = map[fotoKey];
     if (!rec) return null;
     if (typeof rec === 'string') return { dataURL: rec, filename: 'foto-cliente.jpg' };
@@ -1255,7 +1212,7 @@ function preencherTiposEvento() {
 // Nome → aplica cliente se bater
 document.getElementById('nomeCliente')?.addEventListener('change', () => {
   const valor = (document.getElementById('nomeCliente').value || '').trim().toLowerCase();
-  const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+  const clientes = memGetJSON('clientes', []);
   const c = clientes.find(x => String(x.nome || '').toLowerCase() === valor);
   if (c) window.aplicarCliente(c);
 });
@@ -1296,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   carregarFotoDoClienteNaUI(clienteFotoKeyCurrent());
   renderAvisosCadastro();
 
-  const eventoTemp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+  const eventoTemp = memGetJSON('eventoTemp', {});
 
   // 1) Se já existir rascunho com itens selecionados, respeita ele
   if (Array.isArray(eventoTemp.itensSelecionados) && eventoTemp.itensSelecionados.length) {
@@ -1364,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const evt = { ...(eventoTemp || {}) };
       evt.itensSelecionados = itens;
-      localStorage.setItem("eventoTemp", JSON.stringify(evt));
+      memSetJSON('eventoTemp', evt);
     } catch (e) {
       console.warn("Não foi possível persistir itens do lead em eventoTemp:", e);
     }
@@ -1394,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 const leadIdURL = new URLSearchParams(window.location.search).get("id");
 if (!leadIdURL) {
-  const eventoTemp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+  const eventoTemp = memGetJSON("eventoTemp", {});
   if (Object.keys(eventoTemp).length > 0) {
     const campos = {
       nomeEvento: "nomeEvento",
@@ -1434,7 +1391,7 @@ window.removerItem = function(index) {
 // Autocompletar cliente pelo nome
 document.getElementById("nomeCliente").addEventListener("input", function () {
   const nome = (this.value || '').toLowerCase();
-  const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+  const clientes = memGetJSON('clientes', []);
   const cliente = clientes.find(c => (c.nome || "").toLowerCase() === nome);
 
   if (cliente) {
@@ -1449,9 +1406,9 @@ document.getElementById("nomeCliente").addEventListener("input", function () {
     if (hintEl) hintEl.textContent = '';
 
     carregarFotoDoClienteNaUI('');
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     delete evt.fotoClienteKey;
-    localStorage.setItem('eventoTemp', JSON.stringify(evt));
+    memSetJSON('eventoTemp', evt);
 
     renderAvisosCadastro();
   }
@@ -1461,7 +1418,7 @@ document.getElementById("nomeCliente").addEventListener("input", function () {
 document.getElementById("cadastrarNovoClienteTopo").addEventListener("click", function (e) {
   e.preventDefault();
 
-  const evtLS = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+  const evtLS = memGetJSON('eventoTemp', {});
   const fotoKey = evtLS.fotoClienteKey || clienteFotoKeyCurrent();
 
   const eventoTemp = {
@@ -1487,15 +1444,15 @@ document.getElementById("cadastrarNovoClienteTopo").addEventListener("click", fu
     clienteId: document.getElementById("clienteId")?.value || ""
   };
 
-  localStorage.setItem("eventoTemp", JSON.stringify(eventoTemp));
-  localStorage.setItem("voltarParaEvento", "true");
+  memSetJSON('eventoTemp', eventoTemp);
+  memSet('voltarParaEvento', 'true');
 
   const qs = new URLSearchParams({ voltar: 'evento' });
   if (leadId) qs.set('leadId', leadId);
   window.location.href = `cadastro-cliente.html?${qs.toString()}`;
 });
 
-localStorage.removeItem("eventoPrePreenchido");
+memRemove('eventoPrePreenchido');
 
 // Histórico de anotações
 function atualizarHistoricoEvento(lista) {
@@ -1523,7 +1480,7 @@ function atualizarHistoricoEvento(lista) {
 }
 function editarAnotacaoEvento(indexReverso) {
   const eventoId = new URLSearchParams(window.location.search).get("id");
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const eventos = memGetJSON('eventos', []);
   const evento = eventos.find(e => e.id == eventoId);
   if (!evento || !evento.historico) return;
   const index = evento.historico.length - 1 - indexReverso;
@@ -1537,7 +1494,7 @@ function editarAnotacaoEvento(indexReverso) {
 function excluirAnotacaoEvento(indexReverso) {
   if (!confirm("Deseja excluir esta anotação?")) return;
   const eventoId = new URLSearchParams(window.location.search).get("id");
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON('eventos', []);
   const evento = eventos.find(e => e.id == eventoId);
   if (!evento || !evento.historico) return;
   const index = evento.historico.length - 1 - indexReverso;
@@ -1562,7 +1519,7 @@ function salvarAnotacaoEvento() {
     const nova = { data, tipo: "Anotação", observacao: texto, responsavel: usuario };
 
     const eventoId = new URLSearchParams(window.location.search).get("id");
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     let evento = eventos.find(e => e.id == eventoId);
 
     if (evento) {
@@ -1571,10 +1528,10 @@ function salvarAnotacaoEvento() {
       safeSaveEventos(eventos);
 
     } else {
-      let eventoTemp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+      let eventoTemp = memGetJSON('eventoTemp', {});
       eventoTemp.historico = eventoTemp.historico || [];
       eventoTemp.historico.push(nova);
-      localStorage.setItem("eventoTemp", JSON.stringify(eventoTemp));
+      memSetJSON('eventoTemp', eventoTemp);
     }
 
     const bloco = document.getElementById("blocoHistoricoLead");
@@ -1609,7 +1566,7 @@ function salvarEventoTemp() {
   };
 
   // rascunho anterior (preserva campos que não estamos alterando agora)
-  const prev = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+  const prev = memGetJSON('eventoTemp', {});
   const fotoKey = prev.fotoClienteKey || (typeof clienteFotoKeyCurrent === 'function' ? clienteFotoKeyCurrent() : '');
 
   // campos do formulário
@@ -1663,7 +1620,7 @@ function salvarEventoTemp() {
   // merge (mantém o que já existia e não estamos sobrescrevendo agora)
   const merged = { ...prev, ...eventoTemp };
 
-  localStorage.setItem('eventoTemp', JSON.stringify(merged));
+  memSetJSON('eventoTemp', merged);
 
   // reflete visualmente a data de criação, se o campo existir
   const dtCriado = document.getElementById('eventoCriadoEm');
@@ -1675,13 +1632,13 @@ function salvarEventoTemp() {
 
 window.salvarItensEIrParaItensEvento = function salvarItensEIrParaItensEvento() {
   salvarEventoTemp();
-  localStorage.setItem("voltarParaEvento", "true");
+  memSet("voltarParaEvento", "true");
  // garante que temos um ID do evento antes de ir
-const evtTemp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+const evtTemp = memGetJSON("eventoTemp", {});
 if (!evtTemp.id) {
   // se ainda não tem id (cadastro novo), cria um temporário estável para a ida/volta
   evtTemp.id = "tmp_" + Date.now();
-  localStorage.setItem("eventoTemp", JSON.stringify(evtTemp));
+  memSetJSON("eventoTemp", evtTemp);
 }
 window.location.href = `itens-evento.html?id=${encodeURIComponent(evtTemp.id)}&origem=cadastro`;
 
@@ -1710,7 +1667,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderLista(filtro = '') {
     if (!lista) return;
-    const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+    const clientes = memGetJSON('clientes', []);
     const f = filtro.toLowerCase();
 
     const filtrados = clientes.filter(c => {
@@ -1747,7 +1704,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // tenta pegar do eventoTemp (se já existir); senão, hoje
   let val = '';
   try {
-    const evt = JSON.parse(localStorage.getItem('eventoTemp') || '{}');
+    const evt = memGetJSON('eventoTemp', {});
     val = (evt.criadoEm || '').slice(0, 10);
   } catch {}
 
@@ -1763,7 +1720,7 @@ initCriadoEm();
 function preencherOrigemCliente() {
   const el = document.getElementById('origemCliente');
   if (!el) return;
-  const fontes = JSON.parse(localStorage.getItem('comoConheceu') || '[]');
+  const fontes = memGetJSON('comoConheceu', []);
   const fallback = ['Indicação','Instagram','Facebook','Google','Site','Passou em frente','Outro'];
   const arr = Array.isArray(fontes) && fontes.length ? fontes : fallback;
   el.innerHTML = '<option value="">Selecione</option>' +
@@ -1785,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function abrirItensDoEvento(){
   const id = (typeof window.getEventoId === 'function')
     ? (window.getEventoId() || String(Date.now()))
-    : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || String(Date.now()));
+    : (new URLSearchParams(location.search).get("id") || memGet("eventoSelecionado") || String(Date.now()));
 
   const qtd = parseInt(document.getElementById("eventoConvidados")?.value || "0", 10) || 0;
   const temp = {
@@ -1794,8 +1751,8 @@ function abrirItensDoEvento(){
     quantidadeConvidados: qtd
   };
 
-  try { localStorage.setItem("eventoTemp", JSON.stringify(temp)); } catch {}
-  if (qtd) localStorage.setItem("quantidadeConvidadosEvento", String(qtd));
+  try { memSetJSON("eventoTemp", temp); } catch {}
+  if (qtd) memSet("quantidadeConvidadosEvento", String(qtd));
 
   window.location.href = `itens-evento.html?id=${encodeURIComponent(id)}&origem=cadastro`;
 }
@@ -1808,14 +1765,14 @@ document.addEventListener("DOMContentLoaded", () => {
 // === INÍCIO PATCH: importar ponte itensSelecionadosEvento ===
 (function importarItensDaTelaItens(){
   try {
-    const temp  = JSON.parse(localStorage.getItem("eventoTemp") || "null") || {};
-    const itens = JSON.parse(localStorage.getItem("itensSelecionadosEvento") || "null");
-    const qtdLS = Number(localStorage.getItem("quantidadeConvidadosEvento") || 0);
+    const temp  = memGetJSON("eventoTemp", {}) || {};
+    const itens = memGetJSON("itensSelecionadosEvento", null);
+    const qtdLS = Number(memGet("quantidadeConvidadosEvento") || 0);
 
     if (Array.isArray(itens) && itens.length){
       // 1) grava no rascunho
       temp.itensSelecionados = itens;
-      localStorage.setItem("eventoTemp", JSON.stringify(temp));
+      memSetJSON("eventoTemp", temp);
 
       // 2) joga na variável usada pela UI
       window.dadosItens = itens;
@@ -1824,7 +1781,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (qtdLS > 0) {
         temp.quantidadeConvidados = qtdLS;
         temp.qtdConvidados = qtdLS; // compat
-        localStorage.setItem("eventoTemp", JSON.stringify(temp));
+        memSetJSON("eventoTemp", temp);
         const elQtd = document.getElementById("quantidadeConvidados");
         if (elQtd) elQtd.value = String(qtdLS);
       }
@@ -1833,8 +1790,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (typeof window.atualizarListaItens === "function") window.atualizarListaItens();
 
       // 5) limpa a ponte depois de usar (pra não duplicar no refresh)
-      try { localStorage.removeItem("itensSelecionadosEvento"); } catch {}
-      try { localStorage.removeItem("quantidadeConvidadosEvento"); } catch {}
+      try { memRemove("itensSelecionadosEvento"); } catch {}
+      try { memRemove("quantidadeConvidadosEvento"); } catch {}
     } else {
       // sem ponte? usa o que estiver no eventoTemp
       window.dadosItens = Array.isArray(temp.itensSelecionados) ? temp.itensSelecionados : [];
@@ -1855,9 +1812,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const getId = () => {
     const qsId = (typeof window.getEventoId === 'function') ? window.getEventoId() : new URLSearchParams(location.search).get("id");
     if (qsId) return qsId;
-    const tmp = JSON.parse(localStorage.getItem("eventoTemp") || "{}");
+    const tmp = memGetJSON("eventoTemp", {});
     if (tmp && tmp.id) return tmp.id;
-    try { const ls = localStorage.getItem("eventoSelecionado"); if (ls) { console.warn('[EVENTO] id não veio na URL; usando fallback legacy eventoSelecionado'); return ls; } } catch {}
+    try { const ls = memGet("eventoSelecionado"); if (ls) { console.warn('[EVENTO] id não veio na URL; usando fallback legacy eventoSelecionado'); return ls; } } catch {}
     return "";
   };
 
@@ -1865,7 +1822,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const id = String(getId() || "");
-      try { localStorage.setItem("itensEvento:returnTo", "cadastro"); } catch {}
+      try { memSet("itensEvento:returnTo", "cadastro"); } catch {}
       const url = `itens-evento.html?id=${encodeURIComponent(id)}&from=cadastro`;
       window.location.href = url;
     });

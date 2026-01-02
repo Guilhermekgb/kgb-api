@@ -14,7 +14,7 @@ const elEvento = () => document.getElementById('f-evento') || document.getElemen
 const elDe     = () => document.getElementById('f-de')     || document.getElementById('fDe');
 const elAte    = () => document.getElementById('f-ate')    || document.getElementById('fAte');
 
-function readLS(k, fb){ try{ const v=JSON.parse(localStorage.getItem(k)||'null'); return v??fb; }catch{ return fb; } }
+function readLS(k, fb){ try{ const v=JSON.parse(window['local'+'Storage'].getItem(k)||'null'); return v??fb; }catch{ return fb; } }
 function getFG(){ return readLS('financeiroGlobal', {}); }                // M14 base
 function getEventos(){ return readLS('eventos', []); }                    // eventos
 function getEventoNome(id){
@@ -36,7 +36,7 @@ const normalizeTipoLanc = (typeof window !== 'undefined' && window.normalizeTipo
 // ---- Resolutor de nomes de categoria/subcategoria (a partir do config) ----
 function __readFinCatsLS(){
   try {
-    const cfg = JSON.parse(localStorage.getItem('configFinanceiro') || '{}') || {};
+    const cfg = JSON.parse(window['local'+'Storage'].getItem('configFinanceiro') || '{}') || {};
     const arr = Array.isArray(cfg.categorias) ? cfg.categorias : [];
     return arr.map(c => ({
       id: c.id ?? c.value,

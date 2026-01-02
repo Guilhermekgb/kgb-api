@@ -20,8 +20,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
+    try { window.__API_BASE__ = base; } catch(e) {}
     console.log("[KGB] __API_BASE__ =", base);
   })();
 </script>
@@ -203,16 +202,25 @@
 
 /* ===== helpers ===== */
 const $ = (id)=>document.getElementById(id);
-// Busca propostas/leads da API. Requer `window.__API_BASE__` configurado.
+// em-memory cache (não usar storage do navegador para dados de negócio)
+const memoryStore = { leads: [], _kv: {} };
+function memGet(key, def = null){ try { if (Object.prototype.hasOwnProperty.call(memoryStore, key)) return JSON.parse(JSON.stringify(memoryStore[key] ?? def)); return JSON.parse(JSON.stringify(memoryStore._kv[key] ?? def)); } catch { return def; } }
+function memSet(key, value){ if (Object.prototype.hasOwnProperty.call(memoryStore, key)) { memoryStore[key] = value; } else { memoryStore._kv = memoryStore._kv || {}; memoryStore._kv[key] = value; } }
+
+// Busca propostas/leads da API. Requer `window.__API_BASE__` configurado. Usa `window.apiFetch` e cache em memória.
 async function fetchLeadsFromApi(){
   const base = window.__API_BASE__ || '';
-  if(!base) return [];
+  if(!base) return memGet('leads', []);
   try{
-    const r = await fetch(base + '/leads', { credentials: 'same-origin' });
-    if(!r.ok) return [];
-    const data = await r.json();
-    return Array.isArray(data) ? data : [];
-  }catch(e){ console.warn('[Propostas] Erro ao buscar leads da API', e); return []; }
+    if (window.apiFetch) {
+      const d = await window.apiFetch(base + '/leads', { method: 'GET' });
+      const arr = Array.isArray(d) ? d : (d?.data||[]);
+      memSet('leads', arr);
+      return arr;
+    }
+    console.warn('[Propostas] window.apiFetch não disponível — usando cache em memória');
+    return memGet('leads', []);
+  }catch(e){ console.warn('[Propostas] Erro ao buscar leads da API', e); return memGet('leads', []); }
 }
 const asStr = v => (v==null) ? "" : String(v);
 
@@ -244,7 +252,7 @@ function getFunilColuna(leadId){
 
   for(const key of cand){
     let data = null;
-    try{ data = JSON.parse(localStorage.getItem(key)||"null"); }catch{}
+    try{ if (typeof memGet === 'function') data = memGet(key, null); else data = null; }catch{}
     if(!data) continue;
 
     const cols = data.colunas || data.columns || data.listas || data.boards || data;
@@ -395,13 +403,12 @@ async function excluirProposta(id){
   const base = window.__API_BASE__ || '';
   if(!base){ alert('API não configurada para arquivar propostas.'); return; }
   try{
-    const r = await fetch(base + '/leads/' + encodeURIComponent(id), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'arquivado' })
-    });
-    if(!r.ok) throw new Error('Falha ao atualizar lead');
-  }catch(e){ console.warn('Erro ao arquivar proposta:', e); alert('Não foi possível arquivar a proposta.'); }
+    if (!window.apiFetch) {
+      alert("apiFetch não carregou. Verifique se api/api-fetch.js está incluído nesta página.");
+      return;
+    }
+    await window.apiFetch(base + '/leads/' + encodeURIComponent(id), { method: 'PUT', body: { status: 'arquivado' } });
+  } catch(e){ console.warn('Erro ao arquivar proposta:', e); alert('Não foi possível arquivar a proposta.'); }
   carregar();
 }
 
@@ -429,11 +436,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 
 <script>
-// quando mudar "leads" ou "propostasIndex" no localStorage, recarrega a lista
-window.addEventListener("storage", (e)=>{
-  if (e.key === "leads" || e.key === "propostasIndex") carregar();
-});
-// também escuta BroadcastChannel (usado por outras abas para sinalizar mudanças)
+// escuta BroadcastChannel (usado por outras abas para sinalizar mudanças)
 try{
   const ch = new BroadcastChannel('mrubuffet');
   ch.onmessage = (m)=>{ if (m?.data?.type === 'leads:ping') carregar(); };

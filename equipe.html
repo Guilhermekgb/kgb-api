@@ -20,7 +20,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // não mais gravamos em storage aqui — apenas expomos global
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -30,7 +30,7 @@
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- (opcional) ativar ENFORCE do guard p/ testes -->
-<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+<script>try{ window.__GUARD_ENFORCE__ = '1'; }catch(e){};</script>
 
 <!-- Guard de permissões (usa coisas do common) -->
 <script type="module" src="./api/proteger-pagina.js"></script>
@@ -302,39 +302,43 @@
         window.getUsuarioAtual = function(){
           let t = null;
           try { t = (window.obterUsuarioDoToken && window.obterUsuarioDoToken()) || null; } catch {}
-          let uStore = null; try { uStore = JSON.parse(localStorage.getItem('usuarioAtual') || 'null'); } catch {}
           let legacy = window.__KGB_USER_CACHE || null;
-          // try to populate async legacy if not present
           try { if (typeof window.getUsuarioAtualAsync === 'function') window.getUsuarioAtualAsync().then(u=>{ if(u) window.__KGB_USER_CACHE = u; }); } catch {}
-          return t || uStore || legacy || null;
+          return t || legacy || null;
         };
       }
     })();
 
     const q  = (s)=>document.querySelector(s);
     const S_EVT="eventos", S_USR="usuarios", S_COLABS="colaboradoresBase", S_NOTIF="notificacoes";
-    const get = (k,def="[]")=>{ try{return JSON.parse(localStorage.getItem(k)||def);}catch{return JSON.parse(def);} };
-    const set = (k,v)=>localStorage.setItem(k, JSON.stringify(v));
     const norm = (s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
-    // Helpers de JSON para cache leve
-    const getJSON = (k, fb) => {
-      try {
-        const v = JSON.parse(localStorage.getItem(k) || 'null');
-        return v ?? fb;
-      } catch {
-        return fb;
-      }
-    };
-    const setJSON = (k, v) => {
-      try {
-        localStorage.setItem(k, JSON.stringify(v));
-      } catch {}
-    };
+
+    // Memória em página para estado efêmero (fonte de verdade no backend)
+    window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+    const mem = window.__MEM_CACHE__;
+
+    // BroadcastChannel para sincronização entre abas; fallback para postMessage
+    const __BC_NAME__ = 'kgb-ui-sync';
+    let __BC__ = null;
+    try { __BC__ = new BroadcastChannel(__BC_NAME__); } catch(e){ __BC__ = null; }
+    function sendSync(key, value){
+      const msg = { key, value };
+      try{ if(__BC__) __BC__.postMessage(msg); else window.postMessage(msg, '*'); }catch(e){}
+    }
+    function onSync(handler){
+      if(__BC__){ __BC__.onmessage = (ev)=> handler(ev.data); }
+      else { window.addEventListener('message', (ev)=>{ try{ if(ev.data && ev.data.key) handler(ev.data); }catch{} }); }
+    }
+
+    const get = (k, def) => { try { return (mem[k] === undefined ? def : mem[k]); } catch { return def; } };
+    const set = (k, v) => { try { mem[k] = v; sendSync(k, v); } catch {} };
+    const getJSON = (k, fb) => { try { return (mem[k] === undefined ? fb : mem[k]); } catch { return fb; } };
+    const setJSON = (k, v) => { try { mem[k] = v; sendSync(k, v); } catch {} };
 
     // Cache em memória para esta tela
     let eventosMem = [];
 
-    // Carrega lista de eventos da API e mantém espelho no localStorage
+    // Carrega lista de eventos da API e mantém espelho na memStore
     async function syncEventosComBackend() {
       if (typeof IS_REMOTE === "undefined" || !IS_REMOTE || typeof callApi !== "function") {
         // sem backend configurado: usa só o que tiver no navegador
@@ -501,11 +505,7 @@
     q("#filtroColab").addEventListener("input", popularSelColab);
 
     window.addEventListener("focus", ()=>{ if(q("#ov").style.display==="flex") popularSelColab(); });
-    window.addEventListener("storage", (e)=>{
-      if(e.key===S_COLABS || e.key==="colaboradores"){
-        if(q("#ov").style.display==="flex") popularSelColab();
-      }
-    });
+    onSync((msg)=>{ try{ if(!msg) return; if(msg.key===S_COLABS || msg.key==="colaboradores"){ if(q("#ov").style.display==="flex") popularSelColab(); } }catch{} });
 
     function maskHHMM(el){
       let v=el.value.replace(/\D/g,"").slice(0,4);
@@ -608,7 +608,7 @@
       eventosMem = all;
 
       // dispara evento para outras abas/janelas
-      window.dispatchEvent(new StorageEvent("storage",{ key:S_EVT, newValue: JSON.stringify(all) }));
+      sendSync(S_EVT, all);
 
       // 2) tenta salvar na API (fonte da verdade)
       if (typeof IS_REMOTE !== "undefined" && IS_REMOTE && typeof callApi === "function") {
@@ -635,15 +635,8 @@
     });
 
     document.getElementById("buscaEvento").addEventListener("input", renderCards);
-    window.addEventListener("storage",(e)=>{
-      if(e.key===S_EVT){
-        renderCards();
-        if(q("#ov").style.display==="flex" && eventoFocus){
-          const all=get(S_EVT);
-          eventoFocus = all.find(x=> String(x.id)===String(eventoFocus.id))||eventoFocus;
-          renderTabelaEquipe();
-        }
-      }
+    onSync((msg)=>{
+      try{ if(!msg) return; if(msg.key===S_EVT){ renderCards(); if(q("#ov").style.display==="flex" && eventoFocus){ const all=get(S_EVT,[]); eventoFocus = (Array.isArray(all)? all.find(x=> String(x.id)===String(eventoFocus.id)) : null) || eventoFocus; renderTabelaEquipe(); } } }catch{}
     });
 
       document.addEventListener("DOMContentLoaded", async ()=>{
@@ -658,8 +651,8 @@
       const urlId = new URLSearchParams(location.search).get("id");
       if(!urlId) return;
       setTimeout(()=>{
-        const all = (localStorage.getItem("eventos") ? JSON.parse(localStorage.getItem("eventos")) : []);
-        const ev = all.find(e => String(e.id)===String(urlId));
+        const all = getJSON(S_EVT, []);
+        const ev = Array.isArray(all) ? all.find(e => String(e.id)===String(urlId)) : null;
         if(ev){
           const usuario = getUser();
           const n = (s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();

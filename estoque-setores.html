@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { if (!window.__PORTAL_MODE__) localStorage.setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -252,6 +252,28 @@
   //  Versão "híbrida": usa API se existir, e localStorage como cópia
   // ==========================================================
 
+  // === Phase1 scaffolding: memStore + sync + api wrappers ===
+  if (typeof window !== 'undefined') window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+  const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : {};
+
+  let bc = null;
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+  }
+
+  function sendSync(k,v){ try{ if (bc) bc.postMessage({k,v}); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{detail:{k,v}})); }catch{} }
+  function onSync(fn){ if (bc) bc.addEventListener('message', e=>fn(e.data)); else window.addEventListener('kgb-ui-sync', e=>fn(e.detail)); }
+  function getJSON(k, fallback){ try{ const val = mem[k]; return val===undefined ? (typeof fallback==='function'?fallback():fallback) : val; }catch{ return typeof fallback==='function'?fallback():fallback; } }
+  function setJSON(k,v){ try{ mem[k]=v; sendSync(k,v); }catch{} }
+  function isPortalMode(){ try{ return !!(window && window.__PORTAL_MODE__===true); }catch{return false;} }
+  async function apiGet(path){ return (typeof window!=='undefined' && window.apiFetch) ? window.apiFetch(path, { method: 'GET' }) : null; }
+  async function apiPost(path, body){ return (typeof window!=='undefined' && window.apiFetch) ? window.apiFetch(path, { method: 'POST', body }) : null; }
+  async function apiPut(path, body){ return (typeof window!=='undefined' && window.apiFetch) ? window.apiFetch(path, { method: 'PUT', body }) : null; }
+
+  // expose helpers for inline scripts
+  try{ window.getJSON = window.getJSON || getJSON; window.setJSON = window.setJSON || setJSON; window.isPortalMode = window.isPortalMode || isPortalMode; }catch{}
+
+
   /* ===== Helpers de texto ===== */
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({
     "&": "&amp;",
@@ -267,6 +289,7 @@
 
   function readLocal(k) {
     try {
+      if (isPortalMode()) return getJSON(k, []) || [];
       return JSON.parse(localStorage.getItem(k) || "[]");
     } catch (e) {
       console.warn("Erro lendo localStorage setores", e);
@@ -277,7 +300,11 @@
   function saveLocalBoth(arr) {
     const j = JSON.stringify(arr || []);
     try {
-      KEYS.forEach((k) => localStorage.setItem(k, j));
+      if (isPortalMode()) {
+        KEYS.forEach((k) => setJSON(k, arr || []));
+      } else {
+        KEYS.forEach((k) => localStorage.setItem(k, j));
+      }
     } catch (e) {
       console.warn("Erro salvando setores no localStorage", e);
     }

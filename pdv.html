@@ -9,7 +9,7 @@
 (function(){
   // 1) força a base da API para o Render
   var RENDER = window.location.origin;
-  try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+  /* Não gravar API_BASE em armazenamento persistente; usar variável global em memória */
   window.__API_BASE__ = RENDER; // redundância útil
 
   // 2) mostra um selinho no canto para você confirmar visualmente
@@ -42,7 +42,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { /* não persistir API_BASE em armazenamento persistente */ } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -308,31 +308,34 @@ function _todayLocalISO(){
   return new Date(Date.now()-tz).toISOString().slice(0,10);
 }
 
-/* ===== Helpers/compat ===== */
-window.$=window.$||((s,e=document)=>e.querySelector(s));
-window.$$=window.$$||((s,e=document)=>Array.from(e.querySelectorAll(s)));
-window.readLS=window.readLS||((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
-window.writeLS=window.writeLS||((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
-window.uid = window.uid || ((p='id_')=> p + Math.random().toString(36).slice(2,9));
-window.fmtBRL = window.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+  /* ===== Helpers/compat ===== */
+  window.$=window.$||((s,e=document)=>e.querySelector(s));
+  window.$$=window.$$||((s,e=document)=>Array.from(e.querySelectorAll(s)));
+
+  // Memória efêmera do módulo PDV (cache em memória do módulo)
+  (function(){
+    try{
+      if (!window.__mem_pdv) window.__mem_pdv = new Map();
+      const M = window.__mem_pdv;
+      window.memGetPDV = (k,d=null) => M.has(k) ? M.get(k) : d;
+      window.memSetPDV = (k,v) => (M.set(k,v), v);
+      window.memRemovePDV = (k) => (M.delete(k), undefined);
+      window.safeJSON = (s,d=null) => { try { return JSON.parse(s); } catch { return d; } };
+    }catch(e){ /* noop */ }
+  })();
+
+  window.readLS=window.readLS||((k,fb)=>{ try{ const v = (window.memGetPDV ? window.memGetPDV(k) : null); if (v == null) return fb; return (typeof v === 'string') ? safeJSON(v, fb) : v; }catch{return fb;} });
+  window.writeLS=window.writeLS||((k,v)=>{ try{ if (window.memSetPDV) window.memSetPDV(k, v); }catch{} });
+  window.uid = window.uid || ((p='id_')=> p + Math.random().toString(36).slice(2,9));
+  window.fmtBRL = window.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 /* ===== Financeiro (lancamentos/parcela) — helpers ===== */
 const FG_KEY = 'financeiroGlobal';
-function readFG(){ try{ return JSON.parse(localStorage.getItem(FG_KEY)||'{}')||{}; }catch{return{};} }
-function writeFG(g){ localStorage.setItem(FG_KEY, JSON.stringify(g||{})); 
-  // === AUTO-BACKUP M34 ===
-  try {
-    if (window.kgbBackup?.saveWithBackup) {
-      // salva a chave e cria snapshot com retenção (KEEP=5)
-      kgbBackup.saveWithBackup('financeiroGlobal', g);
-    } else {
-      // fallback absoluto: pelo menos gera um snapshot bruto
-      localStorage.setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g));
-    }
-  } catch (e) {
-    console.warn('Auto-backup falhou:', e);
-  }
+function readFG(){ try{ const raw = (window.memGetPDV ? window.memGetPDV(FG_KEY) : null); return raw == null ? {} : (typeof raw === 'string' ? safeJSON(raw, {}) : raw); }catch{return{};} }
+function writeFG(g){ try{ if (window.memSetPDV) window.memSetPDV(FG_KEY, g||{}); }catch(e){} 
+  // === AUTO-BACKUP (opcional) ===
+  try { if (window.kgbBackup?.saveWithBackup) kgbBackup.saveWithBackup('financeiroGlobal', g); } catch(e){}
 }
-function pingFG(){ localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }
+function pingFG(){ try{ if (window.memSetPDV) window.memSetPDV('financeiroGlobal:ping', String(Date.now())); }catch{} }
 
 // nome do evento por id (reaproveita loadEventos já existente)
 function getEventoById(evtId){
@@ -345,8 +348,8 @@ const K_PDV = {
   TICK:    'm31.vendas.tick'                          // pulso p/ disparar 'storage'
 };
 
-function lerLS(k, fb){ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} }
-function gravarLS(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+function lerLS(k, fb){ try{ const raw = (window.memGetPDV ? window.memGetPDV(k) : null); if (raw == null) return fb; return (typeof raw === 'string') ? safeJSON(raw, fb) : raw; }catch{return fb;} }
+function gravarLS(k,v){ try{ if (window.memSetPDV) window.memSetPDV(k, v); }catch{} }
 
 const MAX_VENDAS = 400; // ajuste se quiser (200~500 é um bom número)
 
@@ -370,7 +373,7 @@ function salvarVendaNoLS(venda){
       arr.splice(0, drop);
       try { gravarLS(K_PDV.VENDAS, arr); }
       catch (e2) {
-        console.warn('[PDV] localStorage cheio; limpando m31.vendas.', e2);
+        console.warn('[PDV] memStore cheio; limpando m31.vendas.', e2);
         // última tentativa: guarda só a venda atual
         try { gravarLS(K_PDV.VENDAS, [venda]); } catch {}
       }
@@ -379,8 +382,8 @@ function salvarVendaNoLS(venda){
     }
   }
 
-  // Pulso para outras abas
-  try { localStorage.setItem(K_PDV.TICK, String(Date.now())); } catch {}
+  // Pulso (em memória) para sinalizar internamente — não usa storage persistente
+  try { if (window.memSetPDV) window.memSetPDV(K_PDV.TICK, String(Date.now())); } catch {}
 }
 
 /** Envia broadcast em tempo real para a tela de etiquetas (se aberta) */
@@ -398,8 +401,8 @@ function avisarEtiquetasBroadcast(venda){
 function getApiBase(){
   try{
     const fromWin = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : null;
-    const fromLS  = localStorage.getItem('API_BASE');
-    const base = (fromWin || fromLS || '').trim();
+      const fromLS  = (window.memGetPDV ? window.memGetPDV('API_BASE') : null);
+      const base = (fromWin || fromLS || '').trim();
     return base ? base.replace(/\/+$/, '') : '';
   }catch{ return ''; }
 }
@@ -408,15 +411,8 @@ async function apiSalvarVendaPDV(venda, origem, formaLabel){
   const base = getApiBase();
   if (!base) return;
   try{
-    await fetch(base + '/pdv/vendas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        venda,
-        origem: origem || null,
-        formaLabel: formaLabel || ''
-      })
-    });
+    if (!window.apiFetch) throw new Error('window.apiFetch não disponível');
+    await window.apiFetch(base + '/pdv/vendas', { method: 'POST', body: { venda, origem: origem || null, formaLabel: formaLabel || '' } });
   }catch(e){
     console.warn('[PDV] Falha ao salvar venda na API (mantendo só local).', e);
   }
@@ -426,11 +422,8 @@ async function apiRegistrarMovimentoCaixaPDV(payload){
   const base = getApiBase();
   if (!base) return;
   try{
-    await fetch(base + '/pdv/caixa/movimentos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
+    if (!window.apiFetch) throw new Error('window.apiFetch não disponível');
+    await window.apiFetch(base + '/pdv/caixa/movimentos', { method: 'POST', body: (payload || {}) });
   }catch(e){
     console.warn('[PDV] Falha ao registrar movimento de caixa na API.', e);
   }
@@ -442,17 +435,16 @@ function centsToReais(c){ const n = Number(c||0); return Number.isFinite(n)? (n/
 function espelharVendaNoLocalLancamentos(venda, formaLabel, catId, subId){
   try{
     const ESP_KEY = 'financeiro.lancamentos';
-    const lista = JSON.parse(localStorage.getItem(ESP_KEY) || '[]') || [];
+    const raw = (window.memGetPDV ? window.memGetPDV(ESP_KEY) : null);
+    const lista = Array.isArray(raw) ? raw : (typeof raw === 'string' ? safeJSON(raw, []) : []);
 
     // dados do evento (nome/categoria padrão)
     const evs = (function(){
       try{
-      const a = JSON.parse(localStorage.getItem((window.K_KEYS?.EVENTOS)||'m30.eventos') || '[]');
-const b = JSON.parse(localStorage.getItem('eventos') || '[]');
-const map = new Map();
-[...a, ...b].forEach(e => { if (e && e.id != null) map.set(String(e.id), e); });
-
-
+        const a = readLS((window.K_KEYS?.EVENTOS)||'m30.eventos', []) || [];
+        const b = readLS('eventos', []) || [];
+        const map = new Map();
+        [...a, ...b].forEach(e => { if (e && e.id != null) map.set(String(e.id), e); });
         return Array.from(map.values());
       }catch{ return []; }
     })();
@@ -491,7 +483,7 @@ const data = String(venda.createdAt || hojeLocalISO2).slice(0,10);
         idEvento: venda.eventoId,
         nomeEvento
       });
-      localStorage.setItem(ESP_KEY, JSON.stringify(lista));
+      try { if (window.memSetPDV) window.memSetPDV(ESP_KEY, lista); } catch {}
       // avisa as outras telas que o espelho mudou
       try{ window.dispatchEvent(new Event('fin-store-changed')); }catch{}
     }
@@ -501,7 +493,7 @@ const data = String(venda.createdAt || hojeLocalISO2).slice(0,10);
 function criarLancamentoFinanceiroAPartirDaVenda(v){
   try{
     // carrega FG com arrays garantidos
-    const G = (function(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{return{};} })();
+    const G = (function(){ try{ const raw = (window.memGetPDV ? window.memGetPDV('financeiroGlobal') : null); return raw == null ? {} : (typeof raw === 'string' ? safeJSON(raw, {}) : raw); }catch{return{};} })();
     if(!Array.isArray(G.lancamentos)) G.lancamentos=[];
     if(!Array.isArray(G.parcelas))    G.parcelas=[];
     if(!Array.isArray(G.movimentos))  G.movimentos=[];
@@ -520,7 +512,7 @@ function criarLancamentoFinanceiroAPartirDaVenda(v){
 
     // CONTA do evento pago (prioritária) ou heurística por forma de pagamento
     const contaEventoId = ev?.contaEntradaId ?? ev?.contaId ?? null;
-    const cfg = (function(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} })();
+    const cfg = _cfgFin() || {};
     const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
     const contaEvento = contasCfg.find(c => String(c.id) === String(contaEventoId)) || null;
     const conta = contaEvento
@@ -624,9 +616,9 @@ function criarLancamentoFinanceiroAPartirDaVenda(v){
       dataISO
     });
 
-    // salva + ping (para as telas reagirem)
-    localStorage.setItem('financeiroGlobal', JSON.stringify(G));
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    // salva + ping (para as telas reagirem) — usa cache em memória do módulo
+    try { if (window.memSetPDV) window.memSetPDV('financeiroGlobal', G); } catch {}
+    try { if (window.memSetPDV) window.memSetPDV('financeiroGlobal:ping', String(Date.now())); } catch {}
     window.dispatchEvent(new Event('fin-store-changed')); // garante update na mesma aba
   } catch(e){
     console.warn('criarLancamentoFinanceiroAPartirDaVenda falhou:', e);
@@ -788,7 +780,7 @@ function showToast(text='Pronto!', type='ok'){
 })();
 
 /* ==== Financeiro (categorias + formas) ==== */
-function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} }
+function _cfgFin(){ try{ const raw = (window.memGetPDV ? window.memGetPDV('configFinanceiro') : null); return raw == null ? {} : (typeof raw === 'string' ? safeJSON(raw, {}) : raw); }catch{return{};} }
 function listCategoriasEntrada(){
   const xs = Array.isArray(_cfgFin().categorias) ? _cfgFin().categorias : [];
   return xs.filter(c => String(c.tipo).toLowerCase()==='entrada' && c.paiId==null)
@@ -804,7 +796,7 @@ function listarSubcats(paiId){
 
 function listFormasPagamento(){
   try{
-    const cfg = JSON.parse(localStorage.getItem('configFinanceiro')||'{}') || {};
+    const cfg = _cfgFin() || {};
     const arr = cfg?.formasPagamento ?? cfg?.formas ?? cfg?.tipos ?? [];
     return (Array.isArray(arr) ? arr : []).map(t => ({
       id: String(t.id ?? t.codigo ?? t.valor ?? (t.descricao || t.nome)),
@@ -1094,7 +1086,7 @@ function finalizarItens(){
 
   // 3) ping geral para Resumo/Análises/Lançamentos recarregarem
   try{
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    if (window.memSetPDV) window.memSetPDV('financeiroGlobal:ping', String(Date.now()));
     window.dispatchEvent(new Event('fin-store-changed'));
   }catch{}
 
@@ -1353,7 +1345,7 @@ function finalizarIngressos(){
   }
 
   try{
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    if (window.memSetPDV) window.memSetPDV('financeiroGlobal:ping', String(Date.now()));
     window.dispatchEvent(new Event('fin-store-changed'));
   }catch{}
 
@@ -1370,7 +1362,7 @@ function finalizarIngressos(){
     ts:    ISO()
   });
 
-  // APARAR HISTÓRICO (para não lotar localStorage)
+  // APARAR HISTÓRICO (para não lotar o cache em memória do módulo)
   if (cx.movimentos.length > 1000) {
     cx.movimentos = cx.movimentos.slice(-600);
   }
@@ -1458,7 +1450,7 @@ $("#btnAbrirCaixa").addEventListener('click', () => {
     ts: ISO()
   });
 
-  // APARAR HISTÓRICO (evita QuotaExceeded no localStorage)
+  // APARAR HISTÓRICO (evita QuotaExceeded no cache em memória do módulo)
   if (cx.movimentos.length > 1000) {
     cx.movimentos = cx.movimentos.slice(-600);
   }
@@ -1508,7 +1500,7 @@ $("#btnSangria").addEventListener('click', () => {
     ts: ISO()
   });
 
-  // APARAR HISTÓRICO (evita QuotaExceeded no localStorage)
+  // APARAR HISTÓRICO (evita QuotaExceeded no cache em memória do módulo)
   if (cx.movimentos.length > 1000) {
     cx.movimentos = cx.movimentos.slice(-600);
   }
@@ -1558,7 +1550,7 @@ $("#btnFecharCaixa").addEventListener('click', () => {
     saldoTotal: saldoTot
   });
 
-  // aparar histórico para evitar estourar localStorage em uso intenso
+  // aparar histórico para evitar estourar o cache em memória do módulo em uso intenso
   if (cx.movimentos.length > 1000) {
     cx.movimentos = cx.movimentos.slice(-600);
   }

@@ -33,8 +33,10 @@ const fmtBRL = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL'
 const toNum = v => (typeof v === 'number') ? v
   : (parseFloat(String(v ?? '').replace(/\./g,'').replace(',','.')) || 0);
 
-const readLS = (k, fb=null) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const writeLS = (k,v)=> { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+// Memória efêmera para substituição de storage (não persiste em disco)
+const __memStore_global = (typeof window !== 'undefined') ? (window.__memStore_global || (window.__memStore_global = {})) : {};
+const readLS = (k, fb=null) => { try { const v = __memStore_global[k]; return (typeof v === 'undefined') ? fb : v; } catch { return fb; } };
+const writeLS = (k,v)=> { try { __memStore_global[k] = v; return true; } catch { return false; } };
 
 // Shim: quando `window.storageAdapter.patchFotos` existir, espelha chamadas
 // que escrevem a key `fotosClientes` para o backend via `patchFotos`.

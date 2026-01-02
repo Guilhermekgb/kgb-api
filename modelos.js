@@ -5,39 +5,28 @@ const API_BASE = (window.__API_BASE__ || "").replace(/\/+$/, "");
 const $  = (s,p=document)=>p.querySelector(s);
 const $$ = (s,p=document)=>Array.from(p.querySelectorAll(s));
 
-// Cache em memória (nada mais em localStorage para modelos)
+// Cache em memória (nada de armazenamento local como fonte de verdade para modelos)
 let modelosIndexCache = [];   // [{ slug, nome, updatedAt }]
 let variaveisCache    = [];   // [{ chave, rotulo, exemplo }]
 
 // ---- Cliente da API de Modelos ----
 async function apiListarModelos(){
-  const res = await fetch(`${API_BASE}/modelos`);
-  if(!res.ok) throw new Error("Falha ao listar modelos");
-  const data = await res.json();
+  const j = await window.apiFetch(`${API_BASE}/modelos`, { method: 'GET' });
+  const data = (j && j.data) ? j.data : j;
   modelosIndexCache = Array.isArray(data) ? data : [];
   return modelosIndexCache;
 }
 
 async function apiCriarModelo(nome){
-  const res = await fetch(`${API_BASE}/modelos`, {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ nome })
-  });
-  if(!res.ok) throw new Error("Falha ao criar modelo");
-  const created = await res.json();
+  const j = await window.apiFetch(`${API_BASE}/modelos`, { method: 'POST', body: { nome }, headers: { 'Content-Type':'application/json' } });
+  const created = (j && j.data) ? j.data : j;
   modelosIndexCache.push(created);
   return created;
 }
 
 async function apiRenomearModelo(slug, novoNome){
-  const res = await fetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ nome: novoNome })
-  });
-  if(!res.ok) throw new Error("Falha ao renomear modelo");
-  const updated = await res.json();
+  const j = await window.apiFetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}`, { method: 'PUT', body: { nome: novoNome }, headers: { 'Content-Type':'application/json' } });
+  const updated = (j && j.data) ? j.data : j;
   modelosIndexCache = modelosIndexCache.map(m =>
     m.slug === slug ? updated : m
   );
@@ -45,31 +34,22 @@ async function apiRenomearModelo(slug, novoNome){
 }
 
 async function apiExcluirModelo(slug){
-  const res = await fetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}`, {
-    method: 'DELETE'
-  });
-  if(!res.ok) throw new Error("Falha ao excluir modelo");
+  await window.apiFetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   modelosIndexCache = modelosIndexCache.filter(m => m.slug !== slug);
   return true;
 }
 
 async function apiObterConteudo(slug){
-  const res = await fetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}/conteudo`);
-  if(!res.ok) throw new Error("Falha ao carregar conteúdo");
-  const data = await res.json();
-  return data.html || "";
+  const j = await window.apiFetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}/conteudo`, { method: 'GET' });
+  const data = (j && j.data) ? j.data : j;
+  return (data && data.html) ? data.html : "";
 }
 
 async function apiSalvarConteudo(slug, html){
-  const res = await fetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}/conteudo`, {
-    method: 'PUT',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ html })
-  });
-  if(!res.ok) throw new Error("Falha ao salvar conteúdo");
+  const j = await window.apiFetch(`${API_BASE}/modelos/${encodeURIComponent(slug)}/conteudo`, { method: 'PUT', body: { html }, headers: { 'Content-Type':'application/json' } });
   // se o backend devolver updatedAt, atualiza o cache
   try {
-    const data = await res.json();
+    const data = (j && j.data) ? j.data : j;
     if(data && data.updatedAt){
       modelosIndexCache = modelosIndexCache.map(m =>
         m.slug === slug ? { ...m, updatedAt: data.updatedAt } : m
@@ -81,24 +61,20 @@ async function apiSalvarConteudo(slug, html){
 
 // ---- Variáveis {{chave}} na nuvem ----
 async function apiCarregarVariaveis(){
-  const res = await fetch(`${API_BASE}/modelos/variaveis`);
-  if(!res.ok) {
+  try{
+    const j = await window.apiFetch(`${API_BASE}/modelos/variaveis`, { method: 'GET' });
+    const data = (j && j.data) ? j.data : j;
+    variaveisCache = Array.isArray(data) ? data : [];
+    return variaveisCache;
+  }catch(e){
     console.warn("Falha ao carregar variáveis, usando lista vazia");
     variaveisCache = [];
     return variaveisCache;
   }
-  const data = await res.json();
-  variaveisCache = Array.isArray(data) ? data : [];
-  return variaveisCache;
 }
 
 async function apiSalvarVariaveis(lista){
-  const res = await fetch(`${API_BASE}/modelos/variaveis`, {
-    method: 'PUT',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify(lista)
-  });
-  if(!res.ok) throw new Error("Falha ao salvar variáveis");
+  await window.apiFetch(`${API_BASE}/modelos/variaveis`, { method: 'PUT', body: lista, headers: { 'Content-Type':'application/json' } });
   variaveisCache = lista;
   return true;
 }
@@ -183,7 +159,7 @@ function renderGrid(filter = "") {
     });
   });
 
-  // binds – renomear (somente nuvem, sem localStorage)
+  // binds – renomear (somente nuvem)
   grid.querySelectorAll(".act-rename").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       const card = e.currentTarget.closest(".card");
@@ -463,10 +439,10 @@ function openImgTools(img){
   syncImgFields();
 }
 
-// estado salvo da ancoragem (ok usar localStorage aqui, é preferência visual)
+// estado salvo da ancoragem (preferência visual armazenada no cache de UI)
 const DOCK_KEY = 'modelos.imgtools.docked';
-function isDocked(){ return localStorage.getItem(DOCK_KEY)==='1'; }
-function setDocked(on){ localStorage.setItem(DOCK_KEY, on?'1':'0'); }
+function isDocked(){ try { globalThis.__UI_STORE__ = globalThis.__UI_STORE__ || {}; return globalThis.__UI_STORE__[DOCK_KEY] === '1'; } catch { return false; } }
+function setDocked(on){ try { globalThis.__UI_STORE__ = globalThis.__UI_STORE__ || {}; globalThis.__UI_STORE__[DOCK_KEY] = on ? '1' : '0'; } catch {} }
 
 function dockImgTools(on){
   const t = document.getElementById('imgTools');

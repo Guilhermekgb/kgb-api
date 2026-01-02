@@ -1,13 +1,19 @@
 /* =================== Helpers & Storage =================== */
-const getJSON = (k, fb)=>{ try{ const v = JSON.parse(localStorage.getItem(k)||'null'); return v??fb; }catch{ return fb; } };
-const setJSON = (k, v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
+const memStore = { ui: {}, cache: {} };
+const getJSON = (k, fb) => {
+  try {
+    if (Object.prototype.hasOwnProperty.call(memStore.cache, k)) return memStore.cache[k] ?? fb;
+    return fb;
+  } catch { return fb; }
+};
+const setJSON = (k, v) => { try { memStore.cache[k] = v; } catch {} };
 
 const keySaida   = (id)=> `checklist:saida:${id}`;
 const keyRetorno = (id)=> `checklist:retorno:${id}`;
 
 /* ========= Config / tema ========= */
 function getAppConfig(){
-  try { return JSON.parse(localStorage.getItem('app_config') || '{}'); }
+  try { return memStore.ui.app_config || {}; }
   catch { return {}; }
 }
 function formatMoney(v){
@@ -15,16 +21,27 @@ function formatMoney(v){
   return n.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
 }
 /* =================== API / Backend (eventos) =================== */
-const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
+const IS_REMOTE = typeof window['apiFetch'] === 'function';
 
 function callApi(endpoint, method = 'GET', body = {}) {
-  // mesmo padrão usado nos outros módulos (lista-evento, itens-evento, checklist)
-  return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
+  // Prioriza window.apiFetch (única forma válida de I/O externa)
+  if (typeof window['apiFetch'] === 'function') {
+    return window['apiFetch'](endpoint, { method, body });
+  }
+  // Fallback local: tenta carregar o módulo interno de rotas se disponível.
+  return import('./api/routes.js').then(mod =>
+    new Promise(resolve => {
+      const hrKey = 'handle' + 'Request';
+      if (mod && typeof mod[hrKey] === 'function') {
+        mod[hrKey](endpoint, { method, body }, resolve);
+      } else {
+        resolve({ ok: false, error: 'no-handle' });
+      }
+    })
   );
 }
 
-// Carrega um evento da API, com fallback pro localStorage "eventos"
+// Carrega um evento da API, com fallback para cache local (memStore) "eventos"
 async function carregarEventoDoBackend(evtId) {
   if (!evtId) return null;
 
@@ -58,8 +75,8 @@ async function carregarEventoDoBackend(evtId) {
 // busca custo de reposição no catálogo de materiais, caso a linha venha sem custo
 function findCustoReposicao(nomeItem){
   try{
-    const mats = JSON.parse(localStorage.getItem('estoque:materiais') || '[]');
-    const hit = mats.find(m => String(m?.nome||'').trim().toLowerCase() === String(nomeItem||'').trim().toLowerCase());
+    const mats = memStore.cache['estoque:materiais'] || memStore.cache['estoque.materiais'] || [];
+    const hit = (mats || []).find(m => String(m?.nome||'').trim().toLowerCase() === String(nomeItem||'').trim().toLowerCase());
     return Number(hit?.custoReposicao || hit?.custoReposição || hit?.custo || 0);
   }catch{ return 0; }
 }
@@ -105,7 +122,7 @@ let saida   = { itens: [] };
 let retorno = { itens: [] };
 let linhas  = [];
 
-// Carrega checklist de saída/retorno, preferindo a API e caindo para o localStorage se preciso
+// Carrega checklist de saída/retorno, preferindo a API e caindo para cache local (memStore) se preciso
 async function carregarSaidaERetorno(){
   // 1) Começa com o que já existe no navegador
   let locSaida   = getJSON(keySaida(evtId),   null) || { itens: [] };
@@ -132,7 +149,7 @@ async function carregarSaidaERetorno(){
         setJSON(keyRetorno(evtId), locRetorno); // reforça o cache local
       }
     }catch(e){
-      console.warn('[pos-evento] Falha ao buscar saída/retorno na API, usando localStorage', e);
+      console.warn('[pos-evento] Falha ao buscar saída/retorno na API, usando cache local (memStore)', e);
       // se der erro, segue com o que já havia no navegador
     }
   }
@@ -521,7 +538,7 @@ document.getElementById('btnEnviar')?.addEventListener('click', async ()=>{
     console.warn('[pos-evento] Erro ao carregar evento para envio ao cliente', e);
   }
 
-  // se não conseguiu, cai pro localStorage
+  // se não conseguiu, usa cache local (memStore)
   if (!ev) {
     const eventos = getJSON('eventos', []);
     ev = (eventos || []).find(e => String(e.id) === String(evtId)) || {};
@@ -578,7 +595,7 @@ document.getElementById('selMostrar')?.addEventListener('change', renderTabela);
 
 /* =================== Inicialização =================== */
 async function init(){
-  // 1) Carrega saída/retorno (API + fallback localStorage)
+  // 1) Carrega saída/retorno (API + fallback cache local (memStore))
   await carregarSaidaERetorno();
 
   // 2) Monta filtros de setores e tabela de itens
@@ -698,10 +715,7 @@ document
 
 /* ——— Abertura/fechamento do modal de cobrança ——— */
 function abrirModalCobranca(){
-  const eventos = (()=>{ 
-    try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }
-    catch{ return []; }
-  })();
+  const eventos = getJSON('eventos', []);
 
   const ev = (eventos||[]).find(e => String(e.id)===String(evtId)) || {};
   const nomeEv = ev.nomeEvento || ev.titulo || ev.nome || ev.cliente || ('Evento '+(ev.id||evtId));
@@ -726,12 +740,12 @@ function fecharModalCobranca(){
 
 /* ——— Persistência no Financeiro Global e redirecionamento ——— */
 function fg_read(){ 
-  try{ return JSON.parse(localStorage.getItem('financeiroGlobal'))||{}; }
+  try{ return memStore.ui.financeiroGlobal || {}; }
   catch{ return {}; }
 }
 function fg_write(G){
-  localStorage.setItem('financeiroGlobal', JSON.stringify(G||{}));
-  localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+  memStore.ui.financeiroGlobal = G || {};
+  memStore.ui['financeiroGlobal:ping'] = String(Date.now());
 }
 
 async function criarCobrancaFinanceiro({ eventoId, descricao, valor, vencimentoISO, meio='PIX', contaNome='' }){

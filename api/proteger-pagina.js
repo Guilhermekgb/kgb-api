@@ -26,6 +26,11 @@ function isDebugEnabled(){
 
 async function fetchMe() {
   try {
+    if (typeof window.apiFetch !== 'function') {
+      console.error('[guard] window.apiFetch não disponível — bloqueando acesso protegido.');
+      try { window.location.href = 'acesso-negado.html'; } catch(e){}
+      return null;
+    }
     // Detectar explicitamente same-origin em :3333 para evitar host mismatch (127 vs localhost)
     const isSameOrigin3333 = String(location.port || '') === '3333';
     const baseFromHelper = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (API_BASE || '');
@@ -34,34 +39,27 @@ async function fetchMe() {
     // Não enviar Authorization Bearer quando same-origin; usar cookie httpOnly
     const headers = (!isSameOrigin3333 && window.__KGB_TOKEN) ? { Authorization: `Bearer ${window.__KGB_TOKEN}` } : {};
 
-    const resp = await fetch(meUrl, {
-      credentials: 'include',
-      headers
-    });
+    const resp = await window.apiFetch(meUrl, { method: 'GET', credentials: 'include', headers });
 
-    // Se for o primeiro check do app e o servidor retornar 401, suprimir mensagem falsa (transiente)
-    if (resp && resp.status === 401 && !window.__KGB_AUTH_INITIAL_SUPPRESSED) {
+    const status = resp && (resp.status || (resp.code || 200));
+    if (status === 401 && !window.__KGB_AUTH_INITIAL_SUPPRESSED) {
       window.__KGB_AUTH_INITIAL_SUPPRESSED = true;
-      try { const text = await resp.text().catch(()=>null); try { window.__KGB_LAST_AUTH_DEBUG = String(text); } catch(e){} } catch(e){}
+      try { window.__KGB_LAST_AUTH_DEBUG = String(resp && (resp.data || resp) || ''); } catch(e){}
       return null;
     }
 
     if (__AUTH_DEBUG__) console.debug('[AUTH] fetchMe -> API_BASE=', API_BASE, 'isSameOrigin3333=', isSameOrigin3333, 'headers=', headers);
-    if (__AUTH_DEBUG__) console.warn('[AUTH] /auth/me status:', resp && resp.status);
-    try { if (__AUTH_DEBUG__) console.debug('[AUTH] /auth/me response headers:', Array.from(resp.headers || [])); } catch (e) {}
-    // Se não autenticado, registrar debug no console (não usar alert para UX)
-    if (!resp.ok || resp.status === 401) {
-      try {
-        const text = await resp.text().catch(()=>null);
-        // armazenar para o painel de debug
-        try { window.__KGB_LAST_AUTH_DEBUG = String(text); } catch(e){}
-        if (__AUTH_DEBUG__) console.warn('[AUTH DEBUG] origin=' + location.origin + ' API_BASE=' + (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '(sem __getApiBase)') + ' /auth/me status=' + (resp && resp.status) + ' body=' + String(text));
-      } catch (e) { /* noop */ }
+    if (__AUTH_DEBUG__) console.warn('[AUTH] /auth/me status:', status);
+    try { if (__AUTH_DEBUG__) console.debug('[AUTH] /auth/me response:', resp); } catch (e) {}
+
+    if (!status || status === 401) {
+      try { window.__KGB_LAST_AUTH_DEBUG = String(resp && (resp.data || resp) || ''); } catch(e){}
+      return null;
     }
 
-    if (resp.status === 200) {
-      const j = await resp.json();
-      const user = (j && j.data) ? j.data : (j && j.data) || j || null;
+    if (status === 200) {
+      const j = resp && (resp.data || resp) || null;
+      const user = (j && j.data) ? j.data : j || null;
       if (user) window.__KGB_USER_CACHE = user;
       return user;
     }
@@ -143,13 +141,16 @@ function showKgbDebugPanel(){
 
   panel.querySelector('#kgb-debug-force').addEventListener('click', ()=>{ window.location.href = 'login.html'; });
 
-  panel.querySelector('#kgb-debug-check-server').addEventListener('click', async ()=>{
+      panel.querySelector('#kgb-debug-check-server').addEventListener('click', async ()=>{
     try{
+      if (typeof window.apiFetch !== 'function') {
+        panel.querySelector('#kgb-debug-server-result').textContent = 'apiFetch não disponível';
+        return;
+      }
       const el = panel.querySelector('#kgb-debug-server-result');
       el.textContent = 'checando...';
-      const resp = await fetch(`${API_BASE}/auth/debug`, { credentials: 'include' });
-      const j = await resp.json().catch(()=>null);
-      el.textContent = JSON.stringify(j, null, 2);
+      const resp = await window.apiFetch(`${API_BASE.replace(/\/$/, '')}/auth/debug`, { method: 'GET', credentials: 'include' });
+      el.textContent = JSON.stringify(resp && (resp.data || resp) || resp, null, 2);
       panel.querySelector('#kgb-debug-last').textContent = String(window.__KGB_LAST_AUTH_DEBUG||'(sem resposta)');
     }catch(e){
       const el = panel.querySelector('#kgb-debug-server-result');
@@ -161,9 +162,11 @@ function showKgbDebugPanel(){
     if (!document.body.contains(panel)) { clearInterval(kgbDebugInterval); return; }
     try{
       const el = panel.querySelector('#kgb-debug-server-result');
-      const resp = await fetch(`${API_BASE}/auth/debug`, { credentials: 'include' });
-      const j = await resp.json().catch(()=>null);
-      el.textContent = JSON.stringify(j, null, 2);
+      try{
+        if (typeof window.apiFetch !== 'function') { el.textContent = 'apiFetch não disponível'; return; }
+        const resp = await window.apiFetch(`${API_BASE.replace(/\/$/, '')}/auth/debug`, { method: 'GET', credentials: 'include' });
+        el.textContent = JSON.stringify(resp && (resp.data || resp) || resp, null, 2);
+      }catch(e){ el.textContent = 'erro: '+String(e); }
       panel.querySelector('#kgb-debug-last').textContent = String(window.__KGB_LAST_AUTH_DEBUG||'(sem resposta)');
     }catch(e){ /* ignore polling errors */ }
   }, 5000);

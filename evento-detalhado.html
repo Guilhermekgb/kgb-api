@@ -33,7 +33,7 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persista API_BASE no navegador; apenas exponha para o app
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -57,11 +57,35 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     try {
       var h = String(location.hostname || "");
       if (/\.netlify\.app$/i.test(h)) {
-        localStorage.setItem("guard.enforce", "0");
-        if (!localStorage.getItem("perfil")) localStorage.setItem("perfil", "Administrador");
-        console.log("[GUARD] Bypass ativo (Netlify)");
+        console.warn('[GUARD] Bypass solicitado (Netlify) — não persisto em cloud-only mode');
       }
     } catch (e) {}
+  })();
+</script>
+
+<!-- MemStore runtime + BroadcastChannel para sincronização entre abas (cloud-only) -->
+<script>
+  (function(){
+    try{
+      window.memStore = window.memStore || { ui: {}, cache: {} };
+      // expõe um BroadcastChannel leve para mensagens UI
+      try { window.bcKgb = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('kgb-ui-sync') : null; } catch(e){ window.bcKgb = null; }
+      if (window.bcKgb) {
+        window.bcKgb.onmessage = function(ev){
+          try{
+            const m = ev.data || {};
+            if (m && m.type === 'selected') {
+              try { if (window.writeLS) window.writeLS('eventoSelecionado', m.id); } catch{}
+              memStore.eventoSelecionadoId = m.id;
+            }
+            // repassa pings financeiros como evento DOM para compatibilidade
+            if (m && (m.type === 'financeiroGlobal' || m.type === 'financeiro:return:ping' || m.key === 'financeiroGlobal')){
+              document.dispatchEvent(new CustomEvent('kgb:financeiro:ping', { detail: m }));
+            }
+          }catch(e){}
+        };
+      }
+    }catch(e){}
   })();
 </script>
 
@@ -407,12 +431,16 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 <script>
 (function(){
   // Tenta resolver o ID do evento a partir de várias fontes (robusto)
+  // memStore e BroadcastChannel (cloud-only helpers)
+  const memStore = window.memStore || (window.memStore = { ui: {}, eventoSelecionadoId: null, snapshotFinanceiro: null, eventoCache: null });
+  const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("kgb-ui-sync") : null;
+
   var evtId =
     (window.eventoAtual && (window.eventoAtual.id || window.eventoAtual.evtId)) ||
     (window.evt && (window.evt.id || window.evt.evtId)) ||
     new URLSearchParams(location.search).get('id') ||
-    // fallback: último evento aberto (caso venha de navegação interna)
-    (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+    // fallback: último evento salvo em memória (sem persistência no navegador)
+    (memStore.eventoSelecionadoId || '');
 
   // Ajusta o link do card "Checklist (Tarefas)"
   var a = document.getElementById('linkChecklistTarefas');
@@ -515,13 +543,13 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 
 <!-- Ajustes de ícones, links e ações locais -->
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     window.lucide?.createIcons?.();
 
-    // guarda último evento aberto + substitui EVENTOID nos cards
+    // guarda último evento aberto (em memória) + substitui EVENTOID nos cards
     const qs = new URLSearchParams(location.search);
-    const eid = qs.get('id') || '';
-    if (eid) { try { localStorage.setItem('eventoSelecionado', eid); } catch {} }
+    const eid = qs.get('id') || memStore.eventoSelecionadoId || '';
+    if (eid) { try { memStore.eventoSelecionadoId = eid; window.bcKgb?.postMessage({ type: 'selected', id: eid }); } catch {} }
     document.querySelectorAll('#cardsAcesso a.card-link[href*="EVENTOID"]').forEach(a=>{
       a.href = a.href.replace('EVENTOID', encodeURIComponent(eid));
     });
@@ -530,7 +558,7 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
   // === Links dos cards com ?id= ===
   (function () {
     const id = new URLSearchParams(location.search).get('id') ||
-               (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+           (function(){ try{ return (window.readLS ? window.readLS('eventoSelecionado','') : (memStore.eventoSelecionadoId||'')); }catch(_){return '';} })();
     const q = s => document.getElementById(s);
     const withId = (url) => id ? `${url}?id=${encodeURIComponent(id)}` : url;
 
@@ -547,12 +575,12 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
   if (typeof window.getEventoId !== 'function') {
     window.getEventoId = () =>
       new URLSearchParams(location.search).get('id') ||
-      (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
+      (function(){ try{ return (window.readLS ? window.readLS('eventoSelecionado','') : (memStore.eventoSelecionadoId||'')); }catch(_){return ''; } })();
   }
 
   (function () {
     function lerSnapshotFinanceiro(id){
-      try { return JSON.parse(localStorage.getItem(`financeiroEvento:${id}`) || 'null'); }
+      try { return (window.readLS ? window.readLS(`financeiroEvento:${id}`, null) : null); }
       catch { return null; }
     }
     function parseMoneyBR(v){
@@ -562,7 +590,7 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     }
     function getEventoById(id){
       try {
-        const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+        const arr = (window.readLS ? window.readLS('eventos', []) : (memStore.cache['eventos'] || []));
         return (arr||[]).find(e => String(e.id) === String(id)) || null;
       } catch { return null; }
     }
@@ -595,12 +623,18 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     }
 
     document.addEventListener('DOMContentLoaded', pintarFaltaReceber);
-    window.addEventListener('storage', (e) => {
-      const id = getEventoId();
-      if (e.key === `financeiroEvento:${id}` || e.key === 'financeiro:return:ping') {
-        pintarFaltaReceber();
+    try{
+      if (window.bcKgb) {
+        window.bcKgb.addEventListener('message', (ev) => {
+          const m = ev.data || {};
+          const id = getEventoId();
+          if (m && (m.key === `financeiroEvento:${id}` || m.key === 'financeiro:return:ping' || m.type === 'financeiro:return:ping')) {
+            pintarFaltaReceber();
+          }
+        });
       }
-    });
+      document.addEventListener('kgb:financeiro:ping', pintarFaltaReceber);
+    } catch(e){}
   })();
 
   // Ajuste de margem do conteúdo conforme largura do menu
@@ -630,11 +664,11 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 </script>
 
 <script>
-  // 1) garante que o id do evento esteja salvo para as funções que leem do LS
+  // 1) garante que o id do evento esteja salvo na camada de memória (memStore)
   document.addEventListener('DOMContentLoaded', () => {
     const id = new URLSearchParams(location.search).get('id') ||
-               (function(){ try{return localStorage.getItem('eventoSelecionado')||'';}catch(_){return '';} })();
-    if (id) { try { localStorage.setItem('eventoSelecionado', id); } catch {} }
+               (function(){ try{ return (window.readLS ? window.readLS('eventoSelecionado','') : (memStore.eventoSelecionadoId||'')); }catch(_){return ''; } })();
+    if (id) { try { if (window.writeLS) window.writeLS('eventoSelecionado', id); memStore.eventoSelecionadoId = id; window.bcKgb?.postMessage?.({ type: 'selected', id }); } catch {} }
 
     // 2) se o tbody da lista existir no DOM, renderiza já na carga
     if (document.getElementById('com-lista')) {
@@ -642,16 +676,26 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     }
   });
 
-  // 3) se outras telas alterarem o financeiro/evento, atualiza a listinha aberta
-  window.addEventListener('storage', (e) => {
-    const keys = ['financeiroGlobal', 'financeiroGlobal:ping', 'eventos'];
-    if (keys.includes(e.key)) {
-      if (document.getElementById('dlg-comissoes')?.open &&
-          document.getElementById('com-lista')) {
+  // 3) substitui listeners de storage por BroadcastChannel / eventos customizados
+  try{
+    if (window.bcKgb) {
+      window.bcKgb.addEventListener('message', (ev) => {
+        const m = ev.data || {};
+        const keys = ['financeiroGlobal','financeiroGlobal:ping','eventos'];
+        if (m && (keys.includes(m.key) || keys.includes(m.type))) {
+          if (document.getElementById('dlg-comissoes')?.open && document.getElementById('com-lista')) {
+            try { window.renderComissoesLista?.(); } catch {}
+          }
+        }
+      });
+    }
+    // também ouve eventos DOM emitidos por bc (compatibilidade)
+    document.addEventListener('kgb:financeiro:ping', () => {
+      if (document.getElementById('dlg-comissoes')?.open && document.getElementById('com-lista')) {
         try { window.renderComissoesLista?.(); } catch {}
       }
-    }
-  });
+    });
+  }catch(e){}
 </script>
 <!-- storage-adapter centralizado via kgb-common.js loader -->
 <script type="module" src="evento-detalhado.js"></script>

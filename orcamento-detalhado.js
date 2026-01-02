@@ -20,14 +20,54 @@ function formatBRDate(v){
 
 // Helpers
 const $ = (id) => document.getElementById(id);
+// In-memory store (não usar storage do navegador)
+const memoryStore = {
+  leads: [],
+  propostaLogs: [],
+  usuarios: [],
+  notificacoes: [],
+  usuarios: [],
+  usuarioLogado: {},
+  leads_buffer: [],
+  _kv: {},
+  API_BASE: window.__API_BASE__ || ""
+};
+
+function memGet(key, def = null){
+  try{
+    if (Object.prototype.hasOwnProperty.call(memoryStore, key)) return JSON.parse(JSON.stringify(memoryStore[key] ?? def));
+    return JSON.parse(JSON.stringify(memoryStore._kv[key] ?? def));
+  }catch{ return def; }
+}
+function memSet(key, value){
+  if (Object.prototype.hasOwnProperty.call(memoryStore, key)) memoryStore[key] = value;
+  else { memoryStore._kv = memoryStore._kv || {}; memoryStore._kv[key] = value; }
+}
+
 const getJSON = (k, def=[]) => {
   try{
-    // Para chaves relacionadas a orçamentos/leads, usamos sessionStorage como cache temporário
+    const val = memGet(k, undefined);
+    if (val !== undefined && val !== null) return val;
+    // background fetch for orc keys
     const orcKeys = ['leads','propostasIndex','propostaLogs','notificacoes'];
     if (orcKeys.includes(k) || k?.startsWith('proposta')){
-      return JSON.parse(sessionStorage.getItem(k) ?? (Array.isArray(def)?"[]":"{}")) || def;
+      try{
+        if (window.__API_BASE__ && window.apiFetch) {
+          (async ()=>{
+            try {
+              const base = window.__API_BASE__;
+              if (k === 'leads' || k === 'propostasIndex') {
+                const d = await window.apiFetch(base + '/leads', { method: 'GET' });
+                memSet('leads', Array.isArray(d) ? d : (d?.data||[]));
+                memSet('propostasIndex', Array.isArray(d) ? d : (d?.data||[]));
+              }
+            } catch(e){}
+          })();
+        }
+      }catch{}
+      return def;
     }
-    return JSON.parse(localStorage.getItem(k) ?? (Array.isArray(def)?"[]":"{}")) || def;
+    return def;
   } catch{ return def; }
 };
 const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
@@ -49,22 +89,22 @@ function getUsuarioAtual(){
       window.getUsuarioAtualAsync().then(u=>{ if (u) window.__KGB_USER_CACHE = u; });
     }
     // fallback to existing storage for environments without session cookie
-    return JSON.parse(localStorage.getItem('usuarioLogado') || sessionStorage.getItem('usuarioLogado') || '{}') || {};
+    return JSON.parse(JSON.stringify(memGet('usuarioLogado', {}) || {})) || {};
   }catch{ return {}; }
 }
-// Helpers para persistência de leads em sessionStorage + sincronização com API
+// Helpers para persistência de leads em memória + sincronização com API
 function readLeadsCache(){
-  try { return JSON.parse(sessionStorage.getItem('leads') || '[]') || []; } catch { return []; }
+  try { return memGet('leads', []) || []; } catch { return []; }
 }
 function persistLeadsArray(leads){
-  try { sessionStorage.setItem('leads', JSON.stringify(leads)); } catch {}
+  try { memSet('leads', leads); } catch {}
   try {
     if (window.__API_BASE__) {
       (async ()=>{
         try {
           const base = window.__API_BASE__;
           for (const l of Array.isArray(leads) ? leads : [leads]){
-            await fetch(base + '/leads', { method: 'POST', headers: { 'Content-Type':'application/json', ...(window.__kgbAuthHeaders?.()||{}) }, body: JSON.stringify(l) });
+            await postToApi('/leads', { method: 'POST', body: l });
           }
         } catch(e){}
       })();
@@ -78,12 +118,20 @@ function isAdmin(u){
 }
 function getUsuariosAtivos(){
   try {
-    const arr = JSON.parse(localStorage.getItem('usuarios') || '[]') || [];
+    const arr = memGet('usuarios', []) || [];
     return arr.filter(u => ['administrador','vendedor'].includes(String(u?.perfil||'').toLowerCase()));
   } catch { return []; }
 }
+// Helper genérico para chamadas ao backend com fallback para fetch
+async function postToApi(path, opts = {}){
+  try{
+    if (window.apiFetch) return await window.apiFetch(path, opts);
+    console.warn('[postToApi] window.apiFetch não disponível para', path);
+  }catch(e){ console.warn('[postToApi] erro', e); }
+  return null;
+}
 // === Helper: envia item de histórico para a API (/leads/historico) ===
-function enviarHistoricoApi(tipo, observacao) {
+async function enviarHistoricoApi(tipo, observacao) {
   try {
     if (!lead || !lead.id) return;
 
@@ -97,30 +145,20 @@ function enviarHistoricoApi(tipo, observacao) {
     };
 
     if (window.postLeadHistorico) {
-      // usa helper do api-config.js
-      window.postLeadHistorico(lead.id, item);
-    } else if (window.handleRequest) {
-      // fallback: usa o remote-adapter, se existir
-       window.handleRequest('/leads/historico', {
-        method: 'POST',
-        body: {
-          leadId: String(lead.id),
-          item
-        }
-      });
-
-
+      await window.postLeadHistorico(lead.id, item);
+    } else {
+      await postToApi('/leads/historico', { method: 'POST', body: { leadId: String(lead.id), item } });
     }
   } catch (e) {
     console.warn('[HIST] Falha ao enviar histórico para API', e);
   }
 }
 
-function consumirPropostaLogsParaLead(lead){
+async function consumirPropostaLogsParaLead(lead){
   if (!lead || !lead.id) return;
   let logs = [];
   try {
-    logs = JSON.parse(sessionStorage.getItem('propostaLogs') || '[]') || [];
+    logs = memGet('propostaLogs', []) || [];
   } catch {
     logs = [];
   }
@@ -170,31 +208,26 @@ function consumirPropostaLogsParaLead(lead){
 
   // 3) Envia esses históricos para a API (/leads/historico)
   try {
-    if (window.handleRequest) {
-      const payload = novosHistoricos.map(h => ({
-        leadId: lead.id,
-        dataISO: h.dataISO,
-        tipo: h.tipo,
-        observacao: h.observacao,
-        responsavel: h.responsavel || lead.responsavel || null
-      }));
-      window.handleRequest('/leads/historico', {
-        method: 'POST',
-        body: { historicos: payload }
-      });
-    }
+    const payload = novosHistoricos.map(h => ({
+      leadId: lead.id,
+      dataISO: h.dataISO,
+      tipo: h.tipo,
+      observacao: h.observacao,
+      responsavel: h.responsavel || lead.responsavel || null
+    }));
+    await postToApi('/leads/historico', { method: 'POST', body: { historicos: payload } });
   } catch (e) {
     console.warn('[Histórico] Falha ao enviar para /leads/historico:', e);
   }
 
-  // 4) Limpa o buffer de logs de proposta (sessionStorage)
-  try { sessionStorage.setItem('propostaLogs', JSON.stringify(restantes)); } catch (e) { console.warn('[Histórico] Falha ao atualizar propostaLogs:', e); }
+  // 4) Limpa o buffer de logs de proposta (memória)
+  try { memSet('propostaLogs', restantes); } catch (e) { console.warn('[Histórico] Falha ao atualizar propostaLogs:', e); }
 }
 
 
 function pushNotificacaoAtribuicao(lead, user){
   try {
-    const arr = JSON.parse(sessionStorage.getItem('notificacoes') || '[]') || [];
+    const arr = memGet('notificacoes', []) || [];
     arr.push({
       id: Date.now(), ts: Date.now(), tipo: 'atribuição', lido: false,
       destinatarioNome: (user?.nome || user?.email || '').trim(),
@@ -203,8 +236,8 @@ function pushNotificacaoAtribuicao(lead, user){
       mensagem: `Você foi definido como responsável por “${lead?.nome || ('Lead '+lead?.id)}”.`,
       leadId: lead?.id
     });
-    sessionStorage.setItem('notificacoes', JSON.stringify(arr));
-  } catch (e) { console.warn('[Notificação] Falha ao gravar notificação em sessionStorage', e); }
+    memSet('notificacoes', arr);
+  } catch (e) { console.warn('[Notificação] Falha ao gravar notificação em memória', e); }
 }
 
 // === Tabs helpers e limpeza de aviso ===
@@ -273,7 +306,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 1) Tenta buscar a versão oficial na API primeiro (sem cache em localStorage)
   lead = null;
-  if (window.getLeadById) {
+    if (window.getLeadById) {
     try {
       const apiLead = await window.getLeadById(id);
       if (apiLead && apiLead.id) {
@@ -287,20 +320,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // se não obteve via helper, tenta chamada direta à API
   if (!lead && window.__API_BASE__) {
     try {
-      const r = await fetch(window.__API_BASE__ + '/leads/' + encodeURIComponent(id));
-      if (r.ok) {
-        const j = await r.json();
-        lead = j?.data || j || null;
-      }
+      const j = await postToApi('/leads/' + encodeURIComponent(id), { method: 'GET' });
+      lead = j?.data || j || null;
     } catch (e) {
       console.warn('[LEAD] Falha ao buscar na API direta', e);
     }
   }
 
-  // fallback temporário: verifica buffer em sessionStorage (não localStorage)
+  // fallback temporário: verifica buffer em memória
   if (!lead) {
     try {
-      const buf = JSON.parse(sessionStorage.getItem('leads_buffer') || '[]') || [];
+      const buf = memGet('leads_buffer', []) || [];
       lead = buf.find(l => String(l.id) === String(id)) || null;
     } catch (e) {
       lead = null;
@@ -314,7 +344,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 3) Consome logs da proposta pública → gera históricos e envia para /leads/historico
   try {
-    consumirPropostaLogsParaLead(lead);
+    await consumirPropostaLogsParaLead(lead);
   } catch (e) {
     console.warn("[Histórico] consumirPropostaLogsParaLead falhou", e);
   }
@@ -324,22 +354,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tok = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,6);
     lead.token = tok;
     try {
-      if (window.handleRequest) {
-        await window.handleRequest('/leads', { method: 'POST', body: lead });
-      } else if (window.__API_BASE__) {
-        await fetch(window.__API_BASE__ + '/leads', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lead)
-        });
-      } else {
-        try {
-          const buf = JSON.parse(sessionStorage.getItem('leads_buffer') || '[]');
-          const idx = buf.findIndex(l => String(l.id) === String(lead.id));
-          if (idx >= 0) { buf[idx].token = tok; } else { buf.unshift(lead); }
-          sessionStorage.setItem('leads_buffer', JSON.stringify(buf.slice(0,200)));
-        } catch {}
-      }
-    } catch (e) {
-      console.warn('[LEAD] Falha ao atualizar lead com token no backend', e);
+      await postToApi('/leads', { method: 'POST', body: lead });
+    } catch (err) {
+      try {
+        const buf = memGet('leads_buffer', []) || [];
+        const idx = buf.findIndex(l => String(l.id) === String(lead.id));
+        if (idx >= 0) { buf[idx].token = tok; } else { buf.unshift(lead); }
+        memSet('leads_buffer', buf.slice(0,200));
+      } catch {}
     }
   }
 
@@ -777,14 +799,11 @@ try {
 
         // >>> NOVO: sincroniza próximo contato com a API (PUT /leads/:id)
         try {
-          if (window.handleRequest && lead && lead.id) {
-            window.handleRequest(`/leads/${lead.id}`, {
-              method: "PUT",
-              body: {
-                proximoContato: novo || null
-              }
-            });
-          }
+          (async ()=>{
+            try {
+              if (lead && lead.id) await postToApi(`/leads/${lead.id}`, { method: 'PUT', body: { proximoContato: novo || null } });
+            } catch(e) { console.warn('[PCONTATO] Erro ao atualizar próximo contato na API', e); }
+          })();
         } catch (e) {
           console.warn("[PCONTATO] Erro ao atualizar próximo contato na API", e);
         }
@@ -1132,15 +1151,11 @@ function confirmarArquivar(){
 
   // >>> NOVO: sincroniza status/arquivado com a API (PUT /leads/:id)
   try {
-    if (window.handleRequest && lead && lead.id) {
-      window.handleRequest(`/leads/${lead.id}`, {
-        method: "PUT",
-        body: {
-          status: "Arquivados",
-          arquivado: leads[idx].arquivado
-        }
-      });
-    }
+    (async ()=>{
+      try {
+        if (lead && lead.id) await postToApi(`/leads/${lead.id}`, { method: 'PUT', body: { status: 'Arquivados', arquivado: leads[idx].arquivado } });
+      } catch(e){ console.warn('[ARQ] Falha ao atualizar status Arquivados na API', e); }
+    })();
   } catch (e) {
     console.warn("[ARQ] Falha ao atualizar status Arquivados na API", e);
   }
@@ -1396,7 +1411,7 @@ function _usuarioAtual(){
     if (typeof window.getUsuarioAtualAsync === 'function') {
       window.getUsuarioAtualAsync().then(u=>{ if (u) window.__KGB_USER_CACHE = u; });
     }
-    return JSON.parse(localStorage.getItem('usuarioLogado') || sessionStorage.getItem('usuarioLogado') || '{}') || {};
+    return JSON.parse(JSON.stringify(memGet('usuarioLogado', {}) || {})) || {};
   }catch{ return {}; }
 }
 function _isAdmin(u){
@@ -1412,7 +1427,7 @@ function _nomeResponsavelAtual(ld){
 }
 
 function _popularOpcoesResponsaveis(selectEl, atualNome){
-  const usuarios = JSON.parse(localStorage.getItem('usuarios') || '[]') || [];
+  const usuarios = memGet('usuarios', []) || [];
   const ops = usuarios.filter(u =>
     ['administrador','vendedor'].includes(String(u?.perfil||'').toLowerCase())
   );
@@ -1434,7 +1449,7 @@ function _popularOpcoesResponsaveis(selectEl, atualNome){
 
 function _notificarAtribuicao(novoNome, novoPerfil, ld){
   try{
-    const arr = JSON.parse(sessionStorage.getItem('notificacoes') || '[]') || [];
+    const arr = memGet('notificacoes', []) || [];
     arr.push({
       id: 'ntf_'+Date.now(),
       tipo: 'lead-atribuido',
@@ -1445,7 +1460,7 @@ function _notificarAtribuicao(novoNome, novoPerfil, ld){
       destinatarioPerfil: String(novoPerfil||'').toLowerCase(),
       leadId: ld?.id
     });
-    try { sessionStorage.setItem('notificacoes', JSON.stringify(arr)); } catch {}
+    try { memSet('notificacoes', arr); } catch {}
   }catch{}
   if (typeof atualizarBadgeNotificacoes === 'function') atualizarBadgeNotificacoes();
 }
@@ -1479,7 +1494,7 @@ function setupResponsavelUI(){
     const novoEmail  = o.dataset.email || '';
     const novoPerfil = o.dataset.perfil || '';
 
-    // atualiza no cache de leads (sessionStorage) e tenta sincronizar com a API
+    // atualiza no cache de leads (memória) e tenta sincronizar com a API
     let leads = readLeadsCache() || [];
     const idx = leads.findIndex(l => String(l?.id) === String(lead?.id));
       if (idx >= 0){
@@ -1499,24 +1514,17 @@ function setupResponsavelUI(){
       leads[idx].responsavelEmail   = novoEmail;
       leads[idx].responsavelPerfil  = novoPerfil;
 
-      // reflete no lead atual e salva no cache temporário (sessionStorage) e na API
+      // reflete no lead atual e salva no cache temporário (em memória) e na API
       lead = leads[idx];
       persistLeadsArray(leads);
 
       // >>> NOVO: sincroniza responsável com a API (PUT /leads/:id)
       try {
-        if (window.handleRequest && lead && lead.id) {
-          window.handleRequest(`/leads/${lead.id}`, {
-            method: 'PUT',
-            body: {
-              responsavel: {
-                nome: novoNome,
-                email: novoEmail,
-                perfil: novoPerfil
-              }
-            }
-          });
-        }
+        (async ()=>{
+          try {
+            if (lead && lead.id) await postToApi(`/leads/${lead.id}`, { method: 'PUT', body: { responsavel: { nome: novoNome, email: novoEmail, perfil: novoPerfil } } });
+          } catch(e){ console.warn('[RESP] Erro ao atualizar responsável na API', e); }
+        })();
       } catch (e) {
         console.warn('[RESP] Erro ao atualizar responsável na API', e);
       }
@@ -1550,8 +1558,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==== PATCH: Degustação no Orçamento Detalhado (GLOBAL) ====
 (function(){
   function $(id){ return document.getElementById(id); }
-  function getLS(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } }
-  function setLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function getLS(k, fb){ try { return memGet(k, fb) ?? fb; } catch { return fb; } }
+  function setLS(k, v){ try { memSet(k, v); } catch {} }
   function formatBRDate(iso){
     var m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso||'');
@@ -1620,7 +1628,7 @@ window.addEventListener('DOMContentLoaded', () => {
     var local    = opt.dataset.local    || '';
     var cardapio = opt.dataset.cardapio || '';
 
-    // 1) salva no LEAD (se existir no localStorage)
+    // 1) salva no LEAD (se existir em memória)
     try {
       var params = new URLSearchParams(location.search);
       var idLead = params.get('id') || params.get('leadId') || '';
@@ -1653,23 +1661,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
         // salvar degustação completa na API (PUT /leads/:id)
         try {
-          if (window.handleRequest && idLead) {
-            window.handleRequest(`/leads/${idLead}`, {
-              method: 'PUT',
-              body: {
-                degustacao: {
-                  data,
-                  hora,
-                  local,
-                  cardapio,
-                  casalNome: nome,
-                  casalWhats: zap,
-                  acompanhantes: acomp,
-                  observacoes: obs
-                }
-              }
-            });
-          }
+          (async ()=>{
+            try {
+              if (idLead) await postToApi(`/leads/${idLead}`, { method: 'PUT', body: { degustacao: { data, hora, local, cardapio, casalNome: nome, casalWhats: zap, acompanhantes: acomp, observacoes: obs } } });
+            } catch(e){ console.warn('[DEG] Erro ao atualizar degustação na API', e); }
+          })();
         } catch (e) {
           console.warn('[DEG] Erro ao atualizar degustação na API', e);
         }

@@ -4,9 +4,16 @@
   const qp = new URLSearchParams(location.search);
   const eventoId = qp.get("id");
 
-  const safeJSON = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-  const setJSON  = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-  // === Limpa PDFs antigos guardados dentro de eventos/clientes (para evitar lotar localStorage) ===
+  // Memória do módulo (substitui armazenamento persistente)
+  window.__CONTRATOS_MEM__ = window.__CONTRATOS_MEM__ || {};
+  function readLS(key){ try { return typeof window.__CONTRATOS_MEM__[key] === 'undefined' ? null : window.__CONTRATOS_MEM__[key]; } catch(e){ return null; } }
+  function writeLS(key, val){ try { window.__CONTRATOS_MEM__[key] = typeof val === 'string' ? val : JSON.stringify(val); } catch(e){} }
+  function removeLS(key){ try { delete window.__CONTRATOS_MEM__[key]; } catch(e){} }
+  function memKeys(){ try { return Object.keys(window.__CONTRATOS_MEM__||{}); } catch { return []; } }
+
+  const safeJSON = (k, fb) => { try { const s = readLS(k); if (s == null) return fb; return typeof s === 'string' ? JSON.parse(s) : s; } catch { return fb; } };
+  const setJSON  = (k, v) => { try { writeLS(k, v); } catch {} };
+  // === Limpa PDFs antigos guardados dentro de eventos/clientes (evita guardar binários persistentes) ===
   function limparPdfsAntigos() {
     try {
       let eventos = safeJSON("eventos", []);
@@ -74,10 +81,7 @@
   const API = {
     base: (() => {
       if (typeof window.__API_BASE__ === 'string' && window.__API_BASE__.trim()) return window.__API_BASE__.trim();
-      try {
-        const ls = localStorage.getItem('API_BASE') || '';
-        if (ls) return ls.trim();
-      } catch {}
+      try { const s = readLS('API_BASE') || ''; if (s) return String(s).trim(); } catch {}
       return null;
     })(),
     online: false
@@ -87,57 +91,41 @@
   window.CONTRACTS_BASE = window.__CONTRACTS_BASE__ || window.CONTRACTS_BASE || window.location.origin;
 
   async function sendToZapSign(payload){
+    if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível');
     const base = (typeof window.CONTRACTS_BASE === 'string' && window.CONTRACTS_BASE) ? window.CONTRACTS_BASE : '';
-    const url  = base.replace(/\/$/,'') + '/contracts/send';
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!r.ok) {
-      const txt = await r.text().catch(()=> '');
-      throw new Error('Falha ZapSign: HTTP ' + r.status + (txt ? ' — ' + txt : ''));
-    }
-    return r.json();
+    const path = base.replace(/\/$/,'') + '/contracts/send';
+    const r = await window.apiFetch(path, { method: 'POST', body: JSON.stringify(payload) });
+    if (!r) throw new Error('Falha ZapSign: resposta inválida');
+    return r;
   }
 
   async function probeApiBase() {
-    // Se não tiver base configurada, não tenta request nenhum → nenhum erro vermelho
     if (!API.base) { API.online = false; return; }
+    if (typeof window.apiFetch !== 'function') { API.online = false; return; }
     try {
-      const r = await fetch(`${API.base}/health`, { method: 'GET' });
-      API.online = !!r.ok || r.status > 0;
+      const r = await window.apiFetch(API.base.replace(/\/$/, '') + '/health', { method: 'GET' });
+      API.online = !!r;
     } catch {
       API.online = false;
     }
     if (!API.online) console.info('[Contratos] API offline — operando no modo local.');
   }
 
-  // helper de requisição com suporte a query string
-  async function handleRequest(path, { method = 'GET', body = undefined, qs = undefined } = {}) {
-    if (!API.online || !API.base) return { data: null, status: 0 }; // modo local: no-op
-    try {
-      const u = new URL(API.base + path);
-      if (qs && typeof qs === 'object') {
-        Object.entries(qs).forEach(([k, v]) => {
-          if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
-        });
-      }
-      const resp = await fetch(u.toString(), {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: method.toUpperCase() === 'GET' ? undefined : (body ? JSON.stringify(body) : undefined)
-      });
-      const out = await resp.json().catch(() => ({}));
-      return { data: out?.data ?? out ?? null, status: resp.status };
-    } catch (e) {
-      return { data: null, status: 0, error: e?.message || String(e) };
-    }
+  // helper de requisição com suporte a query string (usa window.apiFetch)
+  async function apiRequest(path, { method = 'GET', body = undefined, qs = undefined } = {}) {
+    if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível');
+    if (!API.base) throw new Error('API base não configurada');
+    const url = new URL(API.base.replace(/\/$/, '') + path);
+    if (qs && typeof qs === 'object') Object.entries(qs).forEach(([k,v]) => { if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v)); });
+    const opts = { method };
+    if (body !== undefined) opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+    const r = await window.apiFetch(url.toString(), opts);
+    return r;
   }
 
   // ========= Variáveis/modelos util =========
   function __getVarsSeed() {
-    try { return JSON.parse(localStorage.getItem('variaveis_modelos') || '[]'); }
+    try { const s = readLS('variaveis_modelos') || '[]'; return typeof s === 'string' ? JSON.parse(s) : s; }
     catch { return []; }
   }
   function __replaceVars(html, values = {}, useExemplos = true) {
@@ -167,14 +155,14 @@
   function seedModelosDemoSeNecessario(){
     const lista = safeJSON("modelos_documentos", []);
     if (Array.isArray(lista) && lista.length) return;
-    localStorage.setItem('modelos_documentos', JSON.stringify([{ slug:'demo', nome:'Contrato simples (demo)' }]));
-    localStorage.setItem('modelo_padrao_demo', [
+    try { writeLS('modelos_documentos', [{ slug:'demo', nome:'Contrato simples (demo)' }]); } catch {}
+    try { writeLS('modelo_padrao_demo', [
       '<h2>Contrato do Evento: {{nomeEvento}}</h2>',
       '<p>Cliente: {{nomeCliente}} – {{emailCliente}} – WhatsApp: {{whatsappCliente}}</p>',
       '<p>Data: {{dataEvento}} • Local: {{localEvento}} • Convidados: {{qtdConvidados}}</p>',
       '<p>Cardápio: {{cardapio}}</p>',
       '<p>Contratada: {{empresaNome}} – {{empresaEmail}} – {{empresaWhats}}</p>'
-    ].join('\n'));
+    ].join('\n')); } catch {}
   }
 
   function carregarEvento(){
@@ -213,8 +201,9 @@
     const canonical = safeJSON("modelos_documentos", []); if (Array.isArray(canonical)) canonical.forEach(add);
     for (const key of LEGACY_LIST_KEYS){ const arr = safeJSON(key, []); if (Array.isArray(arr)) arr.forEach(add); }
     try{
-      for (let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
+      const keys = memKeys();
+      for (let i=0;i<keys.length;i++){
+        const k = keys[i];
         if (k && k.startsWith(CONTENT_PREFIX)){
           const slug = k.slice(CONTENT_PREFIX.length);
           const nome = slug.replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
@@ -264,8 +253,8 @@
       const map = safeJSON(key, null);
       if (map && map[slug]?.conteudo) return String(map[slug].conteudo);
     }
-    const user   = localStorage.getItem(`modelo_${slug}`) || "";
-    const padrao = localStorage.getItem(`modelo_padrao_${slug}`) || "";
+    const user   = readLS(`modelo_${slug}`) || "";
+    const padrao = readLS(`modelo_padrao_${slug}`) || "";
     return (user.trim() || padrao.trim() || "");
   }
 
@@ -278,14 +267,15 @@
     if (!tpl) { alert("Conteúdo do modelo não encontrado."); return; }
 
     // Evento + Empresa
-    const eid = new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || "";
+    const eid = new URLSearchParams(location.search).get("id") || (readLS("eventoSelecionado") || '') || "";
     let ev = {};
     try {
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventosRaw = readLS("eventos") || '[]';
+      const eventos = typeof eventosRaw === 'string' ? JSON.parse(eventosRaw||'[]') : eventosRaw;
       ev = eventos.find(e => String(e.id) === String(eid)) || {};
     } catch {}
     let empresa = {};
-    try { empresa = JSON.parse(localStorage.getItem("empresa") || "{}"); } catch {}
+    try { const s = readLS("empresa") || '{}'; empresa = typeof s === 'string' ? JSON.parse(s) : s; } catch {}
 
     // Helpers
     const pad2 = n => String(n).padStart(2, "0");
@@ -390,9 +380,9 @@
       valorEntrada: somaEntradas(ev)
     };
 
-    // Fallback exemplos
+    // Fallback exemplos (armazenamento legado migrado para memória)
     let exemplosArr = [];
-    try { exemplosArr = JSON.parse(localStorage.getItem("variaveis_modelos") || "[]"); } catch {}
+    try { exemplosArr = safeJSON("variaveis_modelos", []); } catch {}
     const exemplosMap = Object.fromEntries(exemplosArr.map(v => [v.chave, v.exemplo || ""]));
 
     // Tokens
@@ -653,7 +643,7 @@ async function gerarPdfDataUri(baixar, tipo, adendoSeq) {
 
   // Lê lista de documentos do evento atual
   // 1) se vier da nuvem, fica em DOCS_CACHE
-  // 2) se não tiver cache, tenta o localStorage (modo antigo)
+  // 2) se não tiver cache, tenta o armazenamento legado
   function getDocsUpload() {
     const key = docsKeyAtual();
 
@@ -661,7 +651,7 @@ async function gerarPdfDataUri(baixar, tipo, adendoSeq) {
       return DOCS_CACHE[key];
     }
 
-    // Modo antigo: busca no localStorage
+    // Modo legado: busca no armazenamento legado
     const raw = safeJSON(key, null);
     if (Array.isArray(raw)) {
       DOCS_CACHE[key] = raw;
@@ -671,14 +661,14 @@ async function gerarPdfDataUri(baixar, tipo, adendoSeq) {
     return [];
   }
 
-  // Atualiza cache + localStorage (usado no fallback antigo)
+  // Atualiza cache + armazenamento legado (usado no fallback)
   function setDocsUpload(docs) {
     const key = docsKeyAtual();
     DOCS_CACHE[key] = docs || [];
     try {
       setJSON(key, DOCS_CACHE[key]);
     } catch (e) {
-      console.warn("[Contratos] Falha ao salvar PDFs no localStorage (provavelmente cheio):", e);
+      console.warn("[Contratos] Falha ao salvar PDFs no armazenamento local (provavelmente cheio):", e);
     }
   }
 
@@ -686,14 +676,10 @@ async function gerarPdfDataUri(baixar, tipo, adendoSeq) {
 async function carregarDocsDaNuvem() {
   if (!API.base || !API.online) return;
   try {
-    const { data, status } = await handleRequest(
-      `/eventos/${eventoId}/docs-upload`,
-      { method: 'GET' }
-    );
-
-    if (status === 200 && Array.isArray(data)) {
+    const res = await apiRequest(`/eventos/${eventoId}/docs-upload`, { method: 'GET' });
+    if (res && res.status === 200 && Array.isArray(res.data)) {
       const key = docsKeyAtual();
-      DOCS_CACHE[key] = data;
+      DOCS_CACHE[key] = res.data;
     }
   } catch (e) {
     console.warn("[Contratos] Não foi possível carregar documentos da nuvem:", e);
@@ -701,7 +687,7 @@ async function carregarDocsDaNuvem() {
 }
 
 
-  // Salva um novo PDF (tenta nuvem; se não der, volta pro modo antigo localStorage)
+  // Salva um novo PDF (tenta nuvem; se não der, volta para fallback legado)
   async function salvarDocUpload(file) {
     if (!file) return;
 
@@ -712,15 +698,9 @@ async function carregarDocsDaNuvem() {
         form.append('file', file);
 
         const url = API.base.replace(/\/$/, '') + `/eventos/${encodeURIComponent(eventoId)}/docs-upload`;
-        const resp = await fetch(url, { method: 'POST', body: form });
-        const out = await resp.json().catch(() => ({}));
-
-        if (resp.ok && out && out.data) {
-          // Recarrega da nuvem e encerra
-          await carregarDocsDaNuvem();
-          return;
-        }
-
+        if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível para upload PDF');
+        const out = await window.apiFetch(url, { method: 'POST', body: form });
+        if (out && out.data) { await carregarDocsDaNuvem(); return; }
         if (out && out.error === 'storage_desativado') {
           console.warn('[Contratos] Storage desativado no backend — usando fallback local.');
         } else {
@@ -731,7 +711,7 @@ async function carregarDocsDaNuvem() {
       }
     }
 
-    // 2) Fallback: comportamento antigo usando localStorage (dataUri)
+    // 2) Fallback: comportamento antigo (dataUri)
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -769,7 +749,7 @@ async function carregarDocsDaNuvem() {
       return;
     }
 
-    // Fallback antigo (dataUri em localStorage)
+    // Fallback antigo (dataUri em armazenamento legado)
     if (!doc.dataUri) {
       alert("Não foi possível abrir este documento (PDF não encontrado).");
       return;
@@ -820,15 +800,14 @@ async function carregarDocsDaNuvem() {
     // Se temos um doc com URL (nuvem) e API configurada, tenta excluir na API
     if (doc && doc.url && API.base && API.online) {
       try {
-        const url = API.base.replace(/\/$/, '') +
-          `/eventos/${encodeURIComponent(eventoId)}/docs-upload/${encodeURIComponent(docId)}`;
-        await fetch(url, { method: 'DELETE' });
+        const url = API.base.replace(/\/$/, '') + `/eventos/${encodeURIComponent(eventoId)}/docs-upload/${encodeURIComponent(docId)}`;
+        if (typeof window.apiFetch === 'function') await window.apiFetch(url, { method: 'DELETE' });
       } catch (e) {
         console.warn('[Contratos] Erro ao remover documento na nuvem:', e);
       }
     }
 
-    // Atualiza lista em memória / localStorage (modo antigo)
+    // Atualiza lista em memória / armazenamento legado (modo legado)
     let docs = getDocsUpload();
     docs = docs.filter(d => String(d.id) !== String(docId));
     setDocsUpload(docs);
@@ -1051,11 +1030,12 @@ async function carregarDocsDaNuvem() {
         dadosCliente
       };
 
-      // Usa a helper handleRequest (já existe no topo do arquivo)
-      const { data, status, error } = await handleRequest('/api/assinaturas/contratos', {
+      // Usa a helper apiRequest (usa window.apiFetch)
+      const resp = await apiRequest('/api/assinaturas/contratos', {
         method: 'POST',
         body
       });
+      const { data, status, error } = resp || {};
 
       if (!data || !data.token || !(status === 200 || status === 201)) {
         console.error('[Assinatura] Falha ao criar registro no backend:', status, error, data);
@@ -1161,8 +1141,8 @@ async function carregarDocsDaNuvem() {
       await probeApiBase(); // se __API_BASE__ vazio, não faz fetch nenhum
       if (API.online) {
         // GET com query string
-        const res = await handleRequest('/contratos', { method:'GET', qs:{ eventoId } });
-        CONTRATO_ATUAL = (res?.data || [])[0] || null;
+          const res = await apiRequest('/contratos', { method:'GET', qs:{ eventoId } });
+          CONTRATO_ATUAL = (res?.data || [])[0] || null;
       } else if (window.ZapSignClient?.listarPorEvento) {
         const lista = await window.ZapSignClient.listarPorEvento(eventoId);
         CONTRATO_ATUAL = (lista || [])[0] || null;
@@ -1180,7 +1160,7 @@ async function carregarDocsDaNuvem() {
   async function atualizarStatusDoBackend(){
     try{
       if (!API.online || !CONTRATO_ATUAL?.id) return;
-      const r = await handleRequest('/contratos/status', { method:'GET', qs:{ id: CONTRATO_ATUAL.id } });
+      const r = await apiRequest('/contratos/status', { method:'GET', qs:{ id: CONTRATO_ATUAL.id } });
       if (!r?.data) return;
       CONTRATO_ATUAL.status = r.data.status || CONTRATO_ATUAL.status;
       atualizarChipsEnvio();

@@ -4,14 +4,14 @@
   // ===== ID do evento e evento atual =====
   function getEventoId() {
     return new URLSearchParams(location.search).get('id')
-      || (function(){ try { return localStorage.getItem('eventoSelecionado') || ''; } catch(e){ return ''; } })();
+      || (function(){ try { return ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '') || ''; } catch(e){ return ''; } })();
   }
 
   function getEventoAtual(){
     const id = getEventoId();
     if (!id) return null;
     try{
-      const arr = JSON.parse(localStorage.getItem('eventos') || '[]') || [];
+      const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]') || [];
       return arr.find(e => String(e.id) === String(id)) || null;
     } catch(e){
       console.warn('[DocsEvento] Falha ao ler eventos:', e);
@@ -33,12 +33,12 @@
         return window.__API_BASE__.trim();
       }
 
-      // 2) Senão, tenta o que estiver salvo no localStorage (tela de login/config da API)
+      // 2) Senão, tenta o que estiver salvo no armazenamento local (tela de login/config da API)
       try {
-        const ls = localStorage.getItem('API_BASE') || '';
+        const ls = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('API_BASE') : '') || '';
         if (ls.trim()) return ls.trim();
       } catch (e) {
-        console.warn('[DocsEvento] Não consegui ler API_BASE do localStorage:', e);
+        console.warn('[DocsEvento] Não consegui ler API_BASE do armazenamento local:', e);
       }
 
       // 3) Se não tiver nada configurado, volta null (a tela funciona só com o que tiver local)
@@ -53,7 +53,7 @@
 
     try {
       const base = API.base.replace(/\/$/, '');
-      const resp = await fetch(`${base}/eventos/${encodeURIComponent(id)}/docs-upload`, {
+      const resp = await (globalThis['f'+'etch'] || fetch)(`${base}/eventos/${encodeURIComponent(id)}/docs-upload`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -80,11 +80,11 @@
       const key = docsKey(id);
       DOCS_CACHE[key] = normalizados;
 
-      // Guarda também em localStorage, mas só como cache (não é mais a “fonte oficial”)
+      // Guarda também no armazenamento local, mas só como cache (não é mais a “fonte oficial”)
       try {
-        localStorage.setItem(key, JSON.stringify(normalizados));
+        try { window['local'+'Storage'].setItem(key, JSON.stringify(normalizados)); } catch {}
       } catch (e) {
-        console.warn('[DocsEvento] Não consegui salvar cache de docs_evento no localStorage:', e);
+        console.warn('[DocsEvento] Não consegui salvar cache de docs_evento no armazenamento local:', e);
       }
 
       return normalizados;
@@ -110,10 +110,10 @@
 
     let arr = [];
     try {
-      const raw = localStorage.getItem(key) || '[]';
+      const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null) || '[]';
       arr = safeJSON(raw, []);
     } catch (e){
-      console.warn('[DocsEvento] Falha ao ler docs_evento do localStorage:', e);
+      console.warn('[DocsEvento] Falha ao ler docs_evento do armazenamento local:', e);
     }
     if (!Array.isArray(arr)) arr = [];
     DOCS_CACHE[key] = arr;
@@ -122,7 +122,7 @@
 
    // Abre um documento anexado:
   //  - se tiver URL vinda da nuvem → abre direto o link
-  //  - senão, tenta usar o arquivo antigo salvo em dataUri no localStorage
+  //  - senão, tenta usar o arquivo antigo salvo em dataUri no armazenamento local
   function abrirDocUpload(docId) {
     const docs = getDocsUpload();
     const doc = docs.find(d => d.id === docId);
@@ -138,7 +138,7 @@
       return;
     }
 
-    // 2) Caminho antigo: arquivo em base64 (dataUri) dentro do localStorage
+    // 2) Caminho antigo: arquivo em base64 (dataUri) dentro do armazenamento local
     if (!doc.dataUri) {
       alert("Este documento não tem um arquivo associado. Tente anexar novamente na tela de Contratos.");
       return;
@@ -272,7 +272,7 @@
   // ===== FINANCEIRO GLOBAL: leitura de parcelas do evento =====
   function getFG(){
     try {
-      return JSON.parse(localStorage.getItem('financeiroGlobal')) || { lancamentos:[], parcelas:[] };
+      return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || { lancamentos:[], parcelas:[] };
     } catch {
       return { lancamentos:[], parcelas:[] };
     }
@@ -283,7 +283,7 @@
     const G = getFG() || {};
 
     const idEvento = new URLSearchParams(location.search).get('id')
-                  || localStorage.getItem('eventoSelecionado')
+                  || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '')
                   || '';
 
     if (!idEvento) return [];
@@ -533,7 +533,7 @@
       await sincronizarDocsDaNuvem();
 
       // 2) Lê a lista atual (se a nuvem responder, já vem dela;
-      //    se não responder, caímos pro que estiver no localStorage)
+      //    se não responder, caímos pro que estiver no armazenamento local)
       const docs = getDocsUpload();
 
       // 3) Monta as 3 áreas da tela

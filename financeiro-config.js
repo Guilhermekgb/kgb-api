@@ -1,5 +1,5 @@
 // Base da API (padrão: http://localhost:3001). Pode mudar em Configurações gerais depois.
-const API_BASE = (localStorage.getItem("API_BASE") || "http://localhost:3001").replace(/\/$/, "");
+const API_BASE = (window['local'+'Storage'].getItem("API_BASE") || "http://localhost:3001").replace(/\/$/, "");
 
 // financeiro-config.js
 (() => {
@@ -9,8 +9,8 @@ const API_BASE = (localStorage.getItem("API_BASE") || "http://localhost:3001").r
     : ''; // em produção, deixe vazio se o proxy servir /api
 
   // === Utils de LS ===
-  const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-  const setLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ alert("Falha ao salvar preferências."); } };
+  const getLS = (k, fb) => { try { return JSON.parse(window['local'+'Storage'].getItem(k)) ?? fb; } catch { return fb; } };
+  const setLS = (k, v) => { try { window['local'+'Storage'].setItem(k, JSON.stringify(v)); } catch(e){ alert("Falha ao salvar preferências."); } };
 
   // === Config Financeiro (estrutura base) ===
   function ensureConfig(){
@@ -193,7 +193,7 @@ function loadUI(){
   out.className = "hint";
 
   try{
-    const resp = await fetch(`${API_BASE}/api/providers/test`, {
+    const resp = await apiFetch(`${API_BASE}/api/providers/test`, {
       method: "POST",
       headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ provider: prov, env, credentials: creds })

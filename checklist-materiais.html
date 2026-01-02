@@ -28,12 +28,27 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persistir API_BASE em armazenamento persistente — usar variável global em memória
+    try { /* não gravar em armazenamento persistente */ } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<!-- Memória efêmera do módulo (cache em memória do módulo) -->
+<script>
+  (function(){
+    try{
+      if (!window.__mem_checklist_materiais) window.__mem_checklist_materiais = new Map();
+      window.__memCM = window.__mem_checklist_materiais;
+      window.memGetCM = (k,d=null) => window.__memCM.has(k) ? window.__memCM.get(k) : d;
+      window.memSetCM = (k,v) => (window.__memCM.set(k,v), v);
+      window.memRemoveCM = (k) => (window.__memCM.delete(k), undefined);
+      window.safeJSON = (s,d=null) => { try { return JSON.parse(s); } catch { return d; } };
+    }catch(e){}
+  })();
+</script>
 
   <title>Checklist de Materiais – Evento</title>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -449,11 +464,12 @@
   <script>
   /* ===== Utils/Storage ===== */
   const KEY_EVENTOS = 'eventos';
-  const getLS  = (k)=> JSON.parse(localStorage.getItem(k)||'[]');
-  const getObj = (k)=> JSON.parse(localStorage.getItem(k)||'null');
+  // Storage helpers agora usam cache em memória do módulo (não persistente)
+  const getLS  = (k)=> { try { const v = (window.memGetCM ? window.memGetCM(k) : undefined); return v == null ? [] : (Array.isArray(v) ? v : safeJSON(v,[])); } catch { return []; } };
+  const getObj = (k)=> { try { const v = (window.memGetCM ? window.memGetCM(k) : undefined); return v == null ? null : (typeof v === 'string' ? safeJSON(v,null) : v); } catch { return null; } };
   const setObj = (k,v)=> {
-    try { localStorage.setItem(k, JSON.stringify(v)); }
-    catch(e){ alert('Não foi possível salvar (limite do navegador atingido).'); }
+    try { if (window.memSetCM) window.memSetCM(k, v); }
+    catch(e){ alert('Não foi possível salvar no cache em memória do módulo.'); }
   };
   // ===== API (opcional, nuvem) =====
   const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
@@ -493,7 +509,7 @@
       const path = location.pathname.replace(/\/[^/]*$/, '/');
       const execUrl = `${base}${path}checklist-execucao.html?id=${encodeURIComponent(evtId)}&t=${encodeURIComponent(token)}`;
 
-      // guarda no localStorage como antes (mas usando expiresAt do backend se existir)
+      // guarda no cache em memória do módulo como antes (usa expiresAt do backend quando disponível)
       saveExecLinks(evtId, execUrl, expiresAt);
 
       return { execUrl, posUrl: makePosUrl(evtId), token, expiresAt };
@@ -521,26 +537,26 @@
       if (Array.isArray(setores) && setores.length){
         const norm = __uniqueSetores(setores);
         try {
-          localStorage.setItem("estoque:setores", JSON.stringify(norm));
+          if (window.memSetCM) window.memSetCM("estoque:setores", norm);
         } catch(e){}
       }
 
       // Materiais
       if (Array.isArray(mats) && mats.length){
         try {
-          localStorage.setItem("estoque:materiais", JSON.stringify(mats));
+          if (window.memSetCM) window.memSetCM("estoque:materiais", mats);
         } catch(e){}
       }
 
       // Insumos (entradas de estoque/sobras), mesmos campos da tela estoque-insumos
       if (Array.isArray(insumos) && insumos.length){
         try {
-          localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(insumos));
+          if (window.memSetCM) window.memSetCM(KEY_ESTOQUE_INSUMOS, insumos);
         } catch(e){}
       }
     }catch(e){
       console.error("Falha ao sincronizar estoque com a API", e);
-      // em caso de erro, segue com o que tiver no localStorage
+      // em caso de erro, segue com o que tiver no cache em memória do módulo
     }
   }
 
@@ -569,9 +585,9 @@ function __uniqueSetores(arr){
   const a = getLS('estoque.setores')   || [];
   const b = getLS('estoque:setores')   || [];
   const merged = __uniqueSetores([...a, ...b]).filter(s => s && s.ativo !== false);
-  try {
-    localStorage.setItem('estoque:setores', JSON.stringify(merged));
-    localStorage.removeItem('estoque.setores');
+    try {
+    if (window.memSetCM) window.memSetCM('estoque:setores', merged);
+    if (window.memRemoveCM) window.memRemoveCM('estoque.setores');
   } catch(e){}
 })();
 
@@ -593,11 +609,11 @@ const loadSetores = () => {
   // ==== token/link da tela de execução
   function buildExecUrl(evtId){
     const K = 'checklistExec:token:'+evtId;
-    let token = localStorage.getItem(K) || '';
+    let token = (window.memGetCM ? window.memGetCM(K) : '') || '';
     if (!token) {
       try {
         token = crypto.randomUUID();
-        localStorage.setItem(K, token);
+        if (window.memSetCM) window.memSetCM(K, token);
       } catch {
         token = 't_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
       }
@@ -624,20 +640,21 @@ function saveExecLinks(evtId, execUrl, expiresAtFromApi){
     createdAt: new Date().toISOString(),
     expiresAt
   };
-  try { localStorage.setItem(keyLinks(evtId), JSON.stringify(payload)); } catch {}
+  try { if (window.memSetCM) window.memSetCM(keyLinks(evtId), payload); } catch {}
 }
 
 
 function loadExecLinks(evtId){
   try{
-    const raw = JSON.parse(localStorage.getItem(keyLinks(evtId)) || 'null');
-    if (!raw) return null;
-    if (Date.now() > Number(raw.expiresAt||0)) {
+    const raw = (window.memGetCM ? window.memGetCM(keyLinks(evtId)) : null);
+    const obj = raw == null ? null : (typeof raw === 'string' ? safeJSON(raw, null) : raw);
+    if (!obj) return null;
+    if (Date.now() > Number(obj.expiresAt||0)) {
       // expirado -> limpa e não mostra
-      localStorage.removeItem(keyLinks(evtId));
+      if (window.memRemoveCM) window.memRemoveCM(keyLinks(evtId));
       return null;
     }
-    return raw; // {execUrl,posUrl,createdAt,expiresAt}
+    return obj; // {execUrl,posUrl,createdAt,expiresAt}
   }catch{ return null; }
 }
 
@@ -650,19 +667,28 @@ function loadExecLinks(evtId){
     const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0'), yy=d.getFullYear();
     return `${dd}/${mm}/${yy}`;
   }
-  const getNomeIndex = ()=> { try{ return JSON.parse(localStorage.getItem('eventos:nomeIndex')||'[]'); }catch{return [];} };
+  const getNomeIndex = ()=> {
+    try{
+      const v = (window.memGetCM ? window.memGetCM('eventos:nomeIndex') : null);
+      return v == null ? [] : (Array.isArray(v) ? v : safeJSON(v, []));
+    }catch{return [];} };
 
   // ===== Estoque de Insumos (entradas de sobras) =====
 const KEY_ESTOQUE_INSUMOS = 'insumos:estoque';
 
 // lê todas as entradas de estoque
 function loadEstoqueInsumos(){
-  try { return JSON.parse(localStorage.getItem(KEY_ESTOQUE_INSUMOS) || '[]'); }
+  try {
+    const v = (window.memGetCM ? window.memGetCM(KEY_ESTOQUE_INSUMOS) : null);
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') return safeJSON(v, []);
+    return [];
+  }
   catch { return []; }
 }
-// salva substituindo (simples)
+// salva substituindo (simples) — grava no cache em memória do módulo
 function saveEstoqueInsumos(arr){
-  try { localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(arr)); } catch {}
+  try { if (window.memSetCM) window.memSetCM(KEY_ESTOQUE_INSUMOS, arr); } catch {}
 }
 
 // util: step por unidade (reusa a sua função se já existir)
@@ -745,8 +771,12 @@ function stepForUnit_est(un){
 const K_PRT = 'ft:pratos';
 const K_INS = 'ft:insumos';
 const getLSsafe = (k, fallback=[]) => {
-  try { const v = JSON.parse(localStorage.getItem(k)||'null'); return Array.isArray(v) ? v : fallback; }
-  catch { return fallback; }
+  try {
+    const v = (window.memGetCM ? window.memGetCM(k) : null);
+    if (v == null) return fallback;
+    if (Array.isArray(v)) return v;
+    return safeJSON(v, fallback);
+  } catch { return fallback; }
 };
 
 
@@ -967,7 +997,7 @@ if (saved?.execUrl) showExecPanel(saved.execUrl);
   (function loadSavedOnOpen(){
     const id = state.evtId || document.getElementById('evtId')?.value;
     if(!id) return;
-    const saved = JSON.parse(localStorage.getItem(keySaida(id))||'null');
+    const saved = getObj(keySaida(id));
     if(saved){
       hydrateFromSaved(saved);
       document.getElementById('evtId').value = state.evtId;
@@ -1293,7 +1323,7 @@ if (savedLinks?.execUrl) showExecPanel(savedLinks.execUrl);
       status: 'saida_finalizada'
     };
     const payload = makeSaidaLight(raw);
-    try { localStorage.setItem(keySaida(state.evtId), JSON.stringify(payload)); }
+    try { setObj(keySaida(state.evtId), payload); }
     catch{ alert('Não foi possível salvar tudo (limite do navegador).'); }
 
 const url = buildExecUrl(state.evtId);
@@ -1305,9 +1335,9 @@ saveExecLinks(state.evtId, url);
 // === LER DEFINIÇÕES DO EVENTO (inclui a tela nova com chave definicoes_evento_<id>) ===
 // Substitua sua loadDefinicoesDoEvento inteira por esta
 function loadDefinicoesDoEvento(evtId){
-  // 1) chaves diretas
+  // 1) chaves diretas (checa no cache em memória do módulo)
   const tries = [
-    `definicoes_evento_${evtId}`,            // NOVA
+    `definicoes_evento_${evtId}`,
     `definicoes:evento:${evtId}`,
     `definicoes-evento:${evtId}`,
     `evento:definicoes:${evtId}`,
@@ -1315,36 +1345,48 @@ function loadDefinicoesDoEvento(evtId){
     `evento:${evtId}:definicoes`,
   ];
   for (const k of tries){
-    try{ const v = JSON.parse(localStorage.getItem(k)||'null'); if (v) return v; }catch{}
+    try{
+      const raw = (window.memGetCM ? window.memGetCM(k) : null);
+      const v = raw == null ? null : (typeof raw === 'string' ? safeJSON(raw, null) : raw);
+      if (v) return v;
+    }catch{}
   }
 
   // 2) mapas { [id]: definicao }
   const mapKeys = ['definicoes:evento','eventos:definicoes','definicoesEventos'];
   for (const k of mapKeys){
     try{
-      const mp = JSON.parse(localStorage.getItem(k)||'null');
-      if (mp && typeof mp==='object'){
+      const raw = (window.memGetCM ? window.memGetCM(k) : null);
+      const mp = raw == null ? null : (typeof raw === 'string' ? safeJSON(raw, null) : raw);
+      if (mp && typeof mp === 'object'){
         const v = mp[evtId] || mp[String(evtId)];
         if (v) return v;
       }
     }catch{}
   }
 
-  // 3) varredura geral
-  for (let i=0;i<localStorage.length;i++){
-    const key = localStorage.key(i)||'';
-    if (!/defini|card[aá]pio|evento/i.test(key)) continue;
-    try{
-      const v = JSON.parse(localStorage.getItem(key)||'null');
-      const idOk = String(v?.eventoId ?? v?.id ?? v?.idEvento ?? '') === String(evtId);
-      const temMenu = v?.cardapio?.itens?.length || v?.itensCardapio?.length || v?.pratos?.length || (v?.itens && typeof v.itens==='object');
-      if (idOk && temMenu) return v;
-    }catch{}
-  }
+  // 3) varredura geral no Map do memStore (substitui iteração sobre storagem do módulo)
+  try{
+    const mem = window.__mem_checklist_materiais;
+    if (mem && mem instanceof Map){
+      for (const [key, raw] of mem.entries()){
+        if (!/defini|card[aá]pio|evento/i.test(key)) continue;
+        try{
+          const v = (typeof raw === 'string') ? safeJSON(raw, null) : raw;
+          const idOk = String(v?.eventoId ?? v?.id ?? v?.idEvento ?? '') === String(evtId);
+          const temMenu = v?.cardapio?.itens?.length || v?.itensCardapio?.length || v?.pratos?.length || (v?.itens && typeof v.itens==='object');
+          if (idOk && temMenu) return v;
+        }catch{}
+      }
+    }
+  }catch{}
 
-  // 4) fallback antigo
-  const card = JSON.parse(localStorage.getItem('cardapioSelecionado')||'null');
-  if (card) return { cardapio: card, _from:'cardapioSelecionado' };
+  // 4) fallback antigo (cardapioSelecionado no memStore)
+  try{
+    const raw = (window.memGetCM ? window.memGetCM('cardapioSelecionado') : null);
+    const card = raw == null ? null : (typeof raw === 'string' ? safeJSON(raw, null) : raw);
+    if (card) return { cardapio: card, _from:'cardapioSelecionado' };
+  }catch{}
   return null;
 }
 
@@ -1401,20 +1443,20 @@ function fromBaseToUnit(baseVal, base, targetUn){
 // === LER FICHAS TÉCNICAS do modelo novo (ft:pratos + ft:insumos).
 // Se não existirem, cai nos formatos antigos (mantendo compat).
 function loadFichasTecnicas(){
-  // NOVO esquema
+  // NOVO esquema: leia do memStore
   try{
-    const pratos = JSON.parse(localStorage.getItem('ft:pratos')||'[]')||[];
-    const insumos = JSON.parse(localStorage.getItem('ft:insumos')||'[]')||[];
+    const pratosRaw = (window.memGetCM ? window.memGetCM('ft:pratos') : null);
+    const insumosRaw = (window.memGetCM ? window.memGetCM('ft:insumos') : null);
+    const pratos = Array.isArray(pratosRaw) ? pratosRaw : (typeof pratosRaw === 'string' ? safeJSON(pratosRaw, []) : []);
+    const insumos = Array.isArray(insumosRaw) ? insumosRaw : (typeof insumosRaw === 'string' ? safeJSON(insumosRaw, []) : []);
     if (Array.isArray(pratos) && pratos.length){
       const insById = new Map(insumos.map(i=>[String(i.id), i]));
-      // devolve no formato esperado pelo checklist: cada ficha tem .insumos [{nome,un,qtdPorPessoa,qtdFixa,categoria}]
       const fichas = pratos.map(p=>{
         const porcoes = Math.max(1, Number(p.porcoes||1));
         const itens = (p.itens||[]).map(it=>{
           const ins = insById.get(String(it.insumoId)) || {};
           const nome = ins.nome || '(insumo)';
-          // it.qtdBase está na unidade base do insumo (un/g/ml) — converter p/ por pessoa:
-          const qtdPP = Number(it.qtdBase||0) / porcoes; // consumo por porção (=pessoa)
+          const qtdPP = Number(it.qtdBase||0) / porcoes;
           const unBase = (()=>{
             const u = String(ins.unid||'un').toLowerCase();
             if (u==='kg' || u==='g')  return 'g';
@@ -1429,18 +1471,26 @@ function loadFichasTecnicas(){
     }
   }catch{}
 
-  // Legados (mantém suporte antigo)
+  // Legados (varredura no memStore)
   const tries = ['fichas:tecnicas','fichas-tecnicas','fichasTecnicas','fichas_tecnicas'];
   for (const k of tries){
-    try{ const arr = JSON.parse(localStorage.getItem(k)||'null'); if (arr) return arr; }catch{}
+    try{
+      const raw = (window.memGetCM ? window.memGetCM(k) : null);
+      const arr = raw == null ? null : (typeof raw === 'string' ? safeJSON(raw, null) : raw);
+      if (arr) return arr;
+    }catch{}
   }
   const all = [];
-  for (let i=0;i<localStorage.length;i++){
-    const key = localStorage.key(i);
-    if (/^ficha:prato:/.test(key||'')){
-      try{ const v = JSON.parse(localStorage.getItem(key)||'null'); if (v) all.push(v); }catch{}
+  try{
+    const mem = window.__mem_checklist_materiais;
+    if (mem && mem instanceof Map){
+      for (const [key, raw] of mem.entries()){
+        if (/^ficha:prato:/.test(key||'')){
+          try{ const v = (typeof raw === 'string') ? safeJSON(raw, null) : raw; if (v) all.push(v); }catch{}
+        }
+      }
     }
-  }
+  }catch{}
   return all;
 }
 // === Ajuste: ao usar o NOVO formato acima, cada ficha já vem com .insumos pronto.
@@ -1560,8 +1610,11 @@ function montarListaDeMercado(pratosSel, fichasIdx, convidados){
  // Lê categorias personalizadas (criadas em Fichas Técnicas)
 // === Categorias personalizadas (vindas da tela Fichas Técnicas) ===
 function getCatsPersonalizadas(){
-  try { return JSON.parse(localStorage.getItem('insumos.categorias') || '[]'); }
-  catch { return []; }
+  try {
+    const raw = (window.memGetCM ? window.memGetCM('insumos.categorias') : null);
+    if (Array.isArray(raw)) return raw;
+    return typeof raw === 'string' ? safeJSON(raw, []) : [];
+  } catch { return []; }
 }
 const _catsById = () => Object.fromEntries(
   (getCatsPersonalizadas() || []).map(c => [String(c.id), String(c.nome || '').trim()])
@@ -1681,7 +1734,7 @@ function renderListaMercado(lista = [], agrupar, mostrar){
         const i = Number(e.currentTarget.dataset.idx);
         if (i >= 0) {
           lista[i].comprado = e.currentTarget.checked;
-          try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+          try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch {}
         }
       });
     });
@@ -1692,7 +1745,7 @@ function renderListaMercado(lista = [], agrupar, mostrar){
         if (!Number.isFinite(v) || v < 0) return;
         if (i >= 0) {
           lista[i].qtd = v;
-          try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+          try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch {}
         }
       });
     });
@@ -1748,7 +1801,7 @@ function renderListaMercado(lista = [], agrupar, mostrar){
       const i = Number(e.currentTarget.dataset.idx);
       if (i >= 0) {
         lista[i].comprado = e.currentTarget.checked;
-        try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+        try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch {}
       }
     });
   });
@@ -1759,7 +1812,7 @@ function renderListaMercado(lista = [], agrupar, mostrar){
       if (!Number.isFinite(v) || v < 0) return;
       if (i >= 0) {
         lista[i].qtd = v;
-        try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+        try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch {}
       }
     });
   });
@@ -1856,8 +1909,8 @@ document.getElementById('btnSalvarRegistro')?.addEventListener('click', (e)=>{
 });
 document.getElementById('btnGerarEstoqueInsumos')?.addEventListener('click', ()=>{
   if (!_listaMercadoCache?.length){
-    const lista = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId))||'[]');
-    _listaMercadoCache = Array.isArray(lista) ? lista : [];
+    const raw = (window.memGetCM ? window.memGetCM(keyListaMercado(state.evtId)) : null);
+    _listaMercadoCache = Array.isArray(raw) ? raw : (typeof raw === 'string' ? safeJSON(raw, []) : []);
   }
   openDlgEscolherEstoque();
 });
@@ -1893,8 +1946,8 @@ document.getElementById('insumosMostrar')?.addEventListener('change',   ()=> ren
     lista = montarListaDeMercado(pratosSel, fichIdx, convidados); // sua função antiga
   }
 
-  // 3) persistir + renderizar
-  try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch(e){}
+  // 3) persistir + renderizar (cache em memória do módulo)
+  try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch(e){}
   renderListaMercado(lista);
 
   alert(`Lista de mercado gerada a partir do cardápio (${pratosSel.length} prato(s), ${convidados} convidado(s)).`);
@@ -1902,8 +1955,9 @@ document.getElementById('insumosMostrar')?.addEventListener('change',   ()=> ren
 // Salvar rascunho manualmente (além de salvar a cada clique)
 document.getElementById('btnSalvarListaMercado').onclick = ()=>{
   if(!ensureEvtId()){ alert('Informe EVENTOID'); return; }
-  const lista = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId)) || '[]');
-  try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch(e){}
+  const raw = (window.memGetCM ? window.memGetCM(keyListaMercado(state.evtId)) : null);
+  const lista = Array.isArray(raw) ? raw : (typeof raw === 'string' ? safeJSON(raw, []) : []);
+  try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch(e){}
   alert('Rascunho da lista de mercado salvo.');
 };
 
@@ -1917,8 +1971,8 @@ document.getElementById('btnSalvarUsarDoEstoque')?.addEventListener('click', ()=
 
   // pega a lista atual do evento
   if (!_listaMercadoCache?.length){
-    const lst = JSON.parse(localStorage.getItem(keyListaMercado(state.evtId))||'[]');
-    _listaMercadoCache = Array.isArray(lst) ? lst : [];
+    const raw = (window.memGetCM ? window.memGetCM(keyListaMercado(state.evtId)) : null);
+    _listaMercadoCache = Array.isArray(raw) ? raw : (typeof raw === 'string' ? safeJSON(raw, []) : []);
   }
   const lista = _listaMercadoCache;
 
@@ -1985,7 +2039,7 @@ document.getElementById('btnSalvarUsarDoEstoque')?.addEventListener('click', ()=
 
   if (houveMudanca){
     saveEstoqueInsumos(arr);
-    try { localStorage.setItem(keyListaMercado(state.evtId), JSON.stringify(lista)); } catch {}
+    try { if (window.memSetCM) window.memSetCM(keyListaMercado(state.evtId), lista); } catch {}
     renderListaMercado(lista);
   }
   // deixa o dialog fechar normalmente (form method=dialog)
@@ -1997,7 +2051,8 @@ document.getElementById('btnSalvarUsarDoEstoque')?.addEventListener('click', ()=
 (function initListaMercado(){
     const id = new URLSearchParams(location.search).get('id') || state.evtId;
     if (!id) return;
-    const lista = JSON.parse(localStorage.getItem(keyListaMercado(id))||'null') || [];
+    const raw = (window.memGetCM ? window.memGetCM(keyListaMercado(id)) : null);
+    const lista = Array.isArray(raw) ? raw : (typeof raw === 'string' ? safeJSON(raw, []) : []);
     renderListaMercado(lista);
   })();
 
@@ -2089,8 +2144,10 @@ if (saved?.execUrl) showExecPanel(saved.execUrl);
   // 1) Carregar materiais (ambas as chaves)
   function loadAllMateriais(){
     try{
-      const a = JSON.parse(localStorage.getItem('estoque.materiais')||'[]');
-      const b = JSON.parse(localStorage.getItem('estoque:materiais')||'[]');
+      const aRaw = (window.memGetCM ? window.memGetCM('estoque.materiais') : null);
+      const bRaw = (window.memGetCM ? window.memGetCM('estoque:materiais') : null);
+      const a = Array.isArray(aRaw) ? aRaw : (typeof aRaw === 'string' ? safeJSON(aRaw, []) : []);
+      const b = Array.isArray(bRaw) ? bRaw : (typeof bRaw === 'string' ? safeJSON(bRaw, []) : []);
       return [...a, ...b];
     }catch{ return []; }
   }
@@ -2154,7 +2211,7 @@ if (saved?.execUrl) showExecPanel(saved.execUrl);
     const b = ev.target.closest('.foto-btn');
     if(!b) return;
 
-    // tenta primeiro por data-src; se não houver, tenta via data-mid -> localStorage
+    // tenta primeiro por data-src; se não houver, tenta via data-mid -> memStore
     let src  = b.dataset.src || '';
     let nome = b.dataset.nome || '';
 

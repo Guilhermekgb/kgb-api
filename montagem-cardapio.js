@@ -1,3 +1,89 @@
+// ===== MemStore do módulo: montagem-cardapio =====
+window.__mem_montagem_cardapio = window.__mem_montagem_cardapio || new Map();
+
+window.memGetMontagem = function (key) {
+  try {
+    return window.__mem_montagem_cardapio.get(key) ?? null;
+  } catch (e) {
+    return null;
+  }
+};
+
+window.memSetMontagem = function (key, value) {
+  try {
+    window.__mem_montagem_cardapio.set(key, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+window.memRemoveMontagem = function (key) {
+  try {
+    return window.__mem_montagem_cardapio.delete(key);
+  } catch (e) {
+    return false;
+  }
+};
+
+// ===== API helpers (cloud-only) =====
+async function apiGet(path){
+  if (!window['apiFetch']) throw new Error('window.apiFetch não disponível');
+  try {
+    const r = await window['apiFetch'](path, { method: 'GET' });
+    return r;
+  } catch(e){ return { ok: false, error: String(e) }; }
+}
+
+async function loadCatalogos(){
+  try{
+    const already = window.memGetMontagem('catalogosLoaded');
+    if (already) return;
+    const p = Promise.allSettled([
+      apiGet('/catalogo/cardapios'),
+      apiGet('/catalogo/produtos'),
+      apiGet('/catalogo/adicionais'),
+      apiGet('/catalogo/custos-fixos'),
+      apiGet('/fichas-tecnicas'),
+      apiGet('/catalogo/tipos-cardapio')
+    ]);
+    const res = await p;
+    const norm = (r)=>{
+      if (!r || !r.ok) return [];
+      const body = r.data ?? r.items ?? r.itens ?? r;
+      return Array.isArray(body) ? body : (body && Array.isArray(body.data) ? body.data : []);
+    };
+    const [cardapiosR, produtosR, adicionaisR, custosR, fichasR, tiposR] = res.map(x=> x.status === 'fulfilled' ? x.value : null);
+
+    window.memSetMontagem('cardapiosBuffet', norm(cardapiosR));
+    window.memSetMontagem('produtosBuffet', norm(produtosR));
+    window.memSetMontagem('adicionaisBuffet', norm(adicionaisR));
+    window.memSetMontagem('custosFixosBuffet', norm(custosR));
+    window.memSetMontagem('fichasTecnicas', norm(fichasR));
+    window.memSetMontagem('tiposCardapioCatalogo', norm(tiposR));
+
+    // also support ft:insumos / ft:pratos keys if fichas structure includes them
+    try{
+      const f = norm(fichasR) || [];
+      // if fichas comes as object with insumos/pratos, try to set
+      if (f && !Array.isArray(f) && typeof f === 'object'){
+        if (Array.isArray(f['ft:pratos'])) window.memSetMontagem('ft:pratos', f['ft:pratos']);
+        if (Array.isArray(f['ft:insumos'])) window.memSetMontagem('ft:insumos', f['ft:insumos']);
+      }
+    }catch{}
+
+    window.memSetMontagem('catalogosLoaded', true);
+  }catch(e){ console.warn('loadCatalogos falhou:', e); }
+}
+
+function safeJSON (s, fb) {
+  try {
+    if (typeof s === 'string') return JSON.parse(s);
+    return s == null ? fb : s;
+  } catch (e) {
+    return fb;
+  }
+}
 // ===== Utils =====
 const fmtBRL = new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -7,7 +93,7 @@ const slug = (s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').
 
 // ====== Fichas Técnicas (compat) ======
 const FT_KEYS = { INS: 'ft:insumos', PRT: 'ft:pratos' };
-const FT_getLS = (k, fb=[]) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+const FT_getLS = (k, fb=[]) => { try { const v = tryGetLS(k); return v != null ? v : fb; } catch { return fb; } };
 
 // unidades base (un, g, ml)
 const FT_toBaseQty = (qty, unit)=>{
@@ -45,7 +131,7 @@ function FT_custoPorPorcao(prato){
   return (prato?.ingredientes||[]).reduce((s,ing)=> s + (ing.custoPorPessoa||0), 0);
 }
 
-// ===== LocalStorage seguro (quota) =====
+// ===== Storage seguro (quota) =====
 function sanitizeCardapioForStorage(c){
   if (!c || typeof c !== 'object') return null;
   const faixas = Array.isArray(c.faixas)
@@ -71,7 +157,7 @@ function sanitizeCardapioForStorage(c){
 }
 function trySetLS(key, value){
   try{
-    localStorage.setItem(key, JSON.stringify(value));
+    window.memSetMontagem(key, value);
     return true;
   }catch(e){
     if (key === 'cardapioSelecionado'){
@@ -83,37 +169,37 @@ function trySetLS(key, value){
           : []
       };
       try{
-        localStorage.setItem(key, JSON.stringify(v2));
-        console.warn('LocalStorage cheio: salvei cardapioSelecionado em formato reduzido.');
+        window.memSetMontagem(key, v2);
+        console.warn('memStore cheio: salvei cardapioSelecionado em formato reduzido.');
         return 'reduced';
       }catch(e2){
         console.warn('Falhou mesmo em formato reduzido:', e2);
         return false;
       }
     }
-    console.warn('Falha ao salvar em localStorage:', e);
+    console.warn('Falha ao salvar em memStore:', e);
     return false;
   }
 }
 function tryGetLS(key){
   try{
-    const s = localStorage.getItem(key);
-    return s ? JSON.parse(s) : null;
+    const v = window.memGetMontagem(key);
+    return v != null ? v : null;
   }catch{
     return null;
   }
 }
 
 // ===== Estado =====
-let cardapioSelecionado = {};
-let composicao = [];
-let adicionaisDisponiveis = [];
-let autosaveLigado = true;
+let cardapioSelecionado = window.memGetMontagem('cardapioSelecionado') || {};
+let composicao = window.memGetMontagem('composicao') || [];
+let adicionaisDisponiveis = window.memGetMontagem('adicionaisDisponiveis') || [];
+let autosaveLigado = (window.memGetMontagem('autosaveLigado') !== null) ? !!window.memGetMontagem('autosaveLigado') : true;
 
 // Tipos (seções do cardápio)
 const TIPOS_KEY = 'tiposCardapioCatalogo';
 let tiposCatalogo = [];
-let tiposSelecionados = []; // ids (sem incluir 'adicional')
+let tiposSelecionados = window.memGetMontagem('tiposSelecionados') || []; // ids (sem incluir 'adicional')
 
 const SESSAO_PREFIX = 'sessaoMontagem_';
 
@@ -127,7 +213,7 @@ const faixasCardsDiv = () => document.getElementById('faixasCards');
 const saveStatus = () => document.getElementById('saveStatus');
 
 // ===== Inicialização =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Ícones
   try { window.lucide?.createIcons?.(); } catch {}
 
@@ -142,17 +228,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } catch {}
 
-  // Restaura cardápio previamente selecionado
+  // Restaura cardápio previamente selecionado (memStore)
   try {
-    const dados = typeof tryGetLS === 'function'
-      ? tryGetLS('cardapioSelecionado')
-      : JSON.parse(localStorage.getItem('cardapioSelecionado') || 'null');
+    const dados = window.memGetMontagem('cardapioSelecionado') || null;
     if (dados) {
-      cardapioSelecionado = dados;
+      cardapioSelecionado = safeJSON(dados, {}) || {};
       try { document.getElementById('nomeCardapio').textContent = (cardapioSelecionado?.nome || 'Cardápio'); } catch {}
     }
   } catch {}
 
+  // Carrega catálogos do backend antes de popular selects
+  try { await loadCatalogos(); } catch {}
   // Tipos (catálogo + UI)
   try { typeof carregarTiposCatalogo === 'function' && carregarTiposCatalogo(); } catch {}
   try { typeof renderizarTiposSelecionar === 'function' && renderizarTiposSelecionar(); } catch {}
@@ -172,10 +258,10 @@ document.addEventListener('DOMContentLoaded', () => {
   try { typeof carregarAdicionaisNoSelect === 'function' && carregarAdicionaisNoSelect(); } catch {}
   try { typeof preencherFaixasDoCardapio === 'function' && preencherFaixasDoCardapio(cardapioSelecionado); } catch {}
 
-  // Composição (itens)
+  // Composição (itens) (memStore)
   try {
     const chave = 'composicaoCardapio_' + (cardapioSelecionado?.id ?? 'draft');
-    composicao = JSON.parse(localStorage.getItem(chave) || '[]');
+    composicao = window.memGetMontagem(chave) || [];
   } catch { composicao = composicao || []; }
 
   // Sessão salva
@@ -222,7 +308,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Autosave
   const autosaveToggle = document.getElementById('toggleAutosave');
   if (autosaveToggle) autosaveToggle.onchange = (e)=>{
-    try { autosaveLigado = !!e.target.checked; typeof salvarAutosaveFlag === 'function' && salvarAutosaveFlag(); } catch {}
+    try {
+      autosaveLigado = !!e.target.checked;
+      window.memSetMontagem('autosaveLigado', autosaveLigado);
+      typeof salvarAutosaveFlag === 'function' && salvarAutosaveFlag();
+    } catch {}
   };
 
   const selOnly = document.getElementById('toggleSelecionados');
@@ -285,7 +375,7 @@ const DEFAULT_TIPOS = [
 
 function carregarTiposCatalogo(){
   try {
-    const raw = JSON.parse(localStorage.getItem(TIPOS_KEY) || 'null');
+    const raw = tryGetLS(TIPOS_KEY) ?? null;
     const base = (Array.isArray(raw) && raw.length) ? raw
                : (Array.isArray(DEFAULT_TIPOS) ? DEFAULT_TIPOS : []);
     const seen = new Set();
@@ -296,19 +386,19 @@ function carregarTiposCatalogo(){
     })
     .filter(t => t.id && t.nome)
     .filter(t => !seen.has(t.id) && seen.add(t.id));
-    localStorage.setItem(TIPOS_KEY, JSON.stringify(tiposCatalogo));
+    trySetLS(TIPOS_KEY, tiposCatalogo);
   } catch {
     try {
       tiposCatalogo = (Array.isArray(DEFAULT_TIPOS) ? DEFAULT_TIPOS : [])
         .map(t => ({ id: t?.id || slug(t?.nome || ''), nome: String(t?.nome || '').trim() }))
         .filter(t => t.id && t.nome);
-      localStorage.setItem(TIPOS_KEY, JSON.stringify(tiposCatalogo));
+      trySetLS(TIPOS_KEY, tiposCatalogo);
     } catch {
       tiposCatalogo = [];
     }
   }
 }
-function salvarTiposCatalogo(){ localStorage.setItem(TIPOS_KEY, JSON.stringify(tiposCatalogo)); }
+function salvarTiposCatalogo(){ trySetLS(TIPOS_KEY, tiposCatalogo); }
 
 function renderizarTiposSelecionar(){
   const wrap = document.getElementById('tiposSelecionar');
@@ -464,7 +554,7 @@ function lerLimitesDoCatalogo(c){
 }
 function lerLimitesGlobais(){
   try{
-    const g = JSON.parse(localStorage.getItem('limitesCategoriaMontagem')||'null');
+    const g = tryGetLS('limitesCategoriaMontagem') || null;
     if (!g) return null;
     const out = {};
     getCats().forEach(cat=>{ if (g[cat]!=null) out[cat] = Number(g[cat])||0; });
@@ -474,7 +564,7 @@ function lerLimitesGlobais(){
 function lerLimitesSalvos(id){
   if (id==null) return null;
   try{
-    const m = JSON.parse(localStorage.getItem(keyLimitesDoCardapio(id))||'null');
+    const m = tryGetLS(keyLimitesDoCardapio(id)) || null;
     if (!m) return null;
     const out = {};
     getCats().forEach(cat=>{ if (m[cat]!=null) out[cat] = Number(m[cat])||0; });
@@ -505,7 +595,7 @@ function salvarLimiteCategoria(cat, n){
   if (id == null) return;
   const atual = lerLimitesSalvos(id) || {};
   atual[cat] = Number(n)||0;
-  localStorage.setItem(keyLimitesDoCardapio(id), JSON.stringify(atual));
+  trySetLS(keyLimitesDoCardapio(id), atual);
   atualizarIndicadoresLimite();
 }
 function countSelecionados(cat){
@@ -554,9 +644,8 @@ function aplicarLimitesCategoria(){
 function carregarCardapiosNoSelect(){
   const sel = selectCardapioBase(); if (!sel) return;
   sel.innerHTML = '<option value="">Selecione um cardápio</option>';
-
-  const cardapiosA = JSON.parse(localStorage.getItem('cardapiosBuffet')||'[]');
-  const produtos   = JSON.parse(localStorage.getItem('produtosBuffet')||'[]');
+  const cardapiosA = tryGetLS('cardapiosBuffet') || [];
+  const produtos   = tryGetLS('produtosBuffet') || [];
   const cardapiosB = produtos.filter(p=>p?.tipo==='cardapio');
 
   const map = new Map();
@@ -587,7 +676,7 @@ function usarCardapioExistente(c){
   preencherFaixasDoCardapio(c);
 
   const chave = 'composicaoCardapio_' + c.id;
-  composicao = JSON.parse(localStorage.getItem(chave) || '[]');
+  composicao = tryGetLS(chave) || [];
 
   carregarSessao(c.id);
 
@@ -717,7 +806,7 @@ function bindBuscaPratoFT(){
 /* ========= Adicionais / categorias ========= */
 function carregarAdicionaisNoSelect(){
   const sel = document.getElementById('selectAdicional'); if(!sel) return;
-  adicionaisDisponiveis = JSON.parse(localStorage.getItem('adicionaisBuffet')||'[]');
+  adicionaisDisponiveis = tryGetLS('adicionaisBuffet') || [];
   sel.innerHTML = '<option value="">Selecione um adicional cadastrado</option>';
   adicionaisDisponiveis.forEach(a=>{
     if (a?.nome) {
@@ -934,7 +1023,7 @@ const CATEGORIAS_REGRAS = {
   por_km:      'Por km'
 };
 function lerCatalogo(){
-  let arr = []; try{ arr = JSON.parse(localStorage.getItem('custosFixosBuffet')||'[]')||[]; }catch{}
+  let arr = []; try{ arr = tryGetLS('custosFixosBuffet') || []; }catch{}
   return arr.map((raw,idx)=>({
     id: raw.id ?? ('cx_'+Date.now()+'_'+idx),
     nome: raw.nome ?? 'Item',
@@ -1053,8 +1142,8 @@ function atualizarTotais(){
   let custoAdicionaisTotal = 0;
   let valorVendaAdicionais = 0;
 
-  const adicionais = JSON.parse(localStorage.getItem('adicionaisBuffet')||'[]');
-  const fichas = JSON.parse(localStorage.getItem('fichasTecnicas')||'[]');
+  const adicionais = tryGetLS('adicionaisBuffet') || [];
+  const fichas = tryGetLS('fichasTecnicas') || [];
 
   getCats().forEach(cat=>{
     document.querySelectorAll(`#bloco-${cat} input[type='checkbox']`).forEach(chk=>{
@@ -1065,7 +1154,7 @@ function atualizarTotais(){
           if (adicional) {
             const tipo = (adicional.cobranca||'fixo').toLowerCase();
             const valorVenda = toNum(adicional.valor||0);
-            const ficha = fichas.find(f=>f.nome===item.nome);
+            const ficha = (fichas||[]).find(f=>f.nome===item.nome);
             const custoUnit = ficha ? (ficha.ingredientes||[]).reduce((s,ing)=>s+(ing.custoPorPessoa||0),0) : item.custo;
             if (tipo==='pessoa') {
               valorVendaAdicionais += valorVenda * qtd;
@@ -1138,16 +1227,22 @@ function atualizarTotais(){
 // ===== Persistência =====
 function salvarComposicao(){
   const id = cardapioSelecionado?.id ?? 'draft';
-  localStorage.setItem('composicaoCardapio_'+id, JSON.stringify(composicao));
+  try{
+    window.memSetMontagem('composicaoCardapio_'+id, composicao);
+  }catch{}
 }
 function salvarAutosaveFlag(){
-  localStorage.setItem('autosaveMontagem', JSON.stringify(!!autosaveLigado));
+  try{
+    window.memSetMontagem('autosaveLigado', !!autosaveLigado);
+  }catch{}
   atualizarSaveStatus(autosaveLigado ? 'Auto-salvar ligado' : 'Auto-salvar desligado');
 }
 (function carregarAutosaveFlag(){
   try{
-    const flag = JSON.parse(localStorage.getItem('autosaveMontagem')||'true');
-    autosaveLigado = !!flag;
+    const flag = window.memGetMontagem('autosaveLigado');
+    if (flag != null) {
+      autosaveLigado = !!flag;
+    }
     const t = document.getElementById('toggleAutosave');
     if (t) t.checked = autosaveLigado;
   }catch{}
@@ -1155,7 +1250,7 @@ function salvarAutosaveFlag(){
 
 function obterSessao(id){
   if (id==null) return null;
-  try { return JSON.parse(localStorage.getItem(SESSAO_PREFIX+id) || 'null'); } catch { return null; }
+  try { return window.memGetMontagem(SESSAO_PREFIX+id) || null; } catch { return null; }
 }
 function coletarItensAtivos(){
   const itens = [];
@@ -1188,7 +1283,9 @@ function salvarSessao(manual=false){
     tiposSelecionados: [...tiposSelecionados],
   };
 
-  localStorage.setItem(SESSAO_PREFIX+id, JSON.stringify(sessao));
+  try{
+    window.memSetMontagem(SESSAO_PREFIX+id, sessao);
+  }catch{}
   atualizarSaveStatus(manual ? 'Sessão salva' : 'Auto-salvo');
 }
 const salvarSessaoDebounced = (()=>{ let t; return ()=>{ if(!autosaveLigado) return; clearTimeout(t); t=setTimeout(()=>salvarSessao(false), 500); }; })();
@@ -1238,7 +1335,7 @@ function carregarSessao(id){
 function resetarSessao(){
   if (cardapioSelecionado?.id == null) return;
   if (!confirm('Limpar valores salvos deste cardápio?')) return;
-  localStorage.removeItem(SESSAO_PREFIX+cardapioSelecionado.id);
+  try { window.memRemoveMontagem(SESSAO_PREFIX+cardapioSelecionado.id); } catch {}
   inputQtd().value = 1;
   inputHoras().value = 5;
   selectFaixaManual().value = '';
@@ -1247,7 +1344,7 @@ function resetarSessao(){
   composicao.forEach(i=>i.ativo=true);
   renderizarComposicao();
   document.querySelectorAll('.limite-cat').forEach(inp=>inp.value='0');
-  localStorage.removeItem(keyLimitesDoCardapio(cardapioSelecionado.id));
+  try { window.memRemoveMontagem(keyLimitesDoCardapio(cardapioSelecionado.id)); } catch {}
   carregarLimitesNosInputs();
   aplicarLimitesCategoria();
   atualizarTotais();

@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persiste API_BASE no navegador em modo cloud-only
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -28,8 +28,8 @@
 <!-- Helpers globais SEMPRE antes do guard -->
 <script type="module" src="./kgb-common.js"></script>
 
-<!-- (opcional) ativar ENFORCE do guard p/ testes -->
-<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+<!-- (opcional) ativar ENFORCE do guard p/ testes (não persistido em cloud-only) -->
+<script>try{ console.warn('guard.enforce requested — not persisted in cloud-only mode'); }catch(e){}</script>
 
 <!-- Guard de permissões (usa coisas do common) -->
 <script src="js/auth-helper.js"></script>
@@ -236,7 +236,7 @@
   </div>
 
   <script>
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     // ======= KEYS =======
     const KEY_SETORES_OLD = 'estoque.setores';
     const KEY_SETORES_NEW = 'estoque:setores';
@@ -244,32 +244,43 @@
     const KEY_MATERIAIS_OLD = 'estoque.materiais';
 
      // ======= API (opcional, para rodar na nuvem) =======
-    const HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+    const memStore = { setores: null, materiais: null, ui: {} };
+    const HAS_API = (typeof window !== "undefined") && (typeof window['apiFetch'] === "function");
 
     async function apiCreateMaterial(mat){
-      if (!HAS_API) return;
+      if (!HAS_API) {
+        // mantém em memória para UI
+        memStore.materiais = (memStore.materiais || []).concat([mat]);
+        return;
+      }
       try{
-        await window.callApi("/estoque/materiais", "POST", mat);
+        await window['apiFetch']('/estoque/materiais', { method: 'POST', body: mat });
       }catch(e){
-        console.error("Falha ao criar material na API", e);
+        console.error('Falha ao criar material na API', e);
       }
     }
 
     async function apiUpdateMaterial(id, mat){
-      if (!HAS_API) return;
+      if (!HAS_API) {
+        memStore.materiais = (memStore.materiais || []).map(x=> String(x.id)===String(id) ? mat : x);
+        return;
+      }
       try{
-        await window.callApi(`/estoque/materiais/${encodeURIComponent(id)}`, "PUT", mat);
+        await window['apiFetch'](`/estoque/materiais/${encodeURIComponent(id)}`, { method: 'PUT', body: mat });
       }catch(e){
-        console.error("Falha ao atualizar material na API", e);
+        console.error('Falha ao atualizar material na API', e);
       }
     }
 
     async function apiDeleteMaterial(id){
-      if (!HAS_API) return;
+      if (!HAS_API) {
+        memStore.materiais = (memStore.materiais || []).filter(x=> String(x.id)!==String(id));
+        return;
+      }
       try{
-        await window.callApi(`/estoque/materiais/${encodeURIComponent(id)}`, "DELETE", {});
+        await window['apiFetch'](`/estoque/materiais/${encodeURIComponent(id)}`, { method: 'DELETE' });
       }catch(e){
-        console.error("Falha ao excluir material na API", e);
+        console.error('Falha ao excluir material na API', e);
       }
     }
 
@@ -309,19 +320,23 @@
       });
       return [...map.values()];
     }
-    (function migrarSetores(){
+    // migrarSetores: em cloud-only, carregamos do backend para memStore
+    async function migrarSetores(){
       try{
-        const a = JSON.parse(localStorage.getItem(KEY_SETORES_OLD)||'[]');
-        const b = JSON.parse(localStorage.getItem(KEY_SETORES_NEW)||'[]');
-        const merged = uniqueSetores([...a, ...b]).filter(s=>s && s.ativo!==false);
-        localStorage.setItem(KEY_SETORES_NEW, JSON.stringify(merged));
-        localStorage.removeItem(KEY_SETORES_OLD);
-      }catch(e){}
-    })();
+        if (HAS_API) {
+          const resp = await window['apiFetch']('/estoque/setores', { method: 'GET' });
+          const data = resp?.data ?? resp;
+          memStore.setores = Array.isArray(data) ? data : (data?.items || []);
+        } else {
+          memStore.setores = [];
+          console.warn('API não disponível: setores mantidos em memória');
+        }
+      }catch(e){ memStore.setores = []; console.warn('Falha ao carregar setores da API', e); }
+    }
 
     function loadSetores(){
       try{
-        const arr = JSON.parse(localStorage.getItem(KEY_SETORES_NEW)||'[]');
+        const arr = Array.isArray(memStore.setores) ? memStore.setores : [];
         return uniqueSetores(arr).filter(s=>s && s.ativo!==false)
           .sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
       }catch{ return []; }
@@ -345,27 +360,60 @@
 
     function loadMateriais(){
       try{
-        const novo = JSON.parse(localStorage.getItem(KEY_MATERIAIS)    || '[]');
-        const antigo = JSON.parse(localStorage.getItem(KEY_MATERIAIS_OLD) || '[]');
-        return uniqueByIdOrName([...(antigo||[]), ...(novo||[])]);
+        const arr = Array.isArray(memStore.materiais) ? memStore.materiais : [];
+        return uniqueByIdOrName(arr);
       }catch{ return []; }
     }
 
     function saveMateriais(arr){
       try{
-        const payload = JSON.stringify(arr || []);
-        if (payload.length > 4_700_000){
-          alert('Muitos dados salvos no navegador. Exporte, apague alguns itens e importe novamente.');
-          return false;
-        }
-        localStorage.setItem(KEY_MATERIAIS, payload);
-        try { localStorage.removeItem(KEY_MATERIAIS_OLD); } catch {}
+        memStore.materiais = Array.isArray(arr) ? arr : [];
+
+        // dispara gravação assíncrona na API (se disponível)
+        (async function(){
+          if (!HAS_API) { console.warn('API não disponível: materiais salvos apenas em memória'); return; }
+          try{
+            try{
+              await window['apiFetch']('/estoque/materiais/bulk', { method: 'POST', body: memStore.materiais });
+              await fetchMateriaisFromApi();
+              return;
+            }catch(e){
+              try{
+                await window['apiFetch']('/estoque/materiais/import', { method: 'POST', body: memStore.materiais });
+                await fetchMateriaisFromApi();
+                return;
+              }catch(err){
+                for (const m of memStore.materiais){
+                  try{
+                    if (m && m.id) {
+                      await window['apiFetch'](`/estoque/materiais/${encodeURIComponent(m.id)}`, { method: 'PUT', body: m });
+                    } else {
+                      await window['apiFetch']('/estoque/materiais', { method: 'POST', body: m });
+                    }
+                  }catch(e2){ console.warn('Falha ao salvar material', m, e2); }
+                }
+                await fetchMateriaisFromApi();
+                return;
+              }
+            }
+          }catch(e){ console.error('Falha ao salvar materiais', e); }
+        })();
+
         return true;
       }catch(e){
         console.error('Falha ao salvar materiais', e);
-        alert('Não foi possível salvar (limite do navegador).');
+        alert('Não foi possível salvar os materiais.');
         return false;
       }
+    }
+
+    async function fetchMateriaisFromApi(){
+      if (!HAS_API) { memStore.materiais = memStore.materiais || []; return; }
+      try{
+        const resp = await window['apiFetch']('/estoque/materiais', { method: 'GET' });
+        const data = resp?.data ?? resp;
+        memStore.materiais = Array.isArray(data) ? data : (data?.items || []);
+      }catch(e){ memStore.materiais = []; console.warn('Falha ao carregar materiais da API', e); }
     }
 
     function openFotoPreview(src, nome){
@@ -537,7 +585,8 @@
 
     // ======= Export / Import =======
     document.getElementById('btnExport').onclick = ()=>{
-      const blob = new Blob([localStorage.getItem(KEY_MATERIAIS)||'[]'], {type:'application/json'});
+      const json = JSON.stringify(memStore.materiais || []);
+      const blob = new Blob([json], {type:'application/json'});
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'materiais.json'; a.click();
     };
     document.getElementById('btnImport').onclick = ()=> document.getElementById('fileImport').click();
@@ -666,6 +715,9 @@
       obs.observe(alvo, { childList:true });
     })();
 
+    // Init: carregar dados da API para memStore e depois popular UI
+    try{ await migrarSetores(); }catch(e){ /* already warned */ }
+    try{ await fetchMateriaisFromApi(); }catch(e){}
     // Init
     fillSetores();
     render();

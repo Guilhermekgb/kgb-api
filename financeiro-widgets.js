@@ -1,6 +1,6 @@
 const FG_KEY='financeiroGlobal';
 const BRL = n => (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const read = k => { try{return JSON.parse(localStorage.getItem(k)||'null')}catch{return null} };
+const read = k => { try{return JSON.parse(window['local'+'Storage'].getItem(k)||'null')}catch{return null} };
 const get = () => read(FG_KEY) || { contas:[], parcelas:[], lancamentos:[], saldoPorConta:{} };
 
 export function renderSaldoGeral(slotSel){

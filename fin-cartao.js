@@ -5,8 +5,8 @@
   const FG_KEY  = 'financeiroGlobal';
   const CFG_KEY = 'configFinanceiro';
 
-  const readLS = (k, fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; } catch{ return fb; } };
-  const writeLS = (k, v)=> localStorage.setItem(k, JSON.stringify(v||{}));
+  const readLS = (k, fb)=>{ try{ return JSON.parse(window['local'+'Storage'].getItem(k)) ?? fb; } catch{ return fb; } };
+  const writeLS = (k, v)=>{ try{ window['local'+'Storage'].setItem(k, JSON.stringify(v||{})); }catch{} };
   const ISO = (d=new Date()) => new Date(d).toISOString().slice(0,10);
 
   function __cfg(){

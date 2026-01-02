@@ -1,0 +1,184 @@
+# montagem-cardapio.patch
+
+# Patch 1 — BLOCO A (bootstrap + helpers memStore)
+*** Begin Patch
+*** Update File: montagem-cardapio.js
+@@
+-const slug = (s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-');
+-
+-// ====== Fichas Técnicas (compat) ======
++const slug = (s)=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-');
++
++// ===== MemStore do módulo: montagem-cardapio =====
++window.__mem_montagem_cardapio = window.__mem_montagem_cardapio || new Map();
++
++window.memGetMontagem = function(key){
++  try{ return window.__mem_montagem_cardapio.get(key) ?? null; } catch { return null; }
++};
++window.memSetMontagem = function(key, value){
++  try{ window.__mem_montagem_cardapio.set(key, value); return true; } catch { return false; }
++};
++window.memRemoveMontagem = function(key){
++  try{ return window.__mem_montagem_cardapio.delete(key); } catch { return false; }
++};
++
++function safeJSON(s, fb){
++  try{ return (typeof s === 'string') ? JSON.parse(s) : (s == null ? fb : s); }catch{return fb;}
++}
++
++// ====== Fichas Técnicas (compat) ======
+*** End Patch
+
+# Patch 2 — BLOCO B (estado UI / rascunho)
+*** Begin Patch
+*** Update File: montagem-cardapio.js
+@@
+-function trySetLS(key, value){
+-  try{
+-    localStorage.setItem(key, JSON.stringify(value));
+-    return true;
+-  }catch(e){
+-    if (key === 'cardapioSelecionado'){
+-      const v2 = {
+-        id: value?.id ?? null,
+-        nome: value?.nome ?? '',
+-        faixas: Array.isArray(value?.faixas)
+-          ? value.faixas.map(f=>({ de:f.de??f.min??0, ate:f.ate??f.max??'', valor: toNum(f.valor) }))
+-          : []
+-      };
+-      try{
+-        localStorage.setItem(key, JSON.stringify(v2));
+-        console.warn('LocalStorage cheio: salvei cardapioSelecionado em formato reduzido.');
+-        return 'reduced';
+-      }catch(e2){
+-        console.warn('Falhou mesmo em formato reduzido:', e2);
+-        return false;
+-      }
+-    }
+-    console.warn('Falha ao salvar em localStorage:', e);
+-    return false;
+-  }
+-}
+-function tryGetLS(key){
+-  try{
+-    const s = localStorage.getItem(key);
+-    return s ? JSON.parse(s) : null;
+-  }catch{
+-    return null;
+-  }
+-}
++function trySetLS(key, value){
++  try{
++    window.memSetMontagem(key, value);
++    return true;
++  }catch(e){
++    if (key === 'cardapioSelecionado'){
++      const v2 = {
++        id: value?.id ?? null,
++        nome: value?.nome ?? '',
++        faixas: Array.isArray(value?.faixas)
++          ? value.faixas.map(f=>({ de:f.de??f.min??0, ate:f.ate??f.max??'', valor: toNum(f.valor) }))
++          : []
++      };
++      try{
++        window.memSetMontagem(key, v2);
++        console.warn('memStore cheio: salvei cardapioSelecionado em formato reduzido.');
++        return 'reduced';
++      }catch(e2){
++        console.warn('Falhou mesmo em formato reduzido:', e2);
++        return false;
++      }
++    }
++    console.warn('Falha ao salvar em memStore:', e);
++    return false;
++  }
++}
++function tryGetLS(key){
++  try{
++    const v = window.memGetMontagem(key);
++    return v != null ? v : null;
++  }catch{
++    return null;
++  }
++}
+*** End Patch
+
+# Patch 3 — BLOCO B (inicialização de estado vindo do memStore)
+*** Begin Patch
+*** Update File: montagem-cardapio.js
+@@
+-// ===== Estado =====
+-let cardapioSelecionado = {};
+-let composicao = [];
+-let adicionaisDisponiveis = [];
+-let autosaveLigado = true;
++// ===== Estado =====
++let cardapioSelecionado = window.memGetMontagem('cardapioSelecionado') || {};
++let composicao = window.memGetMontagem('composicao') || [];
++let adicionaisDisponiveis = window.memGetMontagem('adicionaisDisponiveis') || [];
++let autosaveLigado = (window.memGetMontagem('autosaveLigado') !== null) ? !!window.memGetMontagem('autosaveLigado') : true;
+@@
+-let tiposCatalogo = [];
+-let tiposSelecionados = []; // ids (sem incluir 'adicional')
++let tiposCatalogo = [];
++let tiposSelecionados = window.memGetMontagem('tiposSelecionados') || []; // ids (sem incluir 'adicional')
+*** End Patch
+
+# Patch 4 — BLOCO B (restauração em DOMContentLoaded)
+*** Begin Patch
+*** Update File: montagem-cardapio.js
+@@
+-  // Restaura cardápio previamente selecionado
+-  try {
+-    const dados = typeof tryGetLS === 'function'
+-      ? tryGetLS('cardapioSelecionado')
+-      : JSON.parse(localStorage.getItem('cardapioSelecionado') || 'null');
+-    if (dados) {
+-      cardapioSelecionado = dados;
+-      try { document.getElementById('nomeCardapio').textContent = (cardapioSelecionado?.nome || 'Cardápio'); } catch {}
+-    }
+-  } catch {}
++  // Restaura cardápio previamente selecionado (memStore)
++  try {
++    const dados = window.memGetMontagem('cardapioSelecionado') || null;
++    if (dados) {
++      cardapioSelecionado = safeJSON(dados, {}) || {};
++      try { document.getElementById('nomeCardapio').textContent = (cardapioSelecionado?.nome || 'Cardápio'); } catch {}
++    }
++  } catch {}
+@@
+-  // Composição (itens)
+-  try {
+-    const chave = 'composicaoCardapio_' + (cardapioSelecionado?.id ?? 'draft');
+-    composicao = JSON.parse(localStorage.getItem(chave) || '[]');
+-  } catch { composicao = composicao || []; }
++  // Composição (itens) (memStore)
++  try {
++    const chave = 'composicaoCardapio_' + (cardapioSelecionado?.id ?? 'draft');
++    composicao = window.memGetMontagem(chave) || [];
++  } catch { composicao = composicao || []; }
+*** End Patch
+
+# Patch 5 — BLOCO B (autosave toggle grava em memStore + persistência de sessão)
+*** Begin Patch
+*** Update File: montagem-cardapio.js
+@@
+-  const autosaveToggle = document.getElementById('toggleAutosave');
+-  if (autosaveToggle) autosaveToggle.onchange = (e)=>{
+-    try { autosaveLigado = !!e.target.checked; typeof salvarAutosaveFlag === 'function' && salvarAutosaveFlag(); } catch {}
+-  };
++  const autosaveToggle = document.getElementById('toggleAutosave');
++  if (autosaveToggle) autosaveToggle.onchange = (e)=>{
++    try {
++      autosaveLigado = !!e.target.checked;
++      window.memSetMontagem('autosaveLigado', autosaveLigado);
++      typeof salvarAutosaveFlag === 'function' && salvarAutosaveFlag();
++    } catch {}
++  };
+*** End Patch
+
+# Notas
+- Estes patches representam apenas BLOCO A e BLOCO B (helpers memStore e migração de estado UI/rascunho).
+- BLOCO C (dados de negócio / API) foi intencionalmente excluído nesta fase.
+
+# Fim do arquivo

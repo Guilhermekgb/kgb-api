@@ -8,7 +8,7 @@ const PAGES = [
   '/cadastro-evento.html',
   '/area-cliente.html',
   '/evento-detalhado.html',
-  '/eventos.html',
+  '/dashboard.html',
   '/clientes-lista.html'
 ];
 
@@ -71,18 +71,43 @@ async function checkPage(page, path, mapping){
   try{
     if (mapping){
       const flat = flattenMapping(mapping);
-      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
+      await page.evaluate((m)=>{
+        try{
+          try{
+            if (typeof window.setFotosMap === 'function') {
+              window.setFotosMap(m);
+            } else if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function') {
+              window.__KGB_MEM__.setJSON('fotosClientes', m);
+            } else {
+              localStorage.setItem('fotosClientes', JSON.stringify(m));
+            }
+          }catch(e){}
+          try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
+        }catch(e){}
+      }, flat);
       // also inject a small eventos list and mark eventoSelecionado so pages that read localStorage render
       try{
-        const sampleKey = Object.keys(flat)[0];
+              const sampleKey = Object.keys(flat)[0];
         if (sampleKey){
           await page.evaluate((k)=>{
             try{
               const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: k, dataISO: new Date().toISOString(), qtdConvidados: 50 };
-              const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
-              arr.unshift(ev);
-              localStorage.setItem('eventos', JSON.stringify(arr));
-              localStorage.setItem('eventoSelecionado', String(ev.id));
+              try{
+                let arr = [];
+                if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function'){
+                  arr = window.__KGB_MEM__.getJSON('eventos', []) || [];
+                } else {
+                  try{ arr = JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ arr = []; }
+                }
+                arr.unshift(ev);
+                if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function'){
+                  window.__KGB_MEM__.setJSON('eventos', arr);
+                  window.__KGB_MEM__.setJSON('eventoSelecionado', String(ev.id));
+                } else {
+                  localStorage.setItem('eventos', JSON.stringify(arr));
+                  localStorage.setItem('eventoSelecionado', String(ev.id));
+                }
+              }catch(e){}
             }catch(e){}
           }, sampleKey);
         }
@@ -96,7 +121,7 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : localStorage.getItem('fotosClientes'));
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
         const out = {};
         function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if (typeof v === 'string') out[key]=v; else if (v && typeof v === 'object') walk(v,key); } }
@@ -106,6 +131,8 @@ async function checkPage(page, path, mapping){
       }catch(e){}
     });
   }catch(e){}
+
+  // (removed test-side probe injection — probe is provided by `kgb-common.js` when headless)
 
   for (let i=0;i<5;i++){
     const before = await analyzeImgs(page);
@@ -125,10 +152,19 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : localStorage.getItem('fotosClientes'));
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
-        const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-        const sel = localStorage.getItem('eventoSelecionado');
+        let evs = [];
+        let sel = null;
+        try{
+          if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function'){
+            evs = window.__KGB_MEM__.getJSON('eventos', []) || [];
+            sel = window.__KGB_MEM__.getJSON('eventoSelecionado', null) || null;
+          } else {
+            evs = JSON.parse(localStorage.getItem('eventos')||'[]');
+            sel = localStorage.getItem('eventoSelecionado');
+          }
+        }catch(e){ evs = []; sel = null; }
         const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0] || {};
         const key = ev && ev.fotoClienteKey;
         if (key && mapping && mapping[key]){
@@ -148,6 +184,11 @@ async function checkPage(page, path, mapping){
     browser = await puppeteer.launch({ args:['--no-sandbox','--disable-setuid-sandbox']});
     const page = await browser.newPage();
 
+    // always mark headless before any page script executes
+    try{
+      await page.evaluateOnNewDocument(()=>{ try{ window.__HEADLESS__ = true; }catch(e){} });
+    }catch(e){}
+
     // ensure mapping + sample event exist before any page script executes
     try{
       if (mapping){
@@ -155,6 +196,7 @@ async function checkPage(page, path, mapping){
         await page.evaluateOnNewDocument((m)=>{
           try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
           try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
+          // mapping-specific sample event + preload
           try{
             const sampleKey = Object.keys(m||{})[0];
             if (sampleKey){
@@ -171,7 +213,8 @@ async function checkPage(page, path, mapping){
 
     // Login (best-effort)
     try{
-      await page.goto(BASE + LOGIN, { waitUntil: 'networkidle2', timeout: 30000 });
+      const loginUrl = BASE + LOGIN + (LOGIN.includes('?') ? '&headless=1' : '?headless=1');
+      await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 30000 });
       await page.type('input[name="email"], input#email, input[type="email"]', 'admin@buffet.com').catch(()=>{});
       await page.type('input#senha, input[name="senha"], input[type="password"]', '123456').catch(()=>{});
       await Promise.all([ page.click('button[type="submit"]'), page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }) ]).catch(()=>{});
@@ -179,7 +222,8 @@ async function checkPage(page, path, mapping){
 
     const results = [];
     for (const p of PAGES){
-      const r = await checkPage(page, p, mapping);
+      const pWithFlag = p + (p.includes('?') ? '&headless=1' : '?headless=1');
+      const r = await checkPage(page, pWithFlag, mapping);
       results.push(r);
     }
 

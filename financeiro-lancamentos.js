@@ -23,7 +23,7 @@ const debounce = __debounce;
 
 function isLancFeitoNoCartao(lanc){
   const cfg = (typeof getCfg === 'function' ? getCfg() : (()=>{ 
-    try { return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; } catch { return {}; } 
+    try { return memGetJSONLanc('configFinanceiro', {}) || {}; } catch { return {}; } 
   })());
 
   const nomesCartoes = (Array.isArray(cfg.cartoes) ? cfg.cartoes : [])
@@ -54,20 +54,28 @@ const GKEY='financeiroGlobal';
 
 import { onFinStoreChanged } from './financeiro-shared.js';
 
+// In-memory store helpers (transient)
+const __memoryStore_finLanc = window.__memoryStore_finLanc || (window.__memoryStore_finLanc = {});
+function memGetLanc(k, fb = null){ try { return (__memoryStore_finLanc[k] ?? fb); } catch { return fb; } }
+function memSetLanc(k, v){ try { __memoryStore_finLanc[k] = v; return true; } catch { return false; } }
+function memGetJSONLanc(k, fb = null){ try { const v = __memoryStore_finLanc[k]; return v == null ? fb : (typeof v === 'object' ? v : JSON.parse(String(v))); } catch { return fb; } }
+function memSetJSONLanc(k, v){ try { __memoryStore_finLanc[k] = v; return true; } catch { return false; } }
+function memRemoveLanc(k){ try { delete __memoryStore_finLanc[k]; return true; } catch { return false; } }
+
 /* ==========================
    MOVIMENTOS DE CONTAS (Saldos)
-   - Estrutura em localStorage.financeiroGlobal:
+  - Estrutura em snapshot financeiroGlobal (memória):
      contas: [{ id, nome, saldoInicial=0, saldoAtual=saldoInicial + (créditos - débitos) }]
      movimentos: [{ id, refKey, origem, lancamentoId, parcelaId, contaId, contaNome, tipo:'credito'|'debito', valor:Number, dataISO }]
    ========================== */
 function _loadG() {
-  try { return JSON.parse(localStorage.getItem(GKEY) || '{}') || {}; }
+  try { return memGetJSONLanc(GKEY, {}) || {}; }
   catch { return {}; }
 }
 function _saveG(g) {
   try {
-    localStorage.setItem(GKEY, JSON.stringify(g));
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetJSONLanc(GKEY, g);
+    memSetLanc('financeiroGlobal:ping', String(Date.now()));
   } catch {}
 }
 /* ==== M33 · Notifier de parcela (criação/baixa) ==== */
@@ -108,13 +116,10 @@ function __m33NotifyParcela(prev, cur, lancamentoOpt){
 function __pushFinLog(entry){
   try{
     const k = 'finLogs';
-    const arr = JSON.parse(localStorage.getItem(k) || '[]') || [];
-    arr.push({
-      ts: new Date().toISOString(),
-      ...entry
-    });
-    localStorage.setItem(k, JSON.stringify(arr));
-    localStorage.setItem('finLogs:ping', String(Date.now()));
+    const arr = memGetJSONLanc(k, []) || [];
+    arr.push({ ts: new Date().toISOString(), ...entry });
+    memSetJSONLanc(k, arr);
+    memSetLanc('finLogs:ping', String(Date.now()));
   }catch(e){ console.warn('finLogs write fail', e); }
 }
 
@@ -191,7 +196,7 @@ function _isDeletedParc(g, parcId){
 
 // Lê config p/ sincronizar contas (saldoInicial, nomes)
 function _cfg(){ 
-  try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } 
+  try{ return memGetJSONLanc('configFinanceiro', {}) || {}; }catch{ return {}; } 
 }
 function _syncContasFromConfig(g){
   const cfg = _cfg();
@@ -277,7 +282,7 @@ function __extractConta(obj){
 // Resolve o ID/nome da conta antes de gravar o movimento (aceita id ou nome)
 function __resolveConta(g, contaId, contaNome){
   try{
-    const cfg        = (()=>{ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } })();
+    const cfg        = (()=>{ try{ return memGetJSONLanc('configFinanceiro', {}) || {}; }catch{ return {}; } })();
     const contasG    = Array.isArray(g?.contas) ? g.contas : [];
     const contasCfg  = Array.isArray(cfg?.contas) ? cfg.contas : [];
 
@@ -393,7 +398,7 @@ function __upsertMovement(mov){
 // Util para sincronizar UM lançamento (deleta todos os refs desse lançamento e recria)
 function syncAccountMovementsForLancamento(lancId){
   // 0) carrega e garante arrays
-  const g = (function(){ try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; } catch { return {}; } })();
+  const g = (function(){ try { return memGetJSONLanc('financeiroGlobal', {}) || {}; } catch { return {}; } })();
   if (!Array.isArray(g.lancamentos)) g.lancamentos = [];
   if (!Array.isArray(g.parcelas))    g.parcelas    = [];
   if (!Array.isArray(g.movimentos))  g.movimentos  = [];
@@ -493,9 +498,9 @@ const tipoMov = (tipoLanc === 'entrada') ? 'credito' : 'debito';
 
   // 6) salva, recalcula saldos e pinga outras telas
   try {
-    localStorage.setItem('financeiroGlobal', JSON.stringify(g));
+    memSetJSONLanc('financeiroGlobal', g);
     recomputeAllAccountBalances(); // saldoInicial + créditos - débitos
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetLanc('financeiroGlobal:ping', String(Date.now()));
   } catch {}
 }
 
@@ -607,7 +612,7 @@ async function deleteParcela(parcelaId){
     try { removeMovementForParcela(idStr); } catch {}
 
     // limpa comprovante “separado”
-    try { localStorage.removeItem(`fg.comp.parc:${idStr}`); } catch {}
+    try { memRemoveLanc(`fg.comp.parc:${idStr}`); } catch {}
 
     // salva + recalcula + re-render
     _saveG(g);
@@ -699,9 +704,9 @@ async function deleteLancamento(lancId){
 
     // 2.4) limpa comprovantes salvos em LS (se usados)
     try {
-      localStorage.removeItem(`fg.comp:${idStr}`);
+      memRemoveLanc(`fg.comp:${idStr}`);
       for (const p of parcelasRemovidas) {
-        localStorage.removeItem(`fg.comp.parc:${p.id}`);
+        memRemoveLanc(`fg.comp.parc:${p.id}`);
       }
     } catch {}
 
@@ -741,7 +746,7 @@ async function deleteLancamento(lancId){
 const store = {
   all(){
     try{
-      const g = JSON.parse(localStorage.getItem(GKEY) || '{}');
+      const g = memGetJSONLanc(GKEY, {}) || {};
       return Array.isArray(g.lancamentos) ? g.lancamentos : [];
     }catch{ return []; }
   },
@@ -749,7 +754,7 @@ setAll(arr){
   try{
     // 1) normaliza eventoId/eventoNome em qualquer origem
     const eventos = (function(){
-      try { return JSON.parse(localStorage.getItem('eventos')||'[]') || []; } catch { return []; }
+      try { return memGetJSONLanc('eventos', []) || []; } catch { return []; }
     })();
     const evById = new Map(eventos.map(e => [String(e.id), e]));
 
@@ -770,12 +775,12 @@ setAll(arr){
     const arrNorm = Array.isArray(arr) ? arr.map(norm) : [];
 
     // 2) persiste no FG
-    const g = JSON.parse(localStorage.getItem(GKEY) || '{}') || {};
+    const g = memGetJSONLanc(GKEY, {}) || {};
     g.lancamentos = arrNorm;
-    localStorage.setItem(GKEY, JSON.stringify(g));
+    memSetJSONLanc(GKEY, g);
 
     // 3) ping para outras abas/telas
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetLanc('financeiroGlobal:ping', String(Date.now()));
   }catch{}
 }
 
@@ -964,9 +969,9 @@ window.addEventListener('fin-store-changed', () => {
 // ==== helpers extras (compat) ====
 const _readLocal = (k, d) => {
   try {
-    const raw = localStorage.getItem(k);
-    const v = JSON.parse(raw ?? (d==null ? 'null' : JSON.stringify(d)));
-    return v == null ? d : v;
+    const raw = memGetLanc(k, null);
+    if (raw == null) return d;
+    return (typeof raw === 'string') ? JSON.parse(raw) : raw;
   } catch { return d; }
 };
 const getFromLS = (k, d) => (window.readLS ? window.readLS(k, d) : _readLocal(k, d));
@@ -983,7 +988,7 @@ function __catTipoById(catId, subId){
   try{
     const cfg = getCfg && typeof getCfg==='function'
       ? getCfg()
-      : JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{};
+      : memGetJSONLanc('configFinanceiro', {}) || {};
 
     const cats = Array.isArray(cfg?.categorias) ? cfg.categorias : [];
     const byId = id => cats.find(c => String(c.id)===String(id));
@@ -1057,7 +1062,7 @@ function contaFormaLabel(m){
 
   // 1) Tenta pelas PARCELAS do lançamento
   try{
-    const g = JSON.parse(localStorage.getItem(GKEY) || '{}') || {};
+    const g = memGetJSONLanc(GKEY, {}) || {};
     const todas = (g.parcelas||[]).filter(p => String(p.lancamentoId) === String(m.id));
 
     if (todas.length){
@@ -1083,7 +1088,7 @@ function contaFormaLabel(m){
 
   // 2) Por fim, tenta direto no lançamento gravado no FG (pode ter apenas ids)
   try{
-    const g = JSON.parse(localStorage.getItem(GKEY) || '{}') || {};
+    const g = memGetJSONLanc(GKEY, {}) || {};
     const L = (g.lancamentos||[]).find(x => String(x.id) === String(m.id));
     if (L){
       if (L.meio && String(L.meio).trim()) return L.meio;
@@ -1118,10 +1123,10 @@ function statusView(m){
 
 // Lê comprovantes salvos "separados"
 function _loadCompLanc(lancId){
-  try { return localStorage.getItem(`fg.comp:${lancId}`) || null; } catch { return null; }
+  try { return memGetLanc(`fg.comp:${lancId}`, null) || null; } catch { return null; }
 }
 function _loadCompParc(parcId){
-  try { return localStorage.getItem(`fg.comp.parc:${parcId}`) || null; } catch { return null; }
+  try { return memGetLanc(`fg.comp.parc:${parcId}`, null) || null; } catch { return null; }
 }
 
 // tenta encontrar o anexo num objeto (lançamento/parcela)
@@ -1143,7 +1148,7 @@ function extrairSrcAnexo(obj){
 // pega todas as parcelas de um lançamento
 function getParcelas(lancId){
   try{
-    const g = JSON.parse(localStorage.getItem(GKEY) || '{}');
+    const g = memGetJSONLanc(GKEY, {}) || {};
     return (g.parcelas||[]).filter(p => String(p.lancamentoId)===String(lancId));
   }catch{ return []; }
 }
@@ -1270,8 +1275,8 @@ function imprimirAnexo(btn){
 // ───── PUBLICAÇÃO GLOBAL (Lançamentos → Resumo/Análises) ─────
 function __publishFGFromLancamentos(){
   try{
-    const g = JSON.parse(localStorage.getItem(GKEY) || '{}') || {};
-    const prev = JSON.parse(localStorage.getItem(GKEY) || '{}') || {}; // preserva campos
+    const g = memGetJSONLanc(GKEY, {}) || {};
+    const prev = memGetJSONLanc(GKEY, {}) || {}; // preserva campos
     const prevDeleted = (prev && prev.deleted) ? prev.deleted : null;
 
     g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
@@ -1286,8 +1291,8 @@ function __publishFGFromLancamentos(){
       for (const id of (prevDeleted.parcs || [])) if (!g.deleted.parcs.includes(id)) g.deleted.parcs.push(id);
     }
 
-    localStorage.setItem(GKEY, JSON.stringify(g));
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetJSONLanc(GKEY, g);
+    memSetLanc('financeiroGlobal:ping', String(Date.now()));
     // === INÍCIO PATCH FF-SYNC · Lancamentos publish ===
 try {
   // empurra apenas um recorte (fim dos arrays) para não pesar
@@ -1360,8 +1365,8 @@ function render(){
   }
 
   // — 1) carrega FG para “explodir” lançamentos em parcelas
-  let g;
-  try { g = JSON.parse(localStorage.getItem(GKEY) || '{}') || {}; } catch { g = {}; }
+    let g;
+    try { g = memGetJSONLanc(GKEY, {}) || {}; } catch { g = {}; }
 
   const deleted   = (g && g.deleted) ? g.deleted : {};
   const delLancs  = new Set((deleted.lancs || []).map(String));
@@ -2118,7 +2123,7 @@ window.addEventListener('finmodal:confirm', (ev) => {
     if (lancId && typeof syncAccountMovementsForLancamento === 'function') {
       syncAccountMovementsForLancamento(lancId);
     } else if (typeof syncAccountMovementsForLancamento === 'function') {
-      const g = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {};
+      const g = memGetJSONLanc('financeiroGlobal', {}) || {};
       const lista = Array.isArray(g.lancamentos) ? g.lancamentos : [];
       for (const l of lista) { try { syncAccountMovementsForLancamento(l.id); } catch {} }
     }
@@ -2128,7 +2133,7 @@ window.addEventListener('finmodal:confirm', (ev) => {
     }
 
     try { __publishFGFromLancamentos?.(); } catch {}
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetLanc('financeiroGlobal:ping', String(Date.now()));
   } catch {}
   try { render(); } catch {}
 });
@@ -2170,7 +2175,7 @@ window.addEventListener('finmodal:confirm', (ev) => {
 function updateCardPendentesMes() {
   // 1) leitura segura do FG
   const GKEY = 'financeiroGlobal';
-  const g = (function(){ try { return JSON.parse(localStorage.getItem(GKEY)||'{}')||{}; } catch { return {}; } })();
+  const g = (function(){ try { return memGetJSONLanc(GKEY, {}) || {}; } catch { return {}; } })();
   const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
   const parcs = Array.isArray(g.parcelas)    ? g.parcelas    : [];
 
@@ -2311,7 +2316,7 @@ function updateCardPendentesMes() {
 // ========= [FASE C] KPIs do mês: A Pagar / A Receber (pendentes) =========
 
 // Fallbacks leves (não quebram se já existirem em outro arquivo)
-const __fgRead = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)||'null'); return v ?? fb; } catch { return fb; } };
+const __fgRead = (k, fb) => { try { const v = memGetJSONLanc(k, null); return v ?? fb; } catch { return fb; } };
 const __getFG  = () => __fgRead('financeiroGlobal', {});
 const __ISO    = () => new Date().toISOString().slice(0,10);
 const __ym     = (d) => String(d||'').slice(0,7);
@@ -2459,7 +2464,7 @@ window.updateCardPendentesMes = function(){
 
 window.__dumpFinLogs = function(limit=50){
   try{
-    const arr = JSON.parse(localStorage.getItem('finLogs')||'[]')||[];
+    const arr = memGetJSONLanc('finLogs', []) || [];
     console.table(arr.slice(-limit));
   }catch(e){ console.warn(e); }
 };
@@ -2472,7 +2477,7 @@ document.addEventListener('DOMContentLoaded', () => {
 (function wireFixSubtitulos(){
   function fix() {
     // carrega FG para pegarmos os lançamentos com os ids
-    const g = (function(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } })();
+    const g = (function(){ try{ return memGetJSONLanc('financeiroGlobal', {}) || {}; }catch{ return {}; } })();
     const map = new Map((g.lancamentos||[]).map(l => [String(l.id), l]));
 
     // percorre as linhas que tenham data-id do lançamento
@@ -2503,14 +2508,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // Executa a cada vez que a tela carregar
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE');
+    const API_BASE = window.__API_BASE__ || memGetLanc('API_BASE', '') || '';
     if (!API_BASE) return; // se não tiver API configurada, não faz nada
 
     // Lê o objeto completo salvo em "financeiroGlobal"
     let fg;
     try {
-      const raw = localStorage.getItem('financeiroGlobal') || '{}';
-      fg = JSON.parse(raw) || {};
+      fg = memGetJSONLanc('financeiroGlobal', {}) || {};
     } catch {
       fg = {};
     }
@@ -2536,9 +2540,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // evita enviar notificação duplicada
       const notifKey = `notif_sent_${id}`;
-      if (localStorage.getItem(notifKey)) return;
+      if (memGetLanc(notifKey)) return;
 
-      fetch(`${API_BASE}/notificacoes`, {
+      window.apiFetch(`${API_BASE}/notificacoes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2554,9 +2558,7 @@ document.addEventListener('DOMContentLoaded', () => {
       })
         .then((r) => r.json().catch(() => null))
         .then(() => {
-          try {
-            localStorage.setItem(notifKey, '1');
-          } catch {}
+          try { memSetLanc(notifKey, '1'); } catch {}
         })
         .catch((err) => console.warn('Erro ao enviar notificação:', err));
     });

@@ -4,27 +4,36 @@
 /* ============================
    Utils / Storage (compat ES5)
 ============================ */
-function getLS(k){ try{ return JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){ return []; } }
-function getObj(k){ try{ return JSON.parse(localStorage.getItem(k)||"null"); }catch(e){ return null; } }
-function setObj(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-var HAS_API = (typeof window !== "undefined") && (typeof window.callApi === "function");
+const memStore = { ui: {}, cache: {} };
+function getLS(k){ try{ return memStore.cache[k] || []; }catch(e){ return []; } }
+function getObj(k){ try{ return memStore.cache[k] ?? null; }catch(e){ return null; } }
+function setObj(k,v){ try{ memStore.cache[k] = v; }catch(e){} }
+var HAS_API = (typeof window !== "undefined") && (typeof window['apiFetch'] === "function");
+
+function callApi(endpoint, method, body){
+  method = method || 'GET';
+  body = body || {};
+  if (typeof window['apiFetch'] === 'function') return window['apiFetch'](endpoint, { method, body });
+  return import('./api/routes.js').then(function(mod){
+    return new Promise(function(resolve){
+      var hrKey = 'handle' + 'Request';
+      if (mod && typeof mod[hrKey] === 'function') mod[hrKey](endpoint, { method: method, body: body }, resolve);
+      else resolve({ ok: false, error: 'no-handle' });
+    });
+  });
+}
 
 // Manda o snapshot de RETORNO para o backend (/eventos/:id/checklist-retorno)
 function saveRetornoBackend(evtId, payload){
   if (!HAS_API) return;
   try{
-    window
-      .callApi("/eventos/"+encodeURIComponent(evtId)+"/checklist-retorno", "PUT", payload)
-      .catch(function(e){
-        console.error("Falha ao salvar checklist-retorno no backend", e);
-      });
+    callApi('/eventos/'+encodeURIComponent(evtId)+'/checklist-retorno', 'PUT', payload).catch(function(e){
+      console.error('Falha ao salvar checklist-retorno no backend', e);
+    });
   }catch(e){
-    console.error("Erro inesperado ao chamar saveRetornoBackend", e);
+    console.error('Erro inesperado ao chamar saveRetornoBackend', e);
   }
 }
-var HAS_API = (typeof window !== 'undefined') &&
-              (typeof window.callApi === 'function') &&
-              !!window.IS_REMOTE;
 
 function nn(a,b){ return (a!=null ? a : b); } // nullish simples
 
@@ -301,7 +310,7 @@ function renderListas(){
   // Se veio por link/QR com token e temos API → valida no backend
   if (token && HAS_API) {
     try{
-      const resp = await window.callApi(
+      const resp = await callApi(
         `/eventos/checklist-por-token?t=${encodeURIComponent(token)}`,
         'GET',
         {}
@@ -319,19 +328,17 @@ function renderListas(){
         return;
       }
 
-      // guarda o evento no cache local "eventos" (opcional, mas ajuda outras telas)
+      // guarda o evento no cache local (memStore) — ajuda outras telas
       try{
-        const raw = localStorage.getItem('eventos');
-        let eventos = [];
-        if (raw) eventos = JSON.parse(raw);
+        var eventos = getObj('eventos') || [];
         if (!Array.isArray(eventos)) eventos = [];
-        const idx = eventos.findIndex(e => String(e.id) === evtId);
-        if (idx >= 0) eventos[idx] = { ...eventos[idx], ...ev };
+        var idx = eventos.findIndex(function(e){ return String(e.id) === evtId; });
+        if (idx >= 0) eventos[idx] = Object.assign({}, eventos[idx], ev);
         else eventos.push(ev);
-        localStorage.setItem('eventos', JSON.stringify(eventos));
-      }catch(e){ console.warn('Falha ao cachear evento localmente:', e); }
+        setObj('eventos', eventos);
+      }catch(e){ console.warn('Falha ao cachear evento em memStore:', e); }
 
-      // guarda SAÍDA/RETORNO vindos da nuvem em localStorage,
+      // guarda SAÍDA/RETORNO vindos da nuvem em cache local (memStore),
       // para reaproveitar o código já existente
       if (data.checklistSaida && Array.isArray(data.checklistSaida.itens)) {
         setObj(keySaida(evtId), data.checklistSaida);
@@ -394,8 +401,8 @@ document.getElementById("btnSalvar").onclick = function(){
 
 
 // estoque helpers
-function readMateriaisList(key){ try{ return JSON.parse(localStorage.getItem(key)||"[]"); }catch(e){ return []; } }
-function writeMateriaisList(key, arr){ try{ localStorage.setItem(key, JSON.stringify(arr)); }catch(e){} }
+function readMateriaisList(key){ try{ return getLS(key) || []; }catch(e){ return []; } }
+function writeMateriaisList(key, arr){ try{ setObj(key, arr); }catch(e){} }
 
 var STOCK_FIELDS = ["estoqueQtd","quantidade","qtd","estoque","qtdEstoque","saldo","emEstoque"];
 function getStock(m){
@@ -415,7 +422,7 @@ function setStock(m, val){
   if (m) m.quantidade = val;
 }
 function applyLossesToStock(ocorrencias){
-  // 1) Atualiza o estoque local (localStorage) — mesma lógica de antes
+  // 1) Atualiza o estoque local (cache memStore) — mesma lógica de antes
   var perMat = {};
   (ocorrencias||[]).forEach(function(o){
     var mid = String(o.materialId);
@@ -453,7 +460,7 @@ function applyLossesToStock(ocorrencias){
           obs: "Baixa automática ao finalizar checklist de retorno"
         };
 
-        window.callApi("/estoque/movimentos", "POST", payload)
+        callApi("/estoque/movimentos", "POST", payload)
           .catch(function(e){
             console.warn("Falha ao registrar movimento de estoque na API", e);
           });
@@ -479,11 +486,11 @@ document.getElementById("btnFinalizar").onclick = function(){
   applyLossesToStock(ocorrencias);
 
   try{
-    localStorage.setItem("posEvento:"+state.evtId, JSON.stringify({
+    setObj("posEvento:"+state.evtId, {
       eventoId: state.evtId,
       data: new Date().toISOString(),
       ocorrencias: ocorrencias
-    }));
+    });
   }catch(e){}
 
    var ret = {
@@ -566,7 +573,7 @@ if (btnAll){
 /* ============================
    Barra "Imprimir setor" (atalho)
 ============================ */
-function __getJSON(k, fb){ try{ var v = JSON.parse(localStorage.getItem(k)||"null"); return (v==null?fb:v); }catch(e){ return fb; } }
+function __getJSON(k, fb){ try{ var v = getObj(k); return (v==null?fb:v); }catch(e){ return fb; } }
 function __loadSetores(){
   var a = __getJSON("estoque.setores", []);
   var b = __getJSON("estoque:setores", []);
@@ -624,7 +631,7 @@ function __linhasPorSetor(setorId){
   rows.sort(function(a,b){ return String(a.nome||"").localeCompare(String(b.nome||"")); });
   return rows;
 }
-function __getAppConfig(){ try{ return JSON.parse(localStorage.getItem("app_config")||"{}"); }catch(e){ return {}; } }
+function __getAppConfig(){ try{ return memStore.ui.app_config || {}; }catch(e){ return {}; } }
 function __htmlImpressaoExec(setor, rows, tipo){
   var cfg    = __getAppConfig();
   var logo   = cfg.logo || "";

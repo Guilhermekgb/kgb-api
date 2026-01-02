@@ -1,33 +1,19 @@
 // api/routes.js - compat/shim (same-origin)
-export async function handleRequest(path, opts = {}) {
-	const method = (opts.method || 'GET').toUpperCase();
-	let body = opts.body ?? undefined;
+export async function apiRequest(path, opts = {}) {
+  if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') {
+    throw new Error('window.apiFetch não disponível — apiRequest requer o provedor apiFetch.');
+  }
+  const method = (opts.method || 'GET').toUpperCase();
+  let body = opts.body ?? undefined;
+  if (method === 'GET' || method === 'HEAD') body = undefined;
 
-	// evita enviar body em GET/HEAD
-	if (method === 'GET' || method === 'HEAD') body = undefined;
+  const callOpts = { method, credentials: opts.credentials || 'include', headers: opts.headers || {} };
+  if (body !== undefined) {
+    if (body instanceof FormData) callOpts.body = body;
+    else if (typeof body === 'string') callOpts.body = body;
+    else { callOpts.headers['Content-Type'] = 'application/json'; callOpts.body = JSON.stringify(body); }
+  }
 
-	// usa apiFetch se existir
-	if (typeof window !== 'undefined' && window.apiFetch) {
-		const callOpts = { method };
-		if (body !== undefined) callOpts.body = body;
-		const data = await window.apiFetch(path, callOpts);
-		return { status: 200, data };
-	}
-
-	const base =
-		(window.__API_BASE__ || '') ||
-		(typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') ||
-		(window.location?.origin || '');
-
-	const url = String(path).startsWith('http') ? path : (base + path);
-	const fetchOpts = { method, credentials: 'include' };
-	if (body !== undefined) {
-		fetchOpts.headers = { 'Content-Type': 'application/json' };
-		fetchOpts.body = JSON.stringify(body);
-	}
-	const r = await fetch(url, fetchOpts);
-	const txt = await r.text();
-	let data;
-	try { data = JSON.parse(txt); } catch { data = txt; }
-	return { status: r.status, data };
+  const res = await window.apiFetch(path, callOpts);
+  return res;
 }

@@ -751,6 +751,24 @@
 
       /* ---------- CONSTANTES LOCALSTORAGE ---------- */
 
+        // === Phase1 scaffolding: memStore + sync + api wrappers ===
+        if (typeof window !== 'undefined') window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+        const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : {};
+
+        let bc = null;
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+        }
+
+        function sendSync(k,v){ try{ if (bc) bc.postMessage({k,v}); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{detail:{k,v}})); }catch{} }
+        function onSync(fn){ if (bc) bc.addEventListener('message', e=>fn(e.data)); else window.addEventListener('kgb-ui-sync', e=>fn(e.detail)); }
+        function getJSON(k, fallback){ try{ const val = mem[k]; return val===undefined ? (typeof fallback==='function'?fallback():fallback) : val; }catch{ return typeof fallback==='function'?fallback():fallback; } }
+        function setJSON(k,v){ try{ mem[k]=v; sendSync(k,v); }catch{} }
+        function isPortalMode(){ try{ return !!(window && window.__PORTAL_MODE__===true); }catch{return false;} }
+        async function apiFetchWrapper(p, opts){ return (typeof window !== 'undefined' && window.apiFetch) ? window.apiFetch(p, opts) : null; }
+        try{ window.getJSON = window.getJSON || getJSON; window.setJSON = window.setJSON || setJSON; window.isPortalMode = window.isPortalMode || isPortalMode; }catch{}
+
+
       const LS_KEY_EVENTOS    = 'kgb_formaturas_eventos';
       const LS_KEY_CONVITES   = 'kgb_formaturas_convites';
       const LS_KEY_FORMANDOS  = 'kgb_formaturas_formandosEvento';
@@ -791,6 +809,9 @@
 
       function carregarEventos(){
         try{
+          if (isPortalMode()) {
+            return getJSON(LS_KEY_EVENTOS, []) || [];
+          }
           const raw = localStorage.getItem(LS_KEY_EVENTOS);
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
@@ -803,6 +824,7 @@
 
       function salvarEventos(lista){
         try{
+          if (isPortalMode()) { setJSON(LS_KEY_EVENTOS, lista); return; }
           localStorage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista));
         }catch(e){
           console.error('Erro ao salvar eventos', e);
@@ -813,6 +835,7 @@
 
       function carregarConvites(eventos){
         try{
+          if (isPortalMode()) return getJSON(LS_KEY_CONVITES, []) || [];
           const raw = localStorage.getItem(LS_KEY_CONVITES);
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
@@ -825,6 +848,7 @@
 
       function salvarConvites(lista){
         try{
+          if (isPortalMode()) { setJSON(LS_KEY_CONVITES, lista); return; }
           localStorage.setItem(LS_KEY_CONVITES, JSON.stringify(lista));
         }catch(e){
           console.error('Erro ao salvar convites', e);
@@ -835,6 +859,7 @@
 
       function carregarFormandos(eventos){
         try{
+          if (isPortalMode()) return getJSON(LS_KEY_FORMANDOS, []) || [];
           const raw = localStorage.getItem(LS_KEY_FORMANDOS);
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
@@ -847,6 +872,7 @@
 
       function salvarFormandos(lista){
         try{
+          if (isPortalMode()) { setJSON(LS_KEY_FORMANDOS, lista); return; }
           localStorage.setItem(LS_KEY_FORMANDOS, JSON.stringify(lista));
         }catch(e){
           console.error('Erro ao salvar formandos', e);
@@ -857,6 +883,7 @@
 
       function carregarHistorico(){
         try{
+          if (isPortalMode()) return getJSON(LS_KEY_HISTORICO, []) || [];
           const raw = localStorage.getItem(LS_KEY_HISTORICO);
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
@@ -869,6 +896,7 @@
 
       function salvarHistorico(lista){
         try{
+          if (isPortalMode()) { setJSON(LS_KEY_HISTORICO, lista); return; }
           localStorage.setItem(LS_KEY_HISTORICO, JSON.stringify(lista));
         }catch(e){
           console.error('Erro ao salvar histórico', e);

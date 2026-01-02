@@ -35,11 +35,8 @@ async function __getNomeUsuarioAtual(){
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
 function callApi(endpoint, method = 'GET', body = {}) {
-  return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise((resolve) => {
-      handleRequest(endpoint, { method, body }, resolve);
-    })
-  );
+  if (!window.apiFetch) throw new Error('window.apiFetch não encontrado');
+  return window.apiFetch(endpoint, { method, body });
 }
 
 const _fmtBR = (n) => (window.toBRL ? window.toBRL(n) :
@@ -59,14 +56,14 @@ window.nomeItemDisplay ??= function (src) {
 };
 // ==== FINANCEIRO GLOBAL: helpers mínimos para lançar "Comissões" ====
 function __fgLoad() {
-  try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; }
+  try { return memGetJSON('financeiroGlobal', {}) || {}; }
   catch { return {}; }
 }
 function __fgSave(g) {
   try {
-    localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-    // ping para outras abas atualizarem
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSetJSON('financeiroGlobal', g);
+    // ping para outras abas/instâncias atualizarem
+    memSet('financeiroGlobal:ping', String(Date.now()));
   } catch {}
 }
 function __uuid() {
@@ -142,7 +139,7 @@ function upsertLancamentoComissao({ eventoId, dataISO, valor, descricao, status 
 }
 
 function lerSnapshotFinanceiro(id){
-  try { return JSON.parse(localStorage.getItem(`financeiroEvento:${id}`) || 'null'); }
+  try { return memGetJSON(`financeiroEvento:${id}`, null); }
   catch { return null; }
 }
 // Carrega usuários ativos e filtra por vendedor/administrador
@@ -150,7 +147,7 @@ function __carregarUsuariosAtivos(){
   const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
   for (const k of chaves){
     try {
-      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      const v = memGetJSON(k, null);
       if (Array.isArray(v)) return v;
     } catch {}
   }
@@ -172,7 +169,7 @@ window.__carregarUsuariosAtivos ??= function () {
   const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
   for (const k of chaves){
     try {
-      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      const v = memGetJSON(k, null);
       if (Array.isArray(v)) return v;
     } catch {}
   }
@@ -232,8 +229,8 @@ window.renderComissoesLista ??= function () {
   if (!box) return;
 
   const id  = new URLSearchParams(location.search).get("id")
-           || localStorage.getItem("eventoSelecionado") || "";
-  const evs = JSON.parse(localStorage.getItem("eventos") || "[]");
+           || memGet("eventoSelecionado") || "";
+  const evs = memGetJSON("eventos", []);
   const ev  = (evs || []).find(e => String(e.id) === String(id)) || {};
 
   // 1) comissões dentro do evento (ev.financeiro.comissao.parcelas)
@@ -254,7 +251,7 @@ window.renderComissoesLista ??= function () {
   // 2) espelhos em financeiroGlobal
   const b = [];
   try {
-    const g = JSON.parse(localStorage.getItem("financeiroGlobal") || "{}") || {};
+    const g = memGetJSON("financeiroGlobal", {}) || {};
     const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
     const parcs = Array.isArray(g.parcelas)    ? g.parcelas    : [];
 
@@ -354,8 +351,8 @@ window.openComissoesDialog ??= function () {
 
   btn.addEventListener("click", () => {
     // 1) evento atual
-    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || '');
-    const arr = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || memGet("eventoSelecionado") || '');
+    const arr = memGetJSON("eventos", []);
     const i   = arr.findIndex(e => String(e.id) === String(id));
     if (i === -1) return alert("Evento não encontrado.");
     const ev  = arr[i];
@@ -397,9 +394,9 @@ window.openComissoesDialog ??= function () {
 
     // 4a) cache local (para outras telas que ainda usam "eventos" no navegador)
     try {
-      localStorage.setItem("eventos", JSON.stringify(arr));
+      memSetJSON("eventos", arr);
     } catch (e) {
-      console.warn("[comissoes] Falha ao salvar eventos no localStorage", e);
+      console.warn("[comissoes] Falha ao salvar eventos na memória", e);
     }
 
     // 4b) tenta salvar na API (fonte da verdade)
@@ -423,7 +420,7 @@ window.openComissoesDialog ??= function () {
     } catch(e){ console.warn(e); }
 
     // 6) ping para outras abas + atualizar a lista do modal
-    try { localStorage.setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
+    try { memSet('financeiroGlobal:ping', String(Date.now())); } catch {}
     try { renderComissoesLista(); } catch {}
 
     // 7) limpar e feedback
@@ -492,8 +489,7 @@ function __totalRecebidoDoEvento(eventoId){
   }
   // Fallback: ler de alguma chave local sua (ajuste se necessário)
   try{
-    const raw = localStorage.getItem(`parcelas:${eventoId}`) || '[]';
-    const parcelas = JSON.parse(raw);
+    const parcelas = memGetJSON(`parcelas:${eventoId}`, []);
     return parcelas.reduce((acc,p)=>{
       const st   = String(p.status||'').toLowerCase();
       const pago = (st === 'pago' || st === 'recebido');
@@ -522,7 +518,7 @@ function __valorContratoDoEvento(ev, eventoId){
 function syncFaltaReceberEventoDetalhado(){
   try {
     const qs  = new URLSearchParams(location.search);
-    const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+    const eid = qs.get('id') || memGet('eventoSelecionado') || '';
     if (!eid) return;
 
     const fmtBRL = v => (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
@@ -530,7 +526,7 @@ function syncFaltaReceberEventoDetalhado(){
     // --- Carrega o evento atual (para calcular o contrato quando preciso)
     let ev = null;
     try {
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = memGetJSON('eventos', []);
       ev = eventos.find(e => String(e.id) === String(eid)) || null;
     } catch {}
 
@@ -546,8 +542,7 @@ function syncFaltaReceberEventoDetalhado(){
     // --- Snapshot do Financeiro do Evento (se existir)
     let snap = null;
     try {
-      const raw = localStorage.getItem(`financeiroEvento:${eid}`);
-      if (raw) snap = JSON.parse(raw);
+      snap = memGetJSON(`financeiroEvento:${eid}`, null);
     } catch {}
 
     // --- RECEBIDO: prioriza snapshot.recebido; fallback __totalRecebidoDoEvento
@@ -590,7 +585,7 @@ if (document.readyState === 'loading') {
   syncFaltaReceberEventoDetalhado();
 }
 
-// re-renderiza quando o Financeiro publicar novos números no localStorage
+// re-renderiza quando o Financeiro publicar novos números (via storage local)
 window.addEventListener('storage', (ev) => {
   const k = String(ev.key || '');
   if (
@@ -658,7 +653,7 @@ function renderFinanceiroResumo() {
     const eid =
       (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
       new URLSearchParams(location.search).get('id') ||
-      localStorage.getItem('eventoSelecionado') || '';
+      memGet('eventoSelecionado') || '';
     if (!eid) return;
 
     const ev = (typeof __carregarEventoDoStorage === 'function')
@@ -719,7 +714,7 @@ function mergeItensNoEvento(ev){
     ];
     const raw = [];
     for (const k of lsChaves){
-      const v = JSON.parse(localStorage.getItem(k) || "null");
+      const v = memGetJSON(k, null);
       if (Array.isArray(v)) raw.push(...v);
       else if (v && typeof v === "object") raw.push(v);
     }
@@ -741,7 +736,7 @@ function mergeItensNoEvento(ev){
 
   // 4) limpa chaves de passagem, para não repetir no próximo carregamento
   ["itensSelecionadosEvento","cardapioSelecionado","adicionaisSelecionadosEvento","adicionaisSelecionados","servicosSelecionadosEvento","servicosSelecionados"]
-    .forEach(k => { try{ localStorage.removeItem(k); }catch{} });
+    .forEach(k => { try{ memRemove(k); }catch{} });
 
   return ev;
 }
@@ -784,7 +779,7 @@ window.addEventListener("storage", function(ev){
 
 function __persistirQtdConvidados(evId, value) {
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     const i = eventos.findIndex(e => String(e.id) === String(evId));
     if (i === -1) return false;
 
@@ -817,27 +812,27 @@ function __debounce(fn, wait = 350) {
   const id =
     (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
     new URLSearchParams(location.search).get('id') ||
-    localStorage.getItem('eventoSelecionado') ||
+    memGet('eventoSelecionado') ||
     '';
 
   if (!id) {
-    console.warn('[Evento detalhado] Nenhum ID de evento encontrado na URL/localStorage.');
+    console.warn('[Evento detalhado] Nenhum ID de evento encontrado na URL/memória.');
     return;
   }
 
-  // Função que aplica o evento na memória e no localStorage
+  // Função que aplica o evento na memória
   function aplicar(evBase){
     const base = evBase && typeof evBase === 'object' ? evBase : {};
     const merged = mergeItensNoEvento({ ...base });
 
-    // Atualiza cache "eventos" no navegador
+    // Atualiza cache "eventos" em memória
     try {
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = memGetJSON('eventos', []);
       const i = eventos.findIndex(e => String(e.id) === String(merged.id));
       if (i > -1) eventos[i] = merged; else eventos.push(merged);
       safeSaveEventos(eventos);
     } catch (e) {
-      console.warn('[Evento detalhado] Erro ao atualizar cache local de eventos:', e);
+      console.warn('[Evento detalhado] Erro ao atualizar cache de eventos na memória:', e);
     }
 
     // Mantém referências globais desta tela
@@ -857,12 +852,12 @@ function __debounce(fn, wait = 350) {
 
           // reforça cache com o que veio da API
           try {
-            const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+            const eventos = memGetJSON('eventos', []);
             const i = eventos.findIndex(e => String(e.id) === String(evApi.id));
             if (i > -1) eventos[i] = evApi; else eventos.push(evApi);
             safeSaveEventos(eventos);
           } catch (e) {
-            console.warn('[Evento detalhado] Erro ao reforçar cache local após GET /eventos/:id:', e);
+            console.warn('[Evento detalhado] Erro ao reforçar cache na memória após GET /eventos/:id:', e);
           }
 
           return;
@@ -876,7 +871,7 @@ function __debounce(fn, wait = 350) {
         aplicar(__carregarEventoDoStorage(id) || {});
       });
   } else {
-    // Modo antigo: só localStorage
+    // Modo antigo: só storage local
     aplicar(__carregarEventoDoStorage(id) || {});
   }
 })();
@@ -884,11 +879,11 @@ function __debounce(fn, wait = 350) {
 
 // === GANCHO: publicar/atualizar o item do Evento na agendaUnified ===
 (function bindAgendaBridgeEvento(){
-  const id = new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado");
+  const id = new URLSearchParams(location.search).get("id") || memGet("eventoSelecionado");
   if (!id) return;
 
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     const ev = eventos.find(e => String(e.id) === String(id));
     if (!ev) return;
 
@@ -944,7 +939,7 @@ const eventoId = new URLSearchParams(location.search).get("id");
 if (typeof window.__getJSON !== "function") {
   window.__getJSON = function (k, fb) {
     try {
-      const v = localStorage.getItem(k);
+      const v = memGet(k);
       return v != null ? JSON.parse(v) : fb;
     } catch {
       return fb;
@@ -954,7 +949,7 @@ if (typeof window.__getJSON !== "function") {
 // === INÍCIO PATCH: persistência da quantidade de convidados + ping cross-tela ===
 function __persistCampoEvento(evId, key, value) {
   try {
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+    const eventos = memGetJSON('eventos', []);
     const i = eventos.findIndex(e => String(e.id) === String(evId));
     if (i === -1) return false;
 
@@ -969,12 +964,12 @@ function __persistCampoEvento(evId, key, value) {
 
     const evAtualizado = eventos[i];
 
-    // 1) Atualiza o cache local (para outras telas que ainda usam localStorage)
+    // 1) Atualiza o cache em memória (para outras telas que ainda usam 'eventos')
     try {
       if (typeof window.safeSaveEventos === 'function') {
         window.safeSaveEventos(eventos);
       } else {
-        localStorage.setItem('eventos', JSON.stringify(eventos));
+        memSetJSON('eventos', eventos);
       }
     } catch {}
 
@@ -999,7 +994,7 @@ function __persistCampoEvento(evId, key, value) {
     window.eventoSelecionado = evAtualizado;
 
     // 4) PING para outras telas (financeiro, etc.)
-    try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+    try { memSet('eventos:ping', String(Date.now())); } catch {}
     try { window.dispatchEvent(new StorageEvent('storage', { key: 'eventos' })); } catch {}
 
     return true;
@@ -1031,13 +1026,13 @@ const __persistQtdConvidadosDebounced = (function(){
       const qs = new URLSearchParams(location.search);
       return qs.get('id') || qs.get('eventoId') ||
              (window.evento && (evento.id || evento.eventoId)) ||
-             localStorage.getItem('eventoSelecionado') || '';
+             memGet('eventoSelecionado') || '';
     } catch { return ''; }
   }
 
   function __carregaEvento(id){
     try {
-      const arr = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const arr = memGetJSON('eventos', []);
       return arr.find(e => String(e.id) === String(id)) || null;
     } catch { return null; }
   }
@@ -1113,10 +1108,10 @@ function salvarEventoTempSlim(ev){
       : []
   };
   const json = JSON.stringify(slim);
-  if (__trySet(sessionStorage, "eventoTemp", json)) return true;
-  if (__trySet(localStorage, "eventoTemp", json)) return true;
+  try { memSetJSON("eventoTemp", json); } catch {}
   const onlyId = JSON.stringify({ id: slim.id });
-  return __trySet(sessionStorage, "eventoTemp", onlyId) || __trySet(localStorage, "eventoTemp", onlyId);
+  try { memSetJSON("eventoTemp", onlyId); } catch {}
+  return true;
 }
 
 /* === Ajusta links dos cards (robusto) === */
@@ -1124,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const id =
     (typeof __getEventoIdFix === 'function' && __getEventoIdFix()) ||
     new URLSearchParams(location.search).get('id') ||
-    localStorage.getItem('eventoSelecionado') ||
+    memGet('eventoSelecionado') ||
     '';
 
   const box = document.getElementById('cardsAcesso');
@@ -1165,7 +1160,7 @@ function __buildNomeIndex(arr = []) {
       convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
       dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
     })).filter(x => x.id);
-    localStorage.setItem("eventos:nomeIndex", JSON.stringify(idx));
+    memSet("eventos:nomeIndex", JSON.stringify(idx));
   } catch {}
 }
 
@@ -1173,7 +1168,7 @@ function __buildNomeIndex(arr = []) {
 function safeSaveEventos(arr){
   // 1) salva normal
   try {
-    localStorage.setItem("eventos", JSON.stringify(arr || []));
+    memSetJSON("eventos", arr || []);
     __buildNomeIndex(arr || []);
     return;
   } catch (e) { /* cai pro modo compacto */ }
@@ -1193,7 +1188,7 @@ function safeSaveEventos(arr){
       }
       return c;
     });
-    localStorage.setItem("eventos", JSON.stringify(slim));
+    memSetJSON("eventos", slim);
     __buildNomeIndex(slim);
     console.warn("Eventos salvos no modo compacto (evitou 'QuotaExceeded').");
   } catch (e2) {
@@ -1220,7 +1215,7 @@ function autoEncerrarSePassou(ev, eventos, idx) {
     try { delete ev.__m13_migrated_v2; } catch {}
     ev.__m13_migrated_v2 = false;
     ev.__lastDataISO = newDataISO; // guarda o “último” para próximas comparações
-    try { localStorage.setItem("m13:dateChanged:" + ev.id, String(Date.now())); } catch {}
+    try { memSet("m13:dateChanged:" + ev.id, String(Date.now())); } catch {}
   }
 
   if (!rawData) return;
@@ -1353,9 +1348,8 @@ if (typeof window.parseMoney !== "function") {
 /* ========== FOTO DO CLIENTE (robusta) ========== */
 async function _dataUrlFromBlobUrl(blobUrl){
   try{
-    const res = await fetch(blobUrl);
-    const blob = await res.blob();
-    return await new Promise((resolve)=>{ const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.readAsDataURL(blob); });
+    console.warn('[evento-detalhado] conversão de blob: URLs desabilitada (usa mapa em memória)');
+    return null;
   }catch{ return null; }
 }
 
@@ -1667,13 +1661,13 @@ function _persistirFotoNormalizada(ev, dataUrl){
 
     // 2) salva a imagem APENAS no mapa "fotosClientes" (sem duplicar no evento)
     try{
-      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+      const map = memGetJSON("fotosClientes", {});
       map[key] = dataUrl;                         // armazena base64 grande aqui
-      (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map)));
+      (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : memSetJSON('fotosClientes', map));
     }catch{}
 
     // 3) atualiza o evento para REFERENCIAR a chave, removendo campos pesados
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     const i = eventos.findIndex(e => String(e.id) === String(ev.id));
     if(i !== -1){
       delete eventos[i].fotoCliente;              // 🔴 NÃO guardar base64 no evento
@@ -1729,7 +1723,7 @@ async function resolveFotoCliente(ev){
 
   if (!url) {
     try {
-      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+      const map = memGetJSON("fotosClientes", {});
       const tryK = [];
       if (ev?.fotoClienteKey) tryK.push(ev.fotoClienteKey);
       if (ev?.clienteId)      tryK.push(`id:${ev.clienteId}`);
@@ -1745,7 +1739,7 @@ async function resolveFotoCliente(ev){
 
   if(!url){
     try{
-      const leads = JSON.parse(sessionStorage.getItem("leads") || "[]");
+      const leads = memGetJSON("leads", []);
       const hit =
         leads.find(l => String(l.id) === String(ev.id)) ||
         leads.find(l => (l.nome && (ev.infoCliente?.nome || ev.nomeCliente)) &&
@@ -1771,7 +1765,7 @@ async function resolveFotoCliente(ev){
       `foto_evento_tmp_${ev.id}`, `avatar_evento_${ev.id}`
     ];
     for(const k of possiveisChaves){
-      const v = sessionStorage.getItem(k);
+      const v = memGet(k);
       if(v && /^data:image\//i.test(v)){ _persistirFotoNormalizada(ev, v); return v; }
     }
     const dataUrl = await _dataUrlFromBlobUrl(url);
@@ -1877,12 +1871,12 @@ function __categoriaComissaoId(){
 
 /* ===== Comissões (janela simples) ===== */
 function _evCtx(){
-  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const id = memGet("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const eventos = memGetJSON("eventos", []);
   const i = eventos.findIndex(e => String(e.id) === String(id));
   return { eventos, i, ev: eventos[i] || null };
 }
-function _getJSON(k, fb){ try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } }
+function _getJSON(k, fb){ try { return memGetJSON(k, fb); } catch { return fb; } }
 
 // pega comissões criadas no Financeiro do Evento (ou no m14.*)
 function getComissoesFromFinanceiro(evId){
@@ -1931,8 +1925,8 @@ function getComissoesFromEvento(ev){
 }
 
 // ==== helpers de LS (leitura/gravação segura) ====
-const _get = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const _set = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const _get = (k, fb) => { try { return memGetJSON(k, fb); } catch { return fb; } };
+const _set = (k, v) => { try { memSetJSON(k, v); } catch {} };
 
 // PARTE 2/4 (CORRIGIDA)
 /**
@@ -2012,7 +2006,7 @@ function upsertComissaoNoFinanceiroGeral(ev){
   });
 
   _set(FG_KEY, fg);
-  try { localStorage.setItem("financeiroGlobal:ping", String(Date.now())); } catch {}
+  try { memSet('financeiroGlobal:ping', String(Date.now())); } catch {}
 
   // --- Retrocompat: m14.* (usado por leitores antigos)
   const lancs = _get("m14.lancs", []);
@@ -2140,8 +2134,8 @@ if (_btnComSalvar && !_btnComSalvar.dataset.bound) {
     e.preventDefault();
 
     // 1) evento atual
-    const arr = JSON.parse(localStorage.getItem("eventos") || "[]");
-    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || '');
+    const arr = memGetJSON('eventos', []);
+    const id  = (typeof window.getEventoId === 'function') ? (window.getEventoId() || '') : (new URLSearchParams(location.search).get("id") || memGet('eventoSelecionado', '') || '');
     const i   = arr.findIndex(ev => String(ev.id) === String(id));
     if (i === -1) return alert("Evento não encontrado.");
     const ev = arr[i];
@@ -2179,11 +2173,11 @@ if (_btnComSalvar && !_btnComSalvar.dataset.bound) {
 
     // 4) persiste o evento
     arr[i] = ev;
-    try { localStorage.setItem("eventos", JSON.stringify(arr)); } catch {}
+    try { memSetJSON('eventos', arr); } catch {}
 
     // 5) espelha no financeiroGlobal (tabela do Financeiro do Evento usa isso)
     const STORAGE_KEY = "financeiroGlobal";
-    const g = (()=>{ try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; } })();
+    const g = memGetJSON(STORAGE_KEY, {});
     g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
     g.parcelas    = Array.isArray(g.parcelas)    ? g.parcelas    : [];
 
@@ -2233,10 +2227,10 @@ if (_btnComSalvar && !_btnComSalvar.dataset.bound) {
       });
     });
 
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(g)); } catch {}
+    try { memSetJSON(STORAGE_KEY, g); } catch {}
 
     // 6) notifica outras abas e refaz a lista do modal agora
-    try { localStorage.setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
+    try { memSet('financeiroGlobal:ping', String(Date.now())); } catch {}
     renderComissoesLista();
 
     // 7) limpa e feedback leve (mantém modal aberto para ver a lista)
@@ -2250,7 +2244,7 @@ if (_btnComSalvar && !_btnComSalvar.dataset.bound) {
 // evento-detalhado.js
 function listarVendedores() {
   try {
-    const us = JSON.parse(localStorage.getItem("usuarios") || "[]");
+    const us = memGetJSON("usuarios", []);
     return (us || [])
       .filter(u => /vendedor/i.test(String(u.perfil || u.tipo || "")))
       .map(u => u.nome)
@@ -2337,8 +2331,8 @@ function ativarEdicao() {
 }
 
 function salvarAlteracoes() {
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
-  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+  const eventos = memGetJSON('eventos', []);
+  const id = memGet('eventoSelecionado', '') || new URLSearchParams(location.search).get("id");
   const i = eventos.findIndex(e => String(e.id) === String(id));
   if (i === -1) return alert("Evento não encontrado.");
 
@@ -2404,7 +2398,7 @@ function editarItensEvento() {
     (window.evento && window.evento.id) ||
     (window.eventoSelecionado && window.eventoSelecionado.id) ||
     new URLSearchParams(window.location.search).get("id") ||
-    localStorage.getItem("eventoSelecionado") ||
+    memGet('eventoSelecionado', '') ||
     ""
   ).trim();
 
@@ -2419,7 +2413,7 @@ function editarItensEvento() {
       (window.evento && window.evento.quantidadeConvidados) ||
       (window.eventoSelecionado && window.eventoSelecionado.quantidadeConvidados) ||
       0;
-    localStorage.setItem("quantidadeConvidadosEvento", String(qtd));
+    memSet("quantidadeConvidadosEvento", String(qtd));
   } catch {}
 
   // 3) (Opcional) snapshot slim do evento no LS, se sua função existir
@@ -2514,8 +2508,8 @@ function salvarAnotacao() {
       favorita: false
     };
 
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
-  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
+    const eventos = memGetJSON('eventos', []);
+  const id = memGet('eventoSelecionado', '') || new URLSearchParams(location.search).get("id");
   const i = eventos.findIndex(e => String(e.id) === String(id));
   if (i === -1) return alert("Evento não encontrado.");
 
@@ -2533,8 +2527,8 @@ function salvarAnotacao() {
 
 function _toggleFavoritoAnotacao(notaId) {
   if (!notaId) return;
-  const idEv = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const idEv = memGet('eventoSelecionado', '') || new URLSearchParams(location.search).get("id");
+  const eventos = memGetJSON('eventos', []);
   const i = eventos.findIndex(e => String(e.id) === String(idEv));
   if (i === -1) return;
 
@@ -2554,8 +2548,8 @@ function _toggleFavoritoAnotacao(notaId) {
 /* ===== Excluir evento ===== */
 function excluirEvento() {
   if (!confirm("Excluir este evento?")) return;
-  const id = localStorage.getItem("eventoSelecionado") || new URLSearchParams(location.search).get("id");
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const id = memGet('eventoSelecionado', '') || new URLSearchParams(location.search).get("id");
+  const eventos = memGetJSON('eventos', []);
   const i = eventos.findIndex(e => String(e.id) === String(id));
   if (i > -1) {
     eventos.splice(i, 1);
@@ -2657,9 +2651,9 @@ async function handleUploadArquivos(e){
   }))
   .then(novos => {
     ev.documentos = (ev.documentos || []).concat(novos);
-    const all = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const all = memGetJSON('eventos', []);
     const i = all.findIndex(x => String(x.id) === String(ev.id));
-    if (i !== -1) { all[i] = ev; localStorage.setItem("eventos", JSON.stringify(all)); }
+    if (i !== -1) { all[i] = ev; memSetJSON('eventos', all); }
     const catAtiva = document.querySelector("#docTabs .tab-doc.ativo")?.dataset.cat || "todos";
     renderListaDocs(catAtiva);
     const inp = document.getElementById("inputArquivoEvento");
@@ -2711,9 +2705,9 @@ function renderListaDocs(cat){
         const id = b.getAttribute("data-del");
         const ev = window.eventoSelecionado;
         ev.documentos = (ev.documentos||[]).filter(d=>d.id!==id);
-        const all = JSON.parse(localStorage.getItem("eventos")||"[]");
+        const all = memGetJSON('eventos', []);
         const i = all.findIndex(x=> String(x.id) === String(ev.id));
-        if(i!==-1){ all[i]=ev; localStorage.setItem("eventos", JSON.stringify(all)); }
+        if(i!==-1){ all[i]=ev; memSetJSON('eventos', all); }
         renderListaDocs(document.querySelector("#docTabs .tab-doc.ativo")?.dataset.cat || "todos");
       };
     });
@@ -2810,10 +2804,10 @@ function fecharModalArquivarEvento() {
 
 async function confirmarArquivamentoEvento() {
   const id =
-    localStorage.getItem("eventoSelecionado") ||
+    memGet("eventoSelecionado", '') ||
     new URLSearchParams(location.search).get("id");
 
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const eventos = memGetJSON('eventos', []);
   const i = eventos.findIndex(e => String(e.id) === String(id));
   if (i === -1) {
     alert("Evento não encontrado.");
@@ -2872,10 +2866,10 @@ async function confirmarArquivamentoEvento() {
 
 async function desarquivarEvento() {
   const id =
-    localStorage.getItem("eventoSelecionado") ||
+    memGet("eventoSelecionado", '') ||
     new URLSearchParams(location.search).get("id");
 
-  const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+  const eventos = memGetJSON('eventos', []);
   const i = eventos.findIndex(e => String(e.id) === String(id));
   if (i === -1) {
     alert("Evento não encontrado.");
@@ -2910,7 +2904,7 @@ function __getClientesArrays(){
   const out = [];
   for (const k of keys){
     try{
-      const arr = JSON.parse(localStorage.getItem(k) || '[]');
+      const arr = memGetJSON(k, []);
       if (Array.isArray(arr)) out.push(...arr);
     }catch{}
   }
@@ -2971,7 +2965,7 @@ async function __gerarPortalLinkSeguro(ev){
       (ev && ev.id) ||
       (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
       (new URLSearchParams(location.search).get('id')) ||
-      (localStorage.getItem('eventoSelecionado') || '')
+      (memGet('eventoSelecionado','') || '')
     ).trim();
 
     if (!eid) {
@@ -2987,19 +2981,14 @@ async function __gerarPortalLinkSeguro(ev){
     const apiBase = (window.__API_BASE__ || '').replace(/\/+$/,'');
     const url = apiBase ? `${apiBase}/portal/token` : '/portal/token';
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventId: eid, eventoPublico: ev || {} })
-    });
-
-    if (!resp.ok) {
-      console.error('Falha ao gerar token do portal', resp.status);
+    let data = null;
+    try {
+      data = await callApi(url, 'POST', { eventId: eid, eventoPublico: ev || {} });
+    } catch (e) {
+      console.error('Falha ao gerar token do portal', e);
       alert('Não consegui gerar o link da área do cliente. Tente novamente.');
       return '';
     }
-
-    const data = await resp.json();
 
     // Se o backend já devolver o link pronto, usamos ele;
     // senão montamos com o token.
@@ -3027,7 +3016,7 @@ function __getPortalLink(ev){
     (ev && ev.id) ||
     (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual()) ||
     (new URLSearchParams(location.search).get('id')) ||
-    (localStorage.getItem('eventoSelecionado') || '')
+    (memGet('eventoSelecionado','') || '')
   ).trim();
 
   if (!eid) {
@@ -3119,15 +3108,15 @@ function __resolveWhatsCliente(ev = {}) {
 function __obterModeloPorSlug(slug){
   if(!slug) return '';
   let lista = [];
-  try { lista = JSON.parse(localStorage.getItem('modelos_documentos')||'[]'); } catch {}
+  try { lista = memGetJSON('modelos_documentos', []); } catch {}
   if (!Array.isArray(lista) || !lista.length){
-    try { lista = JSON.parse(localStorage.getItem('modelos')||'[]'); } catch {}
+    try { lista = memGetJSON('modelos', []); } catch {}
   }
   const hit = (lista||[]).find(m => String(m.slug) === String(slug));
   const fromList = String(hit?.conteudo || hit?.html || hit?.texto || '').trim();
   if (fromList) return fromList;
 
-  const raw = localStorage.getItem(`modelo_${slug}`);
+  const raw = memGet(`modelo_${slug}`, null);
   if (!raw) return '';
   try { const obj = JSON.parse(raw); return String(obj?.conteudo || obj?.html || obj || '').trim(); }
   catch { return String(raw).trim(); }
@@ -3191,7 +3180,7 @@ function abrirWhatsClienteTopo(){
 document.addEventListener('DOMContentLoaded', ()=>{ document.getElementById('btnWhatsClienteTopo')?.addEventListener('click', abrirWhatsClienteTopo); });
 
 /* ====== Agendamento mensagem do GRANDE DIA (08:00 padrão) ====== */
-function __getAppConfig(){ try{ return JSON.parse(localStorage.getItem('app_config')||'{}'); }catch{ return {}; } }
+function __getAppConfig(){ try{ return memGetJSON('app_config', {}); }catch{ return {}; } }
 function __horaPadraoMensagens(){ const h = __getAppConfig().msgHoraPadrao || '08:00'; return toHora(h) || '08:00'; }
 function __dataEventoISO(ev){
   const dia = ev.data || ev.dataEvento || ev.dataDoEvento || '';
@@ -3205,12 +3194,12 @@ function __msEnvioGrandeDia(ev){
   return isFinite(d) ? d.getTime() : 0;
 }
 function __marcarMsgDiaEnviada(ev){
-  const arr = JSON.parse(localStorage.getItem('eventos')||'[]');
+  const arr = memGetJSON('eventos', []);
   const i = arr.findIndex(x=> String(x.id) === String(ev.id));
   if(i>-1){
     arr[i].msgDiaEnviada = true;
     arr[i].msgDiaEnviadaEm = new Date().toISOString();
-    localStorage.setItem('eventos', JSON.stringify(arr));
+    memSetJSON('eventos', arr);
     window.evento = arr[i];
     window.eventoSelecionado = arr[i];
   }
@@ -3277,8 +3266,8 @@ function carregarModelosGrandeDia(selectId, ev){
   const sel = document.getElementById(selectId);
   if (!sel) return;
 
-  let modelos = JSON.parse(localStorage.getItem('modelos_documentos') || 'null');
-  if (!Array.isArray(modelos)) modelos = JSON.parse(localStorage.getItem('modelos') || '[]');
+  let modelos = memGetJSON('modelos_documentos', null);
+  if (!Array.isArray(modelos)) modelos = memGetJSON('modelos', []);
 
   const lista = (Array.isArray(modelos) ? modelos : []).filter(m => !m.tipo || /grande[_\s]?dia|whats|whatsapp|evento/i.test(String(m.tipo)));
   sel.innerHTML = lista.length
@@ -3290,11 +3279,11 @@ function carregarModelosGrandeDia(selectId, ev){
 
   sel.onchange = () => {
     const slug = sel.value || '';
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+    const eventos = memGetJSON('eventos', []);
     const i = eventos.findIndex(x => String(x.id) === String(ev.id));
     if (i > -1) {
       eventos[i].msgDiaSlug = slug;
-      localStorage.setItem('eventos', JSON.stringify(eventos));
+      memSetJSON('eventos', eventos);
       window.evento = eventos[i];
       const chip = document.getElementById('chipMsgGrandeDiaAC');
       if (chip) {
@@ -3330,7 +3319,7 @@ function fecharModalAddConvidados(){
   m.setAttribute('hidden','');
 }
 function aplicarAcrescimoDeConvidados(eventoId, qtdMais, vlUnit){
-  const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+  const eventos = memGetJSON('eventos', []);
   const i = eventos.findIndex(e => String(e.id) === String(eventoId));
   if (i === -1) return false;
 
@@ -3396,7 +3385,7 @@ function salvarAddConvidados(){
 
     // (re)carrega o evento atualizado no window.evento, por garantia
     try {
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = memGetJSON('eventos', []);
       const ev = eventos.find(e => String(e.id) === String(__eventoId));
       if (ev) {
         window.evento = ev;
@@ -3428,17 +3417,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Carrega eventos e encontra o evento atual
   let eventos = [];
-  try { eventos = JSON.parse(localStorage.getItem("eventos") || "[]"); } catch {}
+  try { eventos = memGetJSON('eventos', []); } catch {}
   let ev = eventos.find(e => String(e.id) === String(id)) || null;
 
   // === INÍCIO PATCH 3: migração 1x para limpar fotos inline nos eventos ===
   (function migrarFotosInlineParaMapa(){
     try{
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON('eventos', []);
       if (!Array.isArray(eventos) || !eventos.length) return;
 
       let houveMudanca = false;
-      const map = JSON.parse(localStorage.getItem("fotosClientes") || "{}");
+      const map = memGetJSON('fotosClientes', {});
 
       eventos.forEach(ev => {
         if (!ev || !ev.id) return;
@@ -3457,7 +3446,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (houveMudanca) {
-        (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map)));
+        (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : memSetJSON('fotosClientes', map));
         safeSaveEventos(eventos); // salva eventos já sem foto inline
       }
     }catch(e){}
@@ -3468,7 +3457,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!ev && eventos.length) {
     ev = eventos[0];
     history.replaceState({}, '', location.pathname + '?id=' + encodeURIComponent(ev.id));
-    try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+    try { console.warn('[EVENTO] migração: não gravando eventoSelecionado no storage local'); } catch {}
   }
   if (!ev) { alert("Evento não encontrado."); return; }
   // --- PATCH: ouvir alterações no input #eventoConvidados e persistir + pingar
@@ -3482,7 +3471,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Recarrega LS, acha o evento atual e atualiza os campos
       const id = (window.__EVT_ID_FIX || (typeof __getEventoIdFix === 'function' ? __getEventoIdFix() : ev?.id));
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON('eventos', []);
       const i = eventos.findIndex(e => String(e.id) === String(id));
       if (i < 0) return;
 
@@ -3493,9 +3482,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
            // Persiste local
       try {
-        localStorage.setItem("eventos", JSON.stringify(eventos));
+        memSetJSON('eventos', eventos);
       } catch (e) {
-        console.warn("[evento-detalhado] Falha ao salvar eventos no localStorage", e);
+        console.warn("[evento-detalhado] Falha ao salvar eventos na memória", e);
       }
 
       // Tenta salvar também na API (fonte da verdade)
@@ -3514,7 +3503,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try { window.evento = ev2; window.eventoSelecionado = ev2; } catch {}
 
       // 🔔 Ping para outras telas recalcularem (financeiro-evento, etc.)
-      try { localStorage.setItem('eventos:ping', String(Date.now())); } catch {}
+      try { memSet('eventos:ping', String(Date.now())); } catch {}
 
 
       alert('Convidados atualizados para ' + novo);
@@ -3556,19 +3545,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // Guarda seleção atual (disponibiliza globalmente)
   window.evento = ev;
   window.eventoSelecionado = ev;
-  localStorage.setItem("eventoSelecionado", String(ev.id));
-  localStorage.setItem("eventoSelecionadoNome", ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`);
+  memSet("eventoSelecionado", String(ev.id));
+  memSet("eventoSelecionadoNome", ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`);
 
   // >>> ADIÇÃO: expor contexto mínimo p/ checklist e salvar nome visível
   try {
     const nomeVisivel = ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`;
-    localStorage.setItem("eventoSelecionadoNome", nomeVisivel);
-    localStorage.setItem("evtCtx", JSON.stringify({
+    memSet("eventoSelecionadoNome", nomeVisivel);
+    memSetJSON("evtCtx", {
       id: String(ev.id),
       nome: nomeVisivel,
       convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
       dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
-    }));
+    });
   } catch {}
 
   // === Histórico: render na carga ===
@@ -3577,8 +3566,8 @@ document.addEventListener("DOMContentLoaded", () => {
 // === Evento Detalhado: sincroniza itens vindos do cadastro/itens-evento e renderiza ===
 document.addEventListener("DOMContentLoaded", () => {
   try {
-    const id = new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || "";
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const id = new URLSearchParams(location.search).get("id") || memGet('eventoSelecionado','') || "";
+    const eventos = memGetJSON('eventos', []);
     const i = eventos.findIndex(e => String(e.id) === String(id));
     if (i > -1) {
       // puxa itens que ficaram nas chaves-ponte e cola no próprio evento
@@ -3607,11 +3596,9 @@ try {
   try {
     const evId = __getEventoIdAtual();
     if (!evId) return;
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON('eventos', []);
     let ev = eventos.find(e => String(e.id) === String(evId)) || null;
-    const bakRaw =
-      localStorage.getItem("eventoBackup:" + evId) ||
-      sessionStorage.getItem("eventoBackup:" + evId);
+    const bakRaw = memGet(`eventoBackup:${evId}`, null) || memGet(`eventoBackup:${evId}`, null);
     if (!bakRaw) return;
 
     const bak = JSON.parse(bakRaw);
@@ -3687,7 +3674,7 @@ try {
   // Auto encerrar se passou (recalcula contexto local)
   try {
     const id      = __getEventoIdFix();
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON('eventos', []);
     const idx     = eventos.findIndex(e => String(e.id) === String(id));
     autoEncerrarSePassou(window.evento || {}, eventos, idx);
   } catch {}
@@ -3721,7 +3708,7 @@ function instalarUploadFotoCliente(){
     const reader = new FileReader();
    reader.onload = (e) => {
       const dataUrl = e.target.result;
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = memGetJSON('eventos', []);
       const idx = eventos.findIndex(ev => String(ev.id) === String(eventoId));
       if (idx === -1) { alert("Evento não encontrado."); return; }
 
@@ -3730,7 +3717,7 @@ function instalarUploadFotoCliente(){
       _persistirFotoNormalizada(ev, dataUrl);
 
       // recarrega versão atualizada do evento (com fotoClienteKey) e reflete na UI
-      const atualizados = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const atualizados = memGetJSON('eventos', []);
       const evAtual = atualizados.find(x => String(x.id) === String(ev.id)) || ev;
       window.evento = evAtual;
       window.eventoSelecionado = evAtual;
@@ -3749,16 +3736,16 @@ function instalarUploadFotoCliente(){
 /* >>> SINCRONIZA ITENS ESCOLHIDOS NA TELA DE ITENS (robusto) <<< */
 function syncItensFromItensEvento(ev, eventos) {
   try {
-    const temp = JSON.parse(localStorage.getItem("eventoTemp") || "null");
+    const temp = memGetJSON("eventoTemp", null);
     const itensDoTemp =
       (temp && String(temp.id) === String(ev.id) && Array.isArray(temp.itensSelecionados))
         ? temp.itensSelecionados : null;
 
-    const itensSoltos = JSON.parse(localStorage.getItem("itensSelecionadosEvento") || "null");
+    const itensSoltos = memGetJSON("itensSelecionadosEvento", null);
 
-    const cardSel = JSON.parse(localStorage.getItem("cardapioSelecionado") || "null");
-    const addsSel = JSON.parse(localStorage.getItem("adicionaisSelecionadosEvento") || localStorage.getItem("adicionaisSelecionados") || "null");
-    const srvsSel = JSON.parse(localStorage.getItem("servicosSelecionadosEvento") || localStorage.getItem("servicosSelecionados") || "null");
+    const cardSel = memGetJSON("cardapioSelecionado", null);
+    const addsSel = memGetJSON("adicionaisSelecionadosEvento", memGetJSON("adicionaisSelecionados", null));
+    const srvsSel = memGetJSON("servicosSelecionadosEvento", memGetJSON("servicosSelecionados", null));
 
     // Agora separo categoriaPadrao de cobrancaPadrao
     const normalizarItem = (it, categoriaPadrao = "", cobrancaPadrao = "fixo") => ({
@@ -3782,7 +3769,7 @@ function syncItensFromItensEvento(ev, eventos) {
       (itensDoTemp && itensDoTemp.length) ? itensDoTemp :
       (Array.isArray(itensSoltos) && itensSoltos.length ? itensSoltos : [...doCardapio, ...dosAdds, ...dosSrvs].filter(Boolean));
 
-    const qtdLS = localStorage.getItem("quantidadeConvidadosEvento");
+    const qtdLS = memGet('quantidadeConvidadosEvento', null);
 
     if (escolhidos && escolhidos.length) {
       ev.itensSelecionados = escolhidos;
@@ -3796,11 +3783,11 @@ function syncItensFromItensEvento(ev, eventos) {
 
       if (temp) {
         temp.itensSelecionados = escolhidos;
-        localStorage.setItem("eventoTemp", JSON.stringify(temp));
+        memSetJSON('eventoTemp', temp);
       }
 
       ["itensSelecionadosEvento","quantidadeConvidadosEvento","cardapioSelecionado","adicionaisSelecionadosEvento","adicionaisSelecionados","servicosSelecionadosEvento","servicosSelecionados"]
-        .forEach(k => { try{ localStorage.removeItem(k); }catch{} });
+        .forEach(k => { try{ memRemove(k); }catch{} });
     }
   } catch (e) {
     console.warn("syncItensFromItensEvento (robusto):", e);
@@ -3809,28 +3796,26 @@ function syncItensFromItensEvento(ev, eventos) {
 
 /* ======== PATCH: persistência robusta ======== */
 (() => {
-  const id = localStorage.getItem('eventoSelecionado') || new URLSearchParams(location.search).get('id');
+  const id = memGet('eventoSelecionado', '') || new URLSearchParams(location.search).get('id');
   if (!id) return;
 
-  const getJSON = (k, def = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } };
+  const getJSON = (k, def = null) => { try { return memGetJSON(k, def); } catch { return def; } };
   const setEventos = (arr) => {
     try {
-      localStorage.setItem('eventos', JSON.stringify(arr));
+      memSetJSON('eventos', arr);
     } catch (e) {
-      // Fallback: salva versão “leve” sem anexos/base64 para não explodir a cota
       try {
         const light = Array.isArray(arr)
           ? arr.map(x => (typeof __stripHeavyFromEvent === "function" ? __stripHeavyFromEvent(x) : x))
           : arr;
-        localStorage.setItem('eventos:light', JSON.stringify(light));
+        memSetJSON('eventos:light', light);
         console.warn("Eventos salvos no modo compacto (evitou 'QuotaExceeded').");
       } catch {
-        // Último recurso: sessionStorage
         try {
           const light = Array.isArray(arr)
             ? arr.map(x => (typeof __stripHeavyFromEvent === "function" ? __stripHeavyFromEvent(x) : x))
             : arr;
-          sessionStorage.setItem('eventos:light', JSON.stringify(light));
+          memSet('eventos:light', JSON.stringify(light));
         } catch {}
       }
     }
@@ -3863,7 +3848,7 @@ function syncItensFromItensEvento(ev, eventos) {
     try {
       const temp = getJSON('eventoTemp', null);
       const itensSoltos = getJSON('itensSelecionadosEvento', null);
-      const qtdLS = localStorage.getItem('quantidadeConvidadosEvento');
+      const qtdLS = memGet('quantidadeConvidadosEvento', null);
       const escolhidos =
         (temp && String(temp.id) === String(id) && Array.isArray(temp.itensSelecionados) && temp.itensSelecionados.length)
           ? temp.itensSelecionados
@@ -3871,14 +3856,14 @@ function syncItensFromItensEvento(ev, eventos) {
       if (escolhidos) {
         ev.itensSelecionados = escolhidos;
         if (qtdLS != null) ev.quantidadeConvidados = parseInt(qtdLS, 10) || ev.quantidadeConvidados;
-        localStorage.removeItem('itensSelecionadosEvento');
-        localStorage.removeItem('quantidadeConvidadosEvento');
+        memRemove('itensSelecionadosEvento');
+        memRemove('quantidadeConvidadosEvento');
       }
     } catch {}
 
     // cardápio escolhido → normaliza para ev.cardapioContratado
     try {
-      const raw = localStorage.getItem('cardapioSelecionado');
+      const raw = memGet('cardapioSelecionado', null);
       let sel = null;
       try { sel = JSON.parse(raw); } catch { sel = raw; }
 
@@ -3923,9 +3908,9 @@ function syncItensFromItensEvento(ev, eventos) {
 // 1) ID robusto
 function __getEventoIdFix() {
   const qsId = new URLSearchParams(location.search).get('id') || '';
-  const lsId = localStorage.getItem('eventoSelecionado') || '';
+  const lsId = memGet('eventoSelecionado', '') || '';
   let eventos = [];
-  try { eventos = JSON.parse(localStorage.getItem('eventos') || '[]'); } catch {}
+  try { eventos = memGetJSON('eventos', []); } catch {}
 
   // candidato inicial (query > LS)
   let id = qsId || lsId || '';
@@ -3946,7 +3931,7 @@ function __getEventoIdFix() {
     }
   }
 
-  if (id) { try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {} }
+  if (id) { try { console.warn('[EVENTO] migração: não gravando eventoSelecionado no storage local'); } catch {} }
   return id;
 }
 const __EVT_ID_FIX = __getEventoIdFix();
@@ -3983,7 +3968,7 @@ const __EVT_ID_FIX = __getEventoIdFix();
 })();
 
 // 3) Persistência forte (+ backups)
-function __getJSON(k, d){ try{ const s=localStorage.getItem(k); return s? JSON.parse(s): d; }catch{ return d; } }
+function __getJSON(k, d){ try{ return memGetJSON(k, d); }catch{ return d; } }
 // Remove campos pesados (base64) de um evento
 function __stripHeavyFromEvent(ev = {}) {
   const c = {...ev};
@@ -4023,21 +4008,21 @@ function __lightenPayload(v) {
 // Grava JSON com fallback para "backup leve"
 function __setJSON(k, v) {
   try {
-    localStorage.setItem(k, JSON.stringify(v));
+    memSetJSON(k, v);
     return true;
   } catch (e) {
     if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
       try {
         const light = __lightenPayload(v);
-        localStorage.setItem(k + ':light', JSON.stringify(light));
-        if (!localStorage.getItem('__backupQuotaWarned')) {
-          localStorage.setItem('__backupQuotaWarned', '1');
+        memSetJSON(k + ':light', light);
+        if (!memGet('__backupQuotaWarned', null)) {
+          memSet('__backupQuotaWarned', '1');
           console.warn('Armazenamento cheio: salvei backup leve (sem fotos/arquivos).');
         }
         return true;
       } catch {
         try {
-          sessionStorage.setItem(k + ':light', JSON.stringify(__lightenPayload(v)));
+          memSet(k + ':light', JSON.stringify(__lightenPayload(v)));
           return true;
         } catch {
           return false;
@@ -4062,22 +4047,22 @@ function hardPersistEvento(ev){
   __setJSON(`eventoBackup:${ev.id}`, evLight);
   __setJSON('eventosBackup', arr.map(__stripHeavyFromEvent));
 
-  // 3) manter seleção atual (não persistir em localStorage — migrando para querystring)
-  try { console.warn('[EVENTO] migração: não gravando eventoSelecionado em localStorage'); } catch {}
+  // 3) manter seleção atual (não persistir em storage local — migrando para querystring)
+  try { console.warn('[EVENTO] migração: não gravando eventoSelecionado no storage local'); } catch {}
 
   // 4) >>> NOVO: manter nome visível, contexto e índice de nomes p/ outras telas (ex.: checklist)
   try {
     // nome “bonito” para o evento atual
     const nomeVisivel = ev.nomeEvento || ev.titulo || ev.nome || `Evento ${ev.id}`;
-    localStorage.setItem("eventoSelecionadoNome", nomeVisivel);
+    memSet("eventoSelecionadoNome", nomeVisivel);
 
     // contexto mínimo para telas filhas (id/nome/convidados/data)
-    localStorage.setItem("evtCtx", JSON.stringify({
+    memSetJSON("evtCtx", {
       id: String(ev.id),
       nome: nomeVisivel,
       convidados: Number(ev.quantidadeConvidados ?? ev.qtdConvidados ?? 0) || 0,
       dataISO: String(ev.data || ev.dataEvento || ev.dataDoEvento || "").slice(0,10)
-    }));
+    });
 
     // índice leve de nomes para popular selects por NOME
     if (typeof __buildNomeIndex === "function") {
@@ -4090,7 +4075,7 @@ function hardPersistEvento(ev){
         convidados: Number(e.quantidadeConvidados ?? e.qtdConvidados ?? 0) || 0,
         dataISO: String(e.data || e.dataEvento || e.dataDoEvento || "").slice(0,10)
       })).filter(x => x.id);
-      localStorage.setItem("eventos:nomeIndex", JSON.stringify(idx));
+      memSetJSON("eventos:nomeIndex", idx);
     }
   } catch {}
 
@@ -4114,7 +4099,7 @@ document.addEventListener('visibilitychange', ()=>{ if (document.hidden) hardPer
 
 // 4) Restaura se alguém zerou o vetor 'eventos'
 (function restoreIfMissing(){
-  const id = (typeof __EVT_ID_FIX !== "undefined" && __EVT_ID_FIX) ? __EVT_ID_FIX : (new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado'));
+  const id = (typeof __EVT_ID_FIX !== "undefined" && __EVT_ID_FIX) ? __EVT_ID_FIX : (new URLSearchParams(location.search).get('id') || memGet('eventoSelecionado',''));
   if (!id) return;
   let arr = __getJSON('eventos', []);
   let ev  = arr.find(e=> String(e.id) === String(id));
@@ -4137,8 +4122,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btnIrItens');
   if (btn) {
     btn.addEventListener('click', () => {
-      const id = new URLSearchParams(location.search).get('id')
-              || localStorage.getItem('eventoSelecionado') || '';
+            const id = new URLSearchParams(location.search).get('id')
+              || memGet('eventoSelecionado','') || '';
       try { salvarEventoTempSlim?.(window.evento); } catch {}
       if (id) location.href = `modelos.html?id=${encodeURIComponent(id)}#itens`;
       else    location.href = `modelos.html#itens`;
@@ -4208,7 +4193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const getId = (typeof __getEventoIdAtual === "function")
         ? __getEventoIdAtual()
-        : (new URLSearchParams(location.search).get("id") || localStorage.getItem("eventoSelecionado") || "");
+        : (new URLSearchParams(location.search).get("id") || memGet('eventoSelecionado','') || "");
       ev = window.evento || (typeof __carregarEventoDoStorage === "function" ? __carregarEventoDoStorage(getId) : {}) || {};
     } catch {}
 
@@ -4237,7 +4222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Link seguro para a Área do Cliente (com token)
 function gerarLinkCliente(eventId){
-  const eventos = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{ return []; } })();
+  const eventos = (()=>{ try{ return memGetJSON('eventos', []); }catch{ return []; } })();
   const i = eventos.findIndex(e => String(e.id)===String(eventId));
   if (i < 0) return null;
 
@@ -4251,7 +4236,7 @@ function gerarLinkCliente(eventId){
       // Fallback sem crypto (ambientes antigos)
       eventos[i].acesso.token = 't_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
     }
-    try { localStorage.setItem('eventos', JSON.stringify(eventos)); } catch {}
+    try { memSetJSON('eventos', eventos); } catch {}
   }
 
   // Usa o diretório atual (compatível com apps hospedadas em subpastas)
@@ -4265,8 +4250,8 @@ function gerarLinkCliente(eventId){
   // Helpers
   const todayISO = () => new Date().toISOString().slice(0, 10);
   const qs       = () => new URLSearchParams(location.search);
-  const getId    = () => qs().get("id") || localStorage.getItem("eventoSelecionado") || "";
-  const getArr   = () => { try { return JSON.parse(localStorage.getItem("eventos") || "[]"); } catch { return []; } };
+  const getId    = () => qs().get("id") || memGet('eventoSelecionado','') || "";
+  const getArr   = () => { try { return memGetJSON('eventos', []); } catch { return []; } };
   const getEv    = () => (getArr().find(e => String(e.id) === String(getId())) || {});
 
   // --- CHIP: "Checklist: ok / N atrasado(s)"
@@ -4367,7 +4352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const eid =
       new URLSearchParams(location.search).get('id') ||
-      localStorage.getItem('eventoSelecionado') || '';
+      memGet('eventoSelecionado','') || '';
 
     try { salvarEventoTempSlim?.(window.evento || {}); } catch {}
 
@@ -4378,11 +4363,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===== Render da área: Itens do Evento =====
 function renderItensDoEvento(){
   const qs  = new URLSearchParams(location.search);
-  const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+  const eid = qs.get('id') || memGet('eventoSelecionado','') || '';
   if (!eid) return;
 
   // carregar evento atual
-  const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+  const eventos = memGetJSON('eventos', []);
   const idx = eventos.findIndex(e => String(e.id) === String(eid));
   if (idx === -1) return;
   const ev = eventos[idx] || {};
@@ -4486,7 +4471,7 @@ function renderItensDoEvento(){
     ev.financeiro = ev.financeiro || {};
     ev.financeiro.valorContrato = Number(totalLiq || 0);
     eventos[idx] = ev;
-    localStorage.setItem('eventos', JSON.stringify(eventos));
+    memSetJSON('eventos', eventos);
   }catch{}
 
   try{ window.lucide?.createIcons?.(); }catch{}
@@ -4494,7 +4479,7 @@ function renderItensDoEvento(){
 // === INÍCIO PATCH: auto-bind do campo #eventoConvidados ===
 function __carregarEventoDoStorage(evId) {
   try {
-    const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const eventos = memGetJSON("eventos", []);
     return eventos.find(e => String(e.id) === String(evId)) || null;
   } catch { return null; }
 }
@@ -4510,7 +4495,7 @@ function __syncInputConvidadosComStorage(evId) {
 function __getEventoIdAtual(){
   return (typeof window.__getEventoIdFix === 'function' && window.__getEventoIdFix())
       || new URLSearchParams(location.search).get('id')
-      || localStorage.getItem('eventoSelecionado')
+      || memGet('eventoSelecionado','')
       || '';
 }
 
@@ -4560,7 +4545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const eid = new URLSearchParams(location.search).get('id')
-               || localStorage.getItem('eventoSelecionado') || '';
+           || memGet('eventoSelecionado','') || '';
       const url = `itens-evento.html?id=${encodeURIComponent(eid)}`;
       window.location.href = url;
     });
@@ -4573,7 +4558,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // === Navegação dos cards: Cliente e Pós-Evento (hotfix seguro) ===
 (function () {
   function getEventoId() {
-    return new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+    return new URLSearchParams(location.search).get('id') || memGet('eventoSelecionado','') || '';
   }
 
   // CLIENTE
@@ -4616,7 +4601,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Resolve o ID do evento atual
   const resolveEvtId = () =>
     new URLSearchParams(location.search).get("id") ||
-    localStorage.getItem("eventoSelecionado") || "";
+    memGet('eventoSelecionado','') || "";
 
   // ------- CLIENTE -------
   // Implementa/expõe alternarCliente no escopo global (window)
@@ -4626,7 +4611,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.eventoSelecionado || window.evento || {} ;
 
       // tenta carregar listas possíveis de clientes
-      const getArr = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : []; } catch { return []; } };
+      const getArr = (k) => { try { return memGetJSON(k, []); } catch { return []; } };
       const bases = [
         "clientes","listaClientes","clientes_cad","clientesIndex","clientesList"
       ];
@@ -4701,9 +4686,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const id =
       (window.evento && window.evento.id) ||
       new URLSearchParams(location.search).get("id") ||
-      localStorage.getItem("eventoSelecionado") || "";
+      memGet("eventoSelecionado", '') || "";
 
-    try { localStorage.setItem("itensEvento:returnTo", "detalhado"); } catch {}
+    try { memSet("itensEvento:returnTo", "detalhado"); } catch {}
     const url = `itens-evento.html?id=${encodeURIComponent(String(id || ""))}&from=detalhado`;
     window.location.href = url;
   });
@@ -4716,7 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return String(
         (window.evento && window.evento.id) ||
         new URLSearchParams(location.search).get("id") ||
-        localStorage.getItem("eventoSelecionado") ||
+        memGet("eventoSelecionado", '') ||
         ""
       );
     } catch (e) {
@@ -4730,7 +4715,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof ev.stopImmediatePropagation === "function") ev.stopImmediatePropagation();
 
     const id = getIdAtual();
-    try { localStorage.setItem("itensEvento:returnTo", "detalhado"); } catch (e) {}
+    try { memSet("itensEvento:returnTo", "detalhado"); } catch (e) {}
 
     // Use 'origem=detalhado' para a tela de itens saber para onde voltar
     const url = "itens-evento.html?id=" + encodeURIComponent(id) + "&origem=detalhado";
@@ -4773,13 +4758,13 @@ function getIdEventoAtual(){
     return String(
       (window.evento && window.evento.id) ||
       new URLSearchParams(location.search).get("id") ||
-      localStorage.getItem("eventoSelecionado") || ""
+      memGet("eventoSelecionado", '') || ""
     );
   } catch { return ""; }
 }
 function carregarEventoDoLS(id){
   try {
-    const todos = JSON.parse(localStorage.getItem("eventos") || "[]");
+    const todos = memGetJSON('eventos', []);
     return todos.find(e => String(e.id) === String(id)) || null;
   } catch { return null; }
 }
@@ -4863,7 +4848,7 @@ function calcRecebido(id){
   // A) chave específica do evento — NÃO exige eventoId
   try {
     const key = "financeiroEvento:" + id;
-    const fx  = JSON.parse(localStorage.getItem(key) || "{}") || {};
+    const fx  = memGetJSON(key, {}) || {};
     r += somaArr(fx.lancamentos,  id, true);
     r += somaArr(fx.parcelas,     id, true);
     r += somaArr(fx.recebimentos, id, true);
@@ -4880,7 +4865,7 @@ function calcRecebido(id){
 
   // C) agregado global — só conta se houver eventoId igual
   try {
-    const g = JSON.parse(localStorage.getItem("financeiroGlobal") || "{}") || {};
+    const g = memGetJSON("financeiroGlobal", {}) || {};
     r += somaArr(g.lancamentos,  id, false);
     r += somaArr(g.parcelas,     id, false);
     r += somaArr(g.recebimentos, id, false);
@@ -4888,7 +4873,7 @@ function calcRecebido(id){
 
   // D) ponte opcional (se existir e for o mesmo evento)
   try {
-    const ponte = JSON.parse(localStorage.getItem("financeiro:return") || "{}");
+    const ponte = memGetJSON("financeiro:return", {});
     if (String(ponte?.idEvento) === String(id) && Number(ponte?.recebido) > 0) {
       r = Math.max(r, Number(ponte.recebido));
     }
@@ -4955,10 +4940,10 @@ window.addEventListener("storage", e => {
     if (!modal) return;
     // sugestão automática do VPP com base em algum item "porPessoa", se existir
     try {
-      const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
+            const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
               || new URLSearchParams(location.search).get('id')
-              || localStorage.getItem('eventoSelecionado') || '';
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+              || memGet('eventoSelecionado','') || '';
+            const eventos = memGetJSON('eventos', []);
       const ev = eventos.find(e => String(e.id) === String(id)) || {};
       const it = (ev.itensSelecionados || []).find(x => String(x.tipoCobranca||x.cobranca).toLowerCase()==='porpessoa');
       if (it) {
@@ -4987,11 +4972,11 @@ window.addEventListener("storage", e => {
     if (q <= 0) { alert('Informe a quantidade.'); return; }
     if (vpp < 0) { alert('Valor por pessoa inválido.'); return; }
 
-    // carrega evento
-    const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
-            || new URLSearchParams(location.search).get('id')
-            || localStorage.getItem('eventoSelecionado') || '';
-    const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+        // carrega evento
+        const id = (typeof __getEventoIdAtual === 'function' && __getEventoIdAtual())
+          || new URLSearchParams(location.search).get('id')
+          || memGet('eventoSelecionado','') || '';
+        const eventos = memGetJSON('eventos', []);
     const idx = eventos.findIndex(e => String(e.id) === String(id));
     if (idx === -1) { hide(); return; }
 
@@ -5022,7 +5007,7 @@ window.addEventListener("storage", e => {
 
     // 3) persiste e reflete no DOM
     if (typeof safeSaveEventos === 'function') safeSaveEventos(eventos);
-    else localStorage.setItem('eventos', JSON.stringify(eventos));
+    else memSetJSON('eventos', eventos);
 
     window.evento = eventos[idx];
     window.eventoSelecionado = eventos[idx];
@@ -5145,7 +5130,7 @@ window.__carregarUsuariosAtivos ??= function () {
   const chaves = ['usuarios','cadastroUsuarios','users','listaUsuarios'];
   for (const k of chaves){
     try {
-      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      const v = memGetJSON(k, null);
       if (Array.isArray(v)) return v;
     } catch {}
   }

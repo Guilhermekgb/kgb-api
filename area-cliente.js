@@ -35,8 +35,24 @@
     return 'data:application/octet-stream;base64,'+b;
   };
 
+  // Memória efêmera do módulo area-cliente (cache em memória do módulo)
+  (function(){
+    try{
+      if (!window.__mem_area_cliente) window.__mem_area_cliente = new Map();
+      const M = window.__mem_area_cliente;
+      window.memGetAreaCliente = (k,d=null) => M.has(k) ? M.get(k) : d;
+      window.memSetAreaCliente = (k,v) => (M.set(k,v), v);
+      window.memRemoveAreaCliente = (k) => (M.delete(k), undefined);
+      window.safeJSONArea = (s,d=null) => { try { return JSON.parse(s); } catch { return d; } };
+
+      window.readLS = window.readLS || ((k,fb)=>{ try{ const v = (window.memGetAreaCliente ? window.memGetAreaCliente(k) : null); if (v == null) return fb; return v; }catch{return fb;} });
+      window.writeLS = window.writeLS || ((k,v)=>{ try{ if (window.memSetAreaCliente) window.memSetAreaCliente(k, v); }catch{} });
+      window.iterLSKeys = window.iterLSKeys || (()=> Array.from(window.__mem_area_cliente ? window.__mem_area_cliente.keys() : []));
+    }catch(e){/* noop */}
+  })();
+
   /* ===================== Branding ===================== */
-  let app={}; try{ app=JSON.parse(localStorage.getItem('app_config')||'{}'); }catch{}
+  let app = (typeof window.__APP_CONFIG__ === 'object' && window.__APP_CONFIG__) || (window.readLS ? window.readLS('app_config', {}) : {});
   const setVar=(k,v)=>{ if(v) document.documentElement.style.setProperty(k,v); };
   setVar('--brand',  app.brand  ||'#5a3e2b');
   setVar('--brand-2',app.brand2 ||'#c29a5d');
@@ -53,13 +69,10 @@
   // token que vem no link que o cliente recebe
   const portalToken = qs.get('token') || qs.get('t') || '';
 
-  const API_BASE =
-    (typeof window.__API_BASE__ === 'string' && window.__API_BASE__) ||
-    localStorage.getItem('API_BASE') ||
-    '';
+  const API_BASE = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__) || '';
 
-  let ev  = {};   // evento atual (preenchido pela API ou pelo localStorage)
-  let eid = '';   // id do evento (vem do backend ou do localStorage)
+  let ev  = {};   // evento atual (preenchido pela API ou por armazenamento local antigo)
+  let eid = '';   // id do evento (vem do backend ou de armazenamento local antigo)
 
   // 4.2 – buffers com dados financeiros vindos da API do portal
   let portalFinanceiro = null;
@@ -78,22 +91,7 @@
 
       try {
         const url = API_BASE.replace(/\/+$/,'') + '/portal/me?token=' + encodeURIComponent(portalToken);
-        const resp = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'accept': 'application/json'
-          }
-        });
-
-        if (!resp.ok) {
-          document.body.innerHTML =
-            '<div style="display:grid;place-items:center;height:100vh;font-family:system-ui">' +
-            '<div style="background:#fff;border:1px solid #ead9c8;padding:24px;border-radius:12px;max-width:520px;text-align:center">' +
-            '<h2>Link inválido ou expirado</h2><p>Solicite um novo link ao buffet.</p></div></div>';
-          throw new Error('GET /portal/me falhou: ' + resp.status);
-        }
-
-        const data = await resp.json();
+        const data = await window.apiFetch(url, { method: 'GET', headers: { 'accept': 'application/json' } });
 
         // aqui você ajusta conforme o backend devolver:
         // pode ser { evento: {...} } ou já o objeto do evento
@@ -105,38 +103,21 @@
 
         try {
           const base = API_BASE.replace(/\/+$/,'');
-
-          const [finResp, parcResp] = await Promise.all([
-            fetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`, {
-              method: 'GET',
-              headers: {
-                'accept': 'application/json'
-              }
-            }),
-            fetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`, {
-              method: 'GET',
-              headers: {
-                'accept': 'application/json'
-              }
-            })
-          ]);
-
-          if (finResp.ok) {
-            portalFinanceiro = await finResp.json();
-          } else {
-            console.warn('GET /portal/eventos/:id/financeiro falhou:', finResp.status);
+          try {
+            portalFinanceiro = await window.apiFetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`, { method: 'GET', headers: { 'accept': 'application/json' } });
+          } catch (err) {
+            console.warn('GET /portal/eventos/:id/financeiro falhou:', err?.status || err);
           }
-
-          if (parcResp.ok) {
-            portalParcelas = await parcResp.json();
-          } else {
-            console.warn('GET /portal/eventos/:id/parcelas falhou:', parcResp.status);
+          try {
+            portalParcelas = await window.apiFetch(`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`, { method: 'GET', headers: { 'accept': 'application/json' } });
+          } catch (err) {
+            console.warn('GET /portal/eventos/:id/parcelas falhou:', err?.status || err);
           }
         } catch (e) {
           console.warn('[Portal] Erro ao carregar financeiro/parcelas do portal', e);
         }
         // cache leve só para esta aba/sessão (opcional)
-        try { sessionStorage.setItem('portal_me', JSON.stringify(ev)); } catch {}
+        try { if (window.writeLS) window.writeLS('portal_me', ev); } catch {}
 
       } catch (err) {
         console.error('[Portal] Erro ao carregar evento do portal', err);
@@ -151,14 +132,14 @@
       return;
     }
 
-    // 2) modo antigo (interno): usa id + localStorage
+    // 2) modo antigo (interno): usa id + mem-backed store
     const eidFromQuery = qs.get('id') || '';
-    const eidFromLS    = localStorage.getItem('eventoSelecionado') || '';
+    const eidFromLS    = (window.readLS ? window.readLS('eventoSelecionado','') : '');
     eid = eidFromQuery || eidFromLS || '';
 
     let eventos = [];
     try {
-      eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      eventos = (window.readLS ? window.readLS('eventos', []) : []);
     } catch {
       eventos = [];
     }
@@ -174,7 +155,7 @@
     try{
       const key = ev.fotoClienteKey || '';
       if (key){
-        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})());
+        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return (window.readLS ? window.readLS('fotosClientes', {}) : {}); }catch(e){return {};}})());
         const fromMap = map[key];
         if (fromMap && typeof fromMap === 'string' && fromMap.trim()){
           return fromMap;
@@ -236,11 +217,11 @@
     }, 0);
   }
   function lerSnapshotFinanceiro(eventoId){
-    try{ return JSON.parse(localStorage.getItem(`financeiroEvento:${eventoId}`)||'null'); }catch{ return null; }
+    try{ return (window.readLS ? window.readLS(`financeiroEvento:${eventoId}`, null) : null); }catch{ return null; }
   }
   function valorRecebidoPorParcelas(eventoId){
     try{
-      const parcelas = JSON.parse(localStorage.getItem(`parcelas:${eventoId}`)||'[]');
+      const parcelas = (window.readLS ? window.readLS(`parcelas:${eventoId}`, []) : []);
       return parcelas.reduce((acc,p)=>{
         const st=String(p.status||'').toLowerCase();
         const pago=(st==='pago'||st==='recebido');
@@ -295,9 +276,9 @@
       if (pend == null) pend = contrato - pago;
       falta = Math.max(0, Number(pend || 0));
     }
-    // 2) MODO ANTIGO (interno) → usa localStorage / M14
+    // 2) MODO ANTIGO (interno) → usa armazenamento local (compat) / M14
     else {
-      try{ eventos=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}
+      try{ eventos = (window.readLS ? window.readLS('eventos', []) : eventos); }catch{}
       ev = eventos.find(e=>String(e.id)===String(eid)) || ev || {};
 
       contrato = totalItensComDesconto(ev);
@@ -434,12 +415,12 @@
       }
       return hit||null;
     }
-    function getArrLS(key){ try{ const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; }catch{ return []; } }
+    function getArrLS(key){ try{ return (window.readLS ? window.readLS(key, []) : []); }catch{ return []; } }
     function fromPropostas(eid, preferName){
       try{
         let best=null, bestStrict=null;
-        for(let i=0;i<localStorage.length;i++){
-          const k=localStorage.key(i)||'';
+        const _allKeys = (window.iterLSKeys ? window.iterLSKeys() : []);
+        for(const k of _allKeys){
           if(!/^proposta_visualizacoes/i.test(k)) continue;
           const arr=getArrLS(k).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
           if(!arr.length) continue;
@@ -593,11 +574,11 @@
     const has=(v)=>v!==undefined && v!==null && String(v).trim()!=='';    
 
     const qs  = new URLSearchParams(location.search);
-    const eid = qs.get('id') || localStorage.getItem('eventoSelecionado') || '';
+    const eid = qs.get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '') || '';
 
-    const readFG = ()=>{ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } };
-    const getCompLanc = (lancId)=>{ try{ return localStorage.getItem(`fg.comp:${lancId}`)||null; }catch{ return null; } };
-    const getCompParc = (parcId)=>{ try{ return localStorage.getItem(`fg.comp.parc:${parcId}`)||null; }catch{ return null; } };
+    const readFG = ()=>{ try{ return (window.readLS ? window.readLS('financeiroGlobal', {}) : {}); }catch{ return {}; } };
+    const getCompLanc = (lancId)=>{ try{ return (window.readLS ? window.readLS(`fg.comp:${lancId}`, null) : null); }catch{ return null; } };
+    const getCompParc = (parcId)=>{ try{ return (window.readLS ? window.readLS(`fg.comp.parc:${parcId}`, null) : null); }catch{ return null; } };
 
     function montarLinhas(){
       const linhas=[]; const seen=new Set();
@@ -652,9 +633,9 @@
         return linhas;
       }
 
-      // ==== MODO ANTIGO (interno) — usa localStorage / M14 ====
+      // ==== MODO ANTIGO (interno) — usa armazenamento local (compat) / M14 ====
       try{
-        const arr = JSON.parse(localStorage.getItem(`parcelas:${eid}`)||'[]');
+        const arr = (window.readLS ? window.readLS(`parcelas:${eid}`, []) : []);
         arr.forEach(p=>{
           const anexo = p.comprovanteUrl || p.comprovante || p.reciboUrl || p.url || p.arquivo || getCompParc(p.id);
           push({...p, _anexo: anexo});
@@ -771,12 +752,12 @@
     if (fechar) fechar.addEventListener('click', ()=>modal.classList.remove('open'));
     if (modal)  modal.addEventListener('click',(e)=>{ if(e.target===modal) modal.classList.remove('open'); });
 
-    const loadDefsFromLS=(eid)=>{ try{ return JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}; }catch{ return {}; } };
+    const loadDefsFromLS=(eid)=>{ try{ return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {}); }catch{ return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     function renderDefCardapioBox(){
       const el=$id('defCardapioInfo'); if(!el) return;
-      const eid = new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+      const eid = new URLSearchParams(location.search).get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '') || '';
       const s = loadDefsFromLS(eid);
       if(!s || !s.a4Html){
         el.innerHTML='<span class="badge warn">Pendente</span>'; return;
@@ -884,7 +865,7 @@
   /* ===================== Etapas do Evento ===================== */
   (function etapas(){
     const toISOdate=(v)=>{ if(!v) return null; const d=new Date(v); return isFinite(d)?d:null; };
-    const loadDefsFromLS=(eid)=>{ try{ return JSON.parse(localStorage.getItem('definicoes_evento_'+eid)||'{}')||{}; }catch{ return {}; } };
+    const loadDefsFromLS=(eid)=>{ try{ return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {}); }catch{ return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     const contratoAssinado=(_ev)=>{
@@ -897,7 +878,7 @@
       if (_ev.cardapioContratado || _ev.menu || _ev.menuContracted) return true;
       if (has(_ev.cardapioId) || has(_ev.cardapioNome) || has(_ev.nomeCardapio)) return true;
       try{
-        const c=JSON.parse(localStorage.getItem('cardapioSelecionado')||'null');
+        const c = (window.readLS ? window.readLS('cardapioSelecionado', null) : null);
         if (c && (String(c.eventoId||_eid)===String(_eid)) && (has(c.id)||has(c.nome))) return true;
       }catch{}
       if (Array.isArray(_ev.itensSelecionados)){
@@ -1021,24 +1002,15 @@ const financeiroEmDia = (_ev) => {
     async function carregarTimeline(){
       try {
         const url = `${base}/portal/eventos/${encodeURIComponent(eid)}/timeline`;
-        const resp = await fetch(url, {
-          method:'GET',
-          headers:{
-            'x-tenant-id':'default',
-            'accept':'application/json'
-          }
-        });
-
-        if (!resp.ok) {
-          console.warn('GET /portal/eventos/:id/timeline falhou:', resp.status);
+        let eventosTL = [];
+        try {
+          const data = await window.apiFetch(url, { method: 'GET', headers: { 'x-tenant-id':'default', 'accept':'application/json' } });
+          eventosTL = Array.isArray(data) ? data : (data.eventos || data.timeline || []);
+        } catch (err) {
+          console.warn('GET /portal/eventos/:id/timeline falhou:', err?.status || err);
           listaTimeline.innerHTML = '<li class="muted">Não foi possível carregar a linha do tempo.</li>';
           return;
         }
-
-        const data = await resp.json();
-        const eventosTL = Array.isArray(data)
-          ? data
-          : (data.eventos || data.timeline || []);
 
         if (!eventosTL || !eventosTL.length) {
           listaTimeline.innerHTML = '<li class="muted">Ainda não há eventos registrados na linha do tempo.</li>';
@@ -1090,12 +1062,12 @@ const financeiroEmDia = (_ev) => {
     if (ev.clientNotes?.ideias && txi) txi.value=ev.clientNotes.ideias;
 
     const save = (key, val, hintEl)=>{
-      let arr=[]; try{ arr=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}
+      let arr=[]; try{ arr = (window.readLS ? window.readLS('eventos', []) : []); }catch{}
       const i = arr.findIndex(x=>String(x.id)===String(eid));
       if (i>-1){
         arr[i].clientNotes = arr[i].clientNotes || {};
         arr[i].clientNotes[key] = val;
-        localStorage.setItem('eventos', JSON.stringify(arr));
+        try{ if (window.writeLS) window.writeLS('eventos', arr); }catch{}
         if (hintEl){ hintEl.textContent='Salvo!'; setTimeout(()=>{hintEl.textContent='';}, 1200); }
       }
     };
@@ -1132,7 +1104,7 @@ const financeiroEmDia = (_ev) => {
       try{
         // se ainda estivermos no modo antigo, recarrega de LS
         if (!portalToken) {
-          let eventos=[]; try{ eventos=JSON.parse(localStorage.getItem('eventos')||'[]'); }catch{}
+          let eventos=[]; try{ eventos = (window.readLS ? window.readLS('eventos', []) : []); }catch{}
           ev = eventos.find(e=>String(e.id)===String(eid)) || ev || {};
         }
         renderKpis();

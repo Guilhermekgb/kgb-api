@@ -21,7 +21,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persistir API_BASE em storage do navegador — manter em memória apenas
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -37,7 +37,8 @@
           window.getUsuarioAtual = function(){
             let t = null;
             try { t = (window.obterUsuarioDoToken && window.obterUsuarioDoToken()) || null; } catch {}
-            let uStore = null; try { uStore = JSON.parse(localStorage.getItem('usuarioAtual') || 'null'); } catch {}
+            // Não ler do storage aqui; preferir cache em memória
+            let uStore = window.__KGB_USER_CACHE || null;
             let legacy = window.__KGB_USER_CACHE || null;
             // trigger async population
             try { if (typeof window.getUsuarioAtualAsync === 'function') window.getUsuarioAtualAsync().then(u=>{ if(u) window.__KGB_USER_CACHE = u; }); } catch {}
@@ -49,7 +50,9 @@
     // === Gate por evento designado (Admin sempre passa)
     (function(){
       const n   = s => String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
-      const get = (k,def="null")=>{ try{return JSON.parse(localStorage.getItem(k)||def);}catch{return null}; };
+      // lightweight in-memory cache access (page-local)
+      window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+      const get = (k,def="null")=>{ try{ const v = window.__MEM_CACHE__[k]; return v ? JSON.parse(v) : JSON.parse(def); }catch{return null}; };
 
       // Encapsula checagem de permissão em async init para poder usar sessão via cookie
       (async function(){
@@ -303,13 +306,24 @@ body.no-scroll{ overflow: hidden; }
   const S_EVT="eventos", S_USR="usuarios", S_NOTIF="notificacoes";
   const q = (s)=>document.querySelector(s);
   const norm = (s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
-  const get = (k,def="[]") => { try{return JSON.parse(localStorage.getItem(k)||def);}catch{return JSON.parse(def);} };
-  const set = (k,v) => localStorage.setItem(k, JSON.stringify(v));
 
-  // Helpers para JSON no localStorage (cache leve)
+  // memStore (page-local) + BroadcastChannel para sinalização cross-tab
+  window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+  const memStore = { cache: window.__MEM_CACHE__, ui: {} };
+  const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("kgb-ui-sync") : null;
+
+  function normArr(resp){ return resp?.data || resp?.items || resp?.itens || []; }
+  async function apiGet(path){ return window['apiFetch'](path,{ method: 'GET' }); }
+  async function apiPut(path, body){ return window['apiFetch'](path,{ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  async function apiPost(path, body){ return window['apiFetch'](path,{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+
+  const get = (k,def="[]") => { try{ const v = memStore.cache[k]; return v ? JSON.parse(v) : JSON.parse(def);}catch{return JSON.parse(def);} };
+  const set = (k,v) => { try{ memStore.cache[k] = JSON.stringify(v); }catch{} };
+
+  // Helpers para JSON no memStore (cache leve)
   const getJSON = (k, fb)=>{ 
     try{ 
-      const v = JSON.parse(localStorage.getItem(k)||'null'); 
+      const v = memStore.cache[k] ? JSON.parse(memStore.cache[k]) : null; 
       return v ?? fb; 
     }catch{ 
       return fb; 
@@ -317,25 +331,28 @@ body.no-scroll{ overflow: hidden; }
   };
   const setJSON = (k, v)=>{ 
     try{ 
-      localStorage.setItem(k, JSON.stringify(v)); 
+      memStore.cache[k] = JSON.stringify(v);
+      if(bc) bc.postMessage({ type: 'cache-update', key: k, value: v });
     }catch{} 
   };
 
-  // Carrega o evento pela API, com cache em localStorage como fallback
+  // Carrega o evento pela API, com cache em memória (memStore) como fallback
   async function carregarEventoDoBackend(evtId) {
     if (!evtId) return null;
 
+    // Se ambiente remoto, tentar API; caso contrário, usar memStore como fallback
     if (typeof IS_REMOTE === "undefined" || !IS_REMOTE) {
       const lista = getJSON(S_EVT, []);
       return (lista || []).find(e => String(e.id) === String(evtId)) || null;
     }
 
     try {
-      const resp = await callApi(`/eventos/${encodeURIComponent(String(evtId))}`, "GET", {});
+      let resp;
+      if (typeof callApi === 'function') resp = await callApi(`/eventos/${encodeURIComponent(String(evtId))}`, 'GET', {});
+      else resp = await apiGet(`/eventos/${encodeURIComponent(String(evtId))}`);
       const ev = resp?.data || resp;
 
       if (ev && ev.id) {
-        // atualiza cache local "eventos"
         try {
           const lista = getJSON(S_EVT, []);
           const i = lista.findIndex(e => String(e.id) === String(ev.id));
@@ -359,7 +376,7 @@ body.no-scroll{ overflow: hidden; }
   const urlId = new URLSearchParams(location.search).get("id");
   let id = urlId && urlId !== "EVENTOID" ? String(urlId) : "";
   if(!id){
-    const sel = localStorage.getItem("eventoSelecionado");
+    const sel = memStore.cache['eventoSelecionado'];
     if(sel){ try{ const maybe = JSON.parse(sel); id = maybe?.id ? String(maybe.id) : String(sel); } catch{ id = String(sel); } }
   }
 
@@ -375,8 +392,8 @@ body.no-scroll{ overflow: hidden; }
   function findWhatsappByName(nome){
     const norm = s => String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
     const alvo = norm(nome);
-    const usuarios = (()=>{ try{ return JSON.parse(localStorage.getItem("usuarios")||"[]"); }catch{ return []; } })();
-    const colabs   = (()=>{ try{ return JSON.parse(localStorage.getItem("colaboradoresBase")||"[]"); }catch{ return []; } })();
+    const usuarios = (()=>{ try{ return getJSON("usuarios", []); }catch{ return []; } })();
+    const colabs   = (()=>{ try{ return getJSON("colaboradoresBase", []); }catch{ return []; } })();
 
     let u = usuarios.find(x => norm(x.nome) === alvo && x.whatsapp);
     if (u && u.whatsapp) return u.whatsapp;
@@ -591,30 +608,55 @@ body.no-scroll{ overflow: hidden; }
     if(i>=0){ all[i]=ev; } else { all.push(ev); }
     setJSON(S_EVT, all);
 
-    window.dispatchEvent(new StorageEvent("storage",{ key:S_EVT, newValue:JSON.stringify(all) }));
+    // sinaliza atualização para outras tabs via BroadcastChannel (fallback: window event)
+    if(bc) bc.postMessage({ type:'storage', key: S_EVT, newValue: all });
+    else window.dispatchEvent(new CustomEvent('kgb-cache-update', { detail:{ key: S_EVT, newValue: all } }));
 
-    if (typeof IS_REMOTE !== "undefined" && IS_REMOTE && typeof callApi === "function") {
+    if (typeof IS_REMOTE !== "undefined" && IS_REMOTE) {
       try {
-        await callApi(`/eventos/${encodeURIComponent(String(ev.id))}`, "PUT", ev);
+        if (typeof callApi === 'function') await callApi(`/eventos/${encodeURIComponent(String(ev.id))}`, "PUT", ev);
+        else await apiPut(`/eventos/${encodeURIComponent(String(ev.id))}`, ev);
       } catch(e){
         console.warn("[escala-evento] Falha ao salvar equipe/escala na API", e);
       }
     }
   }
 
-  window.addEventListener("storage",(e)=>{
-    if(e.key===S_EVT){
-      const evts2 = JSON.parse(e.newValue||"[]");
-      const novo  = evts2.find(x=> String(x.id)===String(id));
-      if(novo){
-        const mudouResp = norm(novo.responsavelEquipe) !== norm(eventoSelecionado?.responsavelEquipe);
-        eventoSelecionado = novo;
-        renderResumoResponsavel();
-        renderTabela();
-        if(mudouResp) popularUsuariosNoSelect();
+  if (bc) {
+    bc.onmessage = (ev) => {
+      try {
+        const msg = ev.data || {};
+        if (msg && (msg.type==='storage' || msg.type==='cache-update') && msg.key===S_EVT) {
+          const evts2 = Array.isArray(msg.newValue) ? msg.newValue : JSON.parse(msg.newValue||"[]");
+          const novo = evts2.find(x=> String(x.id)===String(id));
+          if(novo){
+            const mudouResp = norm(novo.responsavelEquipe) !== norm(eventoSelecionado?.responsavelEquipe);
+            eventoSelecionado = novo;
+            renderResumoResponsavel();
+            renderTabela();
+            if(mudouResp) popularUsuariosNoSelect();
+          }
+        }
+      } catch(e){ }
+    };
+  } else {
+    window.addEventListener('kgb-cache-update',(ev)=>{
+      const d = ev.detail || {};
+      if(d.key===S_EVT){
+        try{
+          const evts2 = Array.isArray(d.newValue) ? d.newValue : JSON.parse(d.newValue||"[]");
+          const novo = evts2.find(x=> String(x.id)===String(id));
+          if(novo){
+            const mudouResp = norm(novo.responsavelEquipe) !== norm(eventoSelecionado?.responsavelEquipe);
+            eventoSelecionado = novo;
+            renderResumoResponsavel();
+            renderTabela();
+            if(mudouResp) popularUsuariosNoSelect();
+          }
+        }catch(e){}
       }
-    }
-  });
+    });
+  }
 </script>
 
 

@@ -19,7 +19,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persista API_BASE em armazenamento persistente — usar variável global em memória
+    try { /* não gravar em armazenamento persistente */ } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -39,7 +40,10 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script type="module" src="./kgb-common.js"></script>
 <!-- === INÍCIO PATCH GUARD (entradas-saidas) === -->
-<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+<script>
+  // Guarda enforcements em memória (cache em memória do módulo)
+  try{ (window.__mem_entradas_saidas ||= new Map()).set('guard.enforce','1'); }catch(e){}
+</script>
 <script type="module">
   import guard from './api/proteger-pagina.js';
   const meta = document.querySelector('meta[name="page-permission"]');
@@ -241,8 +245,8 @@
 
 <div id="toast" class="toast">Pronto!</div>
 <script>
-  // === PATCH ES-0: limpeza de chave antiga gigante ===
-  try { localStorage.removeItem('financeiro.lancamentos'); } catch {}
+  // === PATCH ES-0: limpeza de chave antiga gigante (cache em memória do módulo) ===
+  try { (window.__mem_entradas_saidas ||= new Map()).delete('financeiro.lancamentos'); } catch {}
 </script>
 
 <script>
@@ -250,9 +254,17 @@
 (function (win, doc) {
   'use strict';
 
+  // Memória efêmera do módulo (cache em memória do módulo)
+  const __memES = (window.__mem_entradas_saidas ||= new Map());
+  const memGetES = (k, d=null) => __memES.has(k) ? __memES.get(k) : d;
+  const memSetES = (k, v) => (__memES.set(k, v), v);
+  const memRemoveES = (k) => (__memES.delete(k), undefined);
+  const safeJSON = (s, d=null) => { try { return JSON.parse(s); } catch { return d; } };
+
   /* ===== helpers (sem redeclarar globais) ===== */
-  const rLS  = win.readLS || ((k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} });
-  const wLS  = win.writeLS || ((k,v)=> localStorage.setItem(k, JSON.stringify(v)));
+  // rLS/wLS agora usam o cache em memória do módulo
+  const rLS  = win.readLS || ((k,fb)=>{ try{ const v = memGetES(k); return (v === undefined ? fb : v); }catch{return fb;} });
+  const wLS  = win.writeLS || ((k,v)=> memSetES(k, v));
   win.fmtBRL = win.fmtBRL || new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
   win.ISO    = win.ISO    || (()=> new Date().toISOString());
 
@@ -384,10 +396,19 @@
 
   /* ===== financeiro global (saídas) ===== */
   function readFG(){
-    try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch(e){return{};}
+    try{
+      const v = memGetES('financeiroGlobal');
+      if (v == null) return {};
+      return (typeof v === 'string') ? safeJSON(v, {}) : v;
+    }catch(e){return{};}
   }
   function getCfg(){
-    try{ const c = JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; c.tipos = Array.isArray(c.tipos) ? c.tipos : []; return c; }catch(e){return {tipos:[]};}
+    try{
+      const v = memGetES('configFinanceiro');
+      const c = (v == null) ? {} : (typeof v === 'string' ? safeJSON(v, {}) : v);
+      c.tipos = Array.isArray(c.tipos) ? c.tipos : [];
+      return c;
+    }catch(e){return {tipos:[]};}
   }
   function formasMap(){
     const map = new Map();
@@ -404,11 +425,11 @@
   }
 
   /* === helpers para espelhar PDV → financeiroGlobal === */
-  function _fgLoad(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{ return {}; } }
+  function _fgLoad(){ try{ const v = memGetES('financeiroGlobal'); return v == null ? {} : (typeof v === 'string' ? safeJSON(v,{}) : v); }catch{ return {}; } }
   function _fgSave(g){
     try{
-      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      memSetES('financeiroGlobal', g);
+      memSetES('financeiroGlobal:ping', String(Date.now()));
     }catch{}
   }
   function _fgEnsure(g){
@@ -418,7 +439,7 @@
     if(!Array.isArray(g.contas))      g.contas=[];
     return g;
   }
-  function _cfgFin(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{ return {}; } }
+  function _cfgFin(){ try{ const v = memGetES('configFinanceiro'); return v == null ? {} : (typeof v === 'string' ? safeJSON(v,{}) : v); }catch{ return {}; } }
   function pickContaForForma(formaId){
     const cfg = _cfgFin();
     const contas = Array.isArray(cfg.contas)? cfg.contas : [];
@@ -630,7 +651,7 @@ const _lanKey = (evtId) => `${LC_PREFIX_LANCS}:${evtId || '__sem_evt__'}`;
 
 // lê somente do evento atual
 function _lanGetAll(evtId){
-  try { return JSON.parse(localStorage.getItem(_lanKey(evtId)) || '[]') || []; }
+  try { const v = memGetES(_lanKey(evtId)); return v == null ? [] : (typeof v === 'string' ? safeJSON(v,[]) : v); }
   catch { return []; }
 }
 
@@ -638,7 +659,7 @@ function _lanGetAll(evtId){
 function _lanSetAll(evtId, list){
   const key = _lanKey(evtId);
   try {
-    localStorage.setItem(key, JSON.stringify(Array.isArray(list)? list : []));
+    memSetES(key, Array.isArray(list)? list : []);
   } catch (e) {
     // compacta: mantém só os últimos 200 e campos essenciais
     try{
@@ -657,7 +678,7 @@ function _lanSetAll(evtId, list){
         contaId: m.contaId,
         contaNome: m.contaNome
       }));
-      localStorage.setItem(key, JSON.stringify(slim));
+      memSetES(key, slim);
       alert('Espelho grande: salvei versão compacta (últimos 200 registros).');
     }catch(_){}
   }
@@ -774,7 +795,7 @@ function _lanSetAll(evtId, list){
   });
 
   // 1.1) Trazer também o que já existe no FG para o espelho local (sem mexer em valores)
-  const FGraw = (function(){ try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; } catch { return {}; } })();
+  const FGraw = (function(){ try { const v = memGetES('financeiroGlobal'); return v == null ? {} : (typeof v === 'string' ? safeJSON(v,{}) : v); } catch { return {}; } })();
   const lancsFG = Array.isArray(FGraw.lancamentos) ? FGraw.lancamentos : [];
   lancsFG
     .filter(l => String(l.eventoId || '') === String(evtId))
@@ -925,9 +946,9 @@ function _lanSetAll(evtId, list){
 }
 
 // ==== Movimentos/Saldos locais (mini-versão) ====
-function __fgLoad(){ try{ return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; }catch{return{};} }
-function __fgSave(g){ try{ localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-                           localStorage.setItem('financeiroGlobal:ping', String(Date.now())); }catch{} }
+function __fgLoad(){ try{ const v = memGetES('financeiroGlobal'); return v == null ? {} : (typeof v === 'string' ? safeJSON(v,{}) : v); }catch{return{};} }
+function __fgSave(g){ try{ memSetES('financeiroGlobal', g);
+                           memSetES('financeiroGlobal:ping', String(Date.now())); }catch{} }
 function __fgEnsure(g){
   if(!Array.isArray(g.lancamentos)) g.lancamentos=[];
   if(!Array.isArray(g.parcelas))    g.parcelas=[];
@@ -935,7 +956,7 @@ function __fgEnsure(g){
   if(!Array.isArray(g.contas))      g.contas=[];
   return g;
 }
-function __cfg(){ try{ return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }catch{return{};} }
+function __cfg(){ try{ const v = memGetES('configFinanceiro'); return v == null ? {} : (typeof v === 'string' ? safeJSON(v,{}) : v); }catch{return{};} }
 
 // Recalcula saldoAtual = saldoInicial + (créditos - débitos)
 function recomputeAllAccountBalances(){
@@ -1223,8 +1244,10 @@ function syncAccountMovementsForLancamento(lancId){
     try { evs = (typeof listEventos === 'function' ? (listEventos() || []) : evs); } catch {}
     if (!Array.isArray(evs) || evs.length === 0) {
       try {
-        const a = JSON.parse(localStorage.getItem(K.EVENTOS) || '[]');
-        const b = JSON.parse(localStorage.getItem('eventos') || '[]');
+        const a_raw = memGetES(K.EVENTOS);
+        const a = a_raw == null ? [] : (typeof a_raw === 'string' ? safeJSON(a_raw,[]) : a_raw);
+        const b_raw = memGetES('eventos');
+        const b = b_raw == null ? [] : (typeof b_raw === 'string' ? safeJSON(b_raw,[]) : b_raw);
         const map = new Map(); [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
         evs = Array.from(map.values());
       } catch {}
@@ -1251,7 +1274,8 @@ win.addEventListener('finmodal:confirm', (ev)=>{
     const lancId = ev?.detail?.lancId || ev?.detail?.id || null;
 
     // carrega FG
-    const g = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {};
+    const g_raw = memGetES('financeiroGlobal');
+    const g = g_raw == null ? {} : (typeof g_raw === 'string' ? safeJSON(g_raw,{}) : g_raw);
     g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
     g.parcelas    = Array.isArray(g.parcelas)    ? g.parcelas    : [];
     g.movimentos  = Array.isArray(g.movimentos)  ? g.movimentos  : [];
@@ -1323,8 +1347,10 @@ win.addEventListener('finmodal:confirm', (ev)=>{
       try { evs = (typeof listEventos === 'function') ? (listEventos() || []) : evs; } catch {}
       if (!Array.isArray(evs) || evs.length === 0){
         try {
-          const a = JSON.parse(localStorage.getItem((window.K_KEYS?.EVENTOS)||'m30.eventos') || '[]');
-          const b = JSON.parse(localStorage.getItem('eventos') || '[]');
+          const a_raw = memGetES((window.K_KEYS?.EVENTOS)||'m30.eventos');
+          const a = a_raw == null ? [] : (typeof a_raw === 'string' ? safeJSON(a_raw,[]) : a_raw);
+          const b_raw = memGetES('eventos');
+          const b = b_raw == null ? [] : (typeof b_raw === 'string' ? safeJSON(b_raw,[]) : b_raw);
           const map = new Map(); [...a, ...b].forEach(e => { if (e?.id != null) map.set(String(e.id), e); });
           evs = Array.from(map.values());
         } catch {}
@@ -1335,8 +1361,8 @@ win.addEventListener('finmodal:confirm', (ev)=>{
 
     // salva & pinga FG se houve alguma alteração/promoção
     if (lanc || createdNow) {
-      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      memSetES('financeiroGlobal', g);
+      memSetES('financeiroGlobal:ping', String(Date.now()));
     }
   }catch(e){
     console.warn('ajuste/promoção de lançamento após finmodal:confirm', e);

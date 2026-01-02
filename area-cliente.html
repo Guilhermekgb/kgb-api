@@ -18,7 +18,7 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -29,6 +29,9 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 
   <!-- Ícones -->
   <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Helpers globais -->
+  <script type="module" src="./kgb-common.js"></script>
 
   <!-- Estilos -->
   <style>

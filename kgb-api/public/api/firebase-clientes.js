@@ -54,62 +54,33 @@ function unwrapDoc(doc){
 }
 
 async function fsGetCollection(){
-  const url = withKey(`${baseDocUrl()}/${colPath()}`);
-  const r = await fetch(url, { method: "GET" });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || "Falha ao listar no Firestore");
-  const docs = data.documents || [];
-  return docs.map(unwrapDoc);
+  // Migrado: usar endpoint backend `/clientes` via apiFetch
+  const j = await window.apiFetch('/clientes', { method: 'GET', headers: { ...authHeaders() } });
+  return (j && j.data) ? j.data : [];
 }
 
 async function fsCreate(obj){
-  const id = obj?.id || crypto.randomUUID();
-  const now = new Date().toISOString();
-  const payload = wrapDoc({ ...obj, id, createdAt: obj?.createdAt || now, updatedAt: now });
-
-  const url = withKey(`${baseDocUrl()}/${colPath()}?documentId=${encodeURIComponent(id)}`);
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || "Falha ao criar no Firestore");
-  return unwrapDoc(data);
+  // Criar via backend
+  const j = await window.apiFetch('/clientes', { method: 'POST', body: obj, headers: { 'Content-Type': 'application/json', ...authHeaders() } });
+  return j && j.data ? j.data : j;
 }
 async function fsUpsert(obj){
-  const id = obj?.id || crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  // PATCH no documento: cria se existir? (com updateMask e "currentDocument" evita bagunça)
-  const payload = wrapDoc({ ...obj, id, createdAt: obj?.createdAt || now, updatedAt: now });
-
-  const url = withKey(`${baseDocUrl()}/${colPath()}/${encodeURIComponent(id)}?updateMask.fieldPaths=json&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=createdAt`);
-  const r = await fetch(url, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || "Falha ao salvar no Firestore");
-  return unwrapDoc(data);
+  // Upsert via backend: PUT /clientes/:id ou POST
+  const id = obj?.id;
+  if (id) {
+    const j = await window.apiFetch('/clientes/' + encodeURIComponent(id), { method: 'PUT', body: obj, headers: { 'Content-Type': 'application/json', ...authHeaders() } });
+    return j && j.data ? j.data : j;
+  }
+  return await fsCreate(obj);
 }
 
 async function fsGetOne(id){
-  const url = withKey(`${baseDocUrl()}/${colPath()}/${encodeURIComponent(id)}`);
-  const r = await fetch(url, { method: "GET" });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || "Falha ao obter cliente no Firestore");
-  return unwrapDoc(data);
+  const j = await window.apiFetch('/clientes/' + encodeURIComponent(id), { method: 'GET', headers: { ...authHeaders() } });
+  return j && j.data ? j.data : null;
 }
 
 async function fsDelete(id){
-  const url = withKey(`${baseDocUrl()}/${colPath()}/${encodeURIComponent(id)}`);
-  const r = await fetch(url, { method: "DELETE" });
-  if (!r.ok) {
-    const data = await r.json().catch(()=> ({}));
-    throw new Error(data?.error?.message || "Falha ao excluir no Firestore");
-  }
+  await window.apiFetch('/clientes/' + encodeURIComponent(id), { method: 'DELETE', headers: { ...authHeaders() } });
   return { ok: true };
 }
 
@@ -123,11 +94,11 @@ export const firebaseClientes = {
 
 window.firebaseClientes = firebaseClientes;
 
-// --- Adapter: tenta Firestore, depois API backend, por fim localStorage ---
+// --- Adapter: tenta Firestore, depois API backend, por fim fallback em memória ---
 function getApiBase() {
-  // Prefer explicit runtime config, then localStorage. Em dev (localhost or file:),
-  // assume backend em http://localhost:3333 para facilitar testes locais.
-  const explicit = window.__API_BASE__ || (localStorage.getItem('API_BASE') || '');
+  // Prefer explicit runtime config only. NÃO usar armazenamento local como fonte de verdade.
+  // Em dev (localhost or file:), assume backend em http://localhost:3333 para facilitar testes locais.
+  const explicit = window.__API_BASE__ || '';
   if (explicit) return explicit;
   try {
     const host = (window.location && window.location.hostname) ? window.location.hostname : '';
@@ -141,17 +112,21 @@ function getApiBase() {
   return '';
 }
 function authHeaders() {
-  const t = localStorage.getItem('token') || sessionStorage.getItem('token');
-  return t ? { Authorization: 'Bearer ' + t } : {};
+  // Não usar armazenamento local/armazenamento de sessão aqui; preferir cookie-based auth (kgb_token) ou vazio.
+  try {
+    const cookie = (document && document.cookie) ? document.cookie : '';
+    const m = cookie.match(/(?:^|; )kgb_token=([^;]+)/);
+    if (m) return { Authorization: 'Bearer ' + decodeURIComponent(m[1]) };
+  } catch (e) {}
+  return {};
 }
 
 async function tryApiList() {
   const base = getApiBase();
   if (!base) throw new Error('API base ausente');
   const url = (base.replace(/\/$/, '')) + '/clientes';
-  const r = await fetch(url, { method: 'GET', headers: { ...authHeaders() } });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error || 'API list failed');
+  const j = await window.apiFetch(url, { method: 'GET', headers: { ...authHeaders() } });
+  if (!j) throw new Error('API list failed');
   return j.data || [];
 }
 
@@ -159,10 +134,8 @@ async function tryApiGet(id) {
   const base = getApiBase();
   if (!base) throw new Error('API base ausente');
   const url = (base.replace(/\/$/, '')) + '/clientes/' + encodeURIComponent(id);
-  const r = await fetch(url, { method: 'GET', headers: { ...authHeaders() } });
-  if (r.status === 404) throw new Error('notfound');
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error || 'API get failed');
+  const j = await window.apiFetch(url, { method: 'GET', headers: { ...authHeaders() } });
+  if (!j) throw new Error('notfound');
   return j.data;
 }
 
@@ -170,9 +143,8 @@ async function tryApiCreate(obj) {
   const base = getApiBase();
   if (!base) throw new Error('API base ausente');
   const url = (base.replace(/\/$/, '')) + '/clientes';
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify(obj) });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error || 'API create failed');
+  const j = await window.apiFetch(url, { method: 'POST', headers: { 'Content-Type':'application/json', ...authHeaders() }, body: obj });
+  if (!j) throw new Error('API create failed');
   return j.data;
 }
 
@@ -182,9 +154,8 @@ async function tryApiUpsert(obj) {
   const id = obj?.id;
   if (id) {
     const url = (base.replace(/\/$/, '')) + '/clientes/' + encodeURIComponent(id);
-    const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify(obj) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j?.error || 'API put failed');
+    const j = await window.apiFetch(url, { method: 'PUT', headers: { 'Content-Type':'application/json', ...authHeaders() }, body: obj });
+    if (!j) throw new Error('API put failed');
     return j.data;
   }
   return tryApiCreate(obj);
@@ -194,17 +165,14 @@ async function tryApiDelete(id) {
   const base = getApiBase();
   if (!base) throw new Error('API base ausente');
   const url = (base.replace(/\/$/, '')) + '/clientes/' + encodeURIComponent(id);
-  const r = await fetch(url, { method: 'DELETE', headers: { ...authHeaders() } });
-  if (!r.ok) {
-    const j = await r.json().catch(()=> ({}));
-    throw new Error(j?.error || 'API delete failed');
-  }
+  const j = await window.apiFetch(url, { method: 'DELETE', headers: { ...authHeaders() } });
+  if (!j) throw new Error('API delete failed');
   return { ok: true };
 }
 
-// Fallback localStorage helpers
-function lsList() { try { return JSON.parse(localStorage.getItem('clientes')||'[]') || []; } catch { return []; } }
-function lsSaveList(arr) { try { localStorage.setItem('clientes', JSON.stringify(arr||[])); } catch {} }
+// Fallback in-memory helpers (não usar armazenamento local/armazenamento de sessão como fonte de verdade)
+function lsList() { try { globalThis.__MEM_DB__ = globalThis.__MEM_DB__ || {}; return globalThis.__MEM_DB__.clientes || []; } catch { return []; } }
+function lsSaveList(arr) { try { globalThis.__MEM_DB__ = globalThis.__MEM_DB__ || {}; globalThis.__MEM_DB__.clientes = arr || []; } catch {} }
 
 // Wrap original exports to attempt multi-backend
 const original = window.firebaseClientes;

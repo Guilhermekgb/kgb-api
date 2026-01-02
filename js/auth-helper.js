@@ -18,13 +18,12 @@
       const hostWithPort = host + (port ? ':' + port : '');
       const isLiveServer = origin.includes(':5500') || hostWithPort === '127.0.0.1:5500';
 
-      // Prefer explicit runtime config or saved value
+      // Prefer explicit runtime config
       if (window.__API_BASE__) return window.__API_BASE__;
       if (window.API_BASE) return window.API_BASE;
       if (typeof window.__getApiBase === 'function' && window.__getApiBase() !== getApiBase) {
         return window.__getApiBase();
       }
-      try { const ls = localStorage.getItem('API_BASE') || ''; if (ls) return ls; } catch(e) {}
       if (window.location && window.location.origin) return window.location.origin;
       return '';
     } catch (err) {

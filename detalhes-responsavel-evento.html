@@ -21,7 +21,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não persistir API_BASE em storage do navegador — manter em memória apenas
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -216,7 +216,18 @@
   <script>
     /* ===== utilitários base ===== */
     const q=(s,el=document)=>el.querySelector(s);
-    const getLS=(k,fb)=>{try{return JSON.parse(localStorage.getItem(k))??fb}catch{return fb}};
+    // memStore + BroadcastChannel
+    window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+    const memStore = { cache: window.__MEM_CACHE__, ui: {} };
+    const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("kgb-ui-sync") : null;
+
+    function normArr(resp){ return resp?.data || resp?.items || resp?.itens || resp || []; }
+    async function apiGet(path){ if (typeof callApi === 'function') return callApi(path, 'GET', {}); return window['apiFetch'](path, { method: 'GET' }); }
+    async function apiPut(path, body){ if (typeof callApi === 'function') return callApi(path, 'PUT', body); return window['apiFetch'](path, { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) }); }
+    async function apiPost(path, body){ if (typeof callApi === 'function') return callApi(path, 'POST', body); return window['apiFetch'](path, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) }); }
+
+    const getLS=(k,fb)=>{ try{ const v = memStore.cache[k]; return v ? JSON.parse(v) : fb; }catch{return fb} };
+    const setLS=(k,v)=>{ try{ memStore.cache[k]=JSON.stringify(v); if(bc) bc.postMessage({type:'cache-update',key:k,value:v}); }catch{} };
     const norm=(s)=>String(s||"").normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase().trim();
     const ddmmyyyy=(iso)=>{ if(!iso)return"—"; const b=String(iso).split("T")[0]; if(b.includes("/"))return b; const [y,m,d]=b.split("-"); return(d&&m&&y)?`${d}/${m}/${y}`:b; };
     function getUser(){
@@ -235,9 +246,9 @@
 
     function getEventoId(){
       const id = new URLSearchParams(location.search).get("id")
-              || localStorage.getItem("eventoSelecionado")
+              || (memStore.cache['eventoSelecionado'] ? JSON.parse(memStore.cache['eventoSelecionado']) : null)
               || "";
-      return String(id||"");
+      return String((id && id.id) ? id.id : id || "");
     }
 
     /* ===== modal ===== */
@@ -320,21 +331,23 @@
 
     /* ===== tenta obter logo salvo no sistema (opcional) ===== */
     function obterLogoKGB(){
-      // tente em definicoes gerais ou onde você costuma salvar
+      // tente em definicoes memStore ou onde você costuma salvar
       try{
-        const a = JSON.parse(localStorage.getItem("kgb_logo")||"null");
+        const a = memStore.cache['kgb_logo'] ? JSON.parse(memStore.cache['kgb_logo']) : null;
         if (a && typeof a === "string") return a;
       }catch{}
       try{
-        const g = JSON.parse(localStorage.getItem("brandingKGB")||"null");
+        const g = memStore.cache['brandingKGB'] ? JSON.parse(memStore.cache['brandingKGB']) : null;
         if (g?.logo) return g.logo;
       }catch{}
       try{
-        const keys = Object.keys(localStorage).filter(k => k.startsWith("definicoes_evento_"));
+        const keys = Object.keys(memStore.cache).filter(k => k.startsWith("definicoes_evento_"));
         for(const k of keys){
-          const o = JSON.parse(localStorage.getItem(k)||"null");
-          const logo = o?.imagens?.logo || o?.logoUrl || o?.branding?.logo;
-          if (logo) return logo;
+          try{
+            const o = JSON.parse(memStore.cache[k] || "null");
+            const logo = o?.imagens?.logo || o?.logoUrl || o?.branding?.logo;
+            if (logo) return logo;
+          }catch{}
         }
       }catch{}
       return ""; // sem logo
@@ -351,7 +364,11 @@
       try { lucide.createIcons(); } catch {}
       carregar();
     });
-    window.addEventListener("storage",(e)=>{ if(e.key==="eventos"||(e.key||"").startsWith("definicoes_evento_")) carregar(); });
+    if (bc) {
+      bc.onmessage = (ev) => { try { const m = ev.data || {}; if (m && (m.type==='cache-update' || m.type==='storage') && (m.key==='eventos' || String(m.key||'').startsWith('definicoes_evento_'))) carregar(); } catch(e){} };
+    } else {
+      window.addEventListener('kgb-cache-update', (e) => { const d = e.detail || {}; if (d.key==='eventos' || String(d.key||'').startsWith('definicoes_evento_')) carregar(); });
+    }
 
     /* ===== Helpers IndexedDB para o LAYOUT (busca por idbKey salvo em Definições) ===== */
     const IDB_DB = 'buffetLayouts';
@@ -383,8 +400,18 @@
     function carregar(){
       const id=getEventoId();
       const user=getUser();
-      const eventos=getLS("eventos",[]);
-      let ev=eventos.find(e => String(e?.id)===id || String(e?.codigo)===id || String(e?.uuid)===id) || null;
+      // Tenta carregar evento via API quando disponível; senão usa memStore cache
+      let ev = null;
+      if (typeof IS_REMOTE !== 'undefined' && IS_REMOTE) {
+        try {
+          const resp = await apiGet(`/eventos/${encodeURIComponent(String(id))}`);
+          ev = (resp && resp.data) ? resp.data : (Array.isArray(resp) ? resp[0] : resp);
+        } catch(e) { console.warn('[detalhes-responsavel-evento] falha apiGet /eventos/:id', e); }
+      }
+      if (!ev) {
+        const eventos = getLS("eventos",[]);
+        ev = eventos.find(e => String(e?.id)===id || String(e?.codigo)===id || String(e?.uuid)===id) || null;
+      }
 
       // Arquivado/inexistente?
       if(!ev){ bloquear("Evento não encontrado."); return; }
@@ -511,21 +538,25 @@
     }
 
     function obterDefinicoesById(id){
-      const val=localStorage.getItem(`definicoes_evento_${id}`);
-      if(val){ try{return JSON.parse(val)}catch{} }
-      const keys=Object.keys(localStorage).filter(k=>k.startsWith("definicoes_evento_"));
-      let unico=null, match=null;
-      for(const k of keys){
-        try{
-          const obj=JSON.parse(localStorage.getItem(k));
-          if(!obj) continue;
-          if(!unico) unico=obj;
-          const m=obj?.eventoMeta;
-          const ok = [m?.id,m?.codigo,m?.uuid].map(x=>String(x||"")).includes(String(id));
-          if(ok){ match=obj; break; }
-        }catch{}
-      }
-      return match || (keys.length===1 ? unico : null);
+      try{
+        const val = memStore.cache[`definicoes_evento_${id}`];
+        if (val) return JSON.parse(val);
+      }catch{}
+      try{
+        const keys = Object.keys(memStore.cache).filter(k=>k.startsWith("definicoes_evento_"));
+        let unico=null, match=null;
+        for(const k of keys){
+          try{
+            const obj = JSON.parse(memStore.cache[k] || "null");
+            if(!obj) continue;
+            if(!unico) unico = obj;
+            const m = obj?.eventoMeta;
+            const ok = [m?.id,m?.codigo,m?.uuid].map(x=>String(x||"")).includes(String(id));
+            if(ok){ match = obj; break; }
+          }catch{}
+        }
+        return match || (keys.length===1 ? unico : null);
+      }catch{return null}
     }
 
     function bloquear(msg){

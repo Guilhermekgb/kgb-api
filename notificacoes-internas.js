@@ -1,19 +1,45 @@
 import { apiUrl, getAuthHeaders } from './api-config.js'; // se apiUrl não estiver exportado, depois ajustamos
 // notificacoes-internas.js
 // Painel operacional (Checklist + Fontes unificadas).
-// - Checklist: lê localStorage.agenda (tipo: "checklist")
-// - Demais fontes: lê localStorage.agendaUnified (src: 'fin'|'lead'|'funil'|'evento'|'interno')
+// - Checklist: usa espelho em memória `agenda` (tipo: "checklist")
+// - Demais fontes: usa espelho em memória `agendaUnified` (src: 'fin'|'lead'|'funil'|'evento'|'interno')
 
-/* ===== Utils de LS e datas ===== */
-const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+/* ===== Utils de LS (substituído por memStore) e datas ===== */
+const memStore = {
+  notificacoesUI: null,
+  agendaUnified: null,
+  notificationsFeed: null,
+  agenda: null,
+  eventos: null
+};
+
+const getLS = (k, fb) => {
+  try {
+    if (k === 'agendaUnified') return memStore.agendaUnified ?? fb;
+    if (k === 'notificationsFeed') return memStore.notificationsFeed ?? fb;
+    if (k === 'agenda') return memStore.agenda ?? fb;
+    if (k === 'eventos') return memStore.eventos ?? fb;
+    console.warn('[notificacoes-internas] getLS ignorado (cloud-only):', k);
+    return fb;
+  } catch { return fb; }
+};
+
+const setLS = (k, v) => {
+  try {
+    if (k === 'agendaUnified') memStore.agendaUnified = v;
+    else if (k === 'notificationsFeed') memStore.notificationsFeed = v;
+    else if (k === 'agenda') memStore.agenda = v;
+    else if (k === 'eventos') memStore.eventos = v;
+    else console.warn('[notificacoes-internas] setLS ignorado (cloud-only):', k);
+  } catch {}
+};
 // ===== Base da API (nuvem) =====
-const API_BASE = window.__API_BASE__ || localStorage.getItem('API_BASE') || "";
+const API_BASE = null; // cloud-only: não ler de storage local
 // Marca uma notificação como lida diretamente no backend
 async function marcarNotificacaoLidaNoBackend(id) {
-  if (!API_BASE || !id) return;
+  if (!id || typeof window?.apiFetch !== 'function') return;
   try {
-    await fetch(`${API_BASE}/notificacoes/${encodeURIComponent(id)}/read`, {
+    await window['apiFetch'](`/notificacoes/${encodeURIComponent(id)}/read`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -24,11 +50,11 @@ async function marcarNotificacaoLidaNoBackend(id) {
 
 // Sincroniza agendaUnified + notificationsFeed da nuvem para o espelho local
 async function syncFromCloud(){
-  if (!API_BASE) return;
+  if (typeof window?.apiFetch !== 'function') return;
   try {
     const [agendaRes, notifRes] = await Promise.all([
-      fetch(`${API_BASE}/agenda/unified`),
-      fetch(`${API_BASE}/notificacoes`)
+      window['apiFetch']('/agenda/unified'),
+      window['apiFetch']('/notificacoes')
     ]);
 
     const agendaJson = await agendaRes.json();
@@ -41,11 +67,12 @@ async function syncFromCloud(){
                       : Array.isArray(notifJson)        ? notifJson
                       : [];
 
-    // Grava no espelho local para o resto do código usar
-    localStorage.setItem('agendaUnified', JSON.stringify(agendaItems));
-    localStorage.setItem('notificationsFeed', JSON.stringify(notifs));
-    localStorage.setItem('agendaUnified:ping', String(Date.now()));
-    localStorage.setItem('notificationsFeed:ping', String(Date.now()));
+    // Grava no espelho em memória para o resto do código usar
+    memStore.agendaUnified = agendaItems;
+    memStore.notificationsFeed = notifs;
+
+    try { new BroadcastChannel('mrubuffet').postMessage({ type: 'agendaUnified:ping', at: Date.now() }); } catch {}
+    try { new BroadcastChannel('mrubuffet').postMessage({ type: 'notificationsFeed:ping', at: Date.now() }); } catch {}
   } catch (err) {
     console.warn('[notificacoes-internas] falha ao sincronizar da nuvem:', err);
   }
@@ -476,36 +503,28 @@ function wire(){
    // --- Botão "Marcar tudo como lido" (feed curto) — agora usando a API
   document.getElementById('btnMarkAll')?.addEventListener('click', async () => {
     try {
-      // Se tivermos API configurada, pede para o backend marcar tudo como lido
-      if (API_BASE) {
-        // Opcional: você pode, no futuro, mandar o "audience" do usuário logado
-        // Exemplo:
-        // const u = JSON.parse(localStorage.getItem('userProfile') || '{}');
-        // const audience = u?.area || '';
-        await fetch(`${API_BASE}/notificacoes/marcar-todas-lidas`, {
+      // Se tivermos API disponível, pede para o backend marcar tudo como lido
+      if (typeof window?.apiFetch === 'function') {
+        await window['apiFetch']('/notificacoes/marcar-todas-lidas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}) // por enquanto, marca tudo
         });
 
-        // Re-sincroniza espelho local com o backend
+        // Re-sincroniza espelho em memória com o backend
         await syncFromCloud();
       } else {
-        // Fallback: se não houver API_BASE, só marca localmente
+        // Fallback: se não houver apiFetch, marca apenas em memStore
         const feed = __NI.read('notificationsFeed', []) || [];
         const atualizado = feed.map(ev => ({ ...ev, read: 1 }));
-        localStorage.setItem('notificationsFeed', JSON.stringify(atualizado));
+        memStore.notificationsFeed = atualizado;
       }
     } catch (e) {
       console.warn('[notificacoes-internas] falha ao marcar tudo como lido na API:', e);
     }
 
-    // Ping para outras abas/telas
-    localStorage.setItem('notificationsFeed:ping', String(Date.now()));
-    try {
-      const bc = new BroadcastChannel('mrubuffet');
-      bc.postMessage({ type: 'notificationsFeed:ping', at: Date.now() });
-    } catch {}
+    // Ping para outras abas/telas via BroadcastChannel
+    try { new BroadcastChannel('mrubuffet').postMessage({ type: 'notificationsFeed:ping', at: Date.now() }); } catch {}
 
     // Re-render geral
     render();
@@ -589,7 +608,15 @@ document.addEventListener("DOMContentLoaded", ()=>{
 
 // helpers locais seguros (não colidem)
 const __NI = {
-  read(key, fb){ try { return JSON.parse(localStorage.getItem(key) || "null") ?? fb; } catch { return fb; } },
+  read(key, fb){
+    try {
+      if (key === 'agendaUnified') return memStore.agendaUnified ?? fb;
+      if (key === 'notificationsFeed') return memStore.notificationsFeed ?? fb;
+      if (key === 'agenda') return memStore.agenda ?? fb;
+      if (key === 'eventos') return memStore.eventos ?? fb;
+      return fb;
+    } catch { return fb; }
+  },
   money(n){ return Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); },
   // hoje em horário LOCAL
   today(){
@@ -735,17 +762,13 @@ function renderFeedRecentes() {
         const atualizado = atual.map(ev =>
           String(ev.id) === id ? { ...ev, read: 1 } : ev
         );
-        localStorage.setItem('notificationsFeed', JSON.stringify(atualizado));
+        memStore.notificationsFeed = atualizado;
       } catch (e) {
         console.warn('[notificacoes-internas] falha ao atualizar espelho local:', e);
       }
 
       // 3) Dispara ping para outras abas/telas
-      localStorage.setItem('notificationsFeed:ping', String(Date.now()));
-      try {
-        const bc = new BroadcastChannel('mrubuffet');
-        bc.postMessage({ type: 'notificationsFeed:ping', at: Date.now() });
-      } catch {}
+      try { new BroadcastChannel('mrubuffet').postMessage({ type: 'notificationsFeed:ping', at: Date.now() }); } catch {}
 
       // 4) Re-renderiza feed
       renderFeedRecentes();

@@ -2,14 +2,22 @@
 // Coloque este bloco uma única vez no projeto.
 // Ele padroniza leitura/gravação e o broadcast de mudanças do FG.
 
+// In-memory store helpers (per-file) — transient only
+const __memoryStore_fin = window.__memoryStore_fin || (window.__memoryStore_fin = {});
+function memGet(k, fb = null){ try { return (__memoryStore_fin[k] ?? fb); } catch { return fb; } }
+function memSet(k, v){ try { __memoryStore_fin[k] = v; return true; } catch { return false; } }
+function memGetJSON(k, fb = null){ try { const v = __memoryStore_fin[k]; return v == null ? fb : (typeof v === 'object' ? v : JSON.parse(String(v))); } catch { return fb; } }
+function memSetJSON(k, v){ try { __memoryStore_fin[k] = v; return true; } catch { return false; } }
+function memRemove(k){ try { delete __memoryStore_fin[k]; return true; } catch { return false; } }
+
 if (!window.readFG || !window.writeFG) {
   window.readFG = function(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; } catch { return {}; }
+    try { return memGetJSON('financeiroGlobal', {}) || {}; } catch { return {}; }
   };
   window.writeFG = function(g){
     try{
-      localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      memSetJSON('financeiroGlobal', g || {});
+      memSet('financeiroGlobal:ping', String(Date.now()));
     }catch{}
     window.emitFGChange('writeFG');
   };
@@ -19,9 +27,6 @@ if (!window.readFG || !window.writeFG) {
   };
   window.onFGChange = function(cb){
     window.addEventListener('fin-store-changed', cb);
-    window.addEventListener('storage', (ev)=>{
-      if (ev.key==='financeiroGlobal' || ev.key==='financeiroGlobal:ping') cb(ev);
-    });
     try {
       const bc = new BroadcastChannel('mrubuffet');
       bc.onmessage = (msg)=>{ if (msg?.data?.type==='fin-store-changed') cb(msg); };
@@ -32,51 +37,29 @@ if (!window.readFG || !window.writeFG) {
 // Esta função será o "ponto único" para puxar dados do backend
 // e atualizar o snapshot financeiroGlobal no navegador.
 export async function finSyncFromApi(){
-  // Se não tiver handleRequest disponível, mantém modo antigo (100% local)
-  if (typeof window === 'undefined' || typeof window.handleRequest !== 'function') {
-    try { return window.readFG(); } catch { return {}; }
+  // Requerer window.apiFetch (integração cloud)
+  if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') {
+    throw new Error('finSyncFromApi requires window.apiFetch');
   }
 
   try {
-    // 1) Buscar lançamentos no backend (/fin/lancamentos)
-    const respLanc = await window.handleRequest('/fin/lancamentos', {
-      method: 'GET'
-    });
+    const respLanc = await window.apiFetch('/fin/lancamentos', { method: 'GET' });
+    const lancs = Array.isArray(respLanc?.data) ? respLanc.data : [];
 
-    const lancs = Array.isArray(respLanc?.data)
-      ? respLanc.data
-      : [];
+    const respParc = await window.apiFetch('/fin/parcelas', { method: 'GET' });
+    const parcs = Array.isArray(respParc?.data) ? respParc.data : [];
 
-    // 2) Buscar parcelas no backend (/fin/parcelas)
-    const respParc = await window.handleRequest('/fin/parcelas', {
-      method: 'GET'
-    });
-
-    const parcs = Array.isArray(respParc?.data)
-      ? respParc.data
-      : [];
-
-    // 3) Montar novo snapshot financeiroGlobal
     const atual = (typeof window.readFG === 'function') ? (window.readFG() || {}) : {};
-    const novoFG = {
-      ...atual,
-      lancamentos: lancs,
-      parcelas: parcs
-    };
+    const novoFG = { ...atual, lancamentos: lancs, parcelas: parcs };
 
-   // Dentro de finSyncFromApi, na parte que grava o snapshot:
-if (typeof window.writeFG === 'function') {
-  // marca que esta gravação veio da API, para não disparar sync de volta
-  window.__finSyncingFromApi = true;
-  try {
-    window.writeFG(novoFG);
-  } finally {
-    window.__finSyncingFromApi = false;
-  }
-} else {
-  try { localStorage.setItem('financeiroGlobal', JSON.stringify(novoFG)); } catch {}
-}
-
+    if (typeof window.writeFG === 'function') {
+      window.__finSyncingFromApi = true;
+      try { window.writeFG(novoFG); } finally { window.__finSyncingFromApi = false; }
+    } else {
+      memSetJSON('financeiroGlobal', novoFG);
+      memSet('financeiroGlobal:ping', String(Date.now()));
+      try { window.dispatchEvent(new CustomEvent('fin-store-changed',{detail:{reason:'api-sync'}})); } catch {}
+    }
 
     return novoFG;
   } catch (e) {
@@ -142,11 +125,11 @@ export const FIN_LANCAMENTOS_KEY = 'fin_lancamentos';
 
 /* ========= IO helpers (genéricos) ========= */
 export function readLS(key){
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  try { return memGetJSON(key, []) || []; }
   catch { return []; }
 }
 export function writeLS(key, val){
-  localStorage.setItem(key, JSON.stringify(val || []));
+  memSetJSON(key, val || []);
 }
 
 /* ========= Normalização de moeda → centavos (inteiro) ========= */
@@ -249,11 +232,11 @@ const normalize = (l) => {
 
 // Storage (LC_KEY)
 function getAll() {
-  try { return JSON.parse(localStorage.getItem(LC_KEY) || '[]'); }
+  try { return memGetJSON(LC_KEY, []) || []; }
   catch { return []; }
 }
 function setAll(list) {
-  localStorage.setItem(LC_KEY, JSON.stringify(list || []));
+  memSetJSON(LC_KEY, list || []);
   // dispara eventos de sync
   try { window.dispatchEvent(new CustomEvent('fin-store-changed')); } catch {}
 }
@@ -310,7 +293,7 @@ function __finReadFGLocal(){
     if (typeof window !== 'undefined' && typeof window.readFG === 'function') {
       return window.readFG() || {};
     }
-    return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {};
+    return memGetJSON('financeiroGlobal', {}) || {};
   } catch {
     return {};
   }
@@ -327,8 +310,8 @@ function __finWriteFGLocal(novo){
         window.__finSyncingFromApi = false;
       }
     } else {
-      localStorage.setItem('financeiroGlobal', JSON.stringify(novo || {}));
-      localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+      memSetJSON('financeiroGlobal', novo || {});
+      memSet('financeiroGlobal:ping', String(Date.now()));
       try {
         window.dispatchEvent(new CustomEvent('fin-store-changed',{detail:{reason:'api-sync'}}));
       } catch {}
@@ -347,8 +330,8 @@ async function apiFinUpsertLancamento(lanc){
 
   let salvo = { ...lanc };
 
-  // 1) Tenta salvar na API, se existir handleRequest
-  if (typeof window !== 'undefined' && typeof window.handleRequest === 'function') {
+  // 1) Tenta salvar na API via window.apiFetch (obrigatório para modo cloud)
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     try {
       const temId  = !!salvo.id;
       const path   = temId
@@ -356,13 +339,7 @@ async function apiFinUpsertLancamento(lanc){
         : `/fin/lancamentos`;
       const method = temId ? 'PUT' : 'POST';
 
-      const resp = await window.handleRequest(path, {
-        method,
-        body: salvo
-      });
-
-      // ⚠️ Só usa resp.data se for OBJETO (JSON).
-      // Se vier HTML/erro (string), ignora e mantém "salvo" como está.
+      const resp = await window.apiFetch(path, { method, body: salvo });
       if (resp && resp.data && typeof resp.data === 'object') {
         salvo = resp.data;
       }
@@ -403,12 +380,10 @@ async function apiFinDeleteLancamento(lancId){
   if (!lancId) return false;
   const idStr = String(lancId);
 
-  // 1) Tenta apagar na API
-  if (typeof window !== 'undefined' && typeof window.handleRequest === 'function') {
+  // 1) Tenta apagar na API via window.apiFetch
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     try {
-      await window.handleRequest(`/fin/lancamentos/${encodeURIComponent(idStr)}`, {
-        method: 'DELETE'
-      });
+      await window.apiFetch(`/fin/lancamentos/${encodeURIComponent(idStr)}`, { method: 'DELETE' });
     } catch (e) {
       console.warn('[apiFinDeleteLancamento] falha na API (seguindo com local):', e);
     }
@@ -437,8 +412,8 @@ async function apiFinUpsertParcela(parc){
 
   let salva = { ...parc };
 
-  // 1) Tenta salvar na API
-  if (typeof window !== 'undefined' && typeof window.handleRequest === 'function') {
+  // 1) Tenta salvar na API via window.apiFetch
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     try {
       const temId  = !!salva.id;
       const path   = temId
@@ -446,13 +421,7 @@ async function apiFinUpsertParcela(parc){
         : `/fin/parcelas`;
       const method = temId ? 'PUT' : 'POST';
 
-      const resp = await window.handleRequest(path, {
-        method,
-        body: salva
-      });
-
-      // ⚠️ Só usa resp.data se for OBJETO.
-      // Se vier HTML/erro (string), ignora e continua com "salva".
+      const resp = await window.apiFetch(path, { method, body: salva });
       if (resp && resp.data && typeof resp.data === 'object') {
         salva = resp.data;
       }
@@ -492,12 +461,10 @@ async function apiFinDeleteParcela(parcelaId){
   if (!parcelaId) return false;
   const idStr = String(parcelaId);
 
-  // 1) Tenta apagar na API
-  if (typeof window !== 'undefined' && typeof window.handleRequest === 'function') {
+  // 1) Tenta apagar na API via window.apiFetch
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     try {
-      await window.handleRequest(`/fin/parcelas/${encodeURIComponent(idStr)}`, {
-        method: 'DELETE'
-      });
+      await window.apiFetch(`/fin/parcelas/${encodeURIComponent(idStr)}`, { method: 'DELETE' });
     } catch (e) {
       console.warn('[apiFinDeleteParcela] falha na API (seguindo com local):', e);
     }
@@ -542,21 +509,21 @@ try {
 
 // --- Leitura/Gravação do Financeiro Global (FG) ---
 function finCartaoReadFG(){
-  try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; }
+  try { return memGetJSON('financeiroGlobal', {}) || {}; }
   catch { return {}; }
 }
 function finCartaoWriteFG(g){
   try {
-    localStorage.setItem('financeiroGlobal', JSON.stringify(g || {}));
+    memSetJSON('financeiroGlobal', g || {});
     // ping para re-render em outras abas / listeners
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    memSet('financeiroGlobal:ping', String(Date.now()));
     try { window.dispatchEvent(new CustomEvent('fin-store-changed', { detail:{ reason:'fg-write' } })); } catch {}
   } catch {}
 }
 
 // --- Ler config (cartões/contas) ---
 function finCartaoReadCfg(){
-  try { return JSON.parse(localStorage.getItem('configFinanceiro') || '{}') || {}; }
+  try { return memGetJSON('configFinanceiro', {}) || {}; }
   catch { return {}; }
 }
 

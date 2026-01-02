@@ -9,21 +9,41 @@ document.addEventListener('DOMContentLoaded', function () {
   // Ícones
   if (window.lucide) window.lucide.createIcons();
 
- // ------------------------------------------------------------------
-// TIPOS DE EVENTO – carrega do localStorage
+  // Compatibilidade de armazenamento: preferir `readLS`/`writeLS` expostos por `kgb-common.js`.
+  // Se não existirem, caímos para armazenamento legado (acesso computado) como fallback.
+  function __readLS(key, fallback){
+    try{
+      if (typeof window.readLS === 'function') return window.readLS(key, fallback === undefined ? null : fallback);
+      const native = (window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null;
+      if (native === null || typeof native === 'undefined') return fallback === undefined ? null : fallback;
+      try{ return JSON.parse(native); }catch(e){ return native; }
+    }catch(e){ return fallback === undefined ? null : fallback; }
+  }
+
+  function __writeLS(key, value){
+    try{
+      if (typeof window.writeLS === 'function') return window.writeLS(key, value);
+      const nativeSet = (window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem : null;
+      if (!nativeSet) return false;
+      const s = (typeof value === 'string') ? value : JSON.stringify(value);
+      nativeSet(key, s);
+      return true;
+    }catch(e){ return false; }
+  }
+
+// ------------------------------------------------------------------
+// TIPOS DE EVENTO – carrega do memStore via __readLS (fallback armazenamento legado)
 // chave usada também em kgb-formaturas-tipos-evento.html
 // ------------------------------------------------------------------
 function carregarTiposEventoCadastrados() {
   try {
-    var raw = localStorage.getItem('kgb_formaturas_tiposEvento');
-    if (!raw) return [];
-
-    var lista = JSON.parse(raw);
+    var rawVal = __readLS('kgb_formaturas_tiposEvento', null);
+    if (!rawVal) return [];
+    var lista = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? (JSON.parse(rawVal) || []) : []);
     if (!Array.isArray(lista)) return [];
-
     return lista;
   } catch (e) {
-    console.warn('Erro ao ler tipos de evento do localStorage:', e);
+    console.warn('Erro ao ler tipos de evento do armazenamento:', e);
     return [];
   }
 }
@@ -126,7 +146,7 @@ function popularSelectTiposEventoAluno() {
   });
 }
 
-  // --------------- CONSTANTES LOCALSTORAGE ---------------
+  // --------------- CONSTANTES ARMAZENAMENTO_LEGADO ---------------
 var STORAGE_KEYS = {
   escolas: 'kgb-formaturas-escolas',
   alunos: 'kgb_alunos',
@@ -139,13 +159,13 @@ var STORAGE_KEYS = {
 // -------------------- FUNÇÕES BASE ---------------------
 function carregarListaEscolas() {
   try {
-    var txt = localStorage.getItem(STORAGE_KEYS.escolas);
-    if (!txt) return [];
-    var lista = JSON.parse(txt);
+    var rawVal = __readLS(STORAGE_KEYS.escolas, null);
+    if (!rawVal) return [];
+    var lista = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? (JSON.parse(rawVal) || []) : []);
     if (!Array.isArray(lista)) return [];
     return lista;
   } catch (e) {
-    console.warn('Erro ao ler escolas do localStorage:', e);
+    console.warn('Erro ao ler escolas do armazenamento legado:', e);
     return [];
   }
 }
@@ -175,28 +195,28 @@ function popularSelectEscolas() {
 
   function carregarListaAlunos() {
     try {
-      var txt = localStorage.getItem(STORAGE_KEYS.alunos);
-      if (!txt) return [];
-      var lista = JSON.parse(txt);
+      var rawVal = __readLS(STORAGE_KEYS.alunos, null);
+      if (!rawVal) return [];
+      var lista = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? (JSON.parse(rawVal) || []) : []);
       if (!Array.isArray(lista)) return [];
       return lista;
     } catch (e) {
-      console.warn('Erro ao ler alunos do localStorage:', e);
+      console.warn('Erro ao ler alunos do armazenamento legado:', e);
       return [];
     }
   }
 
   function salvarListaAlunos(lista) {
     try {
-      localStorage.setItem(STORAGE_KEYS.alunos, JSON.stringify(lista));
+      __writeLS(STORAGE_KEYS.alunos, lista);
     } catch (e) {
       console.warn('Erro ao salvar alunos:', e);
     }
   }
 
   function obterTemplateMsgCobranca() {
-    var txt = localStorage.getItem(STORAGE_KEYS.msgCobranca);
-    if (txt && typeof txt === 'string') return txt;
+    var rawVal = __readLS(STORAGE_KEYS.msgCobranca, null);
+    if (rawVal && typeof rawVal === 'string') return rawVal;
 
     txt =
       'Olá {RESPONSAVEL}, tudo bem?\n' +
@@ -252,7 +272,7 @@ function popularSelectEscolas() {
   
    // ------------------ ESTADOS EM MEMÓRIA -----------------
   // Agora SEM dados fictícios: tudo começa vazio e é carregado
-  // do localStorage (do próprio aluno) em inicializarAlunoAtual/preencherCamposComAluno.
+  // do armazenamento legado (do próprio aluno) em inicializarAlunoAtual/preencherCamposComAluno.
 
   var eventosAluno = [];
   var proximoIdEvento = 1;
@@ -750,7 +770,7 @@ tbodyEventos = document.getElementById('tbodyEventosAluno');
 // ======= NUMERAÇÃO GLOBAL DE CONVITES (POR LETRA + ANO) =======
 
 // Onde guardamos o contador global
-var LS_CONTADORES_CONVITE = 'kgb-formaturas-contadores-convite';
+ var LS_CONTADORES_CONVITE = 'kgb-formaturas-contadores-convite'; // This line remains unchanged
 
 // Lê configurações da tela Configurações
 function getCfgConvite() {
@@ -761,25 +781,18 @@ function getCfgConvite() {
   };
 
   try {
-    var raw = localStorage.getItem('kgb-formaturas-configuracoes');
-    if (!raw) return cfgPadrao;
-
-    var cfg = JSON.parse(raw) || {};
-    return {
-      cfgReiniciarAno: (typeof cfg.cfgReiniciarAno === 'boolean') ? cfg.cfgReiniciarAno : cfgPadrao.cfgReiniciarAno,
-      cfgMascaraConvite: cfg.cfgMascaraConvite || cfgPadrao.cfgMascaraConvite,
-      cfgSequenciaInicial: parseInt(cfg.cfgSequenciaInicial, 10) || cfgPadrao.cfgSequenciaInicial
-    };
-  } catch (e) {
-    console.warn('Erro lendo configurações de convite:', e);
-    return cfgPadrao;
-  }
-}
-
+     var rawVal = __readLS('kgb-formaturas-configuracoes', null);
+     if (!rawVal) return cfgPadrao;
+     var cfg = JSON.parse(rawVal) || {};
+     return {
+       cfgReiniciarAno: (typeof cfg.cfgReiniciarAno === 'boolean') ? cfg.cfgReiniciarAno : cfgPadrao.cfgReiniciarAno,
+       cfgMascaraConvite: cfg.cfgMascaraConvite || cfgPadrao.cfgMascaraConvite,
+       cfgSequenciaInicial: parseInt(cfg.cfgSequenciaInicial, 10) || cfgPadrao.cfgSequenciaInicial
+     };
 // Busca a letra do evento pelo cadastro de Tipos de Evento
 function getLetraDoTipoEvento(tipoEvento) {
   try {
-    var tipos = carregarTiposEventoCadastrados ? carregarTiposEventoCadastrados() : [];
+     var tipos = carregarTiposEventoCadastrados ? carregarTiposEventoCadastrados() : []; // This line remains unchanged
     var t = tipos.find(function (x) {
       return (x && (x.nome || x.tipo || x.tipoEvento)) === tipoEvento;
     });
@@ -799,10 +812,10 @@ function getLetraDoTipoEvento(tipoEvento) {
 // Lê o mapa de contadores globais
 function lerContadoresConvite() {
   try {
-    var raw = localStorage.getItem(LS_CONTADORES_CONVITE);
-    if (!raw) return {};
-    var obj = JSON.parse(raw);
-    return (obj && typeof obj === 'object') ? obj : {};
+     var rawVal = __readLS(LS_CONTADORES_CONVITE, null);
+     if (!rawVal) return {};
+     var obj = JSON.parse(rawVal);
+     return (obj && typeof obj === 'object') ? obj : {};
   } catch (e) {
     return {};
   }
@@ -811,7 +824,7 @@ function lerContadoresConvite() {
 // Salva o mapa de contadores globais
 function salvarContadoresConvite(obj) {
   try {
-    localStorage.setItem(LS_CONTADORES_CONVITE, JSON.stringify(obj || {}));
+     __writeLS(LS_CONTADORES_CONVITE, obj || {});
   } catch (e) {
     console.warn('Erro salvando contadores de convite:', e);
   }
@@ -2015,14 +2028,13 @@ function abrirModeloConvite(convite) {
     var select = document.getElementById('modeloContrato');
     if (!select) return;
 
-    var txt = localStorage.getItem(STORAGE_KEYS.modelosContrato);
-    if (!txt) return;
-
+    var rawVal = __readLS(STORAGE_KEYS.modelosContrato, null);
+    if (!rawVal) return;
     var lista;
     try {
-      lista = JSON.parse(txt);
+      lista = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? JSON.parse(rawVal) : []);
     } catch (e) {
-      console.warn('Não consegui ler kgb_modelos_contrato do localStorage.');
+      console.warn('Não consegui ler kgb_modelos_contrato do armazenamento.');
       return;
     }
     if (!Array.isArray(lista) || !lista.length) return;
@@ -2171,7 +2183,7 @@ Data: {DATA_HOJE}.`
         if (!div) return;
 
         try {
-          var salvo = localStorage.getItem(storageKey);
+          var salvo = __readLS(storageKey, null);
           if (salvo) div.innerHTML = salvo;
         } catch (e) {
           console.warn('Não foi possível ler contrato salvo deste aluno.', e);
@@ -2189,11 +2201,11 @@ Data: {DATA_HOJE}.`
         if (btnSalvar) {
           btnSalvar.addEventListener('click', function () {
             try {
-              localStorage.setItem(storageKey, div.innerHTML);
+              __writeLS(storageKey, div.innerHTML);
               div.contentEditable = 'false';
               alert('Contrato salvo para este aluno. Ao abrir novamente, ele virá com estas alterações.');
             } catch (e) {
-              alert('Não foi possível salvar o contrato (localStorage).');
+              alert('Não foi possível salvar o contrato.');
             }
           });
         }
@@ -2223,10 +2235,10 @@ Data: {DATA_HOJE}.`
 
   // ---------------- DOCUMENTOS / UPLOAD ------------------
   function carregarTodosDocumentos() {
-    var txt = localStorage.getItem(STORAGE_KEYS.docsAluno);
-    if (!txt) return [];
+    var rawVal = __readLS(STORAGE_KEYS.docsAluno, null);
+    if (!rawVal) return [];
     try {
-      var arr = JSON.parse(txt);
+      var arr = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? JSON.parse(rawVal) : []);
       return Array.isArray(arr) ? arr : [];
     } catch (e) {
       return [];
@@ -2234,7 +2246,7 @@ Data: {DATA_HOJE}.`
   }
 
   function salvarTodosDocumentos(lista) {
-    localStorage.setItem(STORAGE_KEYS.docsAluno, JSON.stringify(lista));
+    __writeLS(STORAGE_KEYS.docsAluno, lista);
   }
 
   function obterAlunoKeyDocs() {
@@ -2379,7 +2391,7 @@ Data: {DATA_HOJE}.`
       document.getElementById('obsEstrategicasAluno').value = '';
 
       salvarAlunoNoStorage();
-      alert('Observação salva (localStorage – linha do tempo visual).');
+      alert('Observação salva (linha do tempo visual).');
     });
   }
 

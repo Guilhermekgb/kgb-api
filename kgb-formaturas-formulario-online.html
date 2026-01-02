@@ -432,6 +432,29 @@
       const LS_KEY_LOGO_FORMATURA = 'kgb_formaturas_logo_formatura';
      const LS_KEY_ESCOLAS        = 'kgb-formaturas-escolas';
 
+      // Phase1 helpers: memStore-aware getters/setters and portal detection
+      function isPortalMode(){
+        return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__ || (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode && window.__KGB_MEM__.isPortalMode()));
+      }
+      function lsGetJSON(key){
+        try{
+          if (window.__KGB_MEM__ && window.__KGB_MEM__.getJSON && isPortalMode()){
+            return window.__KGB_MEM__.getJSON(key, null);
+          }
+          const raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : null;
+        }catch(e){ return null; }
+      }
+      function lsSetJSON(key, value){
+        try{
+          if (window.__KGB_MEM__ && window.__KGB_MEM__.setJSON && isPortalMode()){
+            window.__KGB_MEM__.setJSON(key, value);
+            return;
+          }
+          localStorage.setItem(key, JSON.stringify(value));
+        }catch(e){}
+      }
+
 
       function criarId(prefixo){
         return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -441,7 +464,7 @@
       function aplicarLogoFormatura(){
         const el = document.getElementById('logoFormatura');
         if (!el) return;
-        const url = localStorage.getItem(LS_KEY_LOGO_FORMATURA);
+        const url = lsGetJSON(LS_KEY_LOGO_FORMATURA);
         if (url && typeof url === 'string' && url.trim()){
           el.innerHTML = '<img src="' + url + '" alt="Logo da formatura">';
         }
@@ -450,8 +473,7 @@
       /* --------- ESCOLAS (puxa do localStorage) --------- */
       function carregarEscolas(){
         try{
-          const raw = localStorage.getItem(LS_KEY_ESCOLAS);
-          const arr = raw ? JSON.parse(raw) : [];
+          const arr = lsGetJSON(LS_KEY_ESCOLAS) || [];
           return Array.isArray(arr) ? arr : [];
         }catch(e){
           console.error('Erro ao carregar escolas', e);
@@ -485,8 +507,7 @@
       /* --------- TIPOS DE EVENTO (puxa do localStorage, SEM fictícios) --------- */
       function carregarTiposEvento(){
         try{
-          const raw = localStorage.getItem(LS_KEY_TIPOS_EVENTO);
-          let arr = raw ? JSON.parse(raw) : [];
+          let arr = lsGetJSON(LS_KEY_TIPOS_EVENTO) || [];
           if (!Array.isArray(arr)) arr = [];
           // não cria nenhum evento fictício aqui; usa apenas o que está cadastrado no sistema
           return arr;
@@ -535,8 +556,8 @@
       /* --------- SALVAR FORMULÁRIO NO LOCALSTORAGE --------- */
       function salvarFormulario(dadosObj){
         try{
-          const raw = localStorage.getItem(LS_KEY_FORMULARIOS);
-          let arr = raw ? JSON.parse(raw) : [];
+          const raw = lsGetJSON(LS_KEY_FORMULARIOS);
+          let arr = raw ? raw : [];
           if (!Array.isArray(arr)) arr = [];
 
           const registro = {
@@ -546,7 +567,7 @@
           };
 
           arr.push(registro);
-          localStorage.setItem(LS_KEY_FORMULARIOS, JSON.stringify(arr));
+          lsSetJSON(LS_KEY_FORMULARIOS, arr);
         }catch(e){
           console.error('Erro ao salvar formulário de formatura', e);
         }

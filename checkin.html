@@ -4,27 +4,49 @@
   <meta name="page-permission" content="page:checkin.html">
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <!-- Phase 1 scaffolding: memStore + sync + api wrappers -->
+  <script>
+    (function(){
+      if (typeof window !== 'undefined') window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+      const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : {};
+
+      let bc = null;
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+      }
+
+      function sendSync(k,v){ try{ if (bc) bc.postMessage({k,v}); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{detail:{k,v}})); }catch{} }
+      function onSync(fn){ if (bc) bc.addEventListener('message', e=>fn(e.data)); else window.addEventListener('kgb-ui-sync', e=>fn(e.detail)); }
+      function getJSON(k, fallback){ try{ const val = mem[k]; return val===undefined ? (typeof fallback==='function'?fallback():fallback) : val; }catch{ return typeof fallback==='function'?fallback():fallback; } }
+      function setJSON(k,v){ try{ mem[k]=v; sendSync(k,v); }catch{} }
+      function isPortalMode(){ try{ return !!(window && window.__PORTAL_MODE__===true); }catch{return false;} }
+      async function apiFetchWrapper(p, opts){ return (typeof window !== 'undefined' && window.apiFetch) ? window.apiFetch(p, opts) : null; }
+
+      try{ window.getJSON = window.getJSON || getJSON; window.setJSON = window.setJSON || setJSON; window.isPortalMode = window.isPortalMode || isPortalMode; window.apiFetchWrapper = window.apiFetchWrapper || apiFetchWrapper; }catch{}
+    })();
+  </script>
+
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
+  <script>
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
 
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
+      // Produção (Netlify) -> API na Render
+      var PROD_API = window.location.origin;
 
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
+      // Desenvolvimento local
+      var DEV_API = (window.__API_BASE__ || window.location.origin);
 
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+      try { if (!window.isPortalMode || !window.isPortalMode()) { localStorage.setItem("API_BASE", base); } } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
+  <!-- === FIM PATCH __API_BASE__ (auto) === -->
 
   <title>Check-in de Evento</title>
   <link rel="stylesheet" href="kgb-common.css"/>
@@ -194,8 +216,20 @@
       INGRESSOS:      (window.K_KEYS && window.K_KEYS.INGRESSOS)      || 'm30.tickets'
     };
 
-    const readLS = (k) => { try{ return JSON.parse(localStorage.getItem(k)||'[]')||[]; }catch{ return []; } };
-    const writeLS= (k,v) => localStorage.setItem(k, JSON.stringify(v));
+    const readLS = (k) => {
+      try{
+        if (window.isPortalMode && window.isPortalMode()) {
+          return window.getJSON(k, []) || [];
+        }
+        return JSON.parse(localStorage.getItem(k)||'[]')||[];
+      }catch{ return []; }
+    };
+    const writeLS= (k,v) => {
+      try{
+        if (window.isPortalMode && window.isPortalMode()) { window.setJSON(k, v); return; }
+        localStorage.setItem(k, JSON.stringify(v));
+      }catch{}
+    };
 
     // eventos: nova (m30.eventos) + legado (eventos)
     function eventos(){
@@ -299,10 +333,9 @@
   // ====== INÍCIO: helper para logar check-in na API ======
     async function apiLogCheckin(ticket, { undo = false } = {}) {
       try {
-        const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();
-        if (!base) return; // se não tiver API, só segue local
+        const base = (window.__API_BASE__ || (window.getJSON ? (window.getJSON('API_BASE', '') || '') : '') || '').trim();
+        if (!base && !(typeof window !== 'undefined' && window.apiFetch)) return; // sem API configurada e sem apiFetch
 
-        const urlBase = base.replace(/\/+$/, '');
         const endpoint = undo
           ? `/convites/${encodeURIComponent(ticket.id)}/uncheckin`
           : `/convites/${encodeURIComponent(ticket.id)}/checkin`;
@@ -318,13 +351,9 @@
           }
         };
 
-        await fetch(urlBase + endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
+        if (typeof window !== 'undefined' && window.apiFetch) {
+          await window.apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
+        }
       } catch (e) {
         console.warn('Falha ao enviar log de check-in para a API. Mantendo apenas local.', e);
       }
@@ -334,10 +363,9 @@
        // ====== INÍCIO: helper para logar check-in na API ======
     async function apiLogCheckin(ticket, { undo = false } = {}) {
       try {
-        const base = (window.__API_BASE__ || localStorage.getItem('API_BASE') || '').trim();
-        if (!base) return; // se não tiver API, segue só local
+        const base = (window.__API_BASE__ || (window.getJSON ? (window.getJSON('API_BASE', '') || '') : '') || '').trim();
+        if (!base && !(typeof window !== 'undefined' && window.apiFetch)) return; // sem API configurada e sem apiFetch
 
-        const urlBase = base.replace(/\/+$/, '');
         const endpoint = undo
           ? `/convites/${encodeURIComponent(ticket.id)}/uncheckin`
           : `/convites/${encodeURIComponent(ticket.id)}/checkin`;
@@ -353,13 +381,9 @@
           }
         };
 
-        await fetch(urlBase + endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
+        if (typeof window !== 'undefined' && window.apiFetch) {
+          await window.apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
+        }
       } catch (e) {
         console.warn('Falha ao enviar log de check-in para a API. Mantendo apenas local.', e);
       }
@@ -382,7 +406,10 @@
 
       slot.arr[slot.index] = updated;
       writeLS(slot.key, slot.arr);
-      localStorage.setItem('checkin:ping', String(Date.now()));
+      try {
+        if (window.isPortalMode && window.isPortalMode()) window.setJSON('checkin:ping', String(Date.now()));
+        else localStorage.setItem('checkin:ping', String(Date.now()));
+      } catch(e) {}
 
       // log na API (não trava a tela se der erro)
       try { apiLogCheckin(updated, { undo: false }); } catch (e) { console.warn(e); }
@@ -405,7 +432,7 @@
 
       slot.arr[slot.index] = cur;
       writeLS(slot.key, slot.arr);
-      localStorage.setItem('checkin:ping', String(Date.now()));
+      try { if (window.isPortalMode && window.isPortalMode()) window.setJSON('checkin:ping', String(Date.now())); else localStorage.setItem('checkin:ping', String(Date.now())); } catch(e) {}
 
       // loga "uncheckin" na API
       try { apiLogCheckin(before, { undo: true }); } catch (e) { console.warn(e); }

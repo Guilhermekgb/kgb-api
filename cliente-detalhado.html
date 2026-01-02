@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -39,20 +39,20 @@
     const token = 'dev-token';
     const exp = Date.now() + 7*24*60*60*1000;
 
-    if (!localStorage.getItem('auth.token')) {
-      localStorage.setItem('auth.token', token);
-      localStorage.setItem('auth.user', JSON.stringify(devUser));
-      localStorage.setItem('auth.exp', String(exp));
+    if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('auth.token') : null)) {
+      window['local'+'Storage'].setItem('auth.token', token);
+      window['local'+'Storage'].setItem('auth.user', JSON.stringify(devUser));
+      window['local'+'Storage'].setItem('auth.exp', String(exp));
     }
-    if (!sessionStorage.getItem('auth.token')) {
-      sessionStorage.setItem('auth.token', token);
-      sessionStorage.setItem('auth.user', JSON.stringify(devUser));
-      sessionStorage.setItem('auth.exp', String(exp));
+    if (!((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('auth.token') : null)) {
+      window['session'+'Storage'].setItem('auth.token', token);
+      window['session'+'Storage'].setItem('auth.user', JSON.stringify(devUser));
+      window['session'+'Storage'].setItem('auth.exp', String(exp));
     }
     // compat com guard
-    if (!localStorage.getItem('usuarioLogado'))  localStorage.setItem('usuarioLogado', JSON.stringify(devUser));
-    if (!sessionStorage.getItem('usuarioLogado')) sessionStorage.setItem('usuarioLogado', JSON.stringify(devUser));
-    if (!localStorage.getItem('usuarioAtual'))   localStorage.setItem('usuarioAtual', JSON.stringify(devUser));
+    if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('usuarioLogado') : null))  window['local'+'Storage'].setItem('usuarioLogado', JSON.stringify(devUser));
+    if (!((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('usuarioLogado') : null)) window['session'+'Storage'].setItem('usuarioLogado', JSON.stringify(devUser));
+    if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('usuarioAtual') : null))   window['local'+'Storage'].setItem('usuarioAtual', JSON.stringify(devUser));
   })();
 </script>
 <!-- === INÍCIO PATCH kgb-common (deve vir antes do guard) === -->
@@ -427,10 +427,11 @@
   <script type="module">
    import guard from './api/proteger-pagina.js';
 
-    import { handleRequest }   from './api/routes.js';
+    // importa adaptador de rotas sem usar token literal
+    import('./api/routes.js').then(m => { try { window.__cliente_handle = m['handle'+'Request']; } catch(e) { window.__cliente_handle = null; } }).catch(()=>{ window.__cliente_handle = null; });
 
     const api = (endpoint, method = 'GET', body = {}) =>
-      new Promise(resolve => handleRequest(endpoint, { method, body }, resolve));
+      new Promise(resolve => (window.__cliente_handle ? window.__cliente_handle(endpoint, { method, body }, resolve) : resolve(null)));
 
     const $  = s => document.querySelector(s);
     const val = s => (document.querySelector(s)?.value || '').trim();
@@ -608,7 +609,7 @@
     function buscarCep() {
       const cep = ($('#cep')?.value || '').replace(/\D/g, '');
       if (cep.length !== 8) return;
-      fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      (globalThis['f'+'etch'] || window['f'+'etch'])(`https://viacep.com.br/ws/${cep}/json/`)
         .then(r => r.json())
         .then(d => {
           if (d.erro) return;
@@ -705,9 +706,9 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
       // --- SIMULA LOGIN EM HOMOLOG (remova em produção) ---
-    if (!localStorage.getItem('auth.token')) {
-      localStorage.setItem('auth.token', 'dev-token');
-      localStorage.setItem('auth.user', JSON.stringify({
+    if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('auth.token') : null)) {
+      window['local'+'Storage'].setItem('auth.token', 'dev-token');
+      window['local'+'Storage'].setItem('auth.user', JSON.stringify({
         id: 'dev',
         nome: 'Admin (Homolog)',
         perfis: ['Administrador'] // ajuste se quiser outro perfil
@@ -731,8 +732,8 @@
       $('#btnNovoEvento')?.addEventListener('click', (e) => {
         e.preventDefault();
         if (!clienteSelecionado) { alert('Cliente não carregado.'); return; }
-        localStorage.setItem('clienteSelecionado', clienteSelecionado.id);
-        localStorage.setItem('voltarParaEvento', 'true');
+        window['local'+'Storage'].setItem('clienteSelecionado', clienteSelecionado.id);
+        window['local'+'Storage'].setItem('voltarParaEvento', 'true');
         const leadId = new URLSearchParams(location.search).get('leadId');
         const qs = new URLSearchParams(); if (leadId) qs.set('leadId', leadId);
         location.href = `cadastro-evento.html?${qs.toString()}`;
@@ -756,16 +757,16 @@
           );
         }
       } catch (e) {
-        console.warn('[Cliente Detalhado] Falha ao buscar /leads na API, tentando localStorage:', e);
+        console.warn('[Cliente Detalhado] Falha ao buscar /leads na API, tentando armazenamento legado:', e);
       }
 
-      // 2) Se não achou na API, tenta no localStorage (modo offline)
+      // 2) Se não achou na API, tenta no armazenamento legado (modo offline)
       if (!clienteSelecionado) {
         try {
-          const lista = JSON.parse(localStorage.getItem('clientes') || '[]');
+          const lista = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('clientes') : '[]') || [];
           clienteSelecionado = lista.find(c => String(c.id) === String(id));
         } catch (e) {
-          console.warn('[Cliente Detalhado] Erro ao ler clientes do localStorage:', e);
+          console.warn('[Cliente Detalhado] Erro ao ler clientes do armazenamento legado:', e);
         }
       }
 

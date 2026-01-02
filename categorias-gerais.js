@@ -1,12 +1,65 @@
 "use strict";
 
+// === PATCH PHASE 1: memStore + sync + api wrappers ===
+if (typeof window !== 'undefined') {
+  window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+}
+
+const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : {};
+
+// If file already declared `memStore`, prefer to reuse it
+try { if (typeof memStore !== 'undefined' && memStore) Object.assign(mem, memStore); } catch {}
+
+let bc = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+}
+
+function sendSync(key, value) {
+  try {
+    const msg = { k: key, v: value };
+    if (bc) bc.postMessage(msg);
+    else if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kgb-ui-sync', { detail: msg }));
+  } catch {}
+}
+
+function onSync(fn) {
+  if (bc) bc.addEventListener('message', ev => fn(ev.data));
+  else if (typeof window !== 'undefined') window.addEventListener('kgb-ui-sync', ev => fn(ev.detail));
+}
+
+function getJSON(key, fallback) {
+  try {
+    const val = mem[key];
+    if (val === undefined) return typeof fallback === 'function' ? fallback() : fallback;
+    return val;
+  } catch { return typeof fallback === 'function' ? fallback() : fallback; }
+}
+
+function setJSON(key, value) {
+  try {
+    mem[key] = value;
+    sendSync(key, value);
+  } catch {}
+}
+
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__ === true); } catch { return false; }
+}
+
+async function apiGet(path) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'GET' }) : null); }
+async function apiPost(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'POST', body }) : null); }
+async function apiPut(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'PUT', body }) : null); }
+
+// === END PATCH PHASE 1 ===
+
 /* ------------------ Utilidades gerais ------------------ */
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 function lerJSON(key, fallback) {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = getLocal ? getLocal(key) : null;
     if (raw === null || raw === undefined || raw === "") return fallback;
     const parsed = JSON.parse(raw);
     return (parsed === null || parsed === undefined) ? fallback : parsed;
@@ -15,12 +68,50 @@ function lerJSON(key, fallback) {
 /* ------------------ API: Colunas do Funil ------------------ */
 /**
  * Base da API: vem do patch que está no HTML (window.__API_BASE__)
- * ou da chave "API_BASE" no localStorage.
+ * ou da chave "API_BASE" (não usada aqui; cloud-only).
  */
-const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+const API_BASE = null;
+
+const memStore = {
+  categorias: null,
+  colunasFunil: null,
+  leadsCache: null
+};
+
+function getLocal(key) {
+  try {
+    if (isPortalMode()) {
+      const v = getJSON(key, null);
+      if (v === null || v === undefined || v === "") return null;
+      return (typeof v === 'string') ? v : JSON.stringify(v);
+    }
+    // Legacy behavior: read from localStorage when not in portal mode
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+  } catch (e) {
+    console.warn('[Categorias] getLocal erro:', e);
+  }
+  return null;
+}
+
+function setLocal(chaveLocal, arr) {
+  try {
+    if (isPortalMode()) {
+      setJSON(chaveLocal, arr);
+      return;
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(chaveLocal, JSON.stringify(arr));
+      return;
+    }
+  } catch (e) {
+    console.warn('[Categorias] setLocal erro:', e);
+  }
+}
 /* ------------------ API: Listas Auxiliares ------------------ */
 
-// Mapeia as chaves do localStorage para os endpoints da API
+// Mapeia as chaves (antes em armazenamento local) para os endpoints da API
 const LISTA_ENDPOINTS = {
   comoConheceu: "/listas/como-conheceu",
   motivosArquivamento: "/listas/motivos-arquivamento",
@@ -32,18 +123,21 @@ const LISTA_ENDPOINTS = {
 };
 
 /**
- * Salva uma lista no localStorage e, se possível, também na API.
+ * Salva uma lista em memória (memStore) e, se possível, também na API.
  */
 function salvarListaLocalEApi(chaveLocal, valores) {
   const arr = Array.isArray(valores) ? valores : [];
   try {
-    localStorage.setItem(chaveLocal, JSON.stringify(arr));
+    if (chaveLocal === "colunasLead") memStore.colunasFunil = arr;
+    else if (chaveLocal === "leads") memStore.leadsCache = arr;
+    else setLocal(chaveLocal, arr);
   } catch (e) {
-    console.warn("[Categorias] Não foi possível salvar lista no localStorage:", chaveLocal, e);
+    console.warn("[Categorias] Não foi possível salvar lista em memStore/setLocal:", chaveLocal, e);
   }
 
   const endpointPath = LISTA_ENDPOINTS[chaveLocal];
-  if (!endpointPath || !API_BASE) return;
+  if (!endpointPath) return;
+  if (typeof window?.apiFetch !== 'function') return;
 
   salvarListaNaApi(endpointPath, arr);
 }
@@ -54,7 +148,7 @@ function salvarListaLocalEApi(chaveLocal, valores) {
  */
 async function salvarListaNaApi(endpointPath, valores) {
   try {
-    await fetch(`${API_BASE}${endpointPath}`, {
+      await window['apiFetch'](endpointPath, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itens: valores }),
@@ -66,19 +160,18 @@ async function salvarListaNaApi(endpointPath, valores) {
 }
 
 /**
- * Busca a lista na API e salva no localStorage.
+ * Busca a lista na API e salva em memStore/setLocal.
  * Se falhar, mantém o que já estiver no navegador.
  */
 async function syncListaFromApiToLocal(chaveLocal) {
-  if (!API_BASE) return;
-
   const endpointPath = LISTA_ENDPOINTS[chaveLocal];
   if (!endpointPath) return;
+  if (typeof window?.apiFetch !== 'function') return;
 
   try {
-    const resp = await fetch(`${API_BASE}${endpointPath}`, { method: "GET" });
-    if (!resp.ok) {
-      console.warn("[Categorias] Erro ao buscar lista da API:", endpointPath, resp.status);
+      const resp = await window['apiFetch'](endpointPath, { method: "GET" });
+    if (!resp || !resp.ok) {
+      console.warn("[Categorias] Erro ao buscar lista da API:", endpointPath, resp?.status);
       return;
     }
 
@@ -93,7 +186,10 @@ async function syncListaFromApiToLocal(chaveLocal) {
 
     if (!itens || !itens.length) return;
 
-    localStorage.setItem(chaveLocal, JSON.stringify(itens));
+    if (chaveLocal === "colunasLead") memStore.colunasFunil = itens;
+    else if (chaveLocal === "leads") memStore.leadsCache = itens;
+    else setLocal(chaveLocal, itens);
+
     console.log("[Categorias] Lista sincronizada da API:", chaveLocal);
   } catch (e) {
     console.warn("[Categorias] Falha ao buscar lista da API:", chaveLocal, e);
@@ -104,16 +200,15 @@ async function syncListaFromApiToLocal(chaveLocal) {
  * Chamada genérica de API (GET/PUT) para as colunas do funil.
  * Não precisa mexer aqui depois.
  */
-async function apiColunasFetch(path, options = {}) {
-  if (!API_BASE) {
-    console.warn("[Categorias] API_BASE não configurado; usando somente localStorage.");
+async function apiColunasRequest(path, options = {}) {
+  if (typeof window?.apiFetch !== 'function') {
+    console.warn("[Categorias] window.apiFetch não disponível; abortando apiColunasRequest.");
     return null;
   }
 
-  const url = `${API_BASE}${path}`;
   const { body, ...rest } = options;
 
-  const resp = await fetch(url, {
+    const resp = await window['apiFetch'](path, {
     headers: { "Content-Type": "application/json" },
     ...rest,
     body: body ? JSON.stringify(body) : undefined,
@@ -129,14 +224,14 @@ async function apiColunasFetch(path, options = {}) {
 }
 
 /**
- * Busca as colunas do funil na API e joga no localStorage.colunasLead.
+ * Busca as colunas do funil na API e joga em memStore.colunasFunil.
  * Se der erro, não quebra a tela: continua com o que tiver no navegador.
  */
 async function syncColunasFromApiToLocal() {
-  if (!API_BASE) return;
+  if (typeof window?.apiFetch !== 'function') return;
 
   try {
-    const data = await apiColunasFetch("/funil/colunas", { method: "GET" });
+    const data = await apiColunasRequest("/funil/colunas", { method: "GET" });
     const lista = Array.isArray(data)
       ? data
       : (Array.isArray(data?.colunas) ? data.colunas : []);
@@ -144,23 +239,23 @@ async function syncColunasFromApiToLocal() {
     if (!lista || !lista.length) return;
 
     const ajustadas = garantirNovoLeadPrimeira(lista);
-    localStorage.setItem("colunasLead", JSON.stringify(ajustadas));
+    memStore.colunasFunil = ajustadas;
     console.log("[Categorias] Colunas do funil sincronizadas da API.");
   } catch (e) {
-    console.warn("[Categorias] Falha ao buscar colunas da API; mantendo localStorage:", e);
+    console.warn("[Categorias] Falha ao buscar colunas da API; mantendo memStore/local fallback:", e);
   }
 }
 
 /**
- * Salva as colunas tanto no localStorage quanto na API.
+ * Salva as colunas tanto em memStore quanto na API.
  * ESTA é a função que o restante do código vai chamar.
  */
 function salvarColunasLocalEApi(colunas) {
   const arr = garantirNovoLeadPrimeira(Array.isArray(colunas) ? colunas : []);
   try {
-    localStorage.setItem("colunasLead", JSON.stringify(arr));
+    memStore.colunasFunil = arr;
   } catch (e) {
-    console.warn("[Categorias] Não foi possível salvar colunas no localStorage:", e);
+    console.warn("[Categorias] Não foi possível salvar colunas em memStore:", e);
   }
 
   // Dispara o salvamento na API em background (não trava a tela)
@@ -172,10 +267,10 @@ function salvarColunasLocalEApi(colunas) {
  * Endpoint sugerido: PUT /funil/colunas com { colunas: [...] }
  */
 async function salvarColunasNaApi(colunas) {
-  if (!API_BASE) return;
+  if (typeof window?.apiFetch !== 'function') return;
 
   try {
-    await apiColunasFetch("/funil/colunas", {
+    await apiColunasRequest("/funil/colunas", {
       method: "PUT",
       body: { colunas },
     });
@@ -455,7 +550,7 @@ function removerColuna(index) {
 
   // Move os leads dessa coluna para "Novo Lead"
   leads = leads.map(l => (l.status === nome ? { ...l, status: "Novo Lead" } : l));
-  localStorage.setItem("leads", JSON.stringify(leads));
+  memStore.leadsCache = leads;
 
   // Remove a coluna e garante ordem
   colunas.splice(index, 1);
@@ -847,7 +942,7 @@ function wireAcoes() {
 
 /* ------------------ Inicialização ------------------ */
 document.addEventListener("DOMContentLoaded", async () => {
-  // 1) Colunas do Funil: sincroniza da API para o localStorage (se a API estiver configurada)
+  // 1) Colunas do Funil: sincroniza da API para o memStore (se a API estiver configurada)
   await syncColunasFromApiToLocal();
 
   // 2) Faz migração e semente padrão de colunas, se necessário
@@ -858,7 +953,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const _tmpCols = lerJSON("colunasLead", []);
   salvarColunasLocalEApi(_tmpCols);
 
-  // 4) Sincroniza listas auxiliares da API para o localStorage (se a API existir)
+  // 4) Sincroniza listas auxiliares da API para o memStore/setLocal (se a API existir)
   await Promise.all([
     syncListaFromApiToLocal("comoConheceu"),
     syncListaFromApiToLocal("motivosArquivamento"),

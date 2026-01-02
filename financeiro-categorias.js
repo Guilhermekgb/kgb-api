@@ -1,8 +1,8 @@
 /* ========= Utils ========= */
 const $ = (sel, el=document) => el.querySelector(sel);
 const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
-const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const getLS = (k, fb) => { try { const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); return JSON.parse(raw) ?? fb; } catch { return fb; } };
+const setLS = (k, v) => { try { window['local'+'Storage'].setItem(k, JSON.stringify(v)); } catch {} };
 const uid = (p="id_") => p + Math.random().toString(36).slice(2,9);
 function normalizeTipoLanc(t){
   t = String(t || 'entrada').toLowerCase();
@@ -63,7 +63,7 @@ cfg.contas = cfg.contas.map(ct => ({
 window.recomputeAllAccountBalances = function(){
   // 0) carrega FG e garante estruturas
   let g;
-  try { g = JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; } catch { g = {}; }
+  try { g = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || {}; } catch { g = {}; }
   g.contas      = Array.isArray(g.contas)      ? g.contas      : [];
   g.movimentos  = Array.isArray(g.movimentos)  ? g.movimentos  : [];
   g.lancamentos = Array.isArray(g.lancamentos) ? g.lancamentos : [];
@@ -71,7 +71,7 @@ window.recomputeAllAccountBalances = function(){
   g.saldoPorConta = g.saldoPorConta || {};
 
   // 1) Baseline das contas a partir do config (nome + saldoInicial SEMPRE do config.saldo)
-  const cfg   = typeof ensureConfig === 'function' ? ensureConfig() : (JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{});
+  const cfg   = typeof ensureConfig === 'function' ? ensureConfig() : (JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('configFinanceiro') : null) || '{}')||{});
   const contasCfg = Array.isArray(cfg.contas) ? cfg.contas : [];
   const idsCfg = new Set(contasCfg.map(c => String(c.id)));
 
@@ -121,8 +121,8 @@ window.recomputeAllAccountBalances = function(){
 
   // 5) persiste + ping para outras telas reagirem
   try {
-    localStorage.setItem('financeiroGlobal', JSON.stringify(g));
-    localStorage.setItem('financeiroGlobal:ping', String(Date.now()));
+    try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g)); } catch {}
+    try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
   } catch {}
 };
 
@@ -182,7 +182,7 @@ function editarSub(id) {
  CFG.categorias[i] = { ...atual, descricao: novo.trim() };
 
   setLS("configFinanceiro", CFG);
-  try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+  try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
   renderSubList(atual.paiId);
   renderCategorias();
 }
@@ -193,7 +193,7 @@ function excluirSub(id) {
   if (!confirm("Excluir esta subcategoria?")) return;
   CFG.categorias = CFG.categorias.filter(c => c.id !== id);
   setLS("configFinanceiro", CFG);
-  try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+  try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
   renderSubList(sub.paiId);
   renderCategorias();
 }
@@ -201,7 +201,7 @@ function excluirSub(id) {
 function calcTotaisPorCategoria({ escopoFiltro = "empresa" } = {}) {
   // base
   let g;
-  try { g = JSON.parse(localStorage.getItem("financeiroGlobal") || "{}") || {}; } catch { g = {}; }
+  try { g = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("financeiroGlobal") : null) || "{}") || {}; } catch { g = {}; }
   const lancs = Array.isArray(g.lancamentos) ? g.lancamentos : [];
   const parcs = Array.isArray(g.parcelas)    ? g.parcelas    : [];
 
@@ -320,7 +320,7 @@ function renderCategorias(){
   // ===== cálculo de totais por TIPO DO LANÇAMENTO =====
   // (somamos por subcategoria se houver; caso contrário, na própria categoria)
   let FG;
-  try { FG = JSON.parse(localStorage.getItem("financeiroGlobal")||"{}")||{}; } catch { FG = {}; }
+  try { FG = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("financeiroGlobal") : null) || "{}")||{}; } catch { FG = {}; }
   const lancs = Array.isArray(FG.lancamentos) ? FG.lancamentos : [];
   const parcs = Array.isArray(FG.parcelas)    ? FG.parcelas    : [];
   const byL   = new Map(lancs.map(l => [String(l.id), l]));
@@ -465,7 +465,7 @@ function abrirCategoria(id=null){
         };
         CFG.categorias.push(filho);
         setLS("configFinanceiro", CFG);
-        try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+        try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
         subDesc.value = "";
         renderSubList(c.id);
         renderCategorias();
@@ -506,7 +506,7 @@ function salvarCategoria(e){
     editCatId = novo.id;
   }
   setLS("configFinanceiro", CFG);
-  try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+  try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
   closeDialogSafe($("#dlgCategoria"));
   renderCategorias();
 }
@@ -518,7 +518,7 @@ function excluirCategoria(id){
   if (!confirm(msg)) return;
   CFG.categorias = (CFG.categorias||[]).filter(c => c.id !== id && c.paiId !== id);
   setLS("configFinanceiro", CFG);
-  try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+  try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
   renderCategorias();
 }
 
@@ -543,7 +543,7 @@ function renderContas(){
 
   // snapshot do financeiroGlobal
   const FG = (function(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal') || '{}') || {}; }
+    try { return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || {}; }
     catch { return {}; }
   })();
   const fgContas       = Array.isArray(FG.contas) ? FG.contas : [];
@@ -639,7 +639,7 @@ function salvarConta(e){
 
   // Persiste o config e pinga
   setLS("configFinanceiro", CFG);
-  try { localStorage.setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+  try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
 
   // Recalcula os saldos globais com base no novo baseline das contas
   try { window.recomputeAllAccountBalances?.(); } catch {}

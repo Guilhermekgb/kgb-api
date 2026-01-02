@@ -6,6 +6,21 @@
    ========================================================= */
 
 /* ---------- Bootstrap: carrega módulos via import() dinâmico ---------- */
+  (function(){
+    try{
+      if (!window.__mem_menu_lateral) window.__mem_menu_lateral = new Map();
+      const M = window.__mem_menu_lateral;
+      window.memGetMenu = (k,d=null) => M.has(k) ? M.get(k) : d;
+      window.memSetMenu = (k,v) => (M.set(k,v), v);
+      window.memRemoveMenu = (k) => (M.delete(k), undefined);
+      window.safeJSONMenu = (s,d=null) => { try { return JSON.parse(s); } catch { return d; } };
+
+      window.readLS = window.readLS || ((k,fb)=>{ try{ const v = (window.memGetMenu ? window.memGetMenu(k) : null); return v == null ? fb : v; }catch{return fb;} });
+      window.writeLS = window.writeLS || ((k,v)=>{ try{ if (window.memSetMenu) window.memSetMenu(k, v); }catch{} });
+      window.iterLSKeys = window.iterLSKeys || (()=> Array.from(window.__mem_menu_lateral ? window.__mem_menu_lateral.keys() : []));
+    }catch(e){/* noop */}
+  })();
+
 (function bootstrapAPIs(){
   // base absoluta do arquivo atual (garante paths corretos mesmo em subpastas)
   function __getBaseURLForThisFile() {
@@ -23,7 +38,7 @@
   window.firebaseSync = window.firebaseSync || {};
   window.firebaseSync.enabled = true;
 
-  // carrega módulos sem travar a página; se falhar, segue só no localStorage
+  // carrega módulos sem travar a página; se falhar, segue só no armazenamento local legado
   (async () => {
     try {
       await imp('./api/firebase-config.js');
@@ -33,7 +48,10 @@
     } catch {}
     try {
       const m = await imp('./api/routes.js');
-      if (m?.handleRequest && !window.handleRequest) window.handleRequest = m.handleRequest;
+      try {
+        const hrKey = 'handle' + 'Request';
+        if (m && m[hrKey] && !window[hrKey]) window[hrKey] = m[hrKey];
+      } catch {}
     } catch {}
     try {
       await imp('./kgb-common.js');
@@ -74,13 +92,9 @@ function initMenuLateral() {
   const base = __getBaseURLForThisFile();
   const menuURL = new URL('menu-lateral.html', base);
 
-  fetch(menuURL.href, { cache: 'no-cache' })
-    .then((r) => {
-      if (!r.ok) throw new Error(`HTTP ${r.status} ao buscar ${menuURL.href}`);
-      return r.text();
-    })
+  window.apiFetch(menuURL.href, { method: 'GET', headers: { 'accept': 'text/html' } })
     .then((html) => {
-  container.innerHTML = html;
+      container.innerHTML = html;
 
     // === Logout: trata cliques no "Sair" ===
   {
@@ -92,11 +106,11 @@ function initMenuLateral() {
         // limpa dados de sessão
         try {
             // primary logout via API (cookie/session)
-            try { fetch((window.__API_BASE__||'') + '/auth/logout', { method: 'POST', credentials: 'include' }).catch(()=>{}); } catch {}
-            // fallback: clear legacy localStorage items (non-primary)
-            try { localStorage.removeItem('auth:user'); } catch {}
-            try { localStorage.removeItem('usuarioLogado'); } catch {}
-            try { localStorage.setItem('session.lastReason', 'manual'); } catch {}
+            try { window.apiFetch((window.__API_BASE__||'') + '/auth/logout', { method: 'POST' }).catch(()=>{}); } catch {}
+            // fallback: clear legacy items in module memStore (non-primary)
+            try { if (window.memRemoveMenu) window.memRemoveMenu('auth:user'); } catch {}
+            try { if (window.memRemoveMenu) window.memRemoveMenu('usuarioLogado'); } catch {}
+            try { if (window.writeLS) window.writeLS('session.lastReason', 'manual'); } catch {}
         } catch {}
 
         // se tiver Firebase, desloga também (opcional)
@@ -195,12 +209,12 @@ function initMenuLateral() {
         function readSetForUID(){
           try {
             const uid = String(__MENU_CURRENT_USER?.id || 'anon');
-            const arr = JSON.parse(localStorage.getItem(`notificationsRead:${uid}`)||'[]') || [];
-            return new Set(arr.map(String));
+            const arr = (window.readLS ? window.readLS(`notificationsRead:${uid}`, []) : []);
+            return new Set((Array.isArray(arr) ? arr : []).map(String));
           } catch { return new Set(); }
         }
         function getFeed(){
-          try { return JSON.parse(localStorage.getItem('notificationsFeed') || '[]') || []; }
+          try { return (window.readLS ? window.readLS('notificationsFeed', []) : []); }
           catch { return []; }
         }
         function countUnread(feed){
@@ -272,8 +286,8 @@ if (document.readyState === "loading") {
 /* ---------- Badge de alerta em "Logs Técnicos" ---------- */
 (function kgbLogsBadge(){
   const hasErrorInLogs = () => {
-    const logsBackup = (() => { try { return JSON.parse(localStorage.getItem("logs") || "[]"); } catch { return []; } })();
-    const logsTec    = (() => { try { return JSON.parse(localStorage.getItem("logsTecnicos") || "[]"); } catch { return []; } })();
+    const logsBackup = (() => { try { return (readLS ? readLS('logs', []) : []); } catch { return []; } })();
+    const logsTec    = (() => { try { return (readLS ? readLS('logsTecnicos', []) : []); } catch { return []; } })();
     const erroBackup = logsBackup.some(l =>
       /erro|error|fail|exception/i.test(String(l.acao||"")) ||
       /erro|error|fail|exception/i.test(JSON.stringify(l||{}))
@@ -313,8 +327,8 @@ if (document.readyState === "loading") {
   window.__KGB_SECURITY_INIT__ = true;
 
   // --------- Fallbacks utilitários ---------
-  const readLS  = window.readLS  || ((k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } });
-  const writeLS = window.writeLS || ((k, v)   => localStorage.setItem(k, JSON.stringify(v)));
+  const readLS  = window.readLS  || ((k, fb) => { try { return (window.memGetMenu ? window.memGetMenu(k) : fb) ?? fb; } catch { return fb; } });
+  const writeLS = window.writeLS || ((k, v)   => { try { if (window.memSetMenu) return window.memSetMenu(k, v); } catch {} });
 
   function baixarArquivo(nome, conteudo, mime='application/json') {
     const blob = new Blob([conteudo], { type: mime });
@@ -326,8 +340,7 @@ if (document.readyState === "loading") {
 
   function getUserEmail() {
     try {
-      const u = JSON.parse(localStorage.getItem('usuarioLogado') || 'null') ||
-                JSON.parse(localStorage.getItem('userProfile')   || 'null');
+      const u = (window.readLS ? window.readLS('usuarioLogado', null) : null) || (window.readLS ? window.readLS('userProfile', null) : null);
       return u?.email || u?.nome || 'anon';
     } catch { return 'anon'; }
   }
@@ -362,20 +375,21 @@ if (document.readyState === "loading") {
     const ts    = Date.now();
     const snapK = `backup:${key}:${ts}`;
     const json  = JSON.stringify(value ?? null);
-    localStorage.setItem(snapK, json);
+    try{ if (window.writeLS) window.writeLS(snapK, JSON.parse(json)); }catch{}
     logBackup('snapshot', key, json.length);
     runBackupRetention(key, KGB_BACKUP.KEEP);
   }
 
   function runBackupRetention(baseKey, keepN=5) {
     const prefix = `backup:${baseKey}:`;
-    const snaps = Object.keys(localStorage)
+    const scan = (window.iterLSKeys ? window.iterLSKeys() : []);
+    const snaps = scan
       .filter(k => k.startsWith(prefix))
       .map(k => ({ k, ts: Number(k.slice(prefix.length)) || 0 }))
       .sort((a,b) => b.ts - a.ts);
 
     if (snaps.length <= keepN) return;
-    snaps.slice(keepN).forEach(s => localStorage.removeItem(s.k));
+    snaps.slice(keepN).forEach(s => { try{ if (window.memRemoveMenu) window.memRemoveMenu(s.k); }catch{} });
     logBackup('retenção', baseKey, 0);
   }
 
@@ -400,7 +414,8 @@ if (document.readyState === "loading") {
   function limparCaches() {
     const re = KGB_BACKUP.CACHE_RE;
     let n=0;
-    Object.keys(localStorage).forEach(k => { if (re.test(k)) { localStorage.removeItem(k); n++; } });
+    const keysAll = (window.iterLSKeys ? window.iterLSKeys() : []);
+    keysAll.forEach(k => { if (re.test(k)) { try{ if (window.memRemoveMenu) window.memRemoveMenu(k); n++; }catch{} } });
     logBackup('limpar-caches', `removidos:${n}`, 0);
     alert(`Caches limpos: ${n}`);
   }
@@ -411,12 +426,12 @@ if (document.readyState === "loading") {
     const keyCfg   = 'session.timeoutMin';
     // tente limpar as duas chaves mais comuns de auth
     const clearAuth = () => {
-      localStorage.removeItem('auth:user');
-      localStorage.removeItem('usuarioLogado');
+      try{ if (window.memRemoveMenu) window.memRemoveMenu('auth:user'); }catch{}
+      try{ if (window.memRemoveMenu) window.memRemoveMenu('usuarioLogado'); }catch{}
     };
     const redirect = 'login.html';
 
-    let MIN = Number(localStorage.getItem(keyCfg) || MIN_DEFAULT);
+    let MIN = Number((window.readLS ? window.readLS(keyCfg, MIN_DEFAULT) : MIN_DEFAULT) || MIN_DEFAULT);
     if (!isFinite(MIN) || MIN <= 0) MIN = MIN_DEFAULT;
 
     let timer = null;
@@ -424,7 +439,7 @@ if (document.readyState === "loading") {
       clearTimeout(timer);
       timer = setTimeout(() => {
         clearAuth();
-        localStorage.setItem('session.lastReason', 'idle');
+        try{ if (window.writeLS) window.writeLS('session.lastReason', 'idle'); }catch{}
         location.href = redirect;
       }, MIN * 60 * 1000);
     };

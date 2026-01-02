@@ -18,7 +18,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    // Não gravar em armazenamento local persistente — mantemos em memória e em window.__API_BASE__
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -93,7 +93,7 @@
 <div id="modalModelos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:9999; align-items:center; justify-content:center;">
   <div style="background:#fff; padding:16px; border-radius:12px; width:min(720px, 92vw); max-height:85vh; overflow:auto;">
     <h3 style="margin:0 0 8px 0; color:#8e6b42;">Modelos de Mensagem</h3>
-    <p style="margin-top:0; color:#7b6a57;">Edite abaixo e salve. Eles ficam no localStorage como <code>modelo_*</code>.</p>
+    <p style="margin-top:0; color:#7b6a57;">Edite abaixo e salve. Eles ficam na memória local do navegador como <code>modelo_*</code>.</p>
 
     <label>WhatsApp (proposta_whats)</label>
     <textarea id="mdl_whats" rows="4" style="width:100%;"></textarea>
@@ -118,6 +118,12 @@
 
   <script>
   document.addEventListener("DOMContentLoaded", async () => {
+    // Memória do módulo (substitui uso persistente)
+    window.__PROPOSTA_MEM__ = window.__PROPOSTA_MEM__ || {};
+    function readLS(key){ try { return typeof window.__PROPOSTA_MEM__[key] === 'undefined' ? null : window.__PROPOSTA_MEM__[key]; } catch(e){ return null; } }
+    function writeLS(key, val){ try { window.__PROPOSTA_MEM__[key] = typeof val === 'string' ? val : JSON.stringify(val); } catch(e){} }
+    function safeJSON(key, fb){ try { const s = readLS(key); if (s == null) return fb; return typeof s === 'string' ? JSON.parse(s) : s; } catch { return fb; } }
+
     // ---------- Utils ----------
     const esc = (s) => String(s ?? "")
       .replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -137,7 +143,7 @@
     const safeArr = (a) => Array.isArray(a) ? a : [];
 
     // Base da API (igual resto do sistema)
-    const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
+    const API_BASE = window.__API_BASE__ || readLS("API_BASE") || "";
 
     // ===== Imagens: normaliza e RESOLVE dbId =====
     function toImgObj(img, idx){
@@ -161,11 +167,11 @@
       return null;
     }
 
-    // Busca uma imagem por dbId em localStorage e IndexedDB
+    // Busca uma imagem por dbId em armazenamento legado e IndexedDB
     async function findImageByDbId(dbId){
       if (!dbId) return null;
 
-      // 1) localStorage: chaves diretas e dicionários comuns
+      // 1) Memória local do módulo: chaves diretas e dicionários comuns
       const tryLsValue = (v) => {
         if (!v) return null;
         try {
@@ -186,7 +192,7 @@
         `img:${dbId}`, `image:${dbId}`, `file:${dbId}`, `foto:${dbId}`, dbId
       ];
       for (const k of directKeys){
-        const hit = tryLsValue(localStorage.getItem(k));
+        const hit = tryLsValue(readLS(k));
         if (hit) return hit;
       }
 
@@ -196,33 +202,16 @@
       ];
       for (const dk of dictKeys){
         try{
-          const raw = localStorage.getItem(dk);
+          const raw = readLS(dk);
           if (!raw) continue;
-          const obj = JSON.parse(raw);
+          const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
           const v = obj?.[dbId];
           const out = tryLsValue(typeof v === "string" ? v : JSON.stringify(v||{}));
           if (out) return out;
         }catch{}
       }
 
-      // varre todas as chaves do LS procurando um dicionário com o id
-      try{
-        for (let i=0;i<localStorage.length;i++){
-          const k = localStorage.key(i);
-          if (!k) continue;
-          if (!/img|image|foto|file|upload|blob|cache/i.test(k)) continue;
-          try{
-            const raw = localStorage.getItem(k);
-            if (!raw || raw.length < 20) continue;
-            const obj = JSON.parse(raw);
-            if (obj && typeof obj === "object" && dbId in obj){
-              const v = obj[dbId];
-              const out = typeof v === "string" ? v : (v?.src || v?.base64 || v?.dataUrl || "");
-              if (typeof out === "string" && out) return out;
-            }
-          }catch{}
-        }
-      }catch{}
+      // varredura global do armazenamento legado removida
 
       // 2) IndexedDB: tenta em todos bancos/lojas
       try{
@@ -334,22 +323,17 @@
     // Função para buscar proposta pública na API
     async function fetchPropostaPublica(token) {
       if (!API_BASE || !token) return null;
+      if (typeof window.apiFetch !== 'function') {
+        console.warn('[PROPOSTA] window.apiFetch não disponível — não realiza fetch direto.');
+        return null;
+      }
       try {
-        const resp = await fetch(`${API_BASE}/proposta/${encodeURIComponent(token)}`, {
-          method: "GET"
-          // rota pública, sem headers especiais
-        });
-
-        if (!resp.ok) {
-          console.warn("[PROPOSTA] /proposta/:token retornou status:", resp.status);
-          return null;
+        const resp = await window.apiFetch(`${API_BASE.replace(/\/$/, '')}/proposta/${encodeURIComponent(token)}`, { method: 'GET' });
+        if (!resp || (resp.status && ![200,201].includes(resp.status))) {
+          console.warn("[PROPOSTA] /proposta/:token retornou status:", resp && resp.status);
+          return resp?.data || null;
         }
-
-        let data = null;
-        try { data = await resp.json(); } catch { data = null; }
-
-        // server.js responde { ok:true, data: safeLead }
-        return data?.data || data?.lead || data || null;
+        return resp?.data || resp || null;
       } catch (e) {
         console.warn("[PROPOSTA] Erro ao chamar API /proposta/:token:", e);
         return null;
@@ -372,22 +356,22 @@
       } catch {}
     }
 
-    // 3) Preview: sessionStorage (quando abre logo depois de gerar proposta)
+    // 3) Preview: memória em módulo (quando abre logo depois de gerar proposta)
     if (!lead && t) {
       try {
-        const ss = sessionStorage.getItem(`proposta:${t}`);
+        const ss = readLS(`proposta:${t}`);
         if (ss) {
-          const obj = JSON.parse(ss);
+          const obj = typeof ss === 'string' ? JSON.parse(ss) : ss;
           if (obj?.lead) lead = obj.lead;
         }
       } catch {}
     }
 
-    // 4) Último recurso: sessionStorage.leads (preview rápido) — evita depender de localStorage
+    // 4) Último recurso: memória (preview rápido)
     if (!lead && t) {
       try {
-        const leads = JSON.parse(sessionStorage.getItem("leads") || "[]");
-        lead = leads.find(x => x && x.token === t) || null;
+        const leads = safeJSON("leads", []);
+        lead = (Array.isArray(leads) ? leads.find(x => x && x.token === t) : null) || null;
       } catch {}
     }
 
@@ -412,19 +396,19 @@
       if (Array.isArray(window.cardapiosDisponiveis)) out.push(...window.cardapiosDisponiveis);
 
       try {
-        const c = JSON.parse(localStorage.getItem("cardapiosBuffet") || "[]");
+        const c = safeJSON("cardapiosBuffet", []);
         if (Array.isArray(c)) out.push(...c);
       } catch {}
 
       try {
-        const p = JSON.parse(localStorage.getItem("produtosBuffet") || "[]");
+        const p = safeJSON("produtosBuffet", []);
         if (Array.isArray(p)) out.push(...p.filter(it => String(it?.tipo||"").toLowerCase()==="cardapio"));
         else if (p && Array.isArray(p.cardapios)) out.push(...p.cardapios);
         else if (p && Array.isArray(p.itens)) out.push(...p.itens.filter(it => /card(a|á)pio|menu|buffet/i.test(String(it?.categoria||it?.tipo||it?.grupo||""))));
       } catch {}
 
       try {
-        const cc = JSON.parse(localStorage.getItem("catalogoCardapios") || "[]");
+        const cc = safeJSON("catalogoCardapios", []);
         if (Array.isArray(cc)) out.push(...cc);
         else if (cc && Array.isArray(cc.itens)) out.push(...cc.itens);
       } catch {}
@@ -654,9 +638,9 @@ const sizeToWidth = (t) => {
 // === LOG LOCAL DA PROPOSTA (página pública) ===
   function logPublicAction(entry){
     try{
-      const arr = (typeof readLS === 'function') ? (readLS('propostaLogs',[])||[]) : (JSON.parse(localStorage.getItem('propostaLogs')||'[]')||[]);
+      const arr = safeJSON('propostaLogs', []);
       arr.push({ ...entry, ts: Date.now() });
-      try { if (typeof writeLS === 'function') writeLS('propostaLogs', arr); else localStorage.setItem('propostaLogs', JSON.stringify(arr)); } catch {}
+      try { writeLS('propostaLogs', arr); } catch {}
     }catch{}
   }
     btnCopy?.addEventListener("click", async () => {
@@ -665,21 +649,21 @@ const sizeToWidth = (t) => {
 
     });
     function _getModeloBySlugOrName(preferredSlug, nomeIgual){
-      const direto = (localStorage.getItem(`modelo_${preferredSlug}`) || "").trim();
+      const direto = (readLS(`modelo_${preferredSlug}`) || "").trim();
       if (direto) return direto;
       try {
-        const idx = JSON.parse(localStorage.getItem('modelos_index') || '[]');
-        const hit = idx.find(m => String(m.nome||"").trim().toLowerCase() === String(nomeIgual||"").trim().toLowerCase());
+        const idx = safeJSON('modelos_index', []);
+        const hit = (Array.isArray(idx) ? idx : []).find(m => String(m.nome||"").trim().toLowerCase() === String(nomeIgual||"").trim().toLowerCase());
         if (hit) {
-          const h = (localStorage.getItem(`modelo_${hit.slug}`) || "").trim();
+          const h = (readLS(`modelo_${hit.slug}`) || "").trim();
           if (h) return h;
         }
       } catch { }
       return "";
     }
     // === Gerenciador de modelos (página pública) ===
-const _L = (k) => localStorage.getItem(k) || "";
-const _S = (k, v) => localStorage.setItem(k, v ?? "");
+    const _L = (k) => (readLS ? (readLS(k) || "") : "");
+    const _S = (k, v) => { try { writeLS(k, v ?? ""); } catch{} };
 
 const mdl = document.getElementById("modalModelos");
 document.getElementById("btnModelos")?.addEventListener("click", ()=>{
@@ -697,12 +681,12 @@ document.getElementById("mdlSalvar")?.addEventListener("click", ()=>{
 
   // opcional: manter um índices amigável (modelos_index)
   try{
-    const idx = JSON.parse(localStorage.getItem('modelos_index') || '[]') || [];
+    const idx = safeJSON('modelos_index', []) || [];
     const add = (slug, nome)=>{ if(!idx.find(i=>i.slug===slug)){ idx.push({ slug, nome }); } };
     add('proposta_whats', 'Proposta-whats');
     add('proposta_email_assunto', 'Proposta-email-assunto');
     add('proposta_email', 'Proposta-email');
-    localStorage.setItem('modelos_index', JSON.stringify(idx));
+    try { writeLS('modelos_index', idx); } catch {}
   }catch{}
 
   alert('Modelos salvos.');
@@ -872,9 +856,9 @@ const menusExtras = safeArr(lead?.itensSelecionados)
       if (!token) return;
 
       const debounceKey = `pv:${token}`;
-      const last = Number(sessionStorage.getItem(debounceKey) || 0);
+      const last = Number(readLS(debounceKey) || 0);
       if (Date.now() - last < 30_000) return;
-      sessionStorage.setItem(debounceKey, String(Date.now()));
+      writeLS(debounceKey, String(Date.now()));
 
       let idFromParam = null;
       try{
@@ -885,7 +869,7 @@ const menusExtras = safeArr(lead?.itensSelecionados)
         }
       }catch{}
 
-      const leads = JSON.parse(localStorage.getItem("leads") || "[]");
+      const leads = safeJSON("leads", []);
       const idx = leads.findIndex(l =>
         (idFromParam ? String(l.id) === String(idFromParam) : false) ||
         (l.token && String(l.token) === String(token))
@@ -902,7 +886,7 @@ const menusExtras = safeArr(lead?.itensSelecionados)
         lead.viewLog.push({ at: new Date().toISOString(), ua: navigator.userAgent });
       }catch{}
 
-      localStorage.setItem("leads", JSON.stringify(leads));
+      try { writeLS("leads", leads); } catch {}
     }catch(e){
       console.warn("Falha ao rastrear visualização:", e);
     }

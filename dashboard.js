@@ -6,6 +6,14 @@ if (typeof window.leads === 'undefined') {
 // torna "leads" visível dentro do código do dashboard
 var leads = window.leads;
 
+// runtime memory-only store (não persiste dados de negócio)
+const __memoryStore_dash = {};
+function memGetDash(key, fallback = null) { return Object.prototype.hasOwnProperty.call(__memoryStore_dash, key) ? __memoryStore_dash[key] : fallback; }
+function memSetDash(key, value) { __memoryStore_dash[key] = value; }
+function memRemoveDash(key) { delete __memoryStore_dash[key]; }
+function memGetJSONDash(key, fallback = null) { try { const v = memGetDash(key, null); return v == null ? fallback : (typeof v === 'string' ? JSON.parse(v) : v); } catch { return fallback; } }
+function memSetJSONDash(key, value) { try { memSetDash(key, (value === undefined ? null : JSON.parse(JSON.stringify(value)))); } catch { memSetDash(key, value); } }
+
 let __CURRENT_USER_DASH = window.__KGB_USER_CACHE || null;
 
 async function initDashboard(){
@@ -52,15 +60,14 @@ function safeRenderFinanceiroKPIs(data){
   function __getUID(){
     try {
       const cand = [
-          localStorage.getItem('userProfile'),
-          // usuarioLogado removed: prefer session via getUsuarioAtualAsync/guard
-          localStorage.getItem('usuario'),
-          localStorage.getItem('currentUser'),
-          localStorage.getItem('auth:user')
+          memGetJSONDash('userProfile'),
+          // prefer in-memory or server session
+          memGetJSONDash('usuario'),
+          memGetJSONDash('currentUser'),
+          memGetJSONDash('auth:user')
         ];
-      for (const c of cand){
+      for (const o of cand){
         try{
-          const o = c ? JSON.parse(c) : null;
           if (o && (o.id || o.uid || o.userId)) {
             return String(o.id || o.uid || o.userId);
           }
@@ -71,19 +78,19 @@ function safeRenderFinanceiroKPIs(data){
   }
 
   function __getFeed(){
-    try { return JSON.parse(localStorage.getItem('notificationsFeed')||'[]') || []; }
+    try { return memGetJSONDash('notificationsFeed', []) || []; }
     catch { return []; }
   }
 
   function __getReadSet(uid){
     try {
-      const arr = JSON.parse(localStorage.getItem(`notificationsRead:${uid}`)||'[]') || [];
+      const arr = memGetJSONDash(`notificationsRead:${uid}`, []) || [];
       return new Set(arr.map(String));
     } catch { return new Set(); }
   }
   function __saveReadSet(uid, set){
     const arr = Array.from(set);
-    localStorage.setItem(`notificationsRead:${uid}`, JSON.stringify(arr));
+    memSetJSONDash(`notificationsRead:${uid}`, arr);
   }
 
   function countNaoLidas(){
@@ -124,18 +131,15 @@ function safeRenderFinanceiroKPIs(data){
     __saveReadSet(uid, set);
     refreshDashboardBell();
     // Pinga outras abas
-    try { localStorage.setItem('notificationsFeed:ping', String(Date.now())); } catch {}
+    try { memSetDash('notificationsFeed:ping', String(Date.now())); } catch {}
     try { const bc = new BroadcastChannel('mrubuffet'); bc.postMessage({ type:'notificationsFeed:ping', ts: Date.now() }); bc.close?.(); } catch {}
   }
   window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 
   // Reage a mudanças de feed/leitura nesta e em outras abas
-  window.addEventListener('storage', (ev)=>{
-    if (!ev || !ev.key) return;
-    if (ev.key.startsWith('notificationsFeed') || ev.key.startsWith('notificationsRead:')) {
-      refreshDashboardBell();
-    }
-  });
+  // storage events are not used for dashboard (we keep state in-memory / via API)
+  // manter listener vazio para compatibilidade com outros módulos
+  window.addEventListener('storage', (ev)=>{});
   try {
     const bc = new BroadcastChannel('mrubuffet');
     bc.onmessage = (e)=>{
@@ -224,8 +228,7 @@ function refreshLucideIcons(){
   const u = __CURRENT_USER_DASH || window.__KGB_USER_CACHE || null;
   const primeiroValido = u || (function(){
     try {
-      const cand = [localStorage.getItem('usuario'), localStorage.getItem('currentUser'), localStorage.getItem('auth:user')]
-        .map(x => { try { return x ? JSON.parse(x) : null; } catch { return null; } });
+      const cand = [memGetJSONDash('usuario'), memGetJSONDash('currentUser'), memGetJSONDash('auth:user')];
       return cand.find(x => x && typeof x === 'object') || {};
     } catch { return {}; }
   })();
@@ -252,24 +255,19 @@ renderSaudacaoUsuario();
 
 
   // ===== LS helpers
-  const readLS  = (k,d)=>{ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):d; }catch{ return d; } };
+  // in-memory persistence helpers (do NOT persist dados de negócio)
+  const readLS  = (k,d)=>{ try{ return memGetJSONDash(k, d); } catch{ return d; } };
   const writeLS = (k,v)=>{
-    try { localStorage.setItem(k, JSON.stringify(v)); }
+    try { memSetJSONDash(k, v); }
     catch(e){
-      if (e && (e.name==='QuotaExceededError' || e.code===22 || e.code===1014)) {
-        throw e;
-      } else { throw e; }
+      console.warn('[Dashboard] mem store write failed', e);
+      throw e;
     }
   };
   // ===== Helper genérico para chamadas de API (local/backend)
   async function fetchJSON(url, opts = {}) {
-    const base = window.API_BASE || ""; // se quiser apontar p/ /api, define window.API_BASE = "/api"
-    const resp = await fetch(base + url, {
-      headers: { "Accept": "application/json" },
-      ...opts,
-    });
-    if (!resp.ok) throw new Error(`[API] ${url} → ${resp.status}`);
-    return resp.json();
+    if (!window.apiFetch) throw new Error('window.apiFetch não disponível. Use a API do app.');
+    return await window.apiFetch(url, opts);
   }
 
     // Gatilhos centrais de refresh do Dashboard (apenas financeiro)
@@ -404,8 +402,7 @@ function __salvarLancRapidoNoFG({
 
   const lerFG = () => {
     try {
-      const raw = localStorage.getItem(FG_KEY);
-      const g = raw ? JSON.parse(raw) : {};
+      const g = memGetJSONDash(FG_KEY, {}) || {};
       return {
         contas: [],
         lancamentos: [],
@@ -421,14 +418,14 @@ function __salvarLancRapidoNoFG({
 
   const gravarFG = (g) => {
     try {
-      localStorage.setItem(FG_KEY, JSON.stringify(g));
+      memSetJSONDash(FG_KEY, g);
     } catch (e) {
-      console.warn('[Dashboard] Falhou ao salvar financeiroGlobal', e);
+      console.warn('[Dashboard] Falhou ao salvar financeiroGlobal (mem)', e);
     }
 
-    // "ping" para outras abas/telas
-    try { localStorage.setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
-    try { localStorage.setItem('fg:ping', String(Date.now())); } catch {}
+    // "ping" para outras abas/telas (in-memory)
+    try { memSetDash('financeiroGlobal:ping', String(Date.now())); } catch {}
+    try { memSetDash('fg:ping', String(Date.now())); } catch {}
 
     // BroadcastChannel para telas que escutam mudanças
     try {
@@ -548,7 +545,7 @@ const escopo      = (document.getElementById('fEscopo')   ?.value || 'empresa').
       // descrição da forma (amigável) a partir do config (opcional)
       let formaDescricao = '';
       try {
-        const cfg = JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{};
+        const cfg = memGetJSONDash('configFinanceiro', {}) || {};
         const tipos = Array.isArray(cfg.tipos)?cfg.tipos:[];
         const m = tipos.find(t => String(t.id)===String(forma));
         formaDescricao = m?.descricao || m?.nome || forma || '';
@@ -717,7 +714,7 @@ document.querySelectorAll('[data-card="pg-a-vencer"], #cardPagamentosAVencer a, 
 
   // === Eventos para vínculo
   function getEventos(){
-    try{ return JSON.parse(localStorage.getItem("eventos")||"[]")||[]; }catch{ return []; }
+    try{ return memGetJSONDash("eventos", []) || []; }catch{ return []; }
   }
   function fillEventos(){
     const sel = document.getElementById("fEvento"); if (!sel) return;
@@ -740,7 +737,7 @@ function _normTipo(t) {
   return (s === 'entrada' || s === 'saida') ? s : '';
 }
 function _cfg() {
-  try { return JSON.parse(localStorage.getItem('configFinanceiro') || '{}') || {}; }
+  try { return memGetJSONDash('configFinanceiro', {}) || {}; }
   catch { return {}; }
 }
 
@@ -994,7 +991,7 @@ function fillCategoriasCombined() {
 
     try {
       writeLS(KEY, g);
-      try { localStorage.setItem(KEY + ":ping", String(Date.now())); } catch {}
+      try { memSetDash(KEY + ":ping", String(Date.now())); } catch {}
       try { window.dispatchEvent(new CustomEvent("finmodal:confirm",{detail:{reason:"dashboard-quick"}})); } catch {}
       return;
     } catch (err) {
@@ -1002,8 +999,8 @@ function fillCategoriasCombined() {
     }
 
     try {
-      const prev = localStorage.getItem(KEY);
-      if (prev) localStorage.setItem(KEY + ":backup:" + Date.now(), prev);
+      const prev = memGetDash(KEY);
+      if (prev) memSetDash(KEY + ":backup:" + Date.now(), prev);
     } catch (e) { console.warn("[Financeiro] Backup falhou (seguindo mesmo assim):", e); }
 
    let cur = { contas:[], lancamentos:[], parcelas:[], saldoPorConta:{}, ...g };
@@ -1012,7 +1009,7 @@ function fillCategoriasCombined() {
       cur = stages[i](cur);
       try {
         writeLS(KEY, cur);
-        try { localStorage.setItem(KEY + ":ping", String(Date.now())); } catch {}
+        try { memSetDash(KEY + ":ping", String(Date.now())); } catch {}
         try { window.dispatchEvent(new CustomEvent("finmodal:confirm",{detail:{reason:`dashboard-quick-compact-s${i+1}`}})); } catch {}
         console.warn(`[Financeiro] Salvou após compactação (etapa ${i+1}). Tamanho ~${(bytes(cur)/1024/1024).toFixed(2)} MB`);
         return;
@@ -1038,8 +1035,8 @@ function fillCategoriasCombined() {
       // salva a chave e cria snapshot com retenção (KEEP=5)
       kgbBackup.saveWithBackup('financeiroGlobal', g);
     } else {
-      // fallback absoluto: pelo menos gera um snapshot bruto
-      localStorage.setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g));
+      // fallback absoluto: registra snapshot em memória (não persiste)
+      memSetJSONDash('backup:financeiroGlobal:' + Date.now(), g);
     }
   } catch (e) {
     console.warn('Auto-backup falhou:', e);
@@ -1050,27 +1047,29 @@ function fillCategoriasCombined() {
   // ===== Utilitários rápidos (Console)
   window.__fgExport = function(){
     try{
-      const blob = new Blob([localStorage.getItem("financeiroGlobal")||"{}"], {type:"application/json"});
+      const data = memGetJSONDash("financeiroGlobal") || {};
+      const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `financeiroGlobal-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=> URL.revokeObjectURL(a.href), 8000);
-      console.log("Backup exportado.");
+      console.log("Backup exportado (mem store).");
     }catch(e){ console.error(e); alert("Falha ao exportar."); }
   };
   window.__fgPurgeCaches = function(){
-    const keys = Object.keys(localStorage);
+    // purge in-memory cache keys matching pattern
+    const keys = Object.keys(__memoryStore_dash || {});
     const pesados = keys.filter(k => /layout|snapshot|_html|_imagem|cache|tmp|buffer/i.test(k));
-    pesados.forEach(k => localStorage.removeItem(k));
-    alert(`Limpou ${pesados.length} chaves de cache temporário.`);
+    pesados.forEach(k => memRemoveDash(k));
+    alert(`Limpou ${pesados.length} chaves de cache temporário (mem).`);
   };
   window.__fgVacuum = function(){
     try{
-      const cur = localStorage.getItem("financeiroGlobal");
-      if (cur) localStorage.setItem("financeiroGlobal:backup:"+Date.now(), cur);
-      localStorage.removeItem("financeiroGlobal");
-      alert("Financeiro limpo (backup salvo em localStorage). Reabra o modal e salve novamente.");
+      const cur = memGetJSONDash("financeiroGlobal");
+      if (cur) memSetJSONDash("financeiroGlobal:backup:"+Date.now(), cur);
+      memRemoveDash("financeiroGlobal");
+      alert("Financeiro limpo (backup salvo em memória). Reabra o modal e salve novamente.");
     }catch(e){ console.error(e); alert("Falha ao limpar."); }
   };
 
@@ -1288,7 +1287,7 @@ function fillCategoriasCombined() {
   }
 // --- Cartão de crédito (helpers) ---
 function __cfg(){ 
-  try { return JSON.parse(localStorage.getItem('configFinanceiro')||'{}')||{}; }
+  try { return memGetJSONDash('configFinanceiro', {}) || {}; }
   catch { return {}; }
 }
 
@@ -1506,7 +1505,7 @@ function __destroyChartInstance(canvasOrCtx){
 
     // exporta helper para quem salvar/editar leads manualmente
     window.__leadsChanged = function(){
-      try { localStorage.setItem('leads:ping', String(Date.now())); } catch {}
+      try { memSetDash('leads:ping', String(Date.now())); } catch {}
       rerenderConversao();
     };
   })();
@@ -1555,7 +1554,7 @@ function __destroyChartInstance(canvasOrCtx){
     } catch (e) {
       console.warn("[Dashboard] Falha ao buscar KPIs de leads na API, usando cálculo local:", e);
       try {
-        // Fallback: mesma lógica antiga baseada em localStorage
+        // Fallback: mesma lógica antiga baseada em cache local (mem)
         const leads = readLS("leads", []);
         const hoje = new Date();
         const MES = hoje.getMonth(), ANO = hoje.getFullYear();
@@ -1686,9 +1685,9 @@ function __destroyChartInstance(canvasOrCtx){
   const ul = document.getElementById("listaProximosEventos");
   if (!ul) return;
 
-  // lê eventos
+  // lê eventos (in-memory)
   const eventos = (function(){
-    try { return JSON.parse(localStorage.getItem("eventos") || "[]") || []; }
+    try { return memGetJSONDash("eventos", []) || []; }
     catch { return []; }
   })();
 
@@ -1770,8 +1769,8 @@ function __destroyChartInstance(canvasOrCtx){
   const ul = document.getElementById('listaDegustacoes');
   if (!ul) return;
 
-  // Leitura segura
-  const LS = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
+  // Leitura segura (memória)
+  const LS = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
 
   // Slots cadastrados (data, hora, local, cardapio)
   const slots = LS('degustacoesDisponiveis', []);
@@ -1861,7 +1860,7 @@ function __destroyChartInstance(canvasOrCtx){
   const UL   = document.getElementById('listaNotificacoes');
   if (!WRAP || !UL) return;
 
-  const LS = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
+  const LS = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
 
   // Normaliza item vindo de qualquer fonte
   function normalize(it, origem){
@@ -1977,7 +1976,7 @@ li.addEventListener('click', ()=>{
                            .includes(String(st||'').toLowerCase());
 
   function readFG(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; } catch { return {}; }
+    try { return memGetJSONDash('financeiroGlobal', {}) || {}; } catch { return {}; }
   }
   function val(n){ return Number(n||0) || 0; }
 
@@ -2118,7 +2117,7 @@ li.addEventListener('click', ()=>{
   const fmtBR = (v)=> Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
 
   function readFG(){
-    try { return JSON.parse(localStorage.getItem('financeiroGlobal')||'{}')||{}; } catch { return {}; }
+    try { return memGetJSONDash('financeiroGlobal', {}) || {}; } catch { return {}; }
   }
   function val(n){ return Number(n||0) || 0; }
 
@@ -2281,7 +2280,7 @@ li.addEventListener('click', ()=>{
   const TBL_ID = 'tabelaRetornos';
 
   // Helpers LS
-  const LS = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
+  const LS = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
   const hoje0 = (()=>{ const d=new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })();
 
   // Normalizadores
@@ -2425,8 +2424,8 @@ li.addEventListener('click', ()=>{
 tr.addEventListener('click', ()=>{
   // Preferir abrir o orçamento **existente** (se houver) desse lead
   try {
-    const leadId = String(it.id || '');
-    const props = JSON.parse(localStorage.getItem('propostas') || '[]') || [];
+  const leadId = String(it.id || '');
+  const props = memGetJSONDash('propostas', []) || [];
 
     // Tenta casar por campos comuns: leadId | lead_id | clienteLeadId
     const match = props.find(p => {
@@ -2480,7 +2479,7 @@ tr.addEventListener('click', ()=>{
   if (!ul) return;
 
   // helpers de leitura
-  const LS = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
+  const LS = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
   const hoje0 = (()=>{ const d=new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })();
 
   // normaliza "concluída?"
@@ -2587,13 +2586,13 @@ tr.addEventListener('click', ()=>{
     return ev?.nomeEvento || ev?.titulo || ev?.nome || ev?.cliente || ev?.evento || ("Evento " + (ev?.id||""));
   }
 
-  // varre localStorage por keys "checklist:event:<id>"
+  // varre cache em memória por keys "checklist:event:<id>"
   function lerEstadosChecklist(){
     const out = [];
-    for (const k of Object.keys(localStorage)){
+    for (const k of Object.keys(__memoryStore_dash || {})){
       if (!k.startsWith("checklist:event:")) continue;
       try{
-        const json = JSON.parse(localStorage.getItem(k)||"null");
+        const json = memGetJSONDash(k, null);
         if (json && Array.isArray(json.itens)) out.push({ id: k.split(":").pop(), itens: json.itens });
       }catch{}
     }
@@ -2602,9 +2601,9 @@ tr.addEventListener('click', ()=>{
 
   // monta lista de vencidos
   function computeVencidos(){
-    const eventos = (()=>{
-      try{ return JSON.parse(localStorage.getItem(KEY_EVENTOS)||"[]") || []; }catch{ return []; }
-    })();
+    const eventos = ((()=>{
+      try{ return memGetJSONDash(KEY_EVENTOS, []) || []; }catch{ return []; }
+    })());
     const mapEv = new Map(eventos.map(e => [String(e.id), e]));
 
     const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -2693,7 +2692,7 @@ tr.addEventListener('click', ()=>{
     const today0 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
     const addDias = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
     const fimJanela = addDias(today0, 7);
-    const read = (k, d)=>{ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):d; }catch{ return d; } };
+    const read = (k, d)=>{ try{ return memGetJSONDash(k, d); }catch{ return d; } };
     const parseISO = (v) => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
 
     // 1) RETORNOS VENCIDOS
@@ -2846,7 +2845,7 @@ tr.addEventListener('click', ()=>{
 // Cada item deve ter: { id, ... , lida: true|false }  (se 'lida' faltar, tratamos como NÃO lida)
 
 (function setupBellBadge(){
-  const LS = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
+  const LS = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
 
   function countUnreadFrom(arr){
     if (!Array.isArray(arr)) return 0;
@@ -2880,7 +2879,7 @@ tr.addEventListener('click', ()=>{
   renderBell();
 
   // Atualiza quando a tela de Notificações marcar algo como lido:
-  //  • Ela deve fazer: localStorage.setItem('notif:ping', Date.now().toString());
+  //  • Ela deve fazer: memSetDash('notif:ping', Date.now().toString());
   //  • Ou salvar/atualizar as listas (internas/externas)
   window.addEventListener('storage', (e)=>{
     const k = String(e.key||'');
@@ -2901,7 +2900,7 @@ tr.addEventListener('click', ()=>{
 
   const HIDE_ZERO_KEY = "dashboard:hideZeroAlerts";
   function applyHideZeroAlerts(){
-    const hide = localStorage.getItem(HIDE_ZERO_KEY) === "1";
+    const hide = memGetDash(HIDE_ZERO_KEY) === "1";
     const cb = document.getElementById("cbOcultarZeros");
     if (cb) cb.checked = hide;
 
@@ -2923,7 +2922,7 @@ tr.addEventListener('click', ()=>{
     const cb = document.getElementById("cbOcultarZeros");
     if (!cb) return;
     cb.addEventListener("change", ()=>{
-      localStorage.setItem(HIDE_ZERO_KEY, cb.checked ? "1" : "0");
+      memSetDash(HIDE_ZERO_KEY, cb.checked ? "1" : "0");
       applyHideZeroAlerts();
     });
   }
@@ -2933,8 +2932,8 @@ window.marcarNotificacaoComoLida = function(tipo, id) {
   const keyNew = (tipo === 'interna') ? 'notif:internas' : 'notif:externas';
   const keyOld = (tipo === 'interna') ? 'notificacoesInternas' : 'notificacoesExternas';
 
-  const read  = (k, fb=[]) => { try{ const r=localStorage.getItem(k); return r?JSON.parse(r):fb; }catch{ return fb; } };
-  const write = (k,v)      =>  localStorage.setItem(k, JSON.stringify(v));
+  const read  = (k, fb=[]) => { try{ return memGetJSONDash(k, fb); }catch{ return fb; } };
+  const write = (k,v)      =>  memSetJSONDash(k, v);
 
   // carrega lista (aceita chave nova e legada)
   let lista = read(keyNew, read(keyOld, []));
@@ -2948,7 +2947,7 @@ window.marcarNotificacaoComoLida = function(tipo, id) {
   write(keyNew, lista);
 
   // 🔔 aqui dispara o ping que o dashboard escuta (é isso que você perguntou “onde colar”)
-  localStorage.setItem('notif:ping', Date.now().toString());
+  memSetDash('notif:ping', Date.now().toString());
 };
 
   // Primeira renderização e auto-refresh
@@ -3083,7 +3082,7 @@ window.__lucideRefresh?.();
 (function(){
   const $  = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  function readLS(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } }
+  function readLS(k, fb){ try { return memGetJSONDash(k, fb); } catch { return fb; } }
   function monthKey(d=new Date()){ return d.toISOString().slice(0,7); }
 
   function fixLeadsFinalizadosDoMes(){
@@ -3166,7 +3165,7 @@ window.__lucideRefresh?.();
         const temEnvio = hs.some(h => /proposta\s+enviad/i.test(h?.observacao||''));
         return t + (temEnvio ? 1 : 0);
       }, 0);
-      views = Number(localStorage.getItem('propostasViewsTotal') || 0) || 0;
+      views = Number(memGetDash('propostasViewsTotal') || 0) || 0;
     }
 
     slotQtd.textContent = String(enviados);
@@ -3267,8 +3266,8 @@ window.addEventListener('finmodal:cancel', () => {
 
 })();
 /* ===================== FASE D — KPIs + Gráfico (IDs da Carol) ===================== */
-/* Este bloco usa localStorage.leads como fonte local (fallback).
-   Quando o M36 expuser /leads/metrics, a gente só troca a função de leitura. */
+/* Este bloco usa leads em cache local (mem) como fonte local (fallback).
+  Quando o M36 expuser /leads/metrics, a gente só troca a função de leitura. */
 
 // ---------- Helpers de data ----------
 const __isoLocal = (d = new Date()) => {
@@ -3284,8 +3283,8 @@ const __addMonths = (d, n) => {
   return nd;
 };
 
-// ---------- Leitura segura ----------
-const __readLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
+// ---------- Leitura segura (mem cache) ----------
+const __readLS = (k, fb) => { try { return memGetJSONDash(k, fb); } catch { return fb; } };
 
 // ---------- Normalização de status de lead ----------
 function __statusClass(s) {
@@ -3359,7 +3358,7 @@ function renderKpisCarol() {
 // Ponte: usa o render único já definido acima
 function renderGraficoConversaoCarol(){
   try {
-    const leadsLS = (typeof readLS === 'function') ? (readLS('leads',[])||[]) : (JSON.parse(localStorage.getItem('leads') || '[]'));
+    const leadsLS = (typeof readLS === 'function') ? (readLS('leads',[])||[]) : (memGetJSONDash('leads',[])||[]);
     renderGraficoConversao(leadsLS);
   } catch {}
 }
@@ -3371,7 +3370,7 @@ function bindRealtimeDashboardCarol() {
     try { renderKpisCarol(); renderGraficoConversaoCarol(); } catch (e) { console.warn(e); }
   };
 
-  // Mudanças relevantes no localStorage
+  // Mudanças relevantes no cache
   window.addEventListener('storage', (ev) => {
     if (!ev || !ev.key) return;
     // Se mudar leads (ou alguma chave que seu app use para avisar)
@@ -3451,15 +3450,8 @@ try {
 // =================== DASHBOARD LEADS via API (M36) ===================
 (function(){
   async function apiGET(url){
-    if (window.apiFetch) {
-      return await window.apiFetch(url);
-    }
-    if (window.handleRequest) {
-      return await window.handleRequest(url, { method: 'GET' });
-    }
-    const resp = await fetch(url, { method: 'GET', credentials: 'include' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    return await resp.json();
+    if (!window.apiFetch) throw new Error('window.apiFetch não disponível.');
+    return await window.apiFetch(url);
   }
 
   function setTextById(id, value){

@@ -7,6 +7,29 @@
   <!-- Helpers globais SEMPRE antes do guard -->
 <script type="module" src="./kgb-common.js"></script>
 
+<!-- Phase 1: memStore + sync + api wrappers -->
+<script>
+  (function(){
+    if (typeof window !== 'undefined') window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+    const mem = (typeof window !== 'undefined') ? window.__MEM_CACHE__ : {};
+
+    let bc = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try { bc = new BroadcastChannel('kgb-ui-sync'); } catch(e) { bc = null; }
+    }
+
+    function sendSync(k,v){ try{ if (bc) bc.postMessage({k,v}); else window.dispatchEvent(new CustomEvent('kgb-ui-sync',{detail:{k,v}})); }catch{} }
+    function onSync(fn){ if (bc) bc.addEventListener('message', e=>fn(e.data)); else window.addEventListener('kgb-ui-sync', e=>fn(e.detail)); }
+    function getJSON(k, fallback){ try{ const val = mem[k]; return val===undefined ? (typeof fallback==='function'?fallback():fallback) : val; }catch{ return typeof fallback==='function'?fallback():fallback; } }
+    function setJSON(k,v){ try{ mem[k]=v; sendSync(k,v); }catch{} }
+    function isPortalMode(){ try{ return !!(window && window.__PORTAL_MODE__===true); }catch{return false;} }
+    function apiFetchWrapper(p,opts){ return (window && window.apiFetch) ? window.apiFetch(p,opts) : null; }
+
+    // expose helpers to page scripts
+    try{ window.getJSON = window.getJSON || getJSON; window.setJSON = window.setJSON || setJSON; window.isPortalMode = window.isPortalMode || isPortalMode; window.apiFetchWrapper = window.apiFetchWrapper || apiFetchWrapper; }catch{}
+  })();
+</script>
+
 <!-- (mantém seu bloco que importa exigirPermissao do guard) -->
 <script type="module">
   import { exigirPermissao } from './api/proteger-pagina.js';
@@ -28,7 +51,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { if (!window.isPortalMode || !window.isPortalMode()) { localStorage.setItem("API_BASE", base); } } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -255,7 +278,9 @@ body.no-scroll{
         const fixos = ["Administrador","Vendedor","Financeiro","Maitre","Estoque","Responsável por Evento","Responsavel por Evento"];
         let extras = [];
         try {
-          const raw = JSON.parse(localStorage.getItem("perfis") || "[]");
+          let raw = null;
+          if (window.isPortalMode && window.isPortalMode()) raw = window.getJSON('perfis', []);
+          else raw = JSON.parse(localStorage.getItem("perfis") || "[]");
           extras = Array.isArray(raw) ? raw.map(p => (typeof p==="string"?p:(p?.nome))).filter(Boolean) : [];
         } catch {}
         const norm = s => String(s||"").replace("Responsavel por Evento","Responsável por Evento");
@@ -264,11 +289,16 @@ body.no-scroll{
       })();
 
       function lerPermsAPI(){
-        try { return JSON.parse(localStorage.getItem("permissoesAPI") || "{}") || {}; }
-        catch { return {}; }
+        try {
+          if (window.isPortalMode && window.isPortalMode()) return window.getJSON('permissoesAPI', {}) || {};
+          return JSON.parse(localStorage.getItem("permissoesAPI") || "{}") || {};
+        } catch { return {}; }
       }
       function salvarPermsAPI(m){
-        localStorage.setItem("permissoesAPI", JSON.stringify(m));
+        try {
+          if (window.isPortalMode && window.isPortalMode()) { window.setJSON('permissoesAPI', m); return; }
+          localStorage.setItem("permissoesAPI", JSON.stringify(m));
+        } catch(e) { console.warn('[permissoes] salvarPermsAPI erro', e); }
       }
 
       function renderRbacAPI(){
@@ -330,9 +360,9 @@ body.no-scroll{
           });
         }
         if (btnReset){
-          btnReset.addEventListener("click", () => {
-            if (!confirm("Resetar RBAC da API para os padrões do código? (Isto remove a chave localStorage['permissoesAPI'])")) return;
-            localStorage.removeItem("permissoesAPI");
+            btnReset.addEventListener("click", () => {
+          if (!confirm("Resetar RBAC da API para os padrões do código? (Isto remove a chave localStorage['permissoesAPI'])")) return;
+            try { if (window.isPortalMode && window.isPortalMode()) { window.setJSON('permissoesAPI', {}); } else { localStorage.removeItem("permissoesAPI"); } } catch {}
             renderRbacAPI();
             alert("RBAC resetado. As rotas passarão a usar os defaults internos do código.");
           });

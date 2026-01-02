@@ -5,8 +5,7 @@ const useRemote = false; // trocaremos para true na Fase F (sync remoto)
 
 async function apiGetCustosFixos() {
   if (!useRemote) {
-    try { return JSON.parse(localStorage.getItem('custosFixosBuffet') || '[]') || []; }
-    catch { return []; }
+    try { return readLS ? (readLS('custosFixosBuffet', []) || []) : []; } catch { return []; }
   }
   try {
     const r = await apiFetch('/custosfixos');
@@ -19,7 +18,7 @@ async function apiGetCustosFixos() {
 
 async function apiSaveCustosFixos(arr) {
   if (!useRemote) {
-    localStorage.setItem('custosFixosBuffet', JSON.stringify(arr || []));
+    try { if (typeof writeLS === 'function') writeLS('custosFixosBuffet', arr || []); else window.__memStore_global = window.__memStore_global || ({}), window.__memStore_global['custosFixosBuffet'] = arr || []; } catch {}
     return { ok: true, modo: 'local' };
   }
   try {
@@ -80,12 +79,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function carregar() {
-  try { itens = JSON.parse(localStorage.getItem(LS_KEY) || '[]') || []; }
+  try { itens = readLS ? (readLS(LS_KEY, []) || []) : []; }
   catch { itens = []; }
 }
 
 function salvar() {
-  localStorage.setItem(LS_KEY, JSON.stringify(itens));
+  try { if (typeof writeLS === 'function') writeLS(LS_KEY, itens); } catch {}
 }
 
 // ====== Migração de dados antigos ({nome, valor}) ======
@@ -218,7 +217,7 @@ function __hasComprovante({ lancId, parcelaId } = {}){
       const p = (fg.parcelas||[]).find(x => String(x.id) === String(parcelaId));
       if (p){
         if (p.comprovante && p.comprovante !== '[separado]') return true;
-        try { if (localStorage.getItem(`fg.comp.parc:${p.id}`)) return true; } catch {}
+        try { if (readLS && readLS(`fg.comp.parc:${p.id}`, '')) return true; } catch {}
       }
     }
 
@@ -230,7 +229,7 @@ function __hasComprovante({ lancId, parcelaId } = {}){
         if (l.hasComprovante){
           const sep = (typeof loadComp==='function')
             ? loadComp(l.id)
-            : (localStorage.getItem(`fg.comp:${l.id}`)||null);
+            : (readLS ? readLS(`fg.comp:${l.id}`, null) : null);
           return !!sep;
         }
       }
@@ -500,7 +499,7 @@ function normalizarImportado(it, idx=0) {
 
   btn.addEventListener('click', ()=>{
     const params = new URLSearchParams(location.search);
-    let eventoId = params.get('id') || localStorage.getItem('eventoSelecionado') || '';
+    let eventoId = params.get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '';
     if (!eventoId){ alert('Evento não informado (sem id). Abra este cadastro a partir do evento.'); return; }
     localStorage.setItem('eventoSelecionado', String(eventoId));
 
@@ -514,7 +513,7 @@ function normalizarImportado(it, idx=0) {
       );
 
       // 2) espelha no array "eventos" para fallback do Financeiro
-      const eventos = JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = readLS ? (readLS('eventos', []) || []) : [];
       const i = eventos.findIndex(e => String(e.id) === String(eventoId));
       if (i > -1) {
         eventos[i].financeiro = eventos[i].financeiro || {};

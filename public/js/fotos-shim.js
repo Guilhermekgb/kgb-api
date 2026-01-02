@@ -1,4 +1,59 @@
-﻿// Shim para garantir acesso s├¡ncrono seguro ao mapa `fotosClientes`.
+﻿// Phase 1 (memStore + sync + api wrappers)
+// Adicionado por migração: memStore em `window.__MEM_CACHE__`, sync via
+// BroadcastChannel (com fallback), `getJSON`/`setJSON` e `isPortalMode()`.
+// Em modo portal, evita `localStorage` e usa cache em memória.
+
+// Shim para garantir acesso s├¡ncrono seguro ao mapa `fotosClientes`.
+
+(function(){
+  try{
+    if (typeof window === 'undefined') return;
+    window.__MEM_CACHE__ = window.__MEM_CACHE__ || {};
+    const _CH = 'kgb-ui-sync';
+    function sendSync(type, key, value){
+      try{
+        if (typeof BroadcastChannel !== 'undefined'){
+          const bc = new BroadcastChannel(_CH); bc.postMessage({type,key,value}); bc.close();
+        } else {
+          window.dispatchEvent(new CustomEvent(_CH, {detail:{type,key,value}}));
+        }
+      }catch(e){}
+    }
+    function onSync(cb){
+      try{
+        if (typeof BroadcastChannel !== 'undefined'){
+          const bc = new BroadcastChannel(_CH); bc.onmessage = e => cb(e.data);
+        } else {
+          window.addEventListener(_CH, e => cb(e.detail));
+        }
+      }catch(e){}
+    }
+    function isPortalMode(){
+      return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__);
+    }
+    function getJSON(key, fallback){
+      try{
+        if (isPortalMode()){
+          const v = window.__MEM_CACHE__[key];
+          return v === undefined ? fallback : v;
+        }
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      }catch(e){ return fallback; }
+    }
+    function setJSON(key, value){
+      try{
+        if (isPortalMode()){
+          window.__MEM_CACHE__[key] = value;
+          sendSync('set', key, value);
+          return;
+        }
+        localStorage.setItem(key, JSON.stringify(value));
+      }catch(e){}
+    }
+    window.__KGB_MEM__ = window.__KGB_MEM__ || {getJSON, setJSON, onSync, sendSync, isPortalMode};
+  }catch(e){}
+})();
 // Uso: incluir este script o MAIS CEDO poss├¡vel nas p├íginas que precisam
 // ler `localStorage['fotosClientes']` de forma s├¡ncrona no carregamento.
 
@@ -8,12 +63,19 @@
     if (typeof window !== 'undefined') {
       window.__FOTOS_CLIENTES_PRELOAD__ = window.__FOTOS_CLIENTES_PRELOAD__ || {};
 
-      // S├¡ncrono-safe getter usado por p├íginas que n├úo podem aguardar promises
+      // Síncrono-safe getter usado por páginas que não podem aguardar promises
       window.getFotosClientesSync = function(){
         try{
           if (window.__FOTOS_CLIENTES_PRELOAD__ && Object.keys(window.__FOTOS_CLIENTES_PRELOAD__).length) return window.__FOTOS_CLIENTES_PRELOAD__;
-          // fallback: try localStorage (read-only)
-          try{ const raw = localStorage.getItem('fotosClientes'); if(raw) return JSON.parse(raw); }catch(e){}
+          // fallback: usar memStore em portal ou localStorage fora do portal
+          try{
+            if (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode()){
+              const v = window.__KGB_MEM__.getJSON('fotosClientes', null);
+              if (v) return v;
+            } else {
+              const raw = localStorage.getItem('fotosClientes'); if(raw) return JSON.parse(raw);
+            }
+          }catch(e){}
           return window.__FOTOS_CLIENTES_PRELOAD__ || {};
         }catch(e){ return {}; }
       };
@@ -53,7 +115,7 @@
             const obj = JSON.parse(String(v || '{}')) || {};
             const sa = maybe();
             if (sa){
-              // enviar patch por chave (n├úo bloqueante)
+              // enviar patch por chave (não bloqueante)
               for (const kk of Object.keys(obj)){
                 try{ sa.patchFotos(kk, obj[kk]); } catch(e){ /* ignore */ }
               }
@@ -61,6 +123,15 @@
           } catch(e){ /* malformed payload, ignore */ }
         }
       } catch(e){ /* ignore shim-level errors */ }
+      try{
+        if (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode()){
+          if (String(k) === 'fotosClientes'){
+            try{ window.__KGB_MEM__.setJSON('fotosClientes', JSON.parse(String(v || '{}'))); }catch(e){}
+            return;
+          }
+          return;
+        }
+      }catch(e){}
       return nativeSet(k, v);
     };
   } catch(e){ /* ignore global */ }
