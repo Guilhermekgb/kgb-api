@@ -632,6 +632,7 @@ const JOURNAL_FILE = 'journal.json';
 const LEADS_FILE = 'leads.json';
 const FEIRAS_FILE = 'feiras.json';
 const FEIRA_LEADS_FILE = 'feira-leads.json';
+const FOTOS_FILE = 'fotos-clientes.json';
 const LEADS_HISTORY_FILE = 'leads-historico.json';
 const ORCAMENTOS_FILE = 'orcamentos.json';
 const CLIENTES_FILE = 'clientes.json';
@@ -1051,6 +1052,46 @@ app.delete('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, re
   });
 
   // (leads endpoints for general listing/updates may already exist elsewhere)
+
+  // ========================= FOTOS CLIENTES =========================
+  // GET /fotosClientes — retorna o mapa completo de fotos
+  app.get('/fotosClientes', requireAuth, (req, res) => {
+    try {
+      const obj = loadJSON(FOTOS_FILE, {});
+      return res.json({ ok: true, data: obj });
+    } catch (e) {
+      console.error('[GET /fotosClientes] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao ler fotos' });
+    }
+  });
+
+  // POST /fotosClientes — grava/replace do mapa completo
+  app.post('/fotosClientes', express.json({ limit: '5mb' }), requireAuth, (req, res) => {
+    try {
+      const body = req.body || {};
+      saveJSON(FOTOS_FILE, body || {});
+      return res.status(201).json({ ok: true, data: body });
+    } catch (e) {
+      console.error('[POST /fotosClientes] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao salvar fotos' });
+    }
+  });
+
+  // PUT /fotosClientes/:key — atualiza uma chave específica do mapa
+  app.put('/fotosClientes/:key', express.json({ limit: '2mb' }), requireAuth, (req, res) => {
+    try {
+      const key = String(req.params.key || '').trim();
+      if (!key) return res.status(400).json({ ok: false, error: 'key obrigatório' });
+      const body = req.body;
+      const all = loadJSON(FOTOS_FILE, {});
+      all[key] = body;
+      saveJSON(FOTOS_FILE, all);
+      return res.json({ ok: true, data: { key, value: body } });
+    } catch (e) {
+      console.error('[PUT /fotosClientes/:key] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao atualizar foto' });
+    }
+  });
 
 
 if (!fs.existsSync(path.join(DATA_DIR, JOURNAL_FILE))) saveJSON(JOURNAL_FILE, []);

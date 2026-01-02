@@ -31,6 +31,10 @@
     function isPortalMode(){
       return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__);
     }
+    // API wrappers (Phase 2)
+    function apiGet(u){ if(typeof window['apiFetch'] === 'function') return window['apiFetch'](u, { method: 'GET' }); return Promise.reject(new Error('no apiFetch')); }
+    function apiPost(u,b){ if(typeof window['apiFetch'] === 'function') return window['apiFetch'](u, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); }
+    function apiPut(u,b){ if(typeof window['apiFetch'] === 'function') return window['apiFetch'](u, { method: 'PUT', body: JSON.stringify(b), headers: { 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); }
     function getJSON(key, fallback){
       try{
         if (isPortalMode()){
@@ -82,6 +86,17 @@
 
       // Attempt to warm the preload asynchronously (best-effort)
       try{
+        // Phase 2: if running in portal mode, try to fetch canonical fotos from server
+        if (isPortalMode() && typeof apiGet === 'function'){
+          apiGet('/fotosClientes').then(r=>{
+            try{
+              if (r && r.ok && r.data){
+                window.__FOTOS_CLIENTES_PRELOAD__ = r.data || {};
+                if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function') window.__KGB_MEM__.setJSON('fotosClientes', window.__FOTOS_CLIENTES_PRELOAD__);
+              }
+            }catch(e){}
+          }).catch(()=>{});
+        }
         if (window.storageAdapter && typeof window.storageAdapter.preload === 'function'){
           // preload will set window.__FOTOS_CLIENTES_PRELOAD__ when available
           window.storageAdapter.preload('fotosClientes').catch(()=>{});
@@ -120,6 +135,25 @@
                 try{ sa.patchFotos(kk, obj[kk]); } catch(e){ /* ignore */ }
               }
             }
+            // Phase 2: persist full fotosClientes object to server when in portal mode
+            try{
+              if (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode && window.__KGB_MEM__.isPortalMode()){
+                // update memStore first
+                try{ window.__KGB_MEM__.setJSON('fotosClientes', obj); }catch(e){}
+                // fire-and-forget send to backend via apiFetch
+                if (typeof apiPost === 'function'){
+                  apiPost('/fotosClientes', obj).then(res=>{
+                    try{
+                      if (res && res.ok && res.data){
+                        // reconcile memStore with server canonical
+                        if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function') window.__KGB_MEM__.setJSON('fotosClientes', res.data);
+                      }
+                    }catch(e){}
+                  }).catch(()=>{});
+                }
+                return;
+              }
+            }catch(e){}
           } catch(e){ /* malformed payload, ignore */ }
         }
       } catch(e){ /* ignore shim-level errors */ }
