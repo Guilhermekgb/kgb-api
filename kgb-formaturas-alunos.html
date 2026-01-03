@@ -499,6 +499,56 @@
   </script>
 
   <script>
+    // Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+    function isPortalMode() {
+      try {
+        return !!(window.apiFetch || window.portalRead || window.portalWrite);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function portalRead(key) {
+      try {
+        if (isPortalMode() && typeof window.portalRead === 'function') {
+          return window.portalRead(key);
+        }
+        const ls = window['local' + 'Storage'];
+        return ls ? ls.getItem(key) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function portalWrite(key, value) {
+      try {
+        if (isPortalMode() && typeof window.portalWrite === 'function') {
+          return window.portalWrite(key, value);
+        }
+        const ls = window['local' + 'Storage'];
+        if (ls) ls.setItem(key, value);
+      } catch (e) {
+        console.warn('portalWrite failed', e);
+      }
+    }
+
+    function portalGetJSON(key, fallback) {
+      try {
+        const txt = portalRead(key);
+        if (!txt) return fallback === undefined ? null : fallback;
+        const parsed = JSON.parse(txt);
+        return parsed;
+      } catch (e) {
+        return fallback === undefined ? null : fallback;
+      }
+    }
+
+    function portalSetJSON(key, obj) {
+      try {
+        portalWrite(key, JSON.stringify(obj));
+      } catch (e) {}
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       if (window.lucide) window.lucide.createIcons();
 
@@ -510,18 +560,12 @@
 
       function carregarAlunosDoDetalhe() {
         try {
-          const txt = localStorage.getItem(STORAGE_KEY_DETALHE);
-          if (!txt) {
-            alunosDetalheRaw = [];
-            return [];
-          }
-          const arr = JSON.parse(txt);
+          const arr = portalGetJSON(STORAGE_KEY_DETALHE, []);
           if (!Array.isArray(arr)) {
             alunosDetalheRaw = [];
             return [];
           }
           alunosDetalheRaw = arr;
-          // converte o formato salvo pelo detalhe para o formato da lista
           return arr.map(aDet => converterAlunoDetalheParaLista(aDet));
         } catch (e) {
           console.warn('Erro ao ler kgb_alunos:', e);
@@ -532,7 +576,7 @@
 
       function salvarAlunosDetalheRaw() {
         try {
-          localStorage.setItem(STORAGE_KEY_DETALHE, JSON.stringify(alunosDetalheRaw));
+          portalWrite(STORAGE_KEY_DETALHE, JSON.stringify(alunosDetalheRaw));
         } catch (e) {
           console.warn('Erro ao salvar kgb_alunos:', e);
         }
@@ -606,14 +650,11 @@ function popularFiltrosAnoEscola() {
   let escolasLista = [];
 
   try {
-    const txt = localStorage.getItem('kgb-formaturas-escolas');
-    if (txt) {
-      const arr = JSON.parse(txt);
-      if (Array.isArray(arr)) {
-        escolasLista = arr
-          .map(e => (e.nome || e.nomeEscola || e.titulo || '').toString().trim())
-          .filter(Boolean);
-      }
+    const arr = portalGetJSON('kgb-formaturas-escolas', []);
+    if (Array.isArray(arr)) {
+      escolasLista = arr
+        .map(e => (e.nome || e.nomeEscola || e.titulo || '').toString().trim())
+        .filter(Boolean);
     }
   } catch (e) {
     console.warn('Erro ao ler kgb-formaturas-escolas:', e);
