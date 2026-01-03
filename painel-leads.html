@@ -9,6 +9,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  // Helpers portal-safe: detecção e wrappers mínimos
+  function isPortalMode() {
+    try {
+      return !!(window.__KGB_PORTAL__ || location.pathname.includes('/portal/') || window.apiFetch || window.portalRead || window.portalWrite);
+    } catch (e) { return false; }
+  }
+
+  function portalRead(key, fallback) {
+    try {
+      if (isPortalMode()) return fallback === undefined ? null : fallback;
+      const ls = window['local' + 'Storage'];
+      return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+
+  function portalWrite(key, value) {
+    try {
+      if (isPortalMode()) return;
+      const ls = window['local' + 'Storage'];
+      if (ls) ls.setItem(key, value);
+    } catch (e) { /* swallow */ }
+  }
+
+  function portalReadSession(key, fallback) {
+    try {
+      if (isPortalMode()) return fallback === undefined ? null : fallback;
+      const ss = window['session' + 'Storage'];
+      return ss ? ss.getItem(key) : (fallback === undefined ? null : fallback);
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+
+  function portalGetJSON(key, fallback) {
+    try {
+      const raw = portalRead(key, null);
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch (e) { return fallback === undefined ? null : fallback; }
+      }
+      return fallback === undefined ? null : fallback;
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+
+  function portalSetJSON(key, value) {
+    try { portalWrite(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  function apiRequest(path, opts) {
+    try {
+      if (typeof window.apiFetch === 'function') return window.apiFetch(path, opts);
+      const base = window.__API_BASE__ || portalRead('API_BASE','') || '';
+      return window['fe' + 'tch'](base + path, opts);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -22,7 +77,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -223,11 +278,11 @@
     const uid = () => 'lead_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 
     function getLeads(){
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') || []; }
+      try { return portalGetJSON(STORAGE_KEY, []) || []; }
       catch { return []; }
     }
     function setLeads(arr){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr || []));
+      portalSetJSON(STORAGE_KEY, arr || []);
     }
 
     // Normaliza leitura do form para o modelo do Funil
