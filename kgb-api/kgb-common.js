@@ -46,6 +46,38 @@ const portalRemove = (key) => {
   } catch (e) {}
 };
 
+// JSON helpers that mirror portalRead/portalWrite semantics
+function portalGetJSON(key, fallback = null){
+  try{
+    const raw = portalRead(key, null);
+    if (raw == null) return fallback;
+    if (typeof raw === 'object') return raw;
+    try{ return JSON.parse(raw); } catch { return fallback; }
+  }catch(e){ return fallback; }
+}
+
+function portalSetJSON(key, obj){
+  try{ portalWrite(key, JSON.stringify(obj)); }catch(e){}
+}
+
+// generic apiRequest prefers window.apiFetch (portal shim) and falls back to fetch
+async function apiRequest(path, options = {}){
+  try{
+    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+      return window.apiFetch(path, options);
+    }
+    const base = (__kgbGetAPIBase && typeof __kgbGetAPIBase === 'function') ? (__kgbGetAPIBase() || '') : (window.__API_BASE__||'');
+    const p = String(path||'');
+    const isAbsolute = /^https?:\/\//i.test(p);
+    const url = isAbsolute ? p : `${(base||'').replace(/\/+$/,'')}${p.startsWith('/')? '':'/'}${p}`;
+    const fetchOpts = Object.assign({ credentials: 'include', headers: { 'Content-Type': 'application/json', ...(options.headers||{}) } }, options);
+    const r = await fetch(url, fetchOpts);
+    const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return ct.includes('application/json') ? r.json() : r.text();
+  }catch(e){ throw e; }
+}
+
 function _lsGet(k, fb = null){ try{ return portalRead(k, fb); }catch{return fb;} }
 function _lsSet(k, v){ try{ portalWrite(k, v); }catch{} }
 function _lsRemove(k){ try{ portalRemove(k); }catch{} }
