@@ -1,0 +1,27 @@
+{
+  "weights": {
+    "cloud_migration": 0.45,
+    "tests_smokes": 0.20,
+    "permissions_guard": 0.15,
+    "no_direct_fetch": 0.10,
+    "no_storage_literals": 0.10
+  },
+  "scans": {
+    "include_ext": [".js", ".html"],
+    "exclude_dirs": ["node_modules", ".git", "dist", "build", "vendor", "duplicates-archive", "backups"]
+  },
+  "patterns": {
+    "cloud": ["\\bapiFetch\\b"],
+    "legacy_storage": ["\\blocalStorage\\b", "\\bsessionStorage\\b"],
+    "legacy_fetch": ["\\bfetch\\s*\\("],
+    "guard": ["proteger-pagina\\.js", "guard\\(", "data-permissao", "meta name=\"permissao\""]
+  },
+  "targets": {
+    "smokes_must_exist": [
+      "kgb-api/tests/smoke-portal-area-cliente.js",
+      "kgb-api/tests/smoke-portal-area-cliente-fallback.js",
+      "kgb-api/tests/smoke-portal-area-cliente-timeline.js",
+      "kgb-api/tests/smoke-portal-area-cliente-timeline-write.js"
+    ]
+  }
+}
