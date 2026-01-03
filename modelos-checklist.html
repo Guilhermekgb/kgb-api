@@ -8,6 +8,13 @@
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
   (function(){
+    // small portal-aware helpers
+    function isPortalMode(){ try{ return !!(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__ || window.__PORTAL__); }catch(e){ return !!window.__PORTAL__; } }
+    function portalRead(key){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return null; const v = mem[key]; if (v===undefined) return null; return (typeof v === 'string') ? v : JSON.stringify(v); } const ls = window['local'+'Storage']; return ls ? ls.getItem(key) : null; }catch(e){ return null; } }
+    function portalWrite(key, value){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return; mem[key] = (typeof value === 'string') ? value : JSON.stringify(value); try{ if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value: mem[key] } })); }catch(e){} return; } const ls = window['local'+'Storage']; if(!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value)); }catch(e){} }
+    function portalRemove(key){ try{ if (isPortalMode()) return; const ls = window['local'+'Storage']; if(!ls) return; ls.removeItem(key); }catch(e){} }
+    window.portalRead = portalRead; window.portalWrite = portalWrite; window.portalRemove = portalRemove; window.isPortalMode = isPortalMode;
+
     var host = String(location.hostname||"").toLowerCase();
 
     // Produção (Netlify) -> API na Render
@@ -20,7 +27,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -256,7 +263,7 @@ body.no-scroll{ overflow:hidden; }
     let abaAtiva = "";
     let editIndex = null;
 
-    function salvarModelos(){ localStorage.setItem("checklistModelos", JSON.stringify(checklistModelos)); }
+    function salvarModelos(){ try{ portalWrite("checklistModelos", checklistModelos); }catch(e){} }
     function tipoFormatado(tipo){
       if (tipo === "preEvento") return "Pré-Evento";
       if (tipo === "diaEvento") return "Dia do Evento";
@@ -271,7 +278,7 @@ body.no-scroll{ overflow:hidden; }
       return base.replace(/\s+/g,"");
     }
     function garantirAbasPadrao(){
-      try{ checklistModelos = JSON.parse(localStorage.getItem("checklistModelos") || "{}") || {}; }catch(e){ checklistModelos = {}; }
+      try{ const raw = portalRead("checklistModelos"); checklistModelos = raw ? (JSON.parse(raw) || {}) : {}; }catch(e){ checklistModelos = {}; }
       var mudou = false;
       ["preEvento","diaEvento","posEvento"].forEach(function(k){
         if (!Array.isArray(checklistModelos[k])) { checklistModelos[k] = []; mudou = true; }
@@ -592,11 +599,13 @@ body.no-scroll{ overflow:hidden; }
       var KEY = "checklistModelos";
       function getLS(k, fb){
         try {
-          var val = JSON.parse(localStorage.getItem(k));
+          var raw = portalRead(k);
+          var val = null;
+          try{ val = raw ? JSON.parse(raw) : null; }catch(e){ val = null; }
           return (val==null ? fb : val);
         } catch(e){ return fb; }
       }
-      function setLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+      function setLS(k, v){ portalWrite(k, v); }
 
       var btnExp = document.getElementById("btnExportModelos");
       var inpImp = document.getElementById("inpImportModelos");
