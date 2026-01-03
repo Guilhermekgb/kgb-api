@@ -1070,7 +1070,7 @@
 
     function carregarLogoSalvo() {
       try {
-        const dataUrl = localStorage.getItem(STORAGE_LOGO_KEY);
+        const dataUrl = portalRead(STORAGE_LOGO_KEY);
         if (dataUrl && logoPreview) {
           const img = document.createElement('img');
           img.src = dataUrl;
@@ -1086,8 +1086,8 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
-        try {
-          localStorage.setItem(STORAGE_LOGO_KEY, reader.result);
+          try {
+          portalWrite(STORAGE_LOGO_KEY, reader.result);
           carregarLogoSalvo();
         } catch (e) {
           console.warn('Não foi possível salvar logo:', e);
@@ -1107,7 +1107,7 @@
       limparLogo.addEventListener('click', () => {
         if (!confirm('Remover logo salvo?')) return;
         try {
-          localStorage.removeItem(STORAGE_LOGO_KEY);
+          portalWrite(STORAGE_LOGO_KEY, null);
         } catch {}
         logoPreview.innerHTML = '<span>Nenhuma imagem selecionada.<br>Escolha um logo para representar suas formaturas.</span>';
       });
@@ -1133,7 +1133,7 @@ const LS_KEY_EVENTOS      = 'kgb_formaturas_eventos';
 
     function carregarArrayLocalStorage(chave) {
       try {
-        const raw = localStorage.getItem(chave);
+        const raw = portalRead(chave);
         if (!raw) return [];
         const arr = JSON.parse(raw);
         return Array.isArray(arr) ? arr : [];
@@ -1511,7 +1511,7 @@ function deduplicarPorAluno(lista) {
   // Carrega escolas cadastradas
   let escolasValidas = null;
   try {
-    const txt = localStorage.getItem('kgb-formaturas-escolas');
+    const txt = portalRead('kgb-formaturas-escolas');
     if (txt) {
       const arr = JSON.parse(txt);
       if (Array.isArray(arr)) {
