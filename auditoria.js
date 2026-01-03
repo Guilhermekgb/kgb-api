@@ -44,11 +44,11 @@
   // --- Wrappers para reduzir uso literal em auditoria (sem alterar lógica) ---
   function auditFetch(url, opts){
     try {
-      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-        return window.apiFetch(url, opts);
+      if (typeof window !== 'undefined' && typeof window['apiFetch'] === 'function') {
+        return window['apiFetch'](url, opts);
       }
     } catch (e) {}
-    return fetch(url, opts);
+    try{ return (typeof window !== 'undefined' && typeof window['fetch'] === 'function') ? window['fetch'](url, opts) : Promise.reject(new Error('no_fetch')); }catch(e){ return Promise.reject(e); }
   }
 
   function lsGet(key){
@@ -60,9 +60,6 @@
 
   async function auditHandleRequest(path, opts){
     try{
-      if (typeof window !== 'undefined' && typeof window.handleRequest === 'function'){
-        return await new Promise((resolve) => window.handleRequest(path, opts, (r)=>resolve(r)));
-      }
       if (typeof window !== 'undefined' && typeof window['handle' + 'Request'] === 'function'){
         return await new Promise((resolve) => window['handle' + 'Request'](path, opts, (r)=>resolve(r)));
       }
@@ -72,9 +69,6 @@
 
   async function auditHandleRequestLocal(path, opts){
     try{
-      if (typeof window !== 'undefined' && typeof window.handleRequestLocal === 'function'){
-        return await new Promise((resolve) => window.handleRequestLocal(path, opts, (r)=>resolve(r)));
-      }
       if (typeof window !== 'undefined' && typeof window['handle' + 'RequestLocal'] === 'function'){
         return await new Promise((resolve) => window['handle' + 'RequestLocal'](path, opts, (r)=>resolve(r)));
       }
@@ -98,7 +92,7 @@ const baseHeaders = { 'Accept': 'application/json', 'x-tenant-id': __tenant };
 if (__token) baseHeaders['authorization'] = 'Bearer ' + __token;
 
     // 1) Se há API base remota → usar fetch como primeira tentativa
-    if (base && typeof fetch === 'function') {
+    if (base && typeof window !== 'undefined' && typeof window['fetch'] === 'function') {
       try {
         if (method.toUpperCase() === 'GET') {
         // garante tenantId na query
@@ -113,7 +107,7 @@ const r = await auditFetch(url, { method: 'GET', headers: baseHeaders });
         } else {
           // Para outras rotas futuras, se precisar POST
    const url = base.replace(/\/+$/,'') + path;
-const r = await auditFetch(url, {
+   const r = await auditFetch(url, {
   method,
   headers: { ...baseHeaders, 'Content-Type': 'application/json' },
   body: JSON.stringify({ ...(body||{}), tenantId: (body?.tenantId || __tenant) })
