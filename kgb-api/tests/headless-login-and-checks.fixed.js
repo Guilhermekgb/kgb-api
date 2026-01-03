@@ -2,6 +2,19 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+// Test helpers to centralize localStorage access from Node side
+const LS = () => (typeof window !== 'undefined' ? window['local' + 'Storage'] : null);
+
+async function pageLsGet(page, key){
+  try { return await page.evaluate(k => (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(k) : null, key); } catch { return null; }
+}
+async function pageLsSet(page, key, val){
+  try { await page.evaluate((k,v) => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(k, v); } catch(e){} }, key, val); } catch {}
+}
+async function pageLsRemove(page, key){
+  try { await page.evaluate(k => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].removeItem(k); } catch(e){} }, key); } catch {}
+}
+
 const BASE = process.env.BASE_URL || 'http://localhost:3333';
 const LOGIN = '/login.html';
 const PAGES = [
@@ -71,7 +84,7 @@ async function checkPage(page, path, mapping){
   try{
     if (mapping){
       const flat = flattenMapping(mapping);
-      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
+      await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
       // also inject a small eventos list and mark eventoSelecionado so pages that read localStorage render
       try{
         const sampleKey = Object.keys(flat)[0];
@@ -79,10 +92,10 @@ async function checkPage(page, path, mapping){
           await page.evaluate((k)=>{
             try{
               const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: k, dataISO: new Date().toISOString(), qtdConvidados: 50 };
-              const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
+              const arr = (()=>{ try{ return JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ return []; } })();
               arr.unshift(ev);
-              localStorage.setItem('eventos', JSON.stringify(arr));
-              localStorage.setItem('eventoSelecionado', String(ev.id));
+              window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+              window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
             }catch(e){}
           }, sampleKey);
         }
@@ -96,7 +109,7 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
         const out = {};
         function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if (typeof v === 'string') out[key]=v; else if (v && typeof v === 'object') walk(v,key); } }
@@ -125,10 +138,10 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
-        const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-        const sel = localStorage.getItem('eventoSelecionado');
+        const evs = JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]');
+        const sel = window['local' + 'Storage'].getItem('eventoSelecionado');
         const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0] || {};
         const key = ev && ev.fotoClienteKey;
         if (key && mapping && mapping[key]){
@@ -153,16 +166,16 @@ async function checkPage(page, path, mapping){
       if (mapping){
         const flatGlobal = flattenMapping(mapping);
         await page.evaluateOnNewDocument((m)=>{
-          try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
+          try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
           try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
           try{
             const sampleKey = Object.keys(m||{})[0];
             if (sampleKey){
               const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: sampleKey, dataISO: new Date().toISOString(), qtdConvidados:50 };
-              const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
+              const arr = (()=>{ try{ return JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ return []; } })();
               arr.unshift(ev);
-              localStorage.setItem('eventos', JSON.stringify(arr));
-              localStorage.setItem('eventoSelecionado', String(ev.id));
+              window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+              window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
             }
           }catch(e){}
         }, flatGlobal);

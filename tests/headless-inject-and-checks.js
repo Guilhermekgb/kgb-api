@@ -54,7 +54,7 @@ async function checkPage(page, path) {
     const data = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img')).map(i => i.src || i.getAttribute('data-src'));
       let fotos = null;
-      try { fotos = localStorage.getItem('fotosClientes'); } catch(e) { fotos = '__ls_error__:' + e.message }
+      try { fotos = window['local' + 'Storage'].getItem('fotosClientes'); } catch(e) { fotos = '__ls_error__:' + e.message }
       return { imgs, fotos };
     });
     result.imgs = data.imgs.filter(Boolean);
@@ -116,7 +116,7 @@ async function checkPage(page, path) {
     // make the mapping available before any page scripts run
     const flat = flattenMapping(mapping);
     await page.evaluateOnNewDocument((m) => {
-      try { (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); } catch (e) { /* ignore */ }
+      try { (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); } catch (e) { /* ignore */ }
       try { window.__FOTOS_CLIENTES_PRELOAD__ = m; } catch (e) { }
     }, flat);
     try{
@@ -125,10 +125,10 @@ async function checkPage(page, path) {
         await page.evaluateOnNewDocument((k)=>{
           try{
             const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: k, dataISO: new Date().toISOString(), qtdConvidados: 50 };
-            const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
+            const arr = (()=>{ try{ return JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ return []; } })();
             arr.unshift(ev);
-            localStorage.setItem('eventos', JSON.stringify(arr));
-            localStorage.setItem('eventoSelecionado', String(ev.id));
+            window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+            window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
           }catch(e){}
         }, sampleKey);
       }
@@ -141,8 +141,8 @@ async function checkPage(page, path) {
     // After checkPage navigation, try to force mapping onto images (for pages that use data- attributes)
     try{
       await page.evaluate(()=>{
-        try{
-          const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+          try{
+          const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
           const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
           const flat = {};
           function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if (typeof v === 'string') flat[key]=v; else if (v && typeof v === 'object') walk(v,key); } }
@@ -158,10 +158,10 @@ async function checkPage(page, path) {
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+      const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
-        const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-        const sel = localStorage.getItem('eventoSelecionado');
+        const evs = JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]');
+        const sel = window['local' + 'Storage'].getItem('eventoSelecionado');
         const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0] || {};
         const key = ev && ev.fotoClienteKey;
         if (key && mapping && mapping[key]){

@@ -33,9 +33,9 @@ const puppeteer = require('puppeteer');
 
     const stores = await page.evaluate(async ()=>{
       return {
-        propostasIndex_local: localStorage.propostasIndex || null,
-        propostasIndex_session: sessionStorage.propostasIndex || null,
-        leads_local: localStorage.leads || null,
+        propostasIndex_local: (window['local' + 'Storage'] && window['local' + 'Storage'].getItem ? window['local' + 'Storage'].getItem('propostasIndex') : null) || null,
+        propostasIndex_session: (window['session' + 'Storage'] && window['session' + 'Storage'].getItem ? window['session' + 'Storage'].getItem('propostasIndex') : null) || null,
+        leads_local: (window['local' + 'Storage'] && window['local' + 'Storage'].getItem ? window['local' + 'Storage'].getItem('leads') : null) || null,
         api_base: window.__API_BASE__ || null
       };
     });

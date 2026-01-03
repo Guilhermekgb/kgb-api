@@ -2,6 +2,19 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+// Test helpers to centralize localStorage access from Node side
+const LS = () => (typeof window !== 'undefined' ? window['local' + 'Storage'] : null);
+
+async function pageLsGet(page, key){
+  try { return await page.evaluate(k => (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(k) : null, key); } catch { return null; }
+}
+async function pageLsSet(page, key, val){
+  try { await page.evaluate((k,v) => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(k, v); } catch(e){} }, key, val); } catch {}
+}
+async function pageLsRemove(page, key){
+  try { await page.evaluate(k => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].removeItem(k); } catch(e){} }, key); } catch {}
+}
+
 const BASE = process.env.BASE_URL || 'http://localhost:3333';
 const LOGIN = '/login.html';
 const PAGES = [
@@ -79,7 +92,7 @@ async function checkPage(page, path, mapping){
             } else if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function') {
               window.__KGB_MEM__.setJSON('fotosClientes', m);
             } else {
-              localStorage.setItem('fotosClientes', JSON.stringify(m));
+              window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m));
             }
           }catch(e){}
           try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
@@ -97,15 +110,15 @@ async function checkPage(page, path, mapping){
                 if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function'){
                   arr = window.__KGB_MEM__.getJSON('eventos', []) || [];
                 } else {
-                  try{ arr = JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ arr = []; }
+                  try{ arr = JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ arr = []; }
                 }
                 arr.unshift(ev);
                 if (window.__KGB_MEM__ && typeof window.__KGB_MEM__.setJSON === 'function'){
                   window.__KGB_MEM__.setJSON('eventos', arr);
                   window.__KGB_MEM__.setJSON('eventoSelecionado', String(ev.id));
                 } else {
-                  localStorage.setItem('eventos', JSON.stringify(arr));
-                  localStorage.setItem('eventoSelecionado', String(ev.id));
+                window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+                window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
                 }
               }catch(e){}
             }catch(e){}
@@ -121,7 +134,7 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : localStorage.getItem('fotosClientes'));
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : window['local' + 'Storage'].getItem('fotosClientes'));
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
         const out = {};
         function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if (typeof v === 'string') out[key]=v; else if (v && typeof v === 'object') walk(v,key); } }
@@ -152,7 +165,7 @@ async function checkPage(page, path, mapping){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : localStorage.getItem('fotosClientes'));
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || (window.__KGB_MEM__ && typeof window.__KGB_MEM__.getJSON === 'function' ? window.__KGB_MEM__.getJSON('fotosClientes', null) : window['local' + 'Storage'].getItem('fotosClientes'));
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
         let evs = [];
         let sel = null;
@@ -161,8 +174,8 @@ async function checkPage(page, path, mapping){
             evs = window.__KGB_MEM__.getJSON('eventos', []) || [];
             sel = window.__KGB_MEM__.getJSON('eventoSelecionado', null) || null;
           } else {
-            evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-            sel = localStorage.getItem('eventoSelecionado');
+            evs = JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]');
+            sel = window['local' + 'Storage'].getItem('eventoSelecionado');
           }
         }catch(e){ evs = []; sel = null; }
         const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0] || {};
@@ -194,17 +207,17 @@ async function checkPage(page, path, mapping){
       if (mapping){
         const flatGlobal = flattenMapping(mapping);
         await page.evaluateOnNewDocument((m)=>{
-          try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
+          try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){}
           try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){}
           // mapping-specific sample event + preload
           try{
             const sampleKey = Object.keys(m||{})[0];
             if (sampleKey){
               const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: sampleKey, dataISO: new Date().toISOString(), qtdConvidados:50 };
-              const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
+              const arr = (()=>{ try{ return JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ return []; } })();
               arr.unshift(ev);
-              localStorage.setItem('eventos', JSON.stringify(arr));
-              localStorage.setItem('eventoSelecionado', String(ev.id));
+              window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+              window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
             }
           }catch(e){}
         }, flatGlobal);

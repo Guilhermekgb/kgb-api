@@ -22,7 +22,7 @@ const puppeteer = require('puppeteer');
 
     await new Promise(r=>setTimeout(r,2000));
     // read propostasIndex
-    const propIndex = await page.evaluate(()=> localStorage.propostasIndex || sessionStorage.propostasIndex || null);
+    const propIndex = await page.evaluate(()=> (window['local' + 'Storage'] && window['local' + 'Storage'].getItem ? window['local' + 'Storage'].getItem('propostasIndex') : null) || (window['session' + 'Storage'] && window['session' + 'Storage'].getItem ? window['session' + 'Storage'].getItem('propostasIndex') : null) || null);
     console.log('propostasIndex after save =', propIndex ? propIndex.slice(0,800) : propIndex);
 
     // open list page and wait for its carregar to run

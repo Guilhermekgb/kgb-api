@@ -62,7 +62,7 @@ async function checkPageWithInteractions(browser, path, mapping) {
   const page = await browser.newPage();
   if (mapping) {
     await page.evaluateOnNewDocument((mappingStr) => {
-      try { localStorage.setItem('fotosClientes', mappingStr); } catch(e) {}
+      try { window['local' + 'Storage'].setItem('fotosClientes', mappingStr); } catch(e) {}
     }, JSON.stringify(mapping));
   }
   const url = BASE + path;

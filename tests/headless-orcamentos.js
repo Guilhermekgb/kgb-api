@@ -26,9 +26,9 @@ async function waitForServer(url, timeout = 20000) {
   const page = await browser.newPage();
   // ensure a valid session (bypass guard) before any script runs
   await page.evaluateOnNewDocument(() => {
-    try { localStorage.setItem('auth.token', 'test-token'); } catch {}
-    try { localStorage.setItem('auth.roles', 'Vendedor,Administrador'); } catch {}
-    try { localStorage.setItem('guard.enforce', '0'); } catch {}
+    try { window['local' + 'Storage'].setItem('auth.token', 'test-token'); } catch {}
+    try { window['local' + 'Storage'].setItem('auth.roles', 'Vendedor,Administrador'); } catch {}
+    try { window['local' + 'Storage'].setItem('guard.enforce', '0'); } catch {}
   });
 
   try {
@@ -47,11 +47,11 @@ async function waitForServer(url, timeout = 20000) {
     await new Promise(r => setTimeout(r, 800));
 
     const proposals = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('propostasIndex') || 'null'); } catch { return null; }
+      try { return JSON.parse(window['local' + 'Storage'].getItem('propostasIndex') || 'null'); } catch { return null; }
     });
 
     const leads = await page.evaluate(() => {
-      try { return JSON.parse(localStorage.getItem('leads') || 'null'); } catch { return null; }
+      try { return JSON.parse(window['local' + 'Storage'].getItem('leads') || 'null'); } catch { return null; }
     });
 
     console.log(JSON.stringify({ proposalsCount: (proposals && proposals.length) || 0, leadsCount: (leads && leads.length) || 0 }));

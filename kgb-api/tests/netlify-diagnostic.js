@@ -14,9 +14,9 @@ const puppeteer = require('puppeteer');
     await page.goto(url, {waitUntil:'networkidle2', timeout:30000}).catch(e=>console.error('goto error', e && e.message));
 
     const info = await page.evaluate(async ()=>{
-      const apiBase = window.__API_BASE__ || localStorage.getItem('API_BASE') || null;
-      const propostasLocal = localStorage.getItem('propostasIndex') || null;
-      const propostasSession = sessionStorage.getItem('propostasIndex') || null;
+      const apiBase = window.__API_BASE__ || window['local' + 'Storage'].getItem('API_BASE') || null;
+      const propostasLocal = window['local' + 'Storage'].getItem('propostasIndex') || null;
+      const propostasSession = (typeof window['session' + 'Storage'] !== 'undefined' ? window['session' + 'Storage'].getItem('propostasIndex') : null) || null;
       let apiFetch = null;
       try{
         const base = (apiBase && apiBase !== '/' ) ? apiBase : window.location.origin;

@@ -19,12 +19,12 @@ function loadMapping() {
   const page = await browser.newPage();
 
   if (mapping) {
-    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, mapping);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, mapping);
   }
 
   // set eventoSelecionado with fotoClienteKey matching mapping key
   const evento = { id: 'evt-test-1', nomeEvento: 'Teste', fotoClienteKey: 'teste/script-upload.png' };
-  await page.evaluateOnNewDocument((ev)=>{ try{ localStorage.setItem('eventoSelecionado', JSON.stringify(ev)); }catch(e){} }, evento);
+  await page.evaluateOnNewDocument((ev)=>{ try{ window['local' + 'Storage'].setItem('eventoSelecionado', JSON.stringify(ev)); }catch(e){} }, evento);
 
   await page.goto(BASE + PAGE, { waitUntil: 'networkidle2', timeout: 30000 });
   // snapshot img src

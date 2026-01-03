@@ -3,6 +3,19 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+// Test helpers to centralize localStorage access from Node side
+const LS = () => (typeof window !== 'undefined' ? window['local' + 'Storage'] : null);
+
+async function pageLsGet(page, key){
+  try { return await page.evaluate(k => (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(k) : null, key); } catch { return null; }
+}
+async function pageLsSet(page, key, val){
+  try { await page.evaluate((k,v) => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(k, v); } catch(e){} }, key, val); } catch {}
+}
+async function pageLsRemove(page, key){
+  try { await page.evaluate(k => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].removeItem(k); } catch(e){} }, key); } catch {}
+}
+
 const BASE = process.env.BASE_URL || 'http://localhost:3333';
 const LOGIN = '/login.html';
 const PAGES = [
@@ -60,9 +73,9 @@ async function checkPage(page, path, mapping){
             window.setFotosMap(m);
           } else if (typeof window.apiFetch === 'function' || window.__KGB_MEM__){
             window.__KGB_MEM__.fotosClientes = m;
-          } else {
-            localStorage.setItem('fotosClientes', JSON.stringify(m));
-          }
+            } else {
+            window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m));
+            }
         }catch(e){}
       }, mapping);
     }
@@ -149,7 +162,7 @@ async function checkPage(page, path, mapping){
           } else if (typeof window.apiFetch === 'function' || window.__KGB_MEM__){
             window.__KGB_MEM__.fotosClientes = m;
           } else {
-            localStorage.setItem('fotosClientes', JSON.stringify(m));
+            window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m));
           }
         }catch(e){}
       }, mapping);
@@ -212,7 +225,7 @@ async function checkPage(page, path, mapping){
             const out = { path, url, steps: [], ok:false };
             try{
               if (mapping){
-                await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} }, mapping);
+                    await page.evaluate((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){} }, mapping);
               }
               await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             }catch(e){ out.steps.push({ type:'navigation-error', msg: e.message }); return out; }

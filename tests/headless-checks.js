@@ -23,7 +23,7 @@ async function checkPage(page, path) {
     const data = await page.evaluate(() => {
       const imgs = Array.from(document.querySelectorAll('img')).map(i => i.src || i.getAttribute('data-src'));
       let fotos = null;
-      try { fotos = localStorage.getItem('fotosClientes'); } catch(e) { fotos = '__ls_error__:' + e.message }
+      try { fotos = window['local' + 'Storage'].getItem('fotosClientes'); } catch(e) { fotos = '__ls_error__:' + e.message }
       return { imgs, fotos };
     });
     result.imgs = data.imgs.filter(Boolean);

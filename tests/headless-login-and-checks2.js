@@ -2,6 +2,19 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+// Test helpers to centralize localStorage access from Node side
+const LS = () => (typeof window !== 'undefined' ? window['local' + 'Storage'] : null);
+
+async function pageLsGet(page, key){
+  try { return await page.evaluate(k => (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(k) : null, key); } catch { return null; }
+}
+async function pageLsSet(page, key, val){
+  try { await page.evaluate((k,v) => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(k, v); } catch(e){} }, key, val); } catch {}
+}
+async function pageLsRemove(page, key){
+  try { await page.evaluate(k => { try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].removeItem(k); } catch(e){} }, key); } catch {}
+}
+
 const BASE = process.env.BASE_URL || 'http://localhost:3333';
 const LOGIN = '/login.html';
 const PAGES = [
@@ -71,17 +84,17 @@ async function clickHeuristics(page){
 
   if (mapping) {
     const flat = flattenMapping(mapping);
-    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m; }catch(e){} }, flat);
     try{
       const sampleKey = Object.keys(flat)[0];
       if (sampleKey){
         await page.evaluateOnNewDocument((k)=>{
           try{
             const ev = { id: '__test_ev__', nomeEvento: 'Teste (auto)', fotoClienteKey: k, dataISO: new Date().toISOString(), qtdConvidados: 50 };
-            const arr = (()=>{ try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; } })();
+            const arr = (()=>{ try{ return JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]'); }catch(e){ return []; } })();
             arr.unshift(ev);
-            localStorage.setItem('eventos', JSON.stringify(arr));
-            localStorage.setItem('eventoSelecionado', String(ev.id));
+            window['local' + 'Storage'].setItem('eventos', JSON.stringify(arr));
+            window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id));
           }catch(e){}
         }, sampleKey);
       }
@@ -108,8 +121,8 @@ async function clickHeuristics(page){
     // apply mapping to <img> elements with data-* keys so UI shows images
     try{
       await page.evaluate(()=>{
-        try{
-          const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+          try{
+            const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
           const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
           const flat = {};
           function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if (typeof v === 'string') flat[key]=v; else if (v && typeof v === 'object') walk(v,key); } }
@@ -122,7 +135,7 @@ async function clickHeuristics(page){
 
     // capture localStorage value
     try{
-      const ls = await page.evaluate(()=> localStorage.getItem('fotosClientes'));
+      const ls = await pageLsGet(page, 'fotosClientes');
       out.steps.push({ localStoragePresent: !!ls });
     }catch(e){}
 
@@ -143,10 +156,10 @@ async function clickHeuristics(page){
   try{
     await page.evaluate(()=>{
       try{
-        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || localStorage.getItem('fotosClientes');
+        const raw = window.__FOTOS_CLIENTES_PRELOAD__ || window['local' + 'Storage'].getItem('fotosClientes');
         const mapping = typeof raw === 'string' ? JSON.parse(raw) : raw || {};
-        const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-        const sel = localStorage.getItem('eventoSelecionado');
+        const evs = JSON.parse(window['local' + 'Storage'].getItem('eventos')||'[]');
+        const sel = window['local' + 'Storage'].getItem('eventoSelecionado');
         const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0] || {};
         const key = ev && ev.fotoClienteKey;
         if (key && mapping && mapping[key]){

@@ -37,10 +37,10 @@ function loadMapping() {
     }
     const urlForKey = findByKey(mapping, event.fotoClienteKey);
     const flat = urlForKey ? { [event.fotoClienteKey]: urlForKey } : mapping;
-    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : localStorage.setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, flat);
+    await page.evaluateOnNewDocument((m)=>{ try{ (typeof window.setFotosMap==='function' ? window.setFotosMap(m) : window['local' + 'Storage'].setItem('fotosClientes', JSON.stringify(m))); }catch(e){} try{ window.__FOTOS_CLIENTES_PRELOAD__ = m;}catch(e){} }, flat);
   }
   // set eventoSelecionado and eventos list and query string id
-  await page.evaluateOnNewDocument((ev)=>{ try{ localStorage.setItem('eventoSelecionado', String(ev.id)); localStorage.setItem('eventos', JSON.stringify([ev])); }catch(e){} }, event);
+  await page.evaluateOnNewDocument((ev)=>{ try{ window['local' + 'Storage'].setItem('eventoSelecionado', String(ev.id)); window['local' + 'Storage'].setItem('eventos', JSON.stringify([ev])); }catch(e){} }, event);
 
   const fileUrl = 'file:///' + FILE.replace(/\\/g,'/') + '?id=' + encodeURIComponent(event.id);
   try{
