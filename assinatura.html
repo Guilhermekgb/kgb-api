@@ -324,9 +324,37 @@
   const btnConfirmar     = document.getElementById('btnConfirmar');
   const btnBaixarPdf     = document.getElementById('btnBaixarPdf');
 
+  // Helpers portal/memStore + API wrapper (local to this page)
+  const isPortalMode = () => !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__);
+
+  const portalRead = (key, fallback = null) => {
+    try {
+      const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+      if (mem && Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
+      const ls = window['local' + 'Storage'];
+      const ss = window['session' + 'Storage'];
+      const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+      return v != null ? v : fallback;
+    } catch (e) { return fallback; }
+  };
+
+  const portalWrite = (key, value) => {
+    try {
+      const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+      if (mem) { mem[key] = value; return; }
+      const ls = window['local' + 'Storage'];
+      if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    } catch (e) {}
+  };
+
+  const apiRequest = (url, opts) => {
+    if (window.apiFetch) return window.apiFetch(url, opts);
+    return fetch(url, opts);
+  };
+
   // Descobre base da API
   const API_BASE = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__.trim())
-    || (function () { try { return (localStorage.getItem('API_BASE') || '').trim(); } catch { return ''; } })()
+    || (function () { try { return (portalRead('API_BASE','') || '').trim(); } catch { return ''; } })()
        || 'http://127.0.0.1:3002';
 
 
@@ -365,13 +393,13 @@
     if (!tokenGlobal) return null;
 
     try {
-      const resp = await fetch(
-        API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal),
-        { method: 'GET' }
-      );
+      const url = API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal);
+      const resp = await apiRequest(url, { method: 'GET' });
 
-      if (!resp.ok) {
-        console.warn('[Assinatura] backend retornou erro ao buscar dados:', resp.status);
+      if (!resp || (resp.ok === false)) {
+        // quando apiRequest for window.apiFetch pode retornar objeto diferente; try to read status
+        const st = resp && (resp.status || resp.statusCode || null);
+        console.warn('[Assinatura] backend retornou erro ao buscar dados:', st);
         return null;
       }
 
@@ -503,7 +531,7 @@
       const eid = String(dadosServidor.eventoId || "").trim();
       if (!eid) return;
 
-      const eventos = JSON.parse(localStorage.getItem("eventos") || "[]");
+      const eventos = JSON.parse(portalRead("eventos","[]") || "[]");
       const iEvento = eventos.findIndex(ev => String(ev.id) === eid);
       if (iEvento === -1) return;
 
@@ -534,7 +562,7 @@
       doc.meta.pdfDataUri = pdfDataUri;
 
       eventos[iEvento].documentos = docs;
-      localStorage.setItem("eventos", JSON.stringify(eventos));
+      portalWrite("eventos", JSON.stringify(eventos));
 
       console.log("[Assinatura] PDF assinado salvo em eventos/documentos.");
     } catch (e) {
@@ -675,18 +703,16 @@
           alert('Assinatura do cliente não foi desenhada corretamente.');
           return;
         }
-        const respCli = await fetch(
-          API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/cliente',
-          {
+          const urlCli = API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/cliente';
+          const respCli = await apiRequest(urlCli, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ assinaturaBase64: dataUrl })
+          });
+          if (!respCli || (respCli.ok === false)) {
+            const txt = respCli ? await respCli.text().catch(() => '') : '';
+            throw new Error('Erro ao salvar assinatura do cliente: ' + txt);
           }
-        );
-        if (!respCli.ok) {
-          const txt = await respCli.text().catch(() => '');
-          throw new Error('Erro ao salvar assinatura do cliente: ' + txt);
-        }
         clienteJaSalvo           = true;
         assinaturaClienteDataUrl = dataUrl;
         algoPraSalvar            = true;
@@ -706,16 +732,14 @@
           alert('Assinatura da empresa não foi desenhada corretamente.');
           return;
         }
-        const respEmp = await fetch(
-          API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/empresa',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assinaturaBase64: dataUrlEmp })
-          }
-        );
-        if (!respEmp.ok) {
-          const txt = await respEmp.text().catch(() => '');
+        const urlEmp = API_BASE.replace(/\/$/, '') + '/api/assinaturas/' + encodeURIComponent(tokenGlobal) + '/empresa';
+        const respEmp = await apiRequest(urlEmp, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assinaturaBase64: dataUrlEmp })
+        });
+        if (!respEmp || (respEmp.ok === false)) {
+          const txt = respEmp ? await respEmp.text().catch(() => '') : '';
           throw new Error('Erro ao salvar assinatura da empresa: ' + txt);
         }
         empresaJaSalvo           = true;
