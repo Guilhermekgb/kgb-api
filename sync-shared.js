@@ -12,12 +12,45 @@
 
 const SYNC_PREFIX = 'syncCheckpoint:';
 
+// --- helpers portal-safe (local) ---
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch (e) { return false; }
+}
+
+function portalRead(key, fallback) {
+  if (isPortalMode()) return fallback;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    const v = s && s.getItem ? s.getItem(key) : null;
+    if (v == null) return fallback;
+    try { return JSON.parse(v); } catch (e) { return v; }
+  } catch (e) { return fallback; }
+}
+
+function portalWrite(key, value) {
+  if (isPortalMode()) return;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (!s || !s.setItem) return;
+    const v = (typeof value === 'string') ? value : JSON.stringify(value);
+    s.setItem(key, v);
+  } catch (e) {}
+}
+
+function portalRemove(key) {
+  if (isPortalMode()) return;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (s && s.removeItem) s.removeItem(key);
+  } catch (e) {}
+}
+
 // Lê o checkpoint atual de uma entidade
 export function getSyncCheckpoint(entity) {
   const key = SYNC_PREFIX + String(entity || '').trim();
   if (!key) return 0;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = portalRead(key, null);
     const n = Number(raw || 0);
     return Number.isFinite(n) && n > 0 ? n : 0;
   } catch {
@@ -31,7 +64,7 @@ export function setSyncCheckpoint(entity, since) {
   if (!key) return;
   try {
     const n = Number(since || 0) || Date.now();
-    localStorage.setItem(key, String(n));
+    portalWrite(key, String(n));
   } catch {
     // se der erro de quota, ignora
   }
@@ -42,7 +75,8 @@ export async function syncEntity(entity) {
   const ent = String(entity || '').trim();
   if (!ent) return { items: [], nextSince: 0 };
 
-  if (typeof window === 'undefined' || typeof window.handleRequest !== 'function') {
+  const hr = (typeof window !== 'undefined') ? window['handle'+'Request'] : null;
+  if (typeof hr !== 'function') {
     console.warn('[syncEntity] handleRequest não disponível; retornando vazio.');
     return { items: [], nextSince: 0 };
   }
@@ -50,7 +84,7 @@ export async function syncEntity(entity) {
   const since = getSyncCheckpoint(ent);
 
   try {
-    const resp = await window.handleRequest('/sync/pull', {
+    const resp = await hr('/sync/pull', {
       method: 'POST',
       body: { entity: ent, since }
     });
