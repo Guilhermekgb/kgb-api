@@ -239,6 +239,21 @@
       margin-right:4px;
     }
 
+  /* Portal helpers (page-local) */
+  function isPortalMode() {
+    try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+  }
+  function portalRead(key, fallback) {
+    if (isPortalMode()) return fallback;
+    try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; }
+  }
+  function portalWrite(key, value) {
+    if (isPortalMode()) return;
+    try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch(e) {}
+  }
+  function portalGetJSON(key, fallback) { const raw = portalRead(key, null); if (!raw) return fallback; try { return JSON.parse(raw); } catch(e) { return fallback; } }
+  function portalSetJSON(key, obj) { try { portalWrite(key, JSON.stringify(obj)); } catch(e) {} }
+
     .badge-ativo{
       font-size:11px;
       padding:3px 8px;
@@ -864,7 +879,7 @@ function lerDadosConviteURL() {
       /* ---------- CARREGAR TIPOS DE EVENTO (LOCAIS) ---------- */
       function carregarTiposEvento(){
         try{
-          const raw = localStorage.getItem(LS_KEY_TIPOS_EVENTO);
+          const raw = portalRead(LS_KEY_TIPOS_EVENTO, null);
           if (!raw) return [];
           const arr = JSON.parse(raw);
           if (!Array.isArray(arr)) return [];
@@ -881,7 +896,7 @@ function lerDadosConviteURL() {
 
       function carregarModelos(){
         try{
-          const raw = localStorage.getItem(LS_KEY_MODELOS_CONVITE);
+          const raw = portalRead(LS_KEY_MODELOS_CONVITE, null);
           const arr = raw ? JSON.parse(raw) : [];
           return Array.isArray(arr) ? arr : [];
         }catch(e){
@@ -892,7 +907,7 @@ function lerDadosConviteURL() {
 
       function salvarModelos(){
         try{
-          localStorage.setItem(LS_KEY_MODELOS_CONVITE, JSON.stringify(modelosConvite));
+          portalSetJSON(LS_KEY_MODELOS_CONVITE, modelosConvite);
         }catch(e){
           console.warn('Erro ao salvar modelos de convite', e);
         }
@@ -903,7 +918,7 @@ function lerDadosConviteURL() {
       function carregarLogoConvite(){
         if (!previewLogo || !previewLogoImg || !previewLogoTexto) return;
         try{
-          const url = localStorage.getItem(LS_KEY_LOGO_FORMATURA);
+          const url = portalRead(LS_KEY_LOGO_FORMATURA, '');
           if (url && modeloUsarLogoPrincipal && modeloUsarLogoPrincipal.checked){
             previewLogoImg.src = url;
             previewLogoImg.style.display = 'block';
