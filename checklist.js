@@ -1,5 +1,40 @@
 // checklist.js
 "use strict";
+// helpers portal-safe (inseridos automaticamente)
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+}
+
+function portalRead(key, fallback) {
+  if (isPortalMode()) return fallback;
+  try {
+    const s = window['local' + 'Storage'];
+    const v = s?.getItem?.(key);
+    return v == null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+
+function portalReadSession(key, fallback) {
+  if (isPortalMode()) return fallback;
+  try {
+    const s = window['session' + 'Storage'];
+    const v = s?.getItem?.(key);
+    return v == null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+
+async function apiRequest(path, options = {}) {
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+    return window.apiFetch(path, options);
+  }
+  const base = window.__API_BASE__ || '';
+  const r = await fetch(base + path, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options
+  });
+  return r.json();
+}
 
 /* =========================
    Storage helpers
@@ -37,14 +72,7 @@ function fmtBRDate(d){
 ========================= */
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
-// API request wrapper: prefer window.apiFetch, fallback to handleRequest import
-function apiRequest(endpoint, opts = {}){
-  if (window.apiFetch) return window.apiFetch(endpoint, opts);
-  return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, opts, resolve))
-  );
-}
-
+// API request wrapper is defined above (portal-safe `apiRequest`).
 function callApi(endpoint, method = 'GET', body = {}) {
   return apiRequest(endpoint, { method, body });
 }
