@@ -7,18 +7,64 @@
 
   // ==== helpers de storage / ping ====
   const NOTIFS_KEY = (typeof window.NOTIFS_KEY !== 'undefined' ? window.NOTIFS_KEY : 'notificacoes');
+  // ------- HELPERS PORTAL / API -------
+  function isPortalMode(){
+    return Boolean(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__);
+  }
+  function portalRead(key, fallback = null){
+    try{
+      if (isPortalMode()){
+        const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+        if (!mem) return fallback;
+        return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : fallback;
+      }
+      return window['local'+'Storage'].getItem(key);
+    }catch(e){
+      return fallback;
+    }
+  }
+  function portalWrite(key, value){
+    try{
+      if (isPortalMode()){
+        const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+        if (!mem) return false;
+        mem[key] = value;
+        return true;
+      }
+      window['local'+'Storage'].setItem(key, value);
+      return true;
+    }catch(e){
+      console.error('portalWrite error', e);
+      return false;
+    }
+  }
+  function apiRequest(path, options){
+    try{
+      if (typeof window.apiFetch === 'function'){
+        return window.apiFetch(path, options);
+      }
+      return fetch(path, options);
+    }catch(e){
+      return Promise.reject(e);
+    }
+  }
   function pingNotifs(){
     try {
       // ping “nativo” desta tela
-      localStorage.setItem(NOTIFS_KEY + ':ping', String(Date.now()));
+      portalWrite(NOTIFS_KEY + ':ping', String(Date.now()));
       // ping de compatibilidade com o dashboard (sino)
-      localStorage.setItem('notif:ping', String(Date.now()));
+      portalWrite('notif:ping', String(Date.now()));
     } catch {}
   }
 
   // Quem está logado? (para filtrar internas)
   function getUsuarioLogado(){
     try { return JSON.parse(localStorage.getItem('usuarioLogado') || '{}'); }
+    catch { return {}; }
+  }
+  
+  function getUsuarioLogado(){
+    try { return JSON.parse(portalRead('usuarioLogado', '{}') || '{}'); }
     catch { return {}; }
   }
   function isAdmin(u){
@@ -36,14 +82,14 @@
   // localStorage helpers
   function getArr(key) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = portalRead(key, null);
       const v = raw ? JSON.parse(raw) : [];
       return Array.isArray(v) ? v : [];
     } catch { return []; }
   }
   function setArr(key, arr) {
     try {
-      localStorage.setItem(key, JSON.stringify(arr || []));
+      portalWrite(key, JSON.stringify(arr || []));
       if (key === NOTIFS_KEY) pingNotifs();
     } catch {}
   }
@@ -387,20 +433,20 @@
             entity: { type: 'lead', id: String(leadId || notifId) }
           });
 // === NOTIFICAÇÃO: Follow-up criado ===
-fetch(`${API_BASE}/notificacoes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-        id: `notif:followup:${leadId}:${Date.now()}`,
-        kind: "followup_agendado",
-        title: "Follow-up agendado",
-        message: `Um follow-up foi agendado para o lead ${leadId} em ${dataISO} ${hora ? 'às ' + hora : ''}.`,
-        audience: responsavel,
-        level: "info",
-        entityType: "lead",
-        entityId: leadId
-    })
-});
+apiRequest(`${API_BASE}/notificacoes`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    id: `notif:followup:${leadId}:${Date.now()}`,
+    kind: "followup_agendado",
+    title: "Follow-up agendado",
+    message: `Um follow-up foi agendado para o lead ${leadId} em ${dataISO} ${hora ? 'às ' + hora : ''}.`,
+    audience: responsavel,
+    level: "info",
+    entityType: "lead",
+    entityId: leadId
+  })
+}).catch(()=>{});
 
           // 3) Notificação interna para o responsável
           if (typeof window.__agendaBridge?.publishNotification === 'function'){
