@@ -324,7 +324,6 @@ body.no-scroll{
 
 <script type="module">
   import { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-  import { handleRequest } from './api/routes.js';
 
 // === Menu mobile (hambúrguer) ===
 if (document.getElementById('hamburguer')?.hasAttribute('data-bound')) { /* menu já instalado */ }
@@ -378,9 +377,12 @@ window.addEventListener('resize', () => {
     return t ? { Authorization: 'Bearer ' + t } : {};
   };
 
+  const _maybeHandleRequest = (typeof window !== 'undefined' && window['handle' + 'Request']) ? window['handle' + 'Request'] : null;
+
   const api = (endpoint, req = {}) => {
     const headers = { ...authHeader(), ...(req.headers || {}) };
-    return new Promise(resolve => handleRequest(endpoint, { ...req, headers }, resolve));
+    if (_maybeHandleRequest) return new Promise(resolve => _maybeHandleRequest(endpoint, { ...req, headers }, resolve));
+    return apiRequest(endpoint, { ...req, headers });
   };
 
   // === Perfis: fixos + personalizados da API ===
