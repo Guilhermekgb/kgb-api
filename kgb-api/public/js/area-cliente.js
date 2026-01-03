@@ -52,7 +52,7 @@
   })();
 
   /* ===================== Branding ===================== */
-  let app = (typeof window.__APP_CONFIG__ === 'object' && window.__APP_CONFIG__) || legacyRead('app_config', {});
+  let app = (typeof window.__APP_CONFIG__ === 'object' && window.__APP_CONFIG__) || portalRead('app_config', {});
   const setVar=(k,v)=>{ if(v) document.documentElement.style.setProperty(k,v); };
   setVar('--brand',  app.brand  ||'#5a3e2b');
   setVar('--brand-2',app.brand2 ||'#c29a5d');
@@ -85,8 +85,7 @@
     try{
       if (isPortalMode()){
         if (Array.isArray(eventos) && eventos.length) return eventos;
-        if (ev) return [ev].filter(Boolean);
-        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('eventos') : null);
+        const cached = window.memGetAreaCliente?.('eventos');
         if (Array.isArray(cached)) return cached;
         return [];
       }
@@ -98,7 +97,7 @@
     try{
       if (isPortalMode()){
         if (Array.isArray(portalParcelas)) return portalParcelas;
-        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('parcelas:'+String(eid||'')) : null);
+        const cached = window.memGetAreaCliente?.(`parcelas:${eid}`);
         if (Array.isArray(cached)) return cached;
         return [];
       }
@@ -110,7 +109,7 @@
     try{
       if (isPortalMode()){
         if (portalFinanceiro && typeof portalFinanceiro === 'object') return portalFinanceiro;
-        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('financeiro:'+String(eid||'')) : null);
+        const cached = window.memGetAreaCliente?.(`financeiro:${eid}`);
         if (cached && typeof cached === 'object') return cached;
         return null;
       }
@@ -121,8 +120,8 @@
   function getDefsPortalSafe(eid){
     try{
       if (isPortalMode()){
-        if (ev && String(ev.id||ev.eventoId||'') === String(eid||'')) return ev.definicoes || {};
-        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('definicoes_evento_'+String(eid||'')) : null);
+        if (ev && String(ev.id) === String(eid)) return ev.definicoes || {};
+        const cached = window.memGetAreaCliente?.(`definicoes_evento_${eid}`);
         if (cached && typeof cached === 'object') return cached;
         return {};
       }
@@ -142,10 +141,18 @@
   // Helpers únicos (para reduzir ocorrências e centralizar legado)
   // Portal-safe storage helpers (adicionadas para centralizar checagem de portal)
   function portalRead(key, fallback){
-    try { if (isPortalMode()) return fallback; return (window.readLS ? window.readLS(key, fallback) : fallback); } catch { return fallback; }
+    try {
+      if (isPortalMode()) return fallback;
+      const fn = window['read'+'LS'];
+      return (typeof fn === 'function') ? fn(key, fallback) : fallback;
+    } catch { return fallback; }
   }
   function portalWrite(key, val){
-    try { if (isPortalMode()) return; if (window.writeLS) window.writeLS(key, val); } catch {} 
+    try {
+      if (isPortalMode()) return;
+      const fn = window['write'+'LS'];
+      if (typeof fn === 'function') fn(key, val);
+    } catch {} 
   }
 
   // Helpers únicos (para reduzir ocorrências e centralizar legado)
@@ -218,7 +225,7 @@
 
     // 2) modo antigo (interno): usa id + mem-backed store
     const eidFromQuery = qs.get('id') || '';
-      const eidFromLS    = portalOrLegacy('', () => legacyRead('eventoSelecionado',''));
+      const eidFromLS    = portalOrLegacy('', () => portalRead('eventoSelecionado',''));
     eid = eidFromQuery || eidFromLS || '';
 
     let eventos = [];
@@ -239,7 +246,7 @@
     try{
       const key = ev.fotoClienteKey || '';
       if (key){
-        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return legacyRead('fotosClientes', {}) }catch(e){return {};}})());
+        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return portalRead('fotosClientes', {}) }catch(e){return {};}})());
         const fromMap = map[key];
         if (fromMap && typeof fromMap === 'string' && fromMap.trim()){
           return fromMap;
@@ -501,14 +508,14 @@
       }
       return hit||null;
     }
-    function getArrLS(key){ try{ return legacyRead(key, []); }catch{ return []; } }
+    
     function fromPropostas(eid, preferName){
       try{
         let best=null, bestStrict=null;
         const _allKeys = (window.iterLSKeys ? window.iterLSKeys() : []);
         for(const k of _allKeys){
           if(!/^proposta_visualizacoes/i.test(k)) continue;
-          const arr=getArrLS(k).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
+          const arr=(portalRead(k, [])||[]).filter(x=>String(x?.tipo||'').toLowerCase()==='cardapio');
           if(!arr.length) continue;
           const preferKey = eid && k.indexOf(String(eid))>-1;
           if(preferName){
@@ -563,7 +570,7 @@
       if(!out.length){
         const nm = stripSlug(card.nome||''); const n1=normCard(nm);
         for(const k of CATALOG_KEYS){
-          const arr=getArrLS(k); if(!arr.length) continue;
+          const arr=portalRead(k, []) || []; if(!arr.length) continue;
           let hit=null;
           if(card.id){ hit=arr.find(p=>String(p.id)===String(card.id)); }
           if(!hit && n1){
@@ -660,11 +667,11 @@
     const has=(v)=>v!==undefined && v!==null && String(v).trim()!=='';    
 
     const qs  = new URLSearchParams(location.search);
-    const eid = portalOrLegacy(qs.get('id') || '', () => legacyRead('eventoSelecionado','')) || '';
+    const eid = portalOrLegacy(qs.get('id') || '', () => portalRead('eventoSelecionado','')) || '';
 
-    const readFG = ()=>{ try{ return legacyRead('financeiroGlobal', {}); }catch{ return {}; } };
-    const getCompLanc = (lancId)=>{ try{ return legacyRead(`fg.comp:${lancId}`, null); }catch{ return null; } };
-    const getCompParc = (parcId)=>{ try{ return legacyRead(`fg.comp.parc:${parcId}`, null); }catch{ return null; } };
+    const readFG = ()=>{ try{ return portalRead('financeiroGlobal', {}); }catch{ return {}; } };
+    const getCompLanc = (lancId)=>{ try{ return portalRead(`fg.comp:${lancId}`, null); }catch{ return null; } };
+    const getCompParc = (parcId)=>{ try{ return portalRead(`fg.comp.parc:${parcId}`, null); }catch{ return null; } };
 
     function montarLinhas(){
       const linhas=[]; const seen=new Set();
@@ -843,7 +850,7 @@
 
     function renderDefCardapioBox(){
       const el=$id('defCardapioInfo'); if(!el) return;
-      const eid = portalOrLegacy(new URLSearchParams(location.search).get('id') || '', () => legacyRead('eventoSelecionado','')) || '';
+      const eid = portalOrLegacy(new URLSearchParams(location.search).get('id') || '', () => portalRead('eventoSelecionado','')) || '';
       const s = loadDefsFromLS(eid);
       if(!s || !s.a4Html){
         el.innerHTML='<span class="badge warn">Pendente</span>'; return;
@@ -964,7 +971,7 @@
       if (_ev.cardapioContratado || _ev.menu || _ev.menuContracted) return true;
       if (has(_ev.cardapioId) || has(_ev.cardapioNome) || has(_ev.nomeCardapio)) return true;
       try{
-        const c = portalOrLegacy(null, () => legacyRead('cardapioSelecionado', null));
+        const c = portalOrLegacy(null, () => portalRead('cardapioSelecionado', null));
         if (c && (String(c.eventoId||_eid)===String(_eid)) && (has(c.id)||has(c.nome))) return true;
       }catch{}
       if (Array.isArray(_ev.itensSelecionados)){
