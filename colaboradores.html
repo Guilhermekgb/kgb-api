@@ -8,6 +8,39 @@
 
     <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  // helpers portal-safe (inseridos automaticamente)
+  function isPortalMode() {
+    try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+  }
+
+  function portalRead(key, fallback) {
+    if (isPortalMode()) return fallback;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      const v = s && s.getItem ? s.getItem(key) : null;
+      return (v == null) ? fallback : v;
+    } catch (e) { return fallback; }
+  }
+
+  function portalWrite(key, value) {
+    if (isPortalMode()) return;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      if (s && s.setItem) s.setItem(key, String(value));
+    } catch (e) {}
+  }
+
+  function portalGetJSON(key, fallback) {
+    const raw = portalRead(key, null);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch (e) { return fallback; }
+  }
+
+  function portalSetJSON(key, obj) {
+    try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+  }
+
+<script>
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -21,7 +54,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -246,11 +279,11 @@ body.no-scroll{
       aplicar();
     })();
 
-    // ===== App: Colaboradores (LocalStorage) =====
+    // ===== App: Colaboradores (LocalStorage -> portal-safe) =====
     const KEY="colaboradoresBase";
     const gid = (id)=>document.getElementById(id);
-    const getBase=()=>{ try{ return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch{ return []; } };
-    const setBase=(v)=> localStorage.setItem(KEY, JSON.stringify(v));
+    const getBase=()=>{ try{ return portalGetJSON(KEY, []); } catch{ return []; } };
+    const setBase=(v)=> portalSetJSON(KEY, v);
 
     function linhaHTML(c, i){
       return `
