@@ -1111,10 +1111,18 @@ const financeiroEmDia = (_ev) => {
         }
 
         const data = await resp.json();
-        try{ setJSON('portal_tl_'+String(eid), data); }catch{}
-        const eventosTL = Array.isArray(data)
-          ? data
-          : (data.eventos || data.timeline || []);
+        // server returns envelope { ok: true, items: [] }
+        let eventosTL = [];
+        if (Array.isArray(data)) {
+          eventosTL = data;
+        } else if (data && data.ok && Array.isArray(data.items)) {
+          eventosTL = data.items;
+        } else if (data && Array.isArray(data.eventos)) {
+          eventosTL = data.eventos;
+        } else if (data && Array.isArray(data.timeline)) {
+          eventosTL = data.timeline;
+        }
+        try{ setJSON('portal_tl_'+String(eid), eventosTL); }catch{}
 
         if (!eventosTL || !eventosTL.length) {
           listaTimeline.innerHTML = '<li class="muted">Ainda não há eventos registrados na linha do tempo.</li>';
