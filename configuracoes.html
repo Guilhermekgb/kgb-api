@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -27,6 +27,39 @@
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO PATCH kgb-common (precisa vir cedo no <head>) === -->
 <script type="module" src="./kgb-common.js"></script>
+<script>
+  // helpers portal-safe (inseridos automaticamente)
+  function isPortalMode() {
+    try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+  }
+
+  function portalRead(key, fallback) {
+    if (isPortalMode()) return fallback;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      const v = s && s.getItem ? s.getItem(key) : null;
+      return (v == null) ? fallback : v;
+    } catch (e) { return fallback; }
+  }
+
+  function portalWrite(key, value) {
+    if (isPortalMode()) return;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      if (s && s.setItem) s.setItem(key, String(value));
+    } catch (e) {}
+  }
+
+  function portalGetJSON(key, fallback) {
+    const raw = portalRead(key, null);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch (e) { return fallback; }
+  }
+
+  function portalSetJSON(key, obj) {
+    try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+  }
+</script>
 <!-- === FIM PATCH kgb-common === -->
 
   <title>Configurações do Sistema</title>
@@ -279,7 +312,7 @@
   <script>
     const KEY = 'app_config';
     const $ = (id)=>document.getElementById(id);
-    const cfg = ()=> JSON.parse(localStorage.getItem(KEY) || '{}');
+    const cfg = ()=> portalGetJSON(KEY, {});
 
     function applyThemePreview({brand,brand2,bg}){
       if(brand)  document.documentElement.style.setProperty('--brand',brand);
@@ -331,7 +364,7 @@
         brand, brand2, bg,
         msgHoraPadrao: '08:00'
       };
-      localStorage.setItem(KEY, JSON.stringify(data));
+      portalSetJSON(KEY, data);
       applyThemePreview(data);
       $('heroNome').textContent = data.nome || 'Seu Buffet';
       alert('Configurações salvas!');
