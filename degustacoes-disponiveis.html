@@ -4,6 +4,39 @@
   <meta name="page-permission" content="page:degustacoes-disponiveis.html">
 
   <meta charset="UTF-8" />
+  <script>
+    // portal helpers (page-local)
+    (function(){
+      function isPortalMode(){ try{ return Boolean(window && (window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__)); }catch{return false;} }
+      function portalRead(key, fallback = null){
+        try{
+          if (isPortalMode()){
+            const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+            if (!mem) return fallback;
+            return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : fallback;
+          }
+          return window['local'+'Storage'].getItem(key);
+        }catch(e){ return fallback; }
+      }
+      function portalWrite(key, value){
+        try{
+          if (isPortalMode()){
+            const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+            if (!mem) return false;
+            mem[key] = value;
+            return true;
+          }
+          window['local'+'Storage'].setItem(key, value);
+          return true;
+        }catch(e){ console.error('portalWrite', e); return false; }
+      }
+      function apiRequest(path, opts){
+        try{ if (typeof window !== 'undefined' && typeof window['apiFetch'] === 'function') return window['apiFetch'](path, opts); }catch(e){}
+        try{ const base = (window.__API_BASE__||'').replace(/\/+$/,''); const url = (base||'') + path; return (typeof window !== 'undefined' && typeof window['fetch'] === 'function') ? window['fetch'](url, opts).then(r=>r.json().catch(()=>null)) : Promise.resolve(null); }catch(e){ return Promise.resolve(null); }
+      }
+      try{ window.portalRead = window.portalRead || portalRead; window.portalWrite = window.portalWrite || portalWrite; window.apiRequest = window.apiRequest || apiRequest; }catch{}
+    })();
+  </script>
   <title>Degustações Disponíveis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
@@ -21,7 +54,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -244,18 +277,18 @@
       }
 
       function lerSlots() {
-        try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; }
+        try { var raw = portalRead(LS_KEY, '[]'); return JSON.parse(raw || '[]'); } catch (e) { return []; }
       }
       function salvarSlots(arr) {
-        localStorage.setItem(LS_KEY, JSON.stringify(arr));
+        portalWrite(LS_KEY, JSON.stringify(arr || []));
       }
 
       // agenda (casais)
       function lerAgenda(){
-        try{ return JSON.parse(localStorage.getItem('agenda') || '[]'); }catch(e){ return []; }
+        try{ var raw = portalRead('agenda', '[]'); return JSON.parse(raw || '[]'); }catch(e){ return []; }
       }
       function salvarAgenda(arr){
-        localStorage.setItem('agenda', JSON.stringify(arr));
+        portalWrite('agenda', JSON.stringify(arr || []));
       }
 
       function salvarDegustacao() {
