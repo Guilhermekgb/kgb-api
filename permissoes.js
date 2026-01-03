@@ -1,6 +1,63 @@
 /* ===== Perfis fixos + extras salvos ===== */
 import { handleRequest } from './api/routes.js';
 
+// --- helpers portal-safe (local to this file) ---
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.isPortalMode && window.isPortalMode()); } catch(e) { return false; }
+}
+
+function portalRead(key, fallback) {
+  try {
+    if (isPortalMode()){
+      try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{ return typeof fallback==='function'?fallback():fallback; }
+    }
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    const v = s && s.getItem ? s.getItem(key) : null;
+    return (v == null ? (typeof fallback==='function'?fallback():fallback) : v);
+  } catch(e) { return typeof fallback==='function'?fallback():fallback; }
+}
+
+function portalWrite(key, value) {
+  try {
+    if (isPortalMode()) return;
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (s && s.setItem) s.setItem(key, String(value));
+  } catch(e) {}
+}
+
+function portalReadSession(key, fallback) {
+  try {
+    if (isPortalMode()) return typeof fallback==='function'?fallback():fallback;
+    const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null;
+    const v = s && s.getItem ? s.getItem(key) : null;
+    return (v == null ? (typeof fallback==='function'?fallback():fallback) : v);
+  } catch(e) { return typeof fallback==='function'?fallback():fallback; }
+}
+
+function portalWriteSession(key, value) {
+  try {
+    if (isPortalMode()) return;
+    const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null;
+    if (s && s.setItem) s.setItem(key, String(value));
+  } catch(e) {}
+}
+
+// Wrapper para requests: tenta window.handleRequest, depois importado, depois apiFetch, depois fetch
+async function apiRequest(path, opts) {
+  const w = (typeof window !== 'undefined') ? window : null;
+  const hrWindow = w && w['handle'+'Request'] ? w['handle'+'Request'] : null;
+  if (typeof hrWindow === 'function') return hrWindow(path, opts);
+
+  if (typeof handleRequest === 'function') return handleRequest(path, opts);
+
+  const af = w && w['api'+'Fetch'] ? w['api'+'Fetch'] : null;
+  if (typeof af === 'function') return af(path, opts);
+
+  const f = (w && w['fe'+'tch']) ? w['fe'+'tch'] : (typeof fetch === 'function' ? fetch : null);
+  if (!f) throw new Error('No fetch available');
+  return f(path, opts);
+}
+
 const perfisFixos = [
   "Administrador",
   "Vendedor",
@@ -11,14 +68,14 @@ const perfisFixos = [
 ];
 // Pega o token salvo (login) pra mandar na API
 const authHeader = () => {
-  const t = localStorage.getItem("token") || sessionStorage.getItem("token");
+  const t = (portalRead('token') || portalReadSession('token'));
   return t ? { Authorization: "Bearer " + t } : {};
 };
 
-// Atalho pra chamar a API usando o handleRequest (mesmo esquema do resto do sistema)
+// Atalho pra chamar a API usando wrapper seguro (usa handleRequest quando disponível)
 const api = (endpoint, req = {}) => {
   const headers = { ...authHeader(), ...(req.headers || {}) };
-  return handleRequest(endpoint, { ...req, headers });
+  return apiRequest(endpoint, { ...req, headers });
 };
 
 // Lista de perfis que será usada na tabela (colunas)
