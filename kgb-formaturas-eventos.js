@@ -20,6 +20,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const LS_KEY_TIPOS    = 'kgb_formaturas_tiposEvento';
   const LS_KEY_ESCOLAS  = 'kgb-formaturas-escolas';
 
+  // portal helpers (page-local) — do not write in portal mode
+  function isPortalMode() {
+    try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+  }
+  function portalRead(key, fallback) {
+    if (isPortalMode()) return fallback;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      const v = s && s.getItem ? s.getItem(key) : null;
+      return (v == null) ? fallback : v;
+    } catch(e) { return fallback; }
+  }
+  function portalWrite(key, value) {
+    if (isPortalMode()) return;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      if (s && s.setItem) s.setItem(key, String(value));
+    } catch(e) {}
+  }
+  function portalGetJSON(key, fallback) {
+    const raw = portalRead(key, null);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch(e) { return fallback; }
+  }
+  function portalSetJSON(key, obj) {
+    try { portalWrite(key, JSON.stringify(obj)); } catch(e) {}
+  }
+
 
   function criarId(prefixo){
     return (prefixo || 'id_') + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -44,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function carregarTiposEvento(){
     try{
-      const raw = localStorage.getItem(LS_KEY_TIPOS);
+      const raw = portalRead(LS_KEY_TIPOS, null);
       let arr = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(arr)) arr = [];
       // não cria nada fictício
@@ -91,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function carregarEscolas(){
     try{
-      const raw = localStorage.getItem(LS_KEY_ESCOLAS);
+      const raw = portalRead(LS_KEY_ESCOLAS, null);
       let arr = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(arr)) arr = [];
       // não cria nada fictício
@@ -138,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function carregarEventos(){
     try{
-      const raw = localStorage.getItem(LS_KEY_EVENTOS);
+      const raw = portalRead(LS_KEY_EVENTOS, null);
       let arr = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(arr)) arr = [];
       // não cria eventos de exemplo
@@ -151,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function salvarEventos(lista){
     try{
-      localStorage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista));
+      portalSetJSON(LS_KEY_EVENTOS, lista);
     }catch(e){
       console.error('Erro ao salvar eventos', e);
     }
