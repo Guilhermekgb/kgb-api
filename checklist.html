@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -207,11 +207,20 @@
   <!-- Preenche nome/data do evento SEM mexer no seu checklist.js -->
   <script>
     (function(){
+      // --- helpers portal-safe locais ---
+      function isPortalMode() { try { return !!(window && window.isPortalMode && window.isPortalMode()); } catch(e) { return false; } }
+      function portalRead(key, fallback){ try{ if (isPortalMode()){ try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{return typeof fallback==='function'?fallback():fallback;} } const s=window['local'+'Storage']; const v = s && s.getItem ? s.getItem(key) : null; return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v; }catch{return typeof fallback==='function'?fallback():fallback;}}
+      function portalWrite(key, value){ try{ if (isPortalMode()) return; const s=window['local'+'Storage']; if (s && s.setItem) s.setItem(key, String(value)); }catch{}
+      }
+      function portalRemove(key){ try{ if (isPortalMode()) return; const s=window['local'+'Storage']; if (s && s.removeItem) s.removeItem(key); }catch{}
+      }
+      function portalGetJSON(key, fallback){ try{ const raw = portalRead(key, null); if (!raw) return fallback; try{ return JSON.parse(raw); }catch{return fallback;} }catch{return fallback;} }
+      function portalSetJSON(key, obj){ try{ portalWrite(key, JSON.stringify(obj)); }catch{} }
       function getEventoId(){
-        return new URLSearchParams(location.search).get('id') || localStorage.getItem('eventoSelecionado') || '';
+        return new URLSearchParams(location.search).get('id') || portalRead('eventoSelecionado','') || '';
       }
       function loadEventos(){
-        try{ return JSON.parse(localStorage.getItem('eventos')||'[]'); }catch(e){ return []; }
+        try{ return portalGetJSON('eventos', []); }catch(e){ return []; }
       }
       function getEventoNome(ev){
         if(!ev) return '-';
@@ -239,7 +248,7 @@
       if (lblData) lblData.textContent = ev ? fmtBR(ev.data || ev.dataEvento || ev.dataInicial || ev.data_evento) : '-';
       if (lblId)   lblId.textContent   = id || '-';
 
-      try{ localStorage.setItem('eventoSelecionado', String(id||'')); }catch(e){}
+      try{ portalWrite('eventoSelecionado', String(id||'')); }catch(e){}
     })();
 
     // abre/fecha menu no mobile
