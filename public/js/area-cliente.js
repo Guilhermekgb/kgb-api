@@ -1162,7 +1162,12 @@ const financeiroEmDia = (_ev) => {
         arr[i].clientNotes[key] = val;
         try{
           if (isPortalMode()){ setJSON('eventos', arr); }
-          else { localStorage.setItem('eventos', JSON.stringify(arr)); }
+          else {
+            try {
+              if (isPortalMode()) { setJSON('eventos', arr); }
+              else { localStorage.setItem('eventos', JSON.stringify(arr)); }
+            } catch (e) {}
+          }
         }catch(e){}
         if (hintEl){ hintEl.textContent='Salvo!'; setTimeout(()=>{hintEl.textContent='';}, 1200); }
       }
