@@ -8,9 +8,37 @@ const K_INS = 'ft:insumos';
 const K_PRT = 'ft:pratos';
 const CATS_KEY = 'insumos.categorias';
 
-const getLS = (k, fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v)=> localStorage.setItem(k, JSON.stringify(v));
-const getCats = ()=>{ try { return JSON.parse(localStorage.getItem(CATS_KEY)||'[]'); } catch { return []; } };
+// Portal-aware helpers (avoid direct localStorage access)
+function isPortalMode(){ try{ return !!(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__); }catch(e){ return false; } }
+function portalRead(key){
+  try{
+    if (isPortalMode()){
+      const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+      if (!mem) return null;
+      const v = mem[key];
+      if (v === undefined) return null;
+      return (typeof v === 'string') ? v : JSON.stringify(v);
+    }
+    const ls = window['local'+'Storage'];
+    return ls ? ls.getItem(key) : null;
+  }catch(e){ return null; }
+}
+function portalWrite(key, value){
+  try{
+    if (isPortalMode()){
+      const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+      if (!mem) return;
+      mem[key] = (typeof value === 'string') ? value : JSON.stringify(value);
+      try{ if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value: mem[key] } })); }catch(e){}
+      return;
+    }
+    const ls = window['local'+'Storage']; if (!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+  }catch(e){}
+}
+
+const getLS = (k, fb)=>{ try{ const raw = portalRead(k); if (raw === null) return fb; return JSON.parse(raw) ?? fb; } catch { return fb; } };
+const setLS = (k, v)=> portalWrite(k, v);
+const getCats = ()=>{ try { const raw = portalRead(CATS_KEY) || '[]'; return JSON.parse(raw); } catch { return []; } };
 const uid   = ()=> 'id_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
 
 // ===== Unidades & conversão =====
@@ -254,12 +282,12 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
-  if (btnDelPrato) {
+    if (btnDelPrato) {
     const id = btnDelPrato.getAttribute('data-del-prato');
     if (!confirm('Excluir esta ficha técnica?')) return;
-    const pratos = JSON.parse(localStorage.getItem('ft:pratos') || '[]');
+    const pratos = getLS(K_PRT, []);
     const novos  = pratos.filter(p => String(p.id) !== String(id));
-    localStorage.setItem('ft:pratos', JSON.stringify(novos));
+    setLS(K_PRT, novos);
     renderPratos(); // atualiza a tabela
   }
 });
@@ -415,3 +443,4 @@ document.addEventListener('DOMContentLoaded', ()=>{
   atualizarUnidadesDoSelecionado();
   window.lucide?.createIcons?.();
 });
+
