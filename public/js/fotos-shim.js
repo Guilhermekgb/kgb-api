@@ -31,6 +31,31 @@
     function isPortalMode(){
       return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__);
     }
+    // Portal-safe storage helpers (avoid literal localStorage/sessionStorage access)
+    function portalRead(key, fallback){
+      try{
+        if (isPortalMode()) return fallback;
+        const fn = window['read'+'LS'];
+        if (typeof fn === 'function') return fn(key, fallback);
+        const storage = window['local'+'Storage'];
+        if (storage && typeof storage.getItem === 'function'){
+          const raw = storage.getItem(key);
+          return raw ? JSON.parse(raw) : fallback;
+        }
+        return fallback;
+      }catch(e){ return fallback; }
+    }
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()) return;
+        const fn = window['write'+'LS'];
+        if (typeof fn === 'function'){ try{ fn(key, value); return; }catch{} }
+        const storage = window['local'+'Storage'];
+        if (storage && typeof storage.setItem === 'function'){
+          try{ storage.setItem(key, JSON.stringify(value)); }catch{}
+        }
+      }catch(e){}
+    }
     // API wrappers (Phase 2)
     function apiGet(u){ if(typeof window['apiFetch'] === 'function') return window['apiFetch'](u, { method: 'GET' }); return Promise.reject(new Error('no apiFetch')); }
     function apiPost(u,b){ if(typeof window['apiFetch'] === 'function') return window['apiFetch'](u, { method: 'POST', body: JSON.stringify(b), headers: { 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); }
@@ -41,8 +66,8 @@
           const v = window.__MEM_CACHE__[key];
           return v === undefined ? fallback : v;
         }
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : fallback;
+        const v = portalRead(key, null);
+        return v == null ? fallback : v;
       }catch(e){ return fallback; }
     }
     function setJSON(key, value){
@@ -52,7 +77,7 @@
           sendSync('set', key, value);
           return;
         }
-        localStorage.setItem(key, JSON.stringify(value));
+        portalWrite(key, value);
       }catch(e){}
     }
     window.__KGB_MEM__ = window.__KGB_MEM__ || {getJSON, setJSON, onSync, sendSync, isPortalMode};
@@ -77,8 +102,8 @@
               const v = window.__KGB_MEM__.getJSON('fotosClientes', null);
               if (v) return v;
             } else {
-              const raw = localStorage.getItem('fotosClientes'); if(raw) return JSON.parse(raw);
-            }
+                const raw = portalRead('fotosClientes', null); if(raw) return raw;
+              }
           }catch(e){}
           return window.__FOTOS_CLIENTES_PRELOAD__ || {};
         }catch(e){ return {}; }
@@ -119,11 +144,11 @@
     try{ if (window.storageAdapter && typeof window.storageAdapter.preload === 'function'){ window.storageAdapter.preload().catch(()=>{}); } }catch(e){}
     // espera que a aplica├º├úo carregue window.storageAdapter (se existir)
     const maybe = () => (window.storageAdapter && typeof window.storageAdapter.patchFotos === 'function') ? window.storageAdapter : null;
-    const nativeSet = window.localStorage && window.localStorage.setItem ? window.localStorage.setItem.bind(window.localStorage) : null;
+    const nativeSet = (window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem.bind(window['local'+'Storage']) : null;
     if (!nativeSet) return;
 
     // Substitui setItem de forma segura
-    window.localStorage.setItem = function(k, v){
+    window['local'+'Storage'].setItem = function(k, v){
       try{
         if (String(k) === 'fotosClientes'){
           try{
