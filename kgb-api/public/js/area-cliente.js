@@ -80,6 +80,56 @@
   let portalFinanceiro = null;
   let portalParcelas   = [];
 
+  // Portal-safe getters (Bloco C) — retornam dados da API/memStore em portal mode
+  function getEventosPortalSafe(){
+    try{
+      if (isPortalMode()){
+        if (Array.isArray(eventos) && eventos.length) return eventos;
+        if (ev) return [ev].filter(Boolean);
+        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('eventos') : null);
+        if (Array.isArray(cached)) return cached;
+        return [];
+      }
+      return (window.readLS ? window.readLS('eventos', []) : []);
+    }catch{ return []; }
+  }
+
+  function getParcelasPortalSafe(eid){
+    try{
+      if (isPortalMode()){
+        if (Array.isArray(portalParcelas)) return portalParcelas;
+        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('parcelas:'+String(eid||'')) : null);
+        if (Array.isArray(cached)) return cached;
+        return [];
+      }
+      return (window.readLS ? window.readLS(`parcelas:${eid}`, []) : []);
+    }catch{ return []; }
+  }
+
+  function getFinanceiroPortalSafe(eid){
+    try{
+      if (isPortalMode()){
+        if (portalFinanceiro && typeof portalFinanceiro === 'object') return portalFinanceiro;
+        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('financeiro:'+String(eid||'')) : null);
+        if (cached && typeof cached === 'object') return cached;
+        return null;
+      }
+      return (window.readLS ? window.readLS(`financeiroEvento:${eid}`, null) : null);
+    }catch{ return null; }
+  }
+
+  function getDefsPortalSafe(eid){
+    try{
+      if (isPortalMode()){
+        if (ev && String(ev.id||ev.eventoId||'') === String(eid||'')) return ev.definicoes || {};
+        const cached = (window.memGetAreaCliente ? window.memGetAreaCliente('definicoes_evento_'+String(eid||'')) : null);
+        if (cached && typeof cached === 'object') return cached;
+        return {};
+      }
+      return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {});
+    }catch{ return {}; }
+  }
+
   async function carregarEventoDoPortal() {
     // 1) modo portal online: usa token
     if (portalToken) {
@@ -147,7 +197,7 @@
 
     let eventos = [];
     try {
-      eventos = (window.readLS ? window.readLS('eventos', []) : []);
+      eventos = getEventosPortalSafe();
     } catch {
       eventos = [];
     }
@@ -226,13 +276,12 @@
   }
   function lerSnapshotFinanceiro(eventoId){
     try{
-      if (isPortalMode()) return portalFinanceiro || null;
-      return (window.readLS ? window.readLS(`financeiroEvento:${eventoId}`, null) : null);
+      return getFinanceiroPortalSafe(eventoId);
     }catch{ return null; }
   }
   function valorRecebidoPorParcelas(eventoId){
     try{
-      const parcelas = (isPortalMode() ? (Array.isArray(portalParcelas)?portalParcelas:[]) : (window.readLS ? window.readLS(`parcelas:${eventoId}`, []) : []));
+      const parcelas = getParcelasPortalSafe(eventoId);
       return parcelas.reduce((acc,p)=>{
         const st=String(p.status||'').toLowerCase();
         const pago=(st==='pago'||st==='recebido');
@@ -289,7 +338,7 @@
     }
     // 2) MODO ANTIGO (interno) → usa armazenamento local (compat) / M14
     else {
-      try{ eventos = (window.readLS ? window.readLS('eventos', []) : eventos); }catch{}
+      try{ eventos = getEventosPortalSafe(); }catch{}
       ev = eventos.find(e=>String(e.id)===String(eid)) || ev || {};
 
       contrato = totalItensComDesconto(ev);
@@ -646,7 +695,7 @@
 
       // ==== MODO ANTIGO (interno) — usa armazenamento local (compat) / M14 ====
       try{
-        const arr = (window.readLS ? window.readLS(`parcelas:${eid}`, []) : []);
+        const arr = getParcelasPortalSafe(eid);
         arr.forEach(p=>{
           const anexo = p.comprovanteUrl || p.comprovante || p.reciboUrl || p.url || p.arquivo || getCompParc(p.id);
           push({...p, _anexo: anexo});
@@ -763,7 +812,7 @@
     if (fechar) fechar.addEventListener('click', ()=>modal.classList.remove('open'));
     if (modal)  modal.addEventListener('click',(e)=>{ if(e.target===modal) modal.classList.remove('open'); });
 
-    const loadDefsFromLS=(eid)=>{ try{ if (isPortalMode() && ev && String(ev.id||ev.eventoId||'')===String(eid)) return ev.definicoes || {}; return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {}); }catch{ return {}; } };
+    const loadDefsFromLS = (eid) => { try { return getDefsPortalSafe(eid); } catch { return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     function renderDefCardapioBox(){
@@ -876,7 +925,7 @@
   /* ===================== Etapas do Evento ===================== */
   (function etapas(){
     const toISOdate=(v)=>{ if(!v) return null; const d=new Date(v); return isFinite(d)?d:null; };
-    const loadDefsFromLS=(eid)=>{ try{ if (isPortalMode() && ev && String(ev.id||ev.eventoId||'')===String(eid)) return ev.definicoes || {}; return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {}); }catch{ return {}; } };
+    const loadDefsFromLS = (eid) => { try { return getDefsPortalSafe(eid); } catch { return {}; } };
     const possuiArquivos=(arr)=>Array.isArray(arr)&&arr.filter(Boolean).length>0;
 
     const contratoAssinado=(_ev)=>{
@@ -1073,7 +1122,7 @@ const financeiroEmDia = (_ev) => {
     if (ev.clientNotes?.ideias && txi) txi.value=ev.clientNotes.ideias;
 
     const save = (key, val, hintEl)=>{
-      let arr=[]; try{ arr = (window.readLS ? window.readLS('eventos', []) : []); }catch{}
+      let arr=[]; try{ arr = getEventosPortalSafe(); }catch{}
       const i = arr.findIndex(x=>String(x.id)===String(eid));
       if (i>-1){
         arr[i].clientNotes = arr[i].clientNotes || {};
@@ -1121,7 +1170,7 @@ const financeiroEmDia = (_ev) => {
       try{
         // se ainda estivermos no modo antigo, recarrega de LS
         if (!portalToken) {
-          let eventos=[]; try{ eventos = (window.readLS ? window.readLS('eventos', []) : []); }catch{}
+          let eventos=[]; try{ eventos = getEventosPortalSafe(); }catch{}
           ev = eventos.find(e=>String(e.id)===String(eid)) || ev || {};
         }
         renderKpis();
