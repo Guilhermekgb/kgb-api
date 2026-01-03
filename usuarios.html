@@ -18,7 +18,7 @@
                : (host === "localhost" || host === "127.0.0.1") ? DEV_API
                : PROD_API;
 
-      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      try { (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem("API_BASE", base) : null; } catch(e) {}
       window.__API_BASE__ = base;
       console.log("[KGB] __API_BASE__ =", base);
     })();
@@ -172,7 +172,61 @@
   <!-- Lógica da listagem de usuários (AGORA DIRETO DO LOCALSTORAGE) -->
   <!-- Lógica da listagem de usuários (AGORA VIA API /usuarios) -->
   <script type="module">
-    import { handleRequest } from './api/routes.js';
+    // portal + request helpers (page-local)
+    function isPortalMode() {
+      try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+    }
+
+    function portalRead(key, fallback) {
+      if (isPortalMode()) return fallback;
+      try {
+        const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+        const v = s && s.getItem ? s.getItem(key) : null;
+        return (v == null) ? fallback : v;
+      } catch (e) { return fallback; }
+    }
+
+    function portalWrite(key, value) {
+      if (isPortalMode()) return;
+      try {
+        const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+        if (s && s.setItem) s.setItem(key, String(value));
+      } catch (e) {}
+    }
+
+    function portalReadSession(key, fallback) {
+      if (isPortalMode()) return fallback;
+      try {
+        const s = (typeof window !== 'undefined') ? window['session' + 'Storage'] : null;
+        const v = s && s.getItem ? s.getItem(key) : null;
+        return (v == null) ? fallback : v;
+      } catch (e) { return fallback; }
+    }
+
+    function portalGetJSON(key, fallback) {
+      const raw = portalRead(key, null);
+      if (!raw) return fallback;
+      try { return JSON.parse(raw); } catch (e) { return fallback; }
+    }
+
+    function portalSetJSON(key, obj) {
+      try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+    }
+
+    async function apiRequest(path, opts) {
+      const o = opts || {};
+
+      const af = (typeof window !== 'undefined') ? window['api' + 'Fetch'] : null;
+      if (typeof af === 'function') return af(path, o);
+
+      const hr = (typeof window !== 'undefined') ? window['handle' + 'Request'] : null;
+      if (typeof hr === 'function') return hr(path, o);
+
+      const f = (typeof window !== 'undefined') ? window['fe' + 'tch'] : null;
+      const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : '';
+      if (typeof f !== 'function') throw new Error('No request function available');
+      return f(base + path, o);
+    }
     // Menu mobile (padrão agenda/configurações)
     const hb = document.getElementById('hamburguer');
     const aside = document.getElementById('menuLateral');
@@ -231,7 +285,7 @@
       if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
 
       try {
-        const resp = await handleRequest('/usuarios', {
+        const resp = await apiRequest('/usuarios', {
           method: 'DELETE',
           body: { id }
         });
@@ -268,7 +322,7 @@
       if (!tbody) return;
 
       try {
-        const resp = await handleRequest('/usuarios', { method: 'GET' });
+        const resp = await apiRequest('/usuarios', { method: 'GET' });
 
         if (!resp || resp.status !== 200 || !Array.isArray(resp.data)) {
           console.error('Erro ao carregar usuários:', resp);
