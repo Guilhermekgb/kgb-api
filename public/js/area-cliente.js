@@ -136,7 +136,7 @@
 
         try {
           const base = API_BASE.replace(/\/+$/,'');
-          // usa apiGet (que usa window.apiFetch) — evita fetch/sessionStorage
+          // usa apiGet (via apiFetch) — cloud-only
           const finResp = await apiGet(`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`);
           const parcResp = await apiGet(`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`);
 

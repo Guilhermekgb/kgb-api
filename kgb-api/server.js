@@ -2741,6 +2741,56 @@ app.get('/portal/eventos/:id/timeline', verifyFirebaseToken, (req, res) => {
   }
 });
 
+// POST /portal/eventos/:id/timeline — adiciona um item à timeline
+app.post('/portal/eventos/:id/timeline', verifyFirebaseToken, (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const TIMELINE_FILE = 'portal_timeline.json';
+    const all = loadJSON(TIMELINE_FILE, {});
+    if (!Array.isArray(all[id])) all[id] = [];
+    const item = req.body || {};
+    if (!item.id) item.id = String(Date.now()) + '-' + Math.random().toString(36).slice(2,8);
+    all[id].push(item);
+    saveJSON(TIMELINE_FILE, all);
+    return res.json({ ok: true, items: all[id] });
+  } catch (e) {
+    console.error('[portal] erro em POST /portal/eventos/:id/timeline', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao gravar timeline.' });
+  }
+});
+
+// PUT /portal/eventos/:id/timeline — substitui lista ou atualiza item por id
+app.put('/portal/eventos/:id/timeline', verifyFirebaseToken, (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const TIMELINE_FILE = 'portal_timeline.json';
+    const all = loadJSON(TIMELINE_FILE, {});
+    if (!Array.isArray(all[id])) all[id] = [];
+
+    const body = req.body || {};
+    if (Array.isArray(body.items)) {
+      all[id] = body.items;
+      saveJSON(TIMELINE_FILE, all);
+      return res.json({ ok: true, items: all[id] });
+    }
+
+    // upsert single item by id
+    const item = body;
+    if (item && item.id) {
+      let found = false;
+      all[id] = all[id].map(it => { if (it && String(it.id) === String(item.id)) { found = true; return item; } return it; });
+      if (!found) all[id].push(item);
+      saveJSON(TIMELINE_FILE, all);
+      return res.json({ ok: true, items: all[id] });
+    }
+
+    return res.status(400).json({ ok: false, error: 'Invalid body: provide { items: [...] } or an item with id' });
+  } catch (e) {
+    console.error('[portal] erro em PUT /portal/eventos/:id/timeline', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar timeline.' });
+  }
+});
+
 // ===== API minimal (temporário) — endpoints para `eventos-pagos.html`
 
 // Inicializa DB em memória do servidor quando ausente
