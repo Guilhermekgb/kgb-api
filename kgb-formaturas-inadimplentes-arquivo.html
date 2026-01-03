@@ -698,14 +698,47 @@
       return `${dia}/${mes}/${ano} ${hh}:${mm}`;
     }
 
+    // ------- HELPERS PORTAL / MEMSTORE -------
+    function isPortalMode(){
+      return Boolean(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__);
+    }
+
+    function portalRead(key, fallback = null){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return fallback;
+          return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : fallback;
+        }
+        return window['local'+'Storage'].getItem(key);
+      }catch(e){
+        return fallback;
+      }
+    }
+
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return false;
+          mem[key] = value;
+          return true;
+        }
+        window['local'+'Storage'].setItem(key, value);
+        return true;
+      }catch(e){
+        console.error('portalWrite error', e);
+        return false;
+      }
+    }
+
     // ------- CARREGAR / SALVAR DADOS -------
 
     function carregarFinanceiro(){
       try{
-        const raw = localStorage.getItem(LS_KEY_FINANCEIRO);
+        const raw = portalRead(LS_KEY_FINANCEIRO, null);
         let arr = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(arr)) arr = [];
-        // sem seeds: usa só dados reais gravados pelo sistema
         return arr;
       }catch(e){
         console.error('Erro ao carregar financeiro', e);
@@ -715,7 +748,7 @@
 
     function salvarFinanceiro(lista){
       try{
-        localStorage.setItem(LS_KEY_FINANCEIRO, JSON.stringify(lista));
+        portalWrite(LS_KEY_FINANCEIRO, JSON.stringify(lista));
       }catch(e){
         console.error('Erro ao salvar financeiro', e);
       }
@@ -723,10 +756,9 @@
 
     function carregarArquivo(){
       try{
-        const raw = localStorage.getItem(LS_KEY_ARQUIVO);
+        const raw = portalRead(LS_KEY_ARQUIVO, null);
         let arr = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(arr)) arr = [];
-        // sem seeds: somente arquivamentos reais
         return arr;
       }catch(e){
         console.error('Erro ao carregar arquivo', e);
@@ -736,7 +768,7 @@
 
     function salvarArquivo(lista){
       try{
-        localStorage.setItem(LS_KEY_ARQUIVO, JSON.stringify(lista));
+        portalWrite(LS_KEY_ARQUIVO, JSON.stringify(lista));
       }catch(e){
         console.error('Erro ao salvar arquivo', e);
       }
@@ -744,10 +776,9 @@
 
     function carregarHistoricoArquivos(){
       try{
-        const raw = localStorage.getItem(LS_KEY_HIST_ARQUIVO);
+        const raw = portalRead(LS_KEY_HIST_ARQUIVO, null);
         let arr = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(arr)) arr = [];
-        // sem histórico fictício
         return arr;
       }catch(e){
         console.error('Erro ao carregar histórico', e);
@@ -757,7 +788,7 @@
 
     function salvarHistoricoArquivos(lista){
       try{
-        localStorage.setItem(LS_KEY_HIST_ARQUIVO, JSON.stringify(lista));
+        portalWrite(LS_KEY_HIST_ARQUIVO, JSON.stringify(lista));
       }catch(e){
         console.error('Erro ao salvar histórico', e);
       }
