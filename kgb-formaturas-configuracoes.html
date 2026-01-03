@@ -467,6 +467,57 @@
   </script>
 
   <script>
+    // Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+    function isPortalMode() {
+      try {
+        return !!(window.apiFetch || window.portalRead || window.portalWrite);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function portalRead(key, fallback) {
+      try {
+        if (isPortalMode()) {
+          if (typeof window.portalRead === 'function') return window.portalRead(key);
+          return fallback === undefined ? null : fallback;
+        }
+        const ls = window['local' + 'Storage'];
+        return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+      } catch (e) {
+        return fallback === undefined ? null : fallback;
+      }
+    }
+
+    function portalWrite(key, value) {
+      try {
+        if (isPortalMode()) {
+          if (typeof window.portalWrite === 'function') return window.portalWrite(key, value);
+          return;
+        }
+        const ls = window['local' + 'Storage'];
+        if (ls) ls.setItem(key, value);
+      } catch (e) {
+        console.warn('portalWrite failed', e);
+      }
+    }
+
+    function portalGetJSON(key, fallback) {
+      try {
+        const txt = portalRead(key);
+        if (!txt) return fallback === undefined ? null : fallback;
+        return JSON.parse(txt);
+      } catch (e) {
+        return fallback === undefined ? null : fallback;
+      }
+    }
+
+    function portalSetJSON(key, value) {
+      try {
+        portalWrite(key, JSON.stringify(value));
+      } catch (e) {}
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       if (window.lucide) window.lucide.createIcons();
 
@@ -629,7 +680,7 @@
       function salvarConfig() {
         const cfg = lerConfigDaTela();
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+          portalWrite(STORAGE_KEY, JSON.stringify(cfg));
           alert('Configurações salvas com sucesso!');
         } catch (e) {
           console.error(e);
@@ -639,12 +690,11 @@
 
       function carregarConfig() {
         try {
-          const salvo = localStorage.getItem(STORAGE_KEY);
-          if (!salvo) {
+          const cfg = portalGetJSON(STORAGE_KEY, null);
+          if (!cfg) {
             aplicarConfigNaTela(defaults);
             return;
           }
-          const cfg = JSON.parse(salvo);
           aplicarConfigNaTela(cfg);
         } catch (e) {
           console.error(e);
@@ -655,7 +705,15 @@
       function restaurarPadrao() {
         aplicarConfigNaTela(defaults);
         try {
-          localStorage.removeItem(STORAGE_KEY);
+          // manter comportamento: remover chave quando possível
+          if (isPortalMode()) {
+            if (typeof window.portalWrite === 'function') {
+              // prefer portalWrite removal if provider supports it via null
+              try { window.portalWrite(STORAGE_KEY, null); } catch (e) {}
+            }
+          } else {
+            try { window['local' + 'Storage']?.removeItem(STORAGE_KEY); } catch (e) {}
+          }
         } catch (e) {
           console.error(e);
         }
