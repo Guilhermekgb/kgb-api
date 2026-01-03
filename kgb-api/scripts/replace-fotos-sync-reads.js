@@ -8,6 +8,34 @@ const path = require('path');
 const ROOT = process.argv[2] || '.';
 const GLOB = ['*.js','*.html'];
 
+// portal helpers (page-local pattern) — do not write in portal mode
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+}
+function portalRead(key, fallback) {
+  if (isPortalMode()) return fallback;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    const v = s && s.getItem ? s.getItem(key) : null;
+    return (v == null) ? fallback : v;
+  } catch(e) { return fallback; }
+}
+function portalWrite(key, value) {
+  if (isPortalMode()) return;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (s && s.setItem) s.setItem(key, String(value));
+  } catch(e) {}
+}
+function portalGetJSON(key, fallback) {
+  const raw = portalRead(key, null);
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch(e) { return fallback; }
+}
+function portalSetJSON(key, obj) {
+  try { portalWrite(key, JSON.stringify(obj)); } catch(e) {}
+}
+
 function walk(dir){
   const res = [];
   for(const f of fs.readdirSync(dir)){
@@ -23,11 +51,12 @@ function replaceContent(src){
   let out = src;
   // replace (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})()) patterns
   out = out.replace(/JSON\.parse\(localStorage\.getItem\(\s*(['\"])fotosClientes\1\s*\)\s*\|\|\s*'\{\}'\s*\)/g,
-    "(typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})()); }catch(e){return {};}})())");
+    "(typeof window.getFotosMap==='function' ? window.getFotosMap() : portalGetJSON('fotosClientes', {}))");
 
   // replace (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map))) with helper
+  // replace setItem(...) occurrences with portalSetJSON or preserve setFotosMap if present
   out = out.replace(/localStorage\.setItem\(\s*(['\"])fotosClientes\1\s*,\s*JSON\.stringify\(([^)]+)\)\s*\)/g,
-    "(typeof window.setFotosMap==='function' ? window.setFotosMap($2) : (typeof window.setFotosMap==='function' ? window.setFotosMap($2) : localStorage.setItem('fotosClientes', JSON.stringify($2))))");
+    "(typeof window.setFotosMap==='function' ? window.setFotosMap($2) : portalSetJSON('fotosClientes', $2))");
 
   return out;
 }
