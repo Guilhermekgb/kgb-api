@@ -20,6 +20,25 @@
       function getJSON(k, fallback){ try{ const val = mem[k]; return val===undefined ? (typeof fallback==='function'?fallback():fallback) : val; }catch{ return typeof fallback==='function'?fallback():fallback; } }
       function setJSON(k,v){ try{ mem[k]=v; sendSync(k,v); }catch{} }
       function isPortalMode(){ try{ return !!(window && window.__PORTAL_MODE__===true); }catch{return false;} }
+      function portalRead(k, fallback){
+        try{
+          if (typeof window !== 'undefined' && window.isPortalMode && window.isPortalMode()){
+            if (typeof window.getJSON === 'function') return window.getJSON(k, fallback);
+            const memv = mem[k]; return memv===undefined ? fallback : memv;
+          }
+          const raw = window['local'+'Storage'].getItem(k);
+          return raw === null ? fallback : raw;
+        }catch{ return fallback; }
+      }
+      function portalWrite(k, v){
+        try{
+          if (typeof window !== 'undefined' && window.isPortalMode && window.isPortalMode()){
+            if (typeof window.setJSON === 'function') return window.setJSON(k, v);
+            mem[k] = v; sendSync(k, v); return;
+          }
+          window['local'+'Storage'].setItem(k, v);
+        }catch{}
+      }
       async function apiFetchWrapper(p, opts){ return (typeof window !== 'undefined' && window.apiFetch) ? window.apiFetch(p, opts) : null; }
 
       try{ window.getJSON = window.getJSON || getJSON; window.setJSON = window.setJSON || setJSON; window.isPortalMode = window.isPortalMode || isPortalMode; window.apiFetchWrapper = window.apiFetchWrapper || apiFetchWrapper; }catch{}
@@ -41,7 +60,7 @@
                : (host === "localhost" || host === "127.0.0.1") ? DEV_API
                : PROD_API;
 
-      try { if (!window.isPortalMode || !window.isPortalMode()) { localStorage.setItem("API_BASE", base); } } catch(e) {}
+      try { portalWrite("API_BASE", base); } catch(e) {}
       window.__API_BASE__ = base;
       console.log("[KGB] __API_BASE__ =", base);
     })();
@@ -218,16 +237,14 @@
 
     const readLS = (k) => {
       try{
-        if (window.isPortalMode && window.isPortalMode()) {
-          return window.getJSON(k, []) || [];
-        }
-        return JSON.parse(localStorage.getItem(k)||'[]')||[];
+        const raw = portalRead(k, JSON.stringify([]));
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
       }catch{ return []; }
     };
     const writeLS= (k,v) => {
       try{
-        if (window.isPortalMode && window.isPortalMode()) { window.setJSON(k, v); return; }
-        localStorage.setItem(k, JSON.stringify(v));
+        portalWrite(k, JSON.stringify(v || []));
       }catch{}
     };
 
@@ -406,10 +423,7 @@
 
       slot.arr[slot.index] = updated;
       writeLS(slot.key, slot.arr);
-      try {
-        if (window.isPortalMode && window.isPortalMode()) window.setJSON('checkin:ping', String(Date.now()));
-        else localStorage.setItem('checkin:ping', String(Date.now()));
-      } catch(e) {}
+      try { portalWrite('checkin:ping', String(Date.now())); } catch(e) {}
 
       // log na API (não trava a tela se der erro)
       try { apiLogCheckin(updated, { undo: false }); } catch (e) { console.warn(e); }
@@ -432,7 +446,7 @@
 
       slot.arr[slot.index] = cur;
       writeLS(slot.key, slot.arr);
-      try { if (window.isPortalMode && window.isPortalMode()) window.setJSON('checkin:ping', String(Date.now())); else localStorage.setItem('checkin:ping', String(Date.now())); } catch(e) {}
+      try { portalWrite('checkin:ping', String(Date.now())); } catch(e) {}
 
       // loga "uncheckin" na API
       try { apiLogCheckin(before, { undo: true }); } catch (e) { console.warn(e); }
