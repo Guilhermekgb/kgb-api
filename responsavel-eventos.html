@@ -17,10 +17,10 @@
       var DEV_API = (window.__API_BASE__ || window.location.origin);
 
       var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-               : PROD_API;
+           : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+           : PROD_API;
 
-      try { localStorage.setItem("API_BASE", base); } catch(e) {}
+      try { portalWrite("API_BASE", base); } catch(e) {}
       window.__API_BASE__ = base;
       console.log("[KGB] __API_BASE__ =", base);
     })();
@@ -140,14 +140,58 @@
     var q = function(s){ return document.querySelector(s); };
     var S_EVT = "eventos";
 
+    // --- helpers portal-safe locais ---
+    function isPortalMode() {
+      try { return !!(window && window.isPortalMode && window.isPortalMode()); } catch(e) { return false; }
+    }
+
+    function portalRead(key, fallback){
+      try{
+        if (isPortalMode()){
+          try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{ return typeof fallback==='function'?fallback():fallback; }
+        }
+        const s = window['local'+'Storage'];
+        const v = s && s.getItem ? s.getItem(key) : null;
+        if (v == null) return typeof fallback==='function'?fallback():fallback;
+        try{ return JSON.parse(v); }catch{ return v; }
+      }catch{ return typeof fallback==='function'?fallback():fallback; }
+    }
+
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()) return;
+        const s = window['local'+'Storage'];
+        if (!s || !s.setItem) return;
+        var v = (typeof value === 'string') ? value : JSON.stringify(value);
+        s.setItem(key, v);
+      }catch{}
+    }
+
+    function portalRemove(key){
+      try{
+        if (isPortalMode()) return;
+        const s = window['local'+'Storage'];
+        if (s && s.removeItem) s.removeItem(key);
+      }catch{}
+    }
+
     function norm(s){
       return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
     }
     function get(k,def){
       if(typeof def==="undefined") def="[]";
-      try{ return JSON.parse(localStorage.getItem(k)||def); }catch{ return JSON.parse(def); }
+      try{
+        var v = portalRead(k, def);
+        if (typeof v === 'string') return JSON.parse(v);
+        return v;
+      }catch{ return JSON.parse(def); }
     }
-    function getUser(){ try{ return JSON.parse(localStorage.getItem("usuarioLogado")||"null"); }catch{ return null; } }
+    function getUser(){
+      try{
+        var u = portalRead('usuarioLogado', null);
+        return (typeof u === 'string' && u !== 'null') ? JSON.parse(u) : u;
+      }catch{ return null; }
+    }
     function isAdmin(u){ return norm(u && u.perfil) === "administrador"; }
 
     function parseDataRaw(ev){
@@ -275,9 +319,9 @@
         btn.addEventListener('click', function(){
           try{
             // Guardar apenas o ID em 'eventoSelecionado' (compatível com outras páginas)
-            localStorage.setItem('eventoSelecionado', String(ev.id));
+            portalWrite('eventoSelecionado', String(ev.id));
             // Opcional: JSON completo em outra chave para debug
-            localStorage.setItem('eventoSelecionadoJSON', JSON.stringify({ id: ev.id, nome: nomeEv }));
+            portalWrite('eventoSelecionadoJSON', { id: ev.id, nome: nomeEv });
           }catch{}
         });
         // === FIM PATCH A ===
