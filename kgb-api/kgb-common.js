@@ -13,9 +13,42 @@ window.finSyncFromApi = async function () {
 };
 
 // wrappers para acesso seguro ao localStorage (centraliza handling de erros)
-function _lsGet(k, fb = null){ try{ return localStorage.getItem(k); }catch{return fb;} }
-function _lsSet(k, v){ try{ localStorage.setItem(k, v); }catch{} }
-function _lsRemove(k){ try{ localStorage.removeItem(k); }catch{} }
+// Portal-aware storage helpers and backwards-compatible _ls* wrappers
+function isPortalMode(){ return !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__); }
+
+const portalRead = (key, fallback = null) => {
+  try {
+    const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+    if (mem && Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
+    const ls = window['local' + 'Storage'];
+    const ss = window['session' + 'Storage'];
+    const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+    return v != null ? v : fallback;
+  } catch (e) { return fallback; }
+};
+
+const portalWrite = (key, value) => {
+  try {
+    const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+    const str = (typeof value === 'string') ? value : JSON.stringify(value);
+    if (mem) { mem[key] = str; return; }
+    const ls = window['local' + 'Storage'];
+    if (ls) ls.setItem(key, str);
+  } catch (e) {}
+};
+
+const portalRemove = (key) => {
+  try {
+    const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+    if (mem && Object.prototype.hasOwnProperty.call(mem, key)) { delete mem[key]; return; }
+    const ls = window['local' + 'Storage'];
+    if (ls) ls.removeItem(key);
+  } catch (e) {}
+};
+
+function _lsGet(k, fb = null){ try{ return portalRead(k, fb); }catch{return fb;} }
+function _lsSet(k, v){ try{ portalWrite(k, v); }catch{} }
+function _lsRemove(k){ try{ portalRemove(k); }catch{} }
 
 window.__kgbAuthHeaders = function () {
   const token = _lsGet("AUTH_TOKEN");
