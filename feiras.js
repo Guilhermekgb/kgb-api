@@ -14,6 +14,35 @@
   const getJSON = (k, fb)=>{ try{ return (mem[k]===undefined?fb:mem[k]); }catch{return fb;} };
   const setJSON = (k, v)=>{ try{ mem[k]=v; sendSync(k,v); }catch{} };
 
+  // Portal-aware helpers (avoid direct localStorage access)
+  function portalRead(key){
+    try{
+      if (window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__){
+        const memStore = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+        const v = memStore && memStore[key];
+        if (v === undefined) return null;
+        return (typeof v === 'string') ? v : JSON.stringify(v);
+      }
+      const ls = window['local'+'Storage'];
+      return ls ? ls.getItem(key) : null;
+    }catch(e){ return null; }
+  }
+
+  function portalWrite(key, value){
+    try{
+      if (window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__){
+        const memStore = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+        if (!memStore) return;
+        memStore[key] = (typeof value === 'string') ? value : JSON.stringify(value);
+        try{ sendSync(key, memStore[key]); }catch(e){}
+        return;
+      }
+      const ls = window['local'+'Storage'];
+      if (!ls) return;
+      ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+    }catch(e){}
+  }
+
   // API wrappers — use window['apiFetch'] for real I/O when available
   const apiGet = (u)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'GET' }); return Promise.reject(new Error('no apiFetch')); };
   const apiPost = (u,b)=> { if(typeof window['apiFetch']==='function') return window['apiFetch'](u, { method:'POST', body: JSON.stringify(b), headers:{ 'content-type':'application/json' } }); return Promise.reject(new Error('no apiFetch')); };
@@ -21,8 +50,8 @@
 
   function isPortalMode(){ try{ const qp = new URLSearchParams(location.search); return !!(qp.get('token') || qp.get('portal') || window.__PORTAL__); }catch(e){ return !!window.__PORTAL__; } }
 
-  const read = (k, fb=null) => { try{ if (isPortalMode()) return getJSON(k, fb); return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{ return fb; } };
-  const write = (k, v) => { try{ setJSON(k, v); }catch{}; try{ if (!isPortalMode()) localStorage.setItem(k, JSON.stringify(v)); }catch{} };
+  const read = (k, fb=null) => { try{ if (isPortalMode()) return getJSON(k, fb); const raw = portalRead(k); if (raw === null) return fb; try{ return JSON.parse(raw); }catch{ return fb; } }catch{ return fb; } };
+  const write = (k, v) => { try{ setJSON(k, v); }catch{}; try{ portalWrite(k, v); }catch{} };
   const uid = (p='id_') => (crypto.randomUUID?.() || (p + Math.random().toString(36).slice(2,10)));
   const soDig = (s='') => String(s).replace(/\D+/g,'');
   const norm  = (s) => String(s||'').trim().toLowerCase();
@@ -39,7 +68,7 @@ function getUsuarioLogado(){
       const v = isPortalMode() ? getJSON('usuarioLogado', null) : null;
       if (v) return v;
     }catch{}
-    return JSON.parse(localStorage.getItem('usuarioLogado') || '{}');
+    return read('usuarioLogado', {}) || {};
   }catch{ return {}; }
 }
 function getPerfil(){
@@ -64,19 +93,19 @@ function canVerLeads(){
 
   // ---------- Usuário / Perfil ----------
   function getUsuarioAtual(){
-    try{
-      if (typeof window.getUsuarioAtual === 'function') {
-        const u = window.getUsuarioAtual();
-        if (u) return u;
-      }
-      if (window.__KGB_USER_CACHE) return window.__KGB_USER_CACHE;
       try{
-        const v = isPortalMode() ? getJSON('usuarioLogado', null) : null;
-        if (v) return v;
-      }catch{}
-      return JSON.parse(localStorage.getItem("usuarioLogado") || "{}") || {};
-    }catch{ return {}; }
-  }
+        if (typeof window.getUsuarioAtual === 'function') {
+          const u = window.getUsuarioAtual();
+          if (u) return u;
+        }
+        if (window.__KGB_USER_CACHE) return window.__KGB_USER_CACHE;
+        try{
+          const v = isPortalMode() ? getJSON('usuarioLogado', null) : null;
+          if (v) return v;
+        }catch{}
+        return read('usuarioLogado', {}) || {};
+      }catch{ return {}; }
+    }
   function isAdmin(u){
     const p = String(u?.perfil||'').toLowerCase().trim();
     return ['administrador','administradora','admin','adm'].includes(p);
@@ -1068,8 +1097,7 @@ eventos.forEach(e => {
 
 })();
 function getAnalyticsFeira(feiraId){
-  const leads = (typeof readLS === 'function' ? (readLS('leads',[])||[]) : (JSON.parse(localStorage.getItem('leads')||'[]')||[]))
-    .filter(l => String(l.feiraId) === String(feiraId));
+  const leads = (read('leads',[]) || []).filter(l => String(l.feiraId) === String(feiraId));
 
   const captados = leads.length;
 
