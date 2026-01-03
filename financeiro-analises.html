@@ -289,7 +289,7 @@ const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).
 const yyyymm=iso=>(iso||'').slice(0,7), sameMonth=(iso,ym)=>(iso&&ym)?yyyymm(iso)===ym:false;
 const normTipo=t=>{const s=String(t||'').toLowerCase(); if(s==='receita')return 'entrada'; if(s==='despesa'||s==='saida'||s==='saída')return 'saida'; return (s==='entrada'||s==='saida')?s:'entrada'};
 const normOrigem=o=>{const s=String(o||'ambas').toLowerCase(); return (s==='empresa'||s==='pessoal')?s:'ambas'};
-const readLS=(k,fb=null)=>{try{const v=JSON.parse(localStorage.getItem(k));return(v==null?fb:v)}catch{return fb}};
+const readLS=(k,fb=null)=>{ try { return (window.readLS ? window.readLS(k) : fb) ?? fb; } catch { return fb; } };
 const readFG=()=>{const g=readLS(FG_KEY,{})||{};return{lancamentos:[],parcelas:[],...g}};
 const getCategoriasMap=()=>{
   const cfg=readLS(CFG_KEY,{categorias:[]})||{categorias:[]};
@@ -324,6 +324,10 @@ const state={mes:todayYM(),origem:'ambas',base:'pagamento',tipoPie:'',stack:fals
 
 el.mes.value=state.mes; el.origem.value=state.origem; el.base.value=state.base;
 
+// primeira carga: tenta cloud antes de renderizar
+finEnsureSyncOnce().finally(() => {
+  try { renderAll(); } catch (e) { console.error('[financeiro-analises] renderAll falhou:', e); }
+});
 let barChart=null, pieChart=null, trendChart=null;
 
 /* Ignora ajustes de saldo nas análises */
@@ -342,6 +346,26 @@ const onFinStoreChanged =
 
 // se existir, registra renderAll como handler de mudanças na store compartilhada
 try { onFinStoreChanged && onFinStoreChanged(renderAll); } catch {}
+
+// cloud-first: tenta sincronizar financeiroGlobal antes do primeiro render
+async function finEnsureSyncOnce(){
+  if (finEnsureSyncOnce.__done) return;
+  finEnsureSyncOnce.__done = true;
+  try {
+    // 1) se o módulo expôs no window, usa direto
+    if (typeof window !== 'undefined' && typeof window.finSyncFromApi === 'function') {
+      await window.finSyncFromApi();
+      return;
+    }
+    // 2) fallback: importa do módulo e chama
+    const mod = await import('./financeiro-shared.js');
+    if (mod && typeof mod.finSyncFromApi === 'function') {
+      await mod.finSyncFromApi();
+    }
+  } catch (e) {
+    console.warn('[financeiro-analises] finSyncFromApi falhou, usando cache local (temporário):', e);
+  }
+}
 
 function isQuitadoStatus(st){
   st = String(st||'').toLowerCase();
@@ -687,27 +711,7 @@ window.addEventListener('storage', (e)=>{
 });
 window.addEventListener('fin-store-changed', renderAll);
 
-/* Init (com sync online) */
-(function init(){
-  state.mes = todayYM();
-  el.mes.value = state.mes;
-
-  // Se a função de sync online existir, usamos ela primeiro
-  if (window.finSyncFromApi) {
-    window.finSyncFromApi()
-      .then(() => {
-        // depois que sincronizar com a API, renderiza as análises
-        renderAll();
-      })
-      .catch((err) => {
-        console.warn('[analises] finSyncFromApi falhou, usando dados locais', err);
-        renderAll(); // mesmo com erro, ainda tenta mostrar o que tiver no localStorage
-      });
-  } else {
-    // fallback: se não tiver finSyncFromApi, mantém comportamento antigo
-    renderAll();
-  }
-})();
+/* Init antigo removido: agora a carga inicial é feita via finEnsureSyncOnce() (cloud-first) */
 
 
 (function wireAnalisesLiveReload(){
