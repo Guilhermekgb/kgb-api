@@ -6,9 +6,25 @@
 */
 
 /* ===== Utils ===== */
-const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const getSS = (k, fb) => { try { return JSON.parse(sessionStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+// helpers portal-safe locais
+function isPortalMode() { try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch (e) { return false; } }
+function portalRead(key, fallback){ try{
+  if (isPortalMode()){ try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{ return typeof fallback==='function'?fallback():fallback; } }
+  const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+  const v = ls && ls.getItem ? ls.getItem(key) : null;
+  return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v;
+}catch{ return typeof fallback==='function'?fallback():fallback; }}
+function portalWrite(key, value){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.setItem) ls.setItem(key, String(value)); }catch{}
+}
+function portalRemove(key){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.removeItem) ls.removeItem(key); }catch{}
+}
+function portalReadSession(key, fallback){ try{ if (isPortalMode()) return typeof fallback==='function'?fallback():fallback; const ss = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; const v = ss && ss.getItem ? ss.getItem(key) : null; return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v; }catch{ return typeof fallback==='function'?fallback():fallback; }}
+function portalWriteSession(key, value){ try{ if (isPortalMode()) return; const ss = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; if (ss && ss.setItem) ss.setItem(key, String(value)); }catch{}
+}
+
+const getLS = (k, fb) => { try { const raw = portalRead(k, null); return raw===null ? fb : JSON.parse(raw); } catch { return fb; } };
+const getSS = (k, fb) => { try { const raw = portalReadSession(k, null); return raw===null ? fb : JSON.parse(raw); } catch { return fb; } };
+const setLS = (k, v) => portalWrite(k, JSON.stringify(v));
 const fmtBR = (n) => (Number(n || 0)).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
 
 // >>> CORREÇÃO: hoje em horário LOCAL (evita UTC virar o dia)
@@ -21,7 +37,7 @@ const todayISO = () => {
 const norm = (s="") => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
 const pick = (obj, keys) => { if (!obj) return ""; for (const k of keys){ const v=obj[k]; if (v!=null && String(v).trim()!=="") return v; } return ""; };
 
-function getAppConfig(){ try{ return JSON.parse(localStorage.getItem('app_config')||'{}'); }catch{ return {}; } }
+function getAppConfig(){ try{ const raw = portalRead('app_config','{}'); return JSON.parse(raw||'{}'); }catch{ return {}; } }
 function defaultHour(){ return (getAppConfig().msgHoraPadrao || '08:00'); }
 
 /* ===== Datas ===== */
