@@ -7,6 +7,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  // Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+  function isPortalMode() {
+    try { return !!(window.apiFetch || window.portalRead || window.portalWrite); } catch (e) { return false; }
+  }
+
+  function portalRead(key, fallback) {
+    try {
+      if (isPortalMode()) {
+        if (typeof window.portalRead === 'function') return window.portalRead(key);
+        return fallback === undefined ? null : fallback;
+      }
+      const ls = window['local' + 'Storage'];
+      return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+    } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+
+  function portalWrite(key, value) {
+    try {
+      if (isPortalMode()) {
+        if (typeof window.portalWrite === 'function') return window.portalWrite(key, value);
+        return;
+      }
+      const ls = window['local' + 'Storage'];
+      if (ls) ls.setItem(key, value);
+    } catch (e) { console.warn('portalWrite failed', e); }
+  }
+
+  function portalGetJSON(key, fallback) {
+    try { const txt = portalRead(key); if (!txt) return fallback === undefined ? null : fallback; return JSON.parse(txt); } catch (e) { return fallback === undefined ? null : fallback; }
+  }
+
+  function portalSetJSON(key, value) { try { portalWrite(key, JSON.stringify(value)); } catch (e) {} }
+
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -20,7 +53,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
