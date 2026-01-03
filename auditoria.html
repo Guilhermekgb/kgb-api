@@ -4,6 +4,34 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <meta name="page-permission" content="page:auditoria.html">
+  <script>
+    // Helpers portal/memstore — disponíveis globalmente para esta página
+    function isPortalMode(){
+      return Boolean(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__);
+    }
+    function portalRead(key, fallback = null){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return fallback;
+          return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : fallback;
+        }
+        return window['local'+'Storage'].getItem(key);
+      }catch(e){ return fallback; }
+    }
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return false;
+          mem[key] = value;
+          return true;
+        }
+        window['local'+'Storage'].setItem(key, value);
+        return true;
+      }catch(e){ console.error('portalWrite error', e); return false; }
+    }
+  </script>
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
   (function(){
@@ -19,7 +47,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -388,9 +416,9 @@ main.conteudo-principal{
   document.addEventListener('DOMContentLoaded', () => {
     // restaura preferências
     try {
-      const ps = Number(localStorage.getItem('audit:pageSize') || 50);
+      const ps = Number(portalRead('audit:pageSize', 50) || 50);
       if (ps) { __auditPageSize = ps; const sel = document.getElementById('pageSize'); if (sel) sel.value = String(ps); }
-      const q = localStorage.getItem('audit:q') || '';
+      const q = portalRead('audit:q', '') || '';
       const inp = document.getElementById('auditSearch');
       if (inp) { inp.value = q; __auditPage = 1; }
     } catch {}
@@ -399,12 +427,12 @@ main.conteudo-principal{
     loadLog();
 
  // paginação + busca (salva preferências)
-document.getElementById('pageSize')?.addEventListener('change', (e) => {
+  document.getElementById('pageSize')?.addEventListener('change', (e) => {
   const raw = (e.target?.value ?? '50');
   const v = Number(raw);
   const pageSize = Number.isFinite(v) && v > 0 ? v : 50;
   setPageSize(pageSize);
-  try { localStorage.setItem('audit:pageSize', String(pageSize)); } catch {}
+  try { portalWrite('audit:pageSize', String(pageSize)); } catch {}
 });
 
 document.getElementById('prevPage')?.addEventListener('click', () => {
@@ -417,7 +445,7 @@ document.getElementById('nextPage')?.addEventListener('click', () => {
 
 document.getElementById('auditSearch')?.addEventListener('input', (e) => {
   __auditPage = 1; // sempre volta para a primeira página ao filtrar
-  try { localStorage.setItem('audit:q', e.target?.value || ''); } catch {}
+  try { portalWrite('audit:q', e.target?.value || ''); } catch {}
   render(__auditItems);
 });
 
