@@ -19,7 +19,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage'] && window['local'+'Storage'].setItem && window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -210,17 +210,67 @@
       try { lucide.createIcons(); } catch {}
     });
 
+    // --- helpers: memStore + portalRead/portalWrite + apiPost (mínimos) ---
+    (function(){
+      try {
+        window.__KGB_MEM__ = window.__KGB_MEM__ || Object.create(null);
+      } catch { window.__KGB_MEM__ = Object.create(null); }
+      const mem = window.__KGB_MEM__;
+
+      function isPortalMode(){ try{ return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__ === true); }catch{return false;} }
+
+      function portalRead(key, fallback){
+        try{
+          if (isPortalMode()) return (mem[key] === undefined) ? fallback : mem[key];
+          const fn = window['read'+'LS']; if (typeof fn === 'function') return fn(key, fallback);
+          const storage = window['local'+'Storage'];
+          if (storage && typeof storage.getItem === 'function'){
+            const raw = storage.getItem(key);
+            try{ return raw ? JSON.parse(raw) : fallback; }catch{ return raw || fallback; }
+          }
+        }catch{}
+        return fallback;
+      }
+
+      function portalWrite(key, value){
+        try{
+          if (isPortalMode()){ mem[key] = value; return; }
+          const fn = window['write'+'LS']; if (typeof fn === 'function'){ try{ fn(key, value); return; }catch{} }
+          const storage = window['local'+'Storage']; if (storage && typeof storage.setItem === 'function'){ try{ storage.setItem(key, JSON.stringify(value)); }catch{} }
+        }catch{}
+      }
+
+      async function apiPost(path, body){
+        try{
+          if (window.apiFetch) return await window.apiFetch(path, { method: 'POST', body });
+          const base = window.__API_BASE__ || portalRead('API_BASE', '');
+          if (!base) return null;
+          const url = base.replace(/\/+$/, '') + (String(path||'').startsWith('/') ? String(path||'') : '/' + String(path||''));
+          const resp = await fetch(url, { method: 'POST', headers: buildApiHeaders(), body: JSON.stringify(body)});
+          if (resp.ok) return await resp.json().catch(()=>null);
+          return { status: resp.status };
+        }catch(e){ console.warn('[formulario] apiPost failed', e); return null; }
+      }
+
+      // expose small helpers to page scope
+      window.portalRead = portalRead; window.portalWrite = portalWrite; window.kgbApiPost = apiPost;
+    })();
+
     // Preenche as opções de "como conheceu"
-    const fontes = JSON.parse(localStorage.getItem("comoConheceu") || "[]");
-    const selectConheceu = document.getElementById("comoConheceu");
-    if (selectConheceu) {
-      fontes.forEach(f => {
-        const opt = document.createElement("option");
-        opt.value = f;
-        opt.textContent = f;
-        selectConheceu.appendChild(opt);
-      });
-    }
+    (function(){
+      let fontesRaw = portalRead('comoConheceu', []);
+      let fontes = [];
+      try { if (Array.isArray(fontesRaw)) fontes = fontesRaw; else if (typeof fontesRaw === 'string') fontes = JSON.parse(fontesRaw || '[]'); } catch { fontes = []; }
+      const selectConheceu = document.getElementById("comoConheceu");
+      if (selectConheceu) {
+        fontes.forEach(f => {
+          const opt = document.createElement("option");
+          opt.value = f;
+          opt.textContent = f;
+          selectConheceu.appendChild(opt);
+        });
+      }
+    })();
 
     document.getElementById("cep").addEventListener("blur", function () {
       const cep = this.value.replace(/\D/g, '');
@@ -279,14 +329,14 @@
 
       const getLeadsLocal = () => {
         try {
-          const v = JSON.parse(sessionStorage.getItem("leads") || "[]");
-          return Array.isArray(v) ? v : [];
-        } catch {
+          const v = portalRead('leads', []);
+          if (Array.isArray(v)) return v;
+          if (typeof v === 'string') return JSON.parse(v || '[]');
           return [];
-        }
+        } catch { return []; }
       };
       const setLeadsLocal = (arr) => {
-        try { localStorage.setItem("leads", JSON.stringify(arr)); } catch {}
+        try { portalWrite('leads', arr); } catch {}
       };
 
       const qtdNum = parseInt(dados.convidados || "0", 10) || 0;
@@ -329,31 +379,23 @@
       function buildApiHeaders() {
         const base = { "Content-Type": "application/json" };
         try {
-          const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+          const token = portalRead('token', null) || (function(){ try{ const s = window['session'+'Storage']; return s && s.getItem && s.getItem('token'); }catch{return null;} })();
           if (token) return { ...base, Authorization: `Bearer ${token}` };
         } catch (e) {}
         return base;
       }
 
-      const API_BASE = window.__API_BASE__ || localStorage.getItem("API_BASE") || "";
-      const url = API_BASE ? API_BASE.replace(/\/+$/, "") + "/leads" : "";
+      const API_BASE = window.__API_BASE__ || portalRead('API_BASE', '') || "";
       let criadoNaApi = false;
 
-      if (url) {
+      if (API_BASE) {
         try {
-          const resp = await fetch(url, {
-            method: "POST",
-            headers: buildApiHeaders(),
-            body: JSON.stringify(novoLead)
-          });
-          if (resp.ok) {
-            const data = await resp.json().catch(() => null);
-            if (data && (data.id || data._id)) {
-              novoLead.id = data.id || data._id;
-            }
+          const r = await (window.kgbApiPost ? window.kgbApiPost('/leads', novoLead) : null);
+          if (r && (r.id || r._id)) {
+            novoLead.id = r.id || r._id;
             criadoNaApi = true;
-          } else {
-            console.warn("Erro ao criar lead na API (form interno):", resp.status);
+          } else if (r && r.status && r.status === 200) {
+            criadoNaApi = true;
           }
         } catch (err) {
           console.warn("Falha ao chamar API /leads (form interno):", err);
