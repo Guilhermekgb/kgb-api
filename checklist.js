@@ -4,8 +4,23 @@
 /* =========================
    Storage helpers
 ========================= */
-function getJSON(k, fb){ try{ var v = JSON.parse(localStorage.getItem(k)||"null"); return v==null?fb:v; }catch(e){ return fb; } }
-function setJSON(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+// Portal-aware storage helpers (local to checklist)
+function getJSON(k, fb){ try{ 
+    // try mem cache first
+    const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+    if (mem && Object.prototype.hasOwnProperty.call(mem, k)) {
+      try{ return JSON.parse(mem[k]); }catch(_){ return mem[k]; }
+    }
+    const raw = (window['local'+'Storage'] && window['local'+'Storage'].getItem(k)) || (window['session'+'Storage'] && window['session'+'Storage'].getItem(k));
+    const v = JSON.parse(raw||"null");
+    return v==null?fb:v; }catch(e){ return fb; } }
+
+function setJSON(k, v){ try{ 
+    const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+    const str = JSON.stringify(v);
+    if (mem) { mem[k] = str; return; }
+    try{ window['local'+'Storage']?.setItem(k, str); }catch(e){}
+  }catch(e){} }
 function fmtBRDate(d){
   if(!d) return "-";
   try{
@@ -22,11 +37,16 @@ function fmtBRDate(d){
 ========================= */
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
-function callApi(endpoint, method = 'GET', body = {}) {
-  // mesmo padrão usado nos outros módulos
+// API request wrapper: prefer window.apiFetch, fallback to handleRequest import
+function apiRequest(endpoint, opts = {}){
+  if (window.apiFetch) return window.apiFetch(endpoint, opts);
   return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
+    new Promise(resolve => handleRequest(endpoint, opts, resolve))
   );
+}
+
+function callApi(endpoint, method = 'GET', body = {}) {
+  return apiRequest(endpoint, { method, body });
 }
 
 // Carrega um evento do backend (com fallback para o localStorage "eventos")
@@ -108,10 +128,7 @@ function checklistIsRemote(){
 }
 
 function checklistCallApi(endpoint, method = 'GET', body = {}) {
-  // mesmo padrão usado em outros módulos (lista-evento, itens-evento, etc.)
-  return import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
-  );
+  return apiRequest(endpoint, { method, body });
 }
 
 // Carrega evento pela API, com fallback pro localStorage
