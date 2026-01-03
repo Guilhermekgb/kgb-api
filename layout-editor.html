@@ -4,6 +4,47 @@
   <meta name="page-permission" content="page:layout-editor.html">
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- Helpers portal-aware (inseridos para evitar acessos diretos a localStorage) -->
+<script>
+  (function(){
+    function isPortalMode(){ try{ return !!(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__ || window.__PORTAL__); }catch(e){ return !!window.__PORTAL__; } }
+    function portalRead(key){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return null;
+          const v = mem[key];
+          if (v === undefined) return null;
+          return (typeof v === 'string') ? v : JSON.stringify(v);
+        }
+        const ls = window['local'+'Storage'];
+        return ls ? ls.getItem(key) : null;
+      }catch(e){ return null; }
+    }
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return;
+          mem[key] = (typeof value === 'string') ? value : JSON.stringify(value);
+          try{ if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value: mem[key] } })); }catch(e){}
+          return;
+        }
+        const ls = window['local'+'Storage']; if (!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+      }catch(e){}
+    }
+    function portalRemove(key){
+      try{
+        if (isPortalMode()) return;
+        const ls = window['local'+'Storage']; if (!ls) return; ls.removeItem(key);
+      }catch(e){}
+    }
+    window.portalRead = portalRead;
+    window.portalWrite = portalWrite;
+    window.portalRemove = portalRemove;
+    window.isPortalMode = isPortalMode;
+  })();
+
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
   (function(){
@@ -19,7 +60,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -308,8 +349,8 @@
 /* ===== helpers/fallbacks ===== */
 if(!window.$)  window.$  = (s,el=document)=> el.querySelector(s);
 if(!window.$$) window.$$ = (s,el=document)=> Array.from(el.querySelectorAll(s));
-if(!window.readLS)  window.readLS  = (k,fb)=>{ try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{return fb;} };
-if(!window.writeLS) window.writeLS = (k,v)=> localStorage.setItem(k, JSON.stringify(v));
+if(!window.readLS)  window.readLS  = (k,fb)=>{ try{ const raw = portalRead(k); if (raw === null) return fb; return JSON.parse(raw) ?? fb; }catch{return fb;} };
+if(!window.writeLS) window.writeLS = (k,v)=> portalWrite(k, v);
 if(!window.uid) window.uid = (p='id_')=> p + Math.random().toString(36).slice(2,9);
 
 // INÍCIO PATCH — chaves e leitura de eventos (compat nova/antiga)
@@ -346,7 +387,7 @@ const px2mm=n=>Math.round(n/PX_PER_MM);
 let currentEventoId=null, currentTipo='ingresso-20x7', selectedEl=null;
 
 /* ===== ZOOM ===== */
-let ZOOM = Number(localStorage.getItem('layout.zoom') || '1') || 1;
+let ZOOM = Number((portalRead('layout.zoom') || '1')) || 1;
 function applyZoom(){
   const paper = document.getElementById('paper');
   if (!paper) return;
@@ -356,7 +397,7 @@ function applyZoom(){
 }
 document.getElementById('selZoom')?.addEventListener('change',(e)=>{
   ZOOM = Number(e.target.value) || 1;
-  localStorage.setItem('layout.zoom', String(ZOOM));
+  portalWrite('layout.zoom', String(ZOOM));
   applyZoom();
 });
 
