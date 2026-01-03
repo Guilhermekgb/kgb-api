@@ -3,6 +3,38 @@
 // Senão, mantém tudo localStorage como fallback (modo atual)
 const useRemote = false; // trocaremos para true na Fase F (sync remoto)
 
+// helpers portal-safe (inseridos automaticamente)
+function isPortalMode() {
+  try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch (e) { return false; }
+}
+
+function portalRead(key, fallback) {
+  if (isPortalMode()) return fallback;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+    const v = s && s.getItem ? s.getItem(key) : null;
+    return (v == null) ? fallback : v;
+  } catch (e) { return fallback; }
+}
+
+function portalWrite(key, value) {
+  if (isPortalMode()) return;
+  try {
+    const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+    if (s && s.setItem) s.setItem(key, String(value));
+  } catch (e) {}
+}
+
+function portalGetJSON(key, fallback) {
+  const raw = portalRead(key, null);
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch (e) { return fallback; }
+}
+
+function portalSetJSON(key, obj) {
+  try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+}
+
 async function apiGetCustosFixos() {
   if (!useRemote) {
     try { return readLS ? (readLS('custosFixosBuffet', []) || []) : []; } catch { return []; }
@@ -501,15 +533,15 @@ function normalizarImportado(it, idx=0) {
     const params = new URLSearchParams(location.search);
     let eventoId = params.get('id') || (readLS ? readLS('eventoSelecionado','') : '') || '';
     if (!eventoId){ alert('Evento não informado (sem id). Abra este cadastro a partir do evento.'); return; }
-    localStorage.setItem('eventoSelecionado', String(eventoId));
+    portalWrite('eventoSelecionado', String(eventoId));
 
     const total = Number(getTotalPlanilhaNumber().toFixed(2));
 
     try{
       // 1) salva na chave específica do evento
-      localStorage.setItem(
+      portalSetJSON(
         'custosFixosEvento_'+eventoId,
-        JSON.stringify({ total, savedAt: new Date().toISOString() })
+        { total, savedAt: new Date().toISOString() }
       );
 
       // 2) espelha no array "eventos" para fallback do Financeiro
@@ -518,7 +550,7 @@ function normalizarImportado(it, idx=0) {
       if (i > -1) {
         eventos[i].financeiro = eventos[i].financeiro || {};
         eventos[i].financeiro.custosFixos = total;
-        localStorage.setItem('eventos', JSON.stringify(eventos));
+        portalSetJSON('eventos', eventos);
       }
 
       alert('Custos fixos salvos para o evento!');
