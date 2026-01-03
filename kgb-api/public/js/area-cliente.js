@@ -52,7 +52,7 @@
   })();
 
   /* ===================== Branding ===================== */
-  let app = (typeof window.__APP_CONFIG__ === 'object' && window.__APP_CONFIG__) || (window.readLS ? window.readLS('app_config', {}) : {});
+  let app = (typeof window.__APP_CONFIG__ === 'object' && window.__APP_CONFIG__) || legacyRead('app_config', {});
   const setVar=(k,v)=>{ if(v) document.documentElement.style.setProperty(k,v); };
   setVar('--brand',  app.brand  ||'#5a3e2b');
   setVar('--brand-2',app.brand2 ||'#c29a5d');
@@ -90,7 +90,7 @@
         if (Array.isArray(cached)) return cached;
         return [];
       }
-      return (window.readLS ? window.readLS('eventos', []) : []);
+      return legacyRead('eventos', []);
     }catch{ return []; }
   }
 
@@ -102,7 +102,7 @@
         if (Array.isArray(cached)) return cached;
         return [];
       }
-      return (window.readLS ? window.readLS(`parcelas:${eid}`, []) : []);
+      return legacyRead(`parcelas:${eid}`, []);
     }catch{ return []; }
   }
 
@@ -114,7 +114,7 @@
         if (cached && typeof cached === 'object') return cached;
         return null;
       }
-      return (window.readLS ? window.readLS(`financeiroEvento:${eid}`, null) : null);
+      return legacyRead(`financeiroEvento:${eid}`, null);
     }catch{ return null; }
   }
 
@@ -126,7 +126,7 @@
         if (cached && typeof cached === 'object') return cached;
         return {};
       }
-      return (window.readLS ? window.readLS('definicoes_evento_'+eid, {}) : {});
+      return legacyRead('definicoes_evento_'+eid, {});
     }catch{ return {}; }
   }
 
@@ -137,6 +137,14 @@
       if (isPortalMode()) return portalValue;
       return (typeof legacyFn === 'function') ? legacyFn() : portalValue;
     }catch{ return portalValue; }
+  }
+
+  // Helpers únicos (para reduzir ocorrências e centralizar legado)
+  function legacyRead(key, fallback){
+    try { if (isPortalMode()) return fallback; return (window.readLS ? window.readLS(key, fallback) : fallback); } catch { return fallback; }
+  }
+  function legacyWrite(key, val){
+    try { if (isPortalMode()) return; if (window.writeLS) window.writeLS(key, val); } catch {} 
   }
 
   async function carregarEventoDoPortal() {
@@ -182,7 +190,7 @@
             if (isPortalMode()) {
               if (window.memSetAreaCliente) window.memSetAreaCliente('portal_me', ev);
             } else {
-              if (window.writeLS) window.writeLS('portal_me', ev);
+              legacyWrite('portal_me', ev);
             }
           } catch {}
 
@@ -201,7 +209,7 @@
 
     // 2) modo antigo (interno): usa id + mem-backed store
     const eidFromQuery = qs.get('id') || '';
-    const eidFromLS    = portalOrLegacy('', () => (window.readLS ? window.readLS('eventoSelecionado','') : ''));
+      const eidFromLS    = portalOrLegacy('', () => legacyRead('eventoSelecionado',''));
     eid = eidFromQuery || eidFromLS || '';
 
     let eventos = [];
@@ -210,7 +218,7 @@
     } catch {
       eventos = [];
     }
-    ev = eventos.find(e => String(e.id) === String(eid)) || {};
+      ev = eventos.find(e => String(e.id) === String(eid)) || {};
   }
 
   // carrega o evento assim que o script inicia (portal online ou modo antigo)
@@ -222,7 +230,7 @@
     try{
       const key = ev.fotoClienteKey || '';
       if (key){
-        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return (window.readLS ? window.readLS('fotosClientes', {}) : {}); }catch(e){return {};}})());
+        const map = (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return legacyRead('fotosClientes', {}) }catch(e){return {};}})());
         const fromMap = map[key];
         if (fromMap && typeof fromMap === 'string' && fromMap.trim()){
           return fromMap;
@@ -484,7 +492,7 @@
       }
       return hit||null;
     }
-    function getArrLS(key){ try{ return (window.readLS ? window.readLS(key, []) : []); }catch{ return []; } }
+    function getArrLS(key){ try{ return legacyRead(key, []); }catch{ return []; } }
     function fromPropostas(eid, preferName){
       try{
         let best=null, bestStrict=null;
@@ -643,11 +651,11 @@
     const has=(v)=>v!==undefined && v!==null && String(v).trim()!=='';    
 
     const qs  = new URLSearchParams(location.search);
-    const eid = portalOrLegacy(qs.get('id') || '', () => (window.readLS ? window.readLS('eventoSelecionado','') : '')) || '';
+    const eid = portalOrLegacy(qs.get('id') || '', () => legacyRead('eventoSelecionado','')) || '';
 
-    const readFG = ()=>{ try{ if (isPortalMode()) return {}; return (window.readLS ? window.readLS('financeiroGlobal', {}) : {}); }catch{ return {}; } };
-    const getCompLanc = (lancId)=>{ try{ if (isPortalMode()) return null; return (window.readLS ? window.readLS(`fg.comp:${lancId}`, null) : null); }catch{ return null; } };
-    const getCompParc = (parcId)=>{ try{ if (isPortalMode()) return null; return (window.readLS ? window.readLS(`fg.comp.parc:${parcId}`, null) : null); }catch{ return null; } };
+    const readFG = ()=>{ try{ return legacyRead('financeiroGlobal', {}); }catch{ return {}; } };
+    const getCompLanc = (lancId)=>{ try{ return legacyRead(`fg.comp:${lancId}`, null); }catch{ return null; } };
+    const getCompParc = (parcId)=>{ try{ return legacyRead(`fg.comp.parc:${parcId}`, null); }catch{ return null; } };
 
     function montarLinhas(){
       const linhas=[]; const seen=new Set();
@@ -826,7 +834,7 @@
 
     function renderDefCardapioBox(){
       const el=$id('defCardapioInfo'); if(!el) return;
-      const eid = portalOrLegacy(new URLSearchParams(location.search).get('id') || '', () => (window.readLS ? window.readLS('eventoSelecionado','') : '')) || '';
+      const eid = portalOrLegacy(new URLSearchParams(location.search).get('id') || '', () => legacyRead('eventoSelecionado','')) || '';
       const s = loadDefsFromLS(eid);
       if(!s || !s.a4Html){
         el.innerHTML='<span class="badge warn">Pendente</span>'; return;
@@ -947,7 +955,7 @@
       if (_ev.cardapioContratado || _ev.menu || _ev.menuContracted) return true;
       if (has(_ev.cardapioId) || has(_ev.cardapioNome) || has(_ev.nomeCardapio)) return true;
       try{
-        const c = portalOrLegacy(null, () => (window.readLS ? window.readLS('cardapioSelecionado', null) : null));
+        const c = portalOrLegacy(null, () => legacyRead('cardapioSelecionado', null));
         if (c && (String(c.eventoId||_eid)===String(_eid)) && (has(c.id)||has(c.nome))) return true;
       }catch{}
       if (Array.isArray(_ev.itensSelecionados)){
@@ -1137,10 +1145,10 @@ const financeiroEmDia = (_ev) => {
         arr[i].clientNotes = arr[i].clientNotes || {};
         arr[i].clientNotes[key] = val;
         try{
-          if (isPortalMode()){
+            if (isPortalMode()){
             if (window.memSetAreaCliente) window.memSetAreaCliente('eventos', arr);
           } else {
-            if (window.writeLS) window.writeLS('eventos', arr);
+            legacyWrite('eventos', arr);
           }
         }catch{}
         if (hintEl){ hintEl.textContent='Salvo!'; setTimeout(()=>{hintEl.textContent='';}, 1200); }
