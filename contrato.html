@@ -5,6 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+  <script>
+    // Helpers portal/memstore + request wrapper (page-local, fallback-safe)
+    (function(){
+      function isPortalMode(){
+        try{ return Boolean(window && (window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__)); }catch{return false;}
+      }
+      function portalRead(key, fallback=null){
+        try{
+          if (isPortalMode()){
+            const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+            if (!mem) return fallback;
+            return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : fallback;
+          }
+          return window['local'+'Storage'].getItem(key);
+        }catch(e){ return fallback; }
+      }
+      function portalWrite(key, value){
+        try{
+          if (isPortalMode()){
+            const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+            if (!mem) return false;
+            mem[key] = value;
+            return true;
+          }
+          window['local'+'Storage'].setItem(key, value);
+          return true;
+        }catch(e){ console.error('portalWrite', e); return false; }
+      }
+      function apiRequest(path, opts){
+        try{
+          if (typeof window !== 'undefined' && typeof window['apiFetch'] === 'function'){
+            return window['apiFetch'](path, opts);
+          }
+        }catch(e){}
+        try{
+          const base = (window.__API_BASE__ || '').replace(/\/+$/,'');
+          const url = (base||'') + path;
+          return (typeof window !== 'undefined' && typeof window['fetch'] === 'function') ? window['fetch'](url, opts).then(r => r.json().catch(()=>null)) : Promise.resolve(null);
+        }catch(e){ return Promise.resolve(null); }
+      }
+      try{ window.portalRead = window.portalRead || portalRead; window.portalWrite = window.portalWrite || portalWrite; window.apiRequest = window.apiRequest || apiRequest; }catch{}
+    })();
+  </script>
 <script>
   (function(){
     var host = String(location.hostname||"").toLowerCase();
@@ -17,7 +60,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -64,11 +107,11 @@
   (function () {
     try {
       var h = String(location.hostname || "");
-      if (/\.netlify\.app$/i.test(h)) {
-        localStorage.setItem("guard.enforce", "0");
-        if (!localStorage.getItem("perfil")) localStorage.setItem("perfil", "Administrador");
-        console.log("[GUARD] Bypass ativo (Netlify)");
-      }
+        if (/\.netlify\.app$/i.test(h)) {
+          portalWrite("guard.enforce", "0");
+          if (!portalRead("perfil", null)) portalWrite("perfil", "Administrador");
+          console.log("[GUARD] Bypass ativo (Netlify)");
+        }
     } catch (e) {}
   })();
 </script>
@@ -301,16 +344,8 @@
     const eventId = params.get('id');
     if (!eventId) return;
 
-    // 2) Busca o evento na API real (usa seu apiFetch, se existir; senão, fetch direto)
-    let ev;
-    if (typeof apiFetch === 'function') {
-      ev = await apiFetch(`/api/eventos/${eventId}`);
-    } else {
-      const base = (window.__API_BASE__ || '').replace(/\/+$/,'');
-      const url = (base || '') + `/api/eventos/${eventId}`;
-      const r = await fetch(url, { credentials: 'same-origin' });
-      ev = await r.json();
-    }
+    // 2) Busca o evento na API real (usa window.apiRequest / apiFetch quando disponível)
+    let ev = await (window.apiRequest ? window.apiRequest(`/api/eventos/${eventId}`, { method: 'GET', credentials: 'same-origin' }) : null);
 
     const contrato = ev?.contrato || {};
     const adendos  = Array.isArray(contrato.adendos) ? contrato.adendos : [];
