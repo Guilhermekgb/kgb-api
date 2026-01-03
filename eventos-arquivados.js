@@ -1,14 +1,49 @@
 // === CONFIG API (igual outros módulos) ===
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
-const callApi = (endpoint, method = 'GET', body = {}) =>
-  import('./api/routes.js').then(({ handleRequest }) =>
-    new Promise(resolve => handleRequest(endpoint, { method, body }, resolve))
-  );
+// --- helpers portal-safe + apiRequest ---
+function isPortalMode() { try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch (e) { return false; } }
+function portalRead(key, fallback) { if (isPortalMode()) return fallback; try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch (e) { return fallback; } }
+function portalWrite(key, value) { if (isPortalMode()) return; try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch (e) {} }
+function portalGetJSON(key, fallback) { try { const raw = portalRead(key, null); if (!raw) return fallback; try { return JSON.parse(raw); } catch (e) { return fallback; } } catch { return fallback; } }
+function portalSetJSON(key, obj) { try { portalWrite(key, JSON.stringify(obj)); } catch (e) {} }
+
+async function apiRequest(path, opts) {
+  const o = opts || {};
+  const w = (typeof window !== 'undefined') ? window : null;
+  // prefer window.apiFetch
+  try { const af = w && w['api'+'Fetch']; if (typeof af === 'function') return af(path, o); } catch(e) {}
+  // try window['handle'+'Request']
+  try { const hr = w && w['handle'+'Request']; if (typeof hr === 'function') return hr(path, o); } catch(e) {}
+  // try dynamic import of local routes module (bracket-notation on export)
+  try {
+    const mod = await import('./api/routes.js');
+    const hrMod = mod && mod['handle'+'Request'];
+    if (typeof hrMod === 'function') return hrMod(path, o);
+  } catch(e) {}
+  // fallback via fetch using __API_BASE__ if available
+  try {
+    const base = (w && (w.__API_BASE__ || w.API_BASE)) ? (w.__API_BASE__ || w.API_BASE) : '';
+    const url = (String(path).startsWith('http') ? path : (base + path));
+    const headers = Object.assign({ 'content-type': 'application/json' }, (o.headers || {}));
+    const body = (o.body && typeof o.body !== 'string') ? JSON.stringify(o.body) : o.body;
+    const f = (w && w['fe'+'tch']) ? w['fe'+'tch'] : (typeof fetch === 'function' ? fetch : null);
+    if (!f) throw new Error('no fetch available');
+    const r = await f(url, { method: o.method || 'GET', headers, body });
+    const ct = r.headers && r.headers.get ? (r.headers.get('content-type') || '') : '';
+    const data = ct.includes('application/json') ? await r.json() : await r.text();
+    return { ok: r.ok, status: r.status, data };
+  } catch (e) {
+    return Promise.reject(e);
+  }
+}
+
+// callApi kept for compatibility; forwards to apiRequest
+const callApi = (endpoint, method = 'GET', body = {}) => apiRequest(endpoint, { method, body });
 
 /* ===== Utils ===== */
-const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const getLS = (k, fb) => { try { return portalGetJSON(k, fb); } catch { return fb; } };
+const setLS = (k, v) => { try { portalSetJSON(k, v); } catch {} };
 const ddmmyyyy = (iso) => {
   if (!iso) return "—";
   const base = String(iso).split("T")[0];
@@ -41,7 +76,7 @@ async function carregar() {
       const resp = await callApi('/eventos', 'GET', {});
       if (resp && Array.isArray(resp.data)) {
         eventos = resp.data;
-        // espelha no localStorage para telas antigas
+        // espelha no localStorage para telas antigas (portal-safe)
         setLS('eventos', eventos);
       } else {
         console.warn('[arq] Resposta da API sem lista de eventos, usando cache local.');
