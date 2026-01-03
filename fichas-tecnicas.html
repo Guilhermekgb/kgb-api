@@ -4,6 +4,58 @@
   <meta name="page-permission" content="page:fichas-tecnicas.html">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- portal-safe helpers (inseridos automaticamente) -->
+  <script>
+    function isPortalMode() {
+      try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch (e) { return false; }
+    }
+
+    function portalRead(key, fallback) {
+      try {
+        if (isPortalMode()) {
+          const mem = (typeof window !== 'undefined') ? (window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__ || window.__MEM_STORE__) : null;
+          if (mem && Object.prototype.hasOwnProperty.call(mem, key)) {
+            try { return JSON.parse(mem[key]); } catch { return mem[key]; }
+          }
+          return fallback;
+        }
+        const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+        const v = s && s.getItem ? s.getItem(key) : null;
+        return (v == null) ? fallback : v;
+      } catch (e) { return fallback; }
+    }
+
+    function portalWrite(key, value) {
+      try {
+        if (isPortalMode()) {
+          const mem = (typeof window !== 'undefined') ? (window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__ || window.__MEM_STORE__) : null;
+          if (mem) { try { mem[key] = typeof value === 'string' ? value : JSON.stringify(value); } catch {} }
+          return;
+        }
+        const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+        if (s && s.setItem) s.setItem(key, String(value));
+      } catch (e) {}
+    }
+
+    function portalGetJSON(key, fallback) {
+      try {
+        if (isPortalMode()) {
+          const mem = (typeof window !== 'undefined') ? (window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__ || window.__MEM_STORE__) : null;
+          if (mem && Object.prototype.hasOwnProperty.call(mem, key)) {
+            try { return JSON.parse(mem[key]); } catch { return mem[key]; }
+          }
+          return fallback;
+        }
+        const raw = portalRead(key, null);
+        if (!raw) return fallback;
+        try { return JSON.parse(raw); } catch (e) { return fallback; }
+      } catch (e) { return fallback; }
+    }
+
+    function portalSetJSON(key, obj) {
+      try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+    }
+  </script>
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
   (function(){
@@ -19,7 +71,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -320,9 +372,9 @@
 <script>
 (function () {
   const STORAGE = 'insumos.categorias';
-  const read  = () => { try { return JSON.parse(localStorage.getItem(STORAGE) || '[]'); } catch { return []; } };
+  const read  = () => { try { return portalGetJSON(STORAGE, []); } catch { return []; } };
   const write = (arr) => {
-    try { localStorage.setItem(STORAGE, JSON.stringify(arr)); } catch {}
+    try { portalSetJSON(STORAGE, arr || []); } catch {}
     // avisa o restante da tela que as categorias mudaram
     window.dispatchEvent(new Event('insumo:categorias:changed'));
   };
