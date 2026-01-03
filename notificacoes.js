@@ -43,7 +43,7 @@
       if (typeof window.apiFetch === 'function'){
         return window.apiFetch(path, options);
       }
-      return fetch(path, options);
+      return window.apiFetch(path, options);
     }catch(e){
       return Promise.reject(e);
     }
@@ -59,12 +59,7 @@
 
   // Quem está logado? (para filtrar internas)
   function getUsuarioLogado(){
-    try { return JSON.parse(localStorage.getItem('usuarioLogado') || '{}'); }
-    catch { return {}; }
-  }
-  
-  function getUsuarioLogado(){
-    try { return JSON.parse(portalRead('usuarioLogado', '{}') || '{}'); }
+    try { return portalGetJSON('usuarioLogado') || {}; }
     catch { return {}; }
   }
   function isAdmin(u){
