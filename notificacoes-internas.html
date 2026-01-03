@@ -5,25 +5,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
+  <script>
+    // portal helpers used by this page
+    (function(){
+      function isPortalMode(){ try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e){ return false; } }
+      function portalWrite(k,v){ try{ if (isPortalMode()) return; const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(k, String(v)); }catch(e){} }
+      window.isPortalMode = isPortalMode;
+      window.portalWrite = portalWrite;
+    })();
+    (function(){
+      var host = String(location.hostname||"").toLowerCase();
 
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
+      // Produção (Netlify) -> API na Render
+      var PROD_API = window.location.origin;
 
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
+      // Desenvolvimento local
+      var DEV_API = (window.__API_BASE__ || window.location.origin);
 
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
+      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+               : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
+      try { if (typeof window !== 'undefined' && window.portalWrite) window.portalWrite("API_BASE", base); else try{ (typeof window !== 'undefined') && window['local'+'Storage'] && window['local'+'Storage'].setItem("API_BASE", base); }catch(e){} } catch(e) {}
+      window.__API_BASE__ = base;
+      console.log("[KGB] __API_BASE__ =", base);
+    })();
+  </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO: Helpers globais (precisam vir antes do guard) === -->
 <script type="module" src="./kgb-common.js"></script>
@@ -263,10 +270,10 @@
   // BOTÃO/FORM de exemplo: publique um aviso interno
   function publicarAvisoInterno({ idInterno, titulo, dataISO, timeStart, audience }) {
     // (opcional) se quiser manter uma lista própria de avisos:
-    // const arr = JSON.parse(localStorage.getItem('avisosInternos')||'[]');
+    // const arr = JSON.parse(portalRead('avisosInternos', '[]')||'[]');
     // arr.unshift({id:idInterno, titulo, dataISO, timeStart, audience});
-    // localStorage.setItem('avisosInternos', JSON.stringify(arr));
-    // localStorage.setItem('avisosInternos:ping', String(Date.now()));
+    // portalSetJSON('avisosInternos', arr);
+    // portalWrite('avisosInternos:ping', String(Date.now()));
 
     // === AGENDA UNIFICADA — Aviso interno (upsert)
     window.__agendaBridge?.upsertUnifiedItem({
