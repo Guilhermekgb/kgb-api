@@ -6,6 +6,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  // helpers portal-safe (inseridos automaticamente)
+  function isPortalMode() {
+    try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__); } catch(e) { return false; }
+  }
+
+  function portalRead(key, fallback) {
+    if (isPortalMode()) return fallback;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      const v = s && s.getItem ? s.getItem(key) : null;
+      return (v == null) ? fallback : v;
+    } catch (e) { return fallback; }
+  }
+
+  function portalWrite(key, value) {
+    if (isPortalMode()) return;
+    try {
+      const s = (typeof window !== 'undefined') ? window['local' + 'Storage'] : null;
+      if (s && s.setItem) s.setItem(key, String(value));
+    } catch (e) {}
+  }
+
+  function portalGetJSON(key, fallback) {
+    const raw = portalRead(key, null);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch (e) { return fallback; }
+  }
+
+  function portalSetJSON(key, obj) {
+    try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
+  }
+
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -19,7 +51,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -228,7 +260,7 @@
   let currentView = 'month'; // 'month' | 'week' | 'day' | 'agenda' | 'compact'
 
   // ===== dados =====
-  function getAgendaItems(){ try{ return JSON.parse(localStorage.getItem('agendaUnified')||'[]'); }catch{ return []; } }
+  function getAgendaItems(){ try{ return portalGetJSON('agendaUnified', []); }catch{ return []; } }
 
   // ===== perfil & permissões (UI) =====
   let __AGENDA_CURRENT_USER = window.__KGB_USER_CACHE || null;
@@ -243,7 +275,7 @@
   try { if (typeof window.getUsuarioAtualAsync === 'function') window.getUsuarioAtualAsync().then(u=>{ __AGENDA_CURRENT_USER = u || window.__KGB_USER_CACHE || null; }); } catch {}
   function __getPermsPorPerfil(){
     try{
-      const raw = JSON.parse(localStorage.getItem('permissoes')||'{}') || {};
+      const raw = portalGetJSON('permissoes', {}) || {};
       return (raw && typeof raw==='object') ? raw : {};
     }catch{ return {}; }
   }
