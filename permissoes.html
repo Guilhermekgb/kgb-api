@@ -51,12 +51,46 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { if (!window.isPortalMode || !window.isPortalMode()) { localStorage.setItem("API_BASE", base); } } catch(e) {}
+    try { if (!window.isPortalMode || !window.isPortalMode()) { portalWrite("API_BASE", base); } } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
+
+<!-- Helpers portal-safe locais -->
+<script>
+  (function(){
+    function _isPortal(){ try{ return !!(window && window.isPortalMode && window.isPortalMode()); }catch{return false;} }
+
+    function portalRead(key, fallback){ try{
+      if (_isPortal()){
+        try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{ return fallback; }
+      }
+      const ls = window['local'+'Storage'];
+      const v = ls && ls.getItem(key);
+      return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v;
+    }catch{ return typeof fallback==='function'?fallback():fallback; } }
+
+    function portalWrite(key, value){ try{
+      if (_isPortal()){
+        try{ if (window.setJSON) { window.setJSON(key, value); return; } if (window.__MEM_CACHE__){ window.__MEM_CACHE__[key]=value; return; } }catch{}
+        return;
+      }
+      const ls = window['local'+'Storage']; if (ls) ls.setItem(key, String(value));
+    }catch{} }
+
+    function portalRemove(key){ try{
+      if (_isPortal()){
+        try{ if (window.setJSON){ window.setJSON(key, undefined); } if (window.__MEM_CACHE__){ delete window.__MEM_CACHE__[key]; } return; }catch{}
+        return;
+      }
+      const ls = window['local'+'Storage']; if (ls) ls.removeItem(key);
+    }catch{} }
+
+    try{ window.portalRead = window.portalRead || portalRead; window.portalWrite = window.portalWrite || portalWrite; window.portalRemove = window.portalRemove || portalRemove; }catch{}
+  })();
+</script>
 
   <title>Permissões Detalhadas por Perfil</title>
   <link rel="stylesheet" href="menu-lateral.css" />
@@ -280,7 +314,7 @@ body.no-scroll{
         try {
           let raw = null;
           if (window.isPortalMode && window.isPortalMode()) raw = window.getJSON('perfis', []);
-          else raw = JSON.parse(localStorage.getItem("perfis") || "[]");
+          else raw = JSON.parse((portalRead('perfis') || "[]"));
           extras = Array.isArray(raw) ? raw.map(p => (typeof p==="string"?p:(p?.nome))).filter(Boolean) : [];
         } catch {}
         const norm = s => String(s||"").replace("Responsavel por Evento","Responsável por Evento");
@@ -291,13 +325,13 @@ body.no-scroll{
       function lerPermsAPI(){
         try {
           if (window.isPortalMode && window.isPortalMode()) return window.getJSON('permissoesAPI', {}) || {};
-          return JSON.parse(localStorage.getItem("permissoesAPI") || "{}") || {};
+          return JSON.parse((portalRead('permissoesAPI') || "{}")) || {};
         } catch { return {}; }
       }
       function salvarPermsAPI(m){
         try {
           if (window.isPortalMode && window.isPortalMode()) { window.setJSON('permissoesAPI', m); return; }
-          localStorage.setItem("permissoesAPI", JSON.stringify(m));
+          portalWrite("permissoesAPI", JSON.stringify(m));
         } catch(e) { console.warn('[permissoes] salvarPermsAPI erro', e); }
       }
 
@@ -362,7 +396,7 @@ body.no-scroll{
         if (btnReset){
             btnReset.addEventListener("click", () => {
           if (!confirm("Resetar RBAC da API para os padrões do código? (Isto remove a chave localStorage['permissoesAPI'])")) return;
-            try { if (window.isPortalMode && window.isPortalMode()) { window.setJSON('permissoesAPI', {}); } else { localStorage.removeItem("permissoesAPI"); } } catch {}
+            try { if (window.isPortalMode && window.isPortalMode()) { window.setJSON('permissoesAPI', {}); } else { portalRemove("permissoesAPI"); } } catch {}
             renderRbacAPI();
             alert("RBAC resetado. As rotas passarão a usar os defaults internos do código.");
           });
