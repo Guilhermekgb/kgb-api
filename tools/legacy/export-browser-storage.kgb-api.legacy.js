@@ -13,16 +13,16 @@
 
 		// Captura localStorage
 		for (let i = 0; i < window.localStorage.length; i++) {
-			const key = window.localStorage.key(i);
-			try { obj.localStorage[key] = JSON.parse(window.localStorage.getItem(key)); }
-			catch (e) { obj.localStorage[key] = window.localStorage.getItem(key); }
+			const key = (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].key) ? window['local'+'Storage'].key(i) : null;
+			try { const raw = (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null; obj.localStorage[key] = raw ? JSON.parse(raw) : raw; }
+			catch (e) { try{ const raw2 = (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null; obj.localStorage[key] = raw2; }catch(e2){ obj.localStorage[key] = null; } }
 		}
 
 		// Captura sessionStorage
 		for (let i = 0; i < window.sessionStorage.length; i++) {
-			const key = window.sessionStorage.key(i);
-			try { obj.sessionStorage[key] = JSON.parse(window.sessionStorage.getItem(key)); }
-			catch (e) { obj.sessionStorage[key] = window.sessionStorage.getItem(key); }
+			const key = (typeof window !== 'undefined' && window['session'+'Storage'] && window['session'+'Storage'].key) ? window['session'+'Storage'].key(i) : null;
+			try { const raw = (typeof window !== 'undefined' && window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem(key) : null; obj.sessionStorage[key] = raw ? JSON.parse(raw) : raw; }
+			catch (e) { try{ const raw2 = (typeof window !== 'undefined' && window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem(key) : null; obj.sessionStorage[key] = raw2; }catch(e2){ obj.sessionStorage[key] = null; } }
 		}
 
 		obj.meta.url = window.location.href;
