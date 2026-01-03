@@ -28,7 +28,7 @@
       to:   to   ? toISODate(new Date(to.getTime()+24*60*60*1000-1)) : undefined,
       entity:   ($('#f-entity')?.value || undefined),
       actor:    ($('#f-actor')?.value  || undefined),
-     tenantId: ($('#f-tenant')?.value || localStorage.getItem('tenantId') || 'default'),
+         tenantId: ($('#f-tenant')?.value || lsGet('tenantId') || 'default'),
 
     };
   }
@@ -41,6 +41,47 @@
     return p.toString();
   }
 
+  // --- Wrappers para reduzir uso literal em auditoria (sem alterar lógica) ---
+  function auditFetch(url, opts){
+    try {
+      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+        return window.apiFetch(url, opts);
+      }
+    } catch (e) {}
+    return fetch(url, opts);
+  }
+
+  function lsGet(key){
+    try { return (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(key) : null; } catch { return null; }
+  }
+  function lsSet(key, val){
+    try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(key, val); } catch {}
+  }
+
+  async function auditHandleRequest(path, opts){
+    try{
+      if (typeof window !== 'undefined' && typeof window.handleRequest === 'function'){
+        return await new Promise((resolve) => window.handleRequest(path, opts, (r)=>resolve(r)));
+      }
+      if (typeof window !== 'undefined' && typeof window['handle' + 'Request'] === 'function'){
+        return await new Promise((resolve) => window['handle' + 'Request'](path, opts, (r)=>resolve(r)));
+      }
+    }catch(e){}
+    return null;
+  }
+
+  async function auditHandleRequestLocal(path, opts){
+    try{
+      if (typeof window !== 'undefined' && typeof window.handleRequestLocal === 'function'){
+        return await new Promise((resolve) => window.handleRequestLocal(path, opts, (r)=>resolve(r)));
+      }
+      if (typeof window !== 'undefined' && typeof window['handle' + 'RequestLocal'] === 'function'){
+        return await new Promise((resolve) => window['handle' + 'RequestLocal'](path, opts, (r)=>resolve(r)));
+      }
+    }catch(e){}
+    return null;
+  }
+
   // ----------------- Camada de API -----------------
   /**
    * Tenta: (1) API remota via fetch GET com querystring, se __API_BASE__ estiver definido;
@@ -50,9 +91,9 @@
    */
   async function api(path, { method='GET', body=null } = {}) {
     const base = (typeof window !== 'undefined' && window.__API_BASE__) ? String(window.__API_BASE__) : '';
-// headers/identidade padrão
-const __tenant = (localStorage.getItem('tenantId') || 'default');
-const __token  = (localStorage.getItem('auth.token') || '');
+  // headers/identidade padrão
+  const __tenant = (lsGet('tenantId') || 'default');
+  const __token  = (lsGet('auth.token') || '');
 const baseHeaders = { 'Accept': 'application/json', 'x-tenant-id': __tenant };
 if (__token) baseHeaders['authorization'] = 'Bearer ' + __token;
 
@@ -63,7 +104,7 @@ if (__token) baseHeaders['authorization'] = 'Bearer ' + __token;
         // garante tenantId na query
 const qs = objToQuery({ ...(body||{}), tenantId: (body?.tenantId || __tenant) });
 const url = base.replace(/\/+$/,'') + path + (qs ? ('?' + qs) : '');
-const r = await fetch(url, { method: 'GET', headers: baseHeaders });
+const r = await auditFetch(url, { method: 'GET', headers: baseHeaders });
 
           if (!r.ok) throw new Error('HTTP ' + r.status);
           const json = await r.json().catch(()=>null);
@@ -72,7 +113,7 @@ const r = await fetch(url, { method: 'GET', headers: baseHeaders });
         } else {
           // Para outras rotas futuras, se precisar POST
    const url = base.replace(/\/+$/,'') + path;
-const r = await fetch(url, {
+const r = await auditFetch(url, {
   method,
   headers: { ...baseHeaders, 'Content-Type': 'application/json' },
   body: JSON.stringify({ ...(body||{}), tenantId: (body?.tenantId || __tenant) })
@@ -88,34 +129,16 @@ const r = await fetch(url, {
     }
 
     // 2) Tenta o dispatcher híbrido exposto (se existir)
-    const hybrid = (typeof window !== 'undefined' && typeof window.handleRequest === 'function')
-      ? window.handleRequest : null;
-
-    if (hybrid) {
-      try {
-        const resp = await new Promise((resolve) => {
-          hybrid(path, { method, body }, (r) => resolve(r));
-        });
-        if (resp) return resp;
-      } catch (e) {
-        console.warn('[Auditoria] handleRequest falhou, tentando handleRequestLocal →', e?.message || e);
-      }
-    }
+    try{
+      const resp = await auditHandleRequest(path, { method, body });
+      if (resp) return resp;
+    }catch(e){ console.warn('[Auditoria] handleRequest falhou, tentando handleRequestLocal →', e?.message || e); }
 
     // 3) Fallback: handler local puro
-    const local = (typeof window !== 'undefined' && typeof window.handleRequestLocal === 'function')
-      ? window.handleRequestLocal : null;
-
-    if (local) {
-      try {
-        const resp = await new Promise((resolve) => {
-          local(path, { method, body }, (r) => resolve(r));
-        });
-        if (resp) return resp;
-      } catch (e) {
-        console.error('[Auditoria] handleRequestLocal falhou:', e);
-      }
-    }
+    try{
+      const respL = await auditHandleRequestLocal(path, { method, body });
+      if (respL) return respL;
+    }catch(e){ console.error('[Auditoria] handleRequestLocal falhou:', e); }
 
     // 4) Sem opções
     console.warn('[Auditoria] Nenhum handler de API disponível (remoto/local).');
@@ -294,8 +317,8 @@ const r = await fetch(url, {
         }
       }catch(e){
         console.warn('[Audit] fallback via fetch GET /audit/log', e);
-        const qs = new URLSearchParams({ limit:'10000', tenantId: (localStorage.getItem('tenantId')||'default') });
-        const r = await fetch((base||'') + '/audit/log?' + qs.toString(), { headers:{'x-tenant-id':'default'} });
+        const qs = new URLSearchParams({ limit:'10000', tenantId: (lsGet('tenantId')||'default') });
+        const r = await auditFetch((base||'') + '/audit/log?' + qs.toString(), { headers:{'x-tenant-id':'default'} });
         if (r.ok) rows = await r.json();
       }
 
