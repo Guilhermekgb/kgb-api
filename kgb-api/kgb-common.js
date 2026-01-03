@@ -12,8 +12,13 @@ window.finSyncFromApi = async function () {
   return Promise.resolve();
 };
 
+// wrappers para acesso seguro ao localStorage (centraliza handling de erros)
+function _lsGet(k, fb = null){ try{ return localStorage.getItem(k); }catch{return fb;} }
+function _lsSet(k, v){ try{ localStorage.setItem(k, v); }catch{} }
+function _lsRemove(k){ try{ localStorage.removeItem(k); }catch{} }
+
 window.__kgbAuthHeaders = function () {
-  const token = localStorage.getItem("AUTH_TOKEN");
+  const token = _lsGet("AUTH_TOKEN");
   if (!token) return {};
   return { Authorization: "Bearer " + token };
 };
@@ -155,7 +160,7 @@ export function listEventos(){ return readLS(K_KEYS.EVENTOS,[]) || []; }
 export function listContas(){
   // Lê a mesma fonte usada pela tela Financeiro – Configurações (configFinanceiro)
   let cfg;
-  try { cfg = JSON.parse(localStorage.getItem('configFinanceiro') || '{}') || {}; }
+  try { cfg = JSON.parse(_lsGet('configFinanceiro') || '{}') || {}; }
   catch { cfg = {}; }
 
   const contas = Array.isArray(cfg.contas) ? cfg.contas : [];
@@ -168,12 +173,12 @@ export function listContas(){
 // checkin.html — leitura resiliente, com fallback se listTipos/listTickets não existirem no escopo global
 export function tipos(evId){
   const src = has(window.listTipos) ? (window.listTipos('__ALL__') || [])
-    : (JSON.parse(localStorage.getItem(K_KEYS.INGRESSO_TIPOS) || '[]') || []);
+    : (JSON.parse(_lsGet(K_KEYS.INGRESSO_TIPOS) || '[]') || []);
   return (src||[]).filter(t => String(t.eventoId) === String(evId));
 }
 export function tickets(evId){
   const src = has(window.listTickets) ? (window.listTickets('__ALL__') || [])
-    : (JSON.parse(localStorage.getItem(K_KEYS.TICKETS) || '[]') || []);
+    : (JSON.parse(_lsGet(K_KEYS.TICKETS) || '[]') || []);
   return (src||[]).filter(t => String(t.eventoId) === String(evId));
 }
 
@@ -407,11 +412,11 @@ try { base = (window.__API_BASE__ || '').trim(); } catch (e) {}
 
 // 2) Lê override do localStorage (apenas para DEV local)
 let saved = '';
-try { saved = (localStorage.getItem('API_BASE') || '').trim(); } catch (e) {}
+try { saved = (_lsGet('API_BASE') || '').trim(); } catch (e) {}
 
 // Se estiver ONLINE (Netlify), nunca usar localhost salvo no localStorage
 if (!isLocalhost && saved && (saved.includes('localhost') || saved.includes('127.0.0.1'))) {
-  try { localStorage.removeItem('API_BASE'); } catch (e) {}
+  try { _lsRemove('API_BASE'); } catch (e) {}
   saved = '';
 }
 
@@ -431,7 +436,7 @@ window.__API_BASE__ = base;
       if (typeof window.__API_BASE__ === 'string' && window.__API_BASE__)
         return window.__API_BASE__.trim();
       try {
-        const ls = localStorage.getItem('API_BASE');
+        const ls = _lsGet('API_BASE');
         if (ls && ls.trim()) return ls.trim();
       } catch (e) {}
     } catch (e) {}
