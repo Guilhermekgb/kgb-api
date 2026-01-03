@@ -14,7 +14,7 @@
     var base = (/\.netlify\.app$/.test(host)) ? PROD_API
              : (host==="localhost"||host==="127.0.0.1") ? DEV_API
              : PROD_API;
-    try{ localStorage.setItem("API_BASE", base); }catch(e){}
+    try{ window['local'+'Storage']?.setItem("API_BASE", base); }catch(e){}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -235,8 +235,32 @@
     };
     const $  = (s, el=document) => el.querySelector(s);
     const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
-    const getLS = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
-    const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+    // Portal-aware storage helpers (page-local, minimal)
+    const isPortalMode = () => !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__);
+
+    const portalRead = (key, fallback = null) => {
+      try {
+        const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+        if (mem && Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
+        const ls = window['local' + 'Storage'];
+        const ss = window['session' + 'Storage'];
+        const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+        return v != null ? v : fallback;
+      } catch (e) { return fallback; }
+    };
+
+    const portalWrite = (key, value) => {
+      try {
+        const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+        if (mem) { mem[key] = value; return; }
+        const ls = window['local' + 'Storage'];
+        if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+      } catch (e) {}
+    };
+
+    const getLS = (k, fb) => { try { const raw = portalRead(k, null); const v = raw == null ? null : JSON.parse(raw); return v ?? fb; } catch { return fb; } };
+    const setLS = (k, v) => { try { portalWrite(k, JSON.stringify(v)); } catch(e) {} };
     const uniq = (arr) => Array.from(new Set(arr));
 
     // ======================= SEED =======================
@@ -750,13 +774,13 @@
         const n = (nome||'').trim();
         if (!n) return;
         const novo = (window.canon ? canon(n) : n);
-        const cats = JSON.parse(localStorage.getItem('variaveis_categorias')||'[]');
+        const cats = JSON.parse(portalRead('variaveis_categorias','[]')||'[]');
         if (!cats.includes(novo)){
           cats.push(novo);
-          localStorage.setItem('variaveis_categorias', JSON.stringify(uniq(cats)));
+          portalWrite('variaveis_categorias', JSON.stringify(uniq(cats)));
         }
         const sel = document.getElementById('varCategoriaSel');
-        const all = JSON.parse(localStorage.getItem('variaveis_categorias')||'[]').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        const all = JSON.parse(portalRead('variaveis_categorias','[]')||'[]').sort((a,b)=>a.localeCompare(b,'pt-BR'));
         sel.innerHTML = all.map(c => `<option value="${c}">${c}</option>`).join('');
         sel.value = novo;
       }
@@ -877,7 +901,7 @@
     if (!btn) return;
     btn.addEventListener('click', function(){
       try{
-        var lista = JSON.parse(localStorage.getItem('variaveis_modelos')||'[]')||[];
+        var lista = JSON.parse(portalRead('variaveis_modelos','[]')||'[]')||[];
         var blob = new Blob([JSON.stringify(lista, null, 2)], {type:'application/json'});
         var url  = URL.createObjectURL(blob);
         var a = document.createElement('a');
