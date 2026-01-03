@@ -104,7 +104,7 @@
   let portalParcelas   = [];
 
   async function carregarEventoDoPortal() {
-    // 1) modo portal online: usa token
+    // modo portal online: usa token na URL
     if (portalToken) {
       if (!API_BASE) {
         document.body.innerHTML =
@@ -116,12 +116,7 @@
 
       try {
         const url = API_BASE.replace(/\/+$/,'') + '/portal/me?token=' + encodeURIComponent(portalToken);
-        const resp = await window['apiFetch'](url, {
-          method: 'GET',
-          headers: {
-            'accept': 'application/json'
-          }
-        });
+        const resp = await window['apiFetch'](url, { method: 'GET', headers: { 'accept': 'application/json' } });
 
         if (!resp.ok) {
           document.body.innerHTML =
@@ -132,50 +127,41 @@
         }
 
         const data = await resp.json();
-
-        // aqui você ajusta conforme o backend devolver:
-        // pode ser { evento: {...} } ou já o objeto do evento
         ev  = data.evento || data;
         eid = String(ev.id || ev.eventoId || '');
-       // 4.2 – depois de saber o id do evento, busca financeiro + parcelas direto na API do portal
+
+        // limpa buffers locais
         portalFinanceiro = null;
-        portalParcelas   = [];
+        portalParcelas = [];
 
         try {
           const base = API_BASE.replace(/\/+$/,'');
+          // usa apiGet (que usa window.apiFetch) — evita fetch/sessionStorage
+          const finResp = await apiGet(`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`);
+          const parcResp = await apiGet(`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`);
 
-          const [finResp, parcResp] = await Promise.all([
-            window['apiFetch'](`${base}/portal/eventos/${encodeURIComponent(eid)}/financeiro`, {
-              method: 'GET',
-              headers: {
-                'accept': 'application/json'
-              }
-            }),
-            window['apiFetch'](`${base}/portal/eventos/${encodeURIComponent(eid)}/parcelas`, {
-              method: 'GET',
-              headers: {
-                'accept': 'application/json'
-              }
-            })
-          ]);
-
-          if (finResp.ok) {
-            portalFinanceiro = await finResp.json();
+          if (finResp && finResp.ok) {
+            try { portalFinanceiro = await finResp.json(); } catch (e) { console.warn('[Portal] parse financeiro', e); }
           } else {
-            console.warn('GET /portal/eventos/:id/financeiro falhou:', finResp.status);
+            console.warn('GET /portal/eventos/:id/financeiro falhou:', finResp && finResp.status);
           }
 
-          if (parcResp.ok) {
-            portalParcelas = await parcResp.json();
+          if (parcResp && parcResp.ok) {
+            try { portalParcelas = await parcResp.json(); } catch (e) { console.warn('[Portal] parse parcelas', e); }
           } else {
-            console.warn('GET /portal/eventos/:id/parcelas falhou:', parcResp.status);
+            console.warn('GET /portal/eventos/:id/parcelas falhou:', parcResp && parcResp.status);
           }
         } catch (e) {
           console.warn('[Portal] Erro ao carregar financeiro/parcelas do portal', e);
         }
-        // cache leve só para esta aba/sessão (opcional) — agora em memória (memStore)
-        try { setJSON('portal_me', ev); } catch {}
 
+        // guarda em memStore para uso pela aba (portal) e evita localStorage
+        try { setJSON('portal_me', ev); } catch (e) {}
+        try { setJSON('portal_evento', ev); } catch (e) {}
+        try { setJSON('portal_fin_'+String(eid), portalFinanceiro); } catch (e) {}
+        try { setJSON('portal_parc_'+String(eid), portalParcelas); } catch (e) {}
+
+        return;
       } catch (err) {
         console.error('[Portal] Erro ao carregar evento do portal', err);
         if (!document.body.innerHTML.includes('Link inválido')) {
@@ -186,25 +172,17 @@
         }
         throw err;
       }
-          if (finResp.ok) {
-            portalFinanceiro = await finResp.json();
-          } else {
-            console.warn('GET /portal/eventos/:id/financeiro falhou:', finResp.status);
-          }
-
-          if (parcResp.ok) {
-            portalParcelas = await parcResp.json();
-          } else {
-            console.warn('GET /portal/eventos/:id/parcelas falhou:', parcResp.status);
-          }
-    } catch {
-      eventos = [];
     }
-    ev = eventos.find(e => String(e.id) === String(eid)) || {};
-        try { setJSON('portal_me', ev); } catch {}
-        try { setJSON('portal_evento', ev); } catch {}
-        try { setJSON('portal_fin_'+String(eid), portalFinanceiro); } catch {}
-        try { setJSON('portal_parc_'+String(eid), portalParcelas); } catch {}
+
+    // Fallback (modo antigo / offline): tenta carregar dos dados locais
+    try {
+      const eventos = JSON.parse(localStorage.getItem('eventos')||'[]');
+      ev = eventos.find(e => String(e.id) === String(eid)) || {};
+      try { setJSON('portal_me', ev); } catch (e) {}
+      try { setJSON('portal_evento', ev); } catch (e) {}
+    } catch (e) {
+      // sem eventos locais
+    }
 
   // carrega o evento assim que o script inicia (portal online ou modo antigo)
   await carregarEventoDoPortal();
