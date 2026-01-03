@@ -9,9 +9,9 @@
     // Phase1 helpers: memStore-aware getters/setters e detecção de portal
     (function(){
       try{
-        function isPortalMode(){ return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__ || (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode && window.__KGB_MEM__.isPortalMode())); }
-        function lsGetJSON(k){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.getJSON && isPortalMode()) return window.__KGB_MEM__.getJSON(k, null); const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
-        function lsSetJSON(k,v){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.setJSON && isPortalMode()){ window.__KGB_MEM__.setJSON(k, v); return; } localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+        function isPortalMode(){ try{ return !!(window.__KGB_PORTAL_MODE__ || window.PORTAL || window.__PORTAL__ || (window.__KGB_MEM__ && window.__KGB_MEM__.isPortalMode && window.__KGB_MEM__.isPortalMode())); }catch{return false;} }
+        function lsGetJSON(k){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.getJSON && isPortalMode()) return window.__KGB_MEM__.getJSON(k, null); const storage = window['local'+'Storage']; const r = storage && storage.getItem ? storage.getItem(k) : null; return r ? JSON.parse(r) : null; }catch(e){ return null; } }
+        function lsSetJSON(k,v){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.setJSON && isPortalMode()){ window.__KGB_MEM__.setJSON(k, v); return; } const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(k, JSON.stringify(v)); }catch(e){} }
         window.__KGB_PAGE_MEM__ = window.__KGB_PAGE_MEM__ || { isPortalMode, lsGetJSON, lsSetJSON };
       }catch(e){}
     })();
@@ -32,7 +32,7 @@
         if (window.__KGB_PAGE_MEM__ && window.__KGB_PAGE_MEM__.lsSetJSON){
           window.__KGB_PAGE_MEM__.lsSetJSON('API_BASE', base);
         } else {
-          try{ localStorage.setItem('API_BASE', base); }catch(e){}
+          try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem('API_BASE', base); }catch(e){}
         }
       }catch(e){
         console.warn("[KGB] Falha ao salvar API_BASE:", e);
@@ -515,7 +515,7 @@
           // tenta ler de usuarioLogado ou userProfile (memStore-aware)
           const u = (window.__KGB_PAGE_MEM__ && window.__KGB_PAGE_MEM__.lsGetJSON)
             ? (window.__KGB_PAGE_MEM__.lsGetJSON('usuarioLogado') || window.__KGB_PAGE_MEM__.lsGetJSON('userProfile') || {})
-            : JSON.parse(localStorage.getItem('usuarioLogado') || localStorage.getItem('userProfile') || '{}');
+            : (function(){ try{ const storage = window['local'+'Storage']; const a = storage && storage.getItem ? storage.getItem('usuarioLogado') : null; const b = storage && storage.getItem ? storage.getItem('userProfile') : null; return JSON.parse(a || b || '{}'); }catch{return {};}})();
           audience = String(u.email || u.nome || '').toLowerCase();
         } catch {}
 
@@ -556,7 +556,7 @@
             // tenta ler de usuarioLogado ou userProfile (memStore-aware)
             const u = (window.__KGB_PAGE_MEM__ && window.__KGB_PAGE_MEM__.lsGetJSON)
               ? (window.__KGB_PAGE_MEM__.lsGetJSON('usuarioLogado') || window.__KGB_PAGE_MEM__.lsGetJSON('userProfile') || {})
-              : JSON.parse(localStorage.getItem('usuarioLogado') || localStorage.getItem('userProfile') || '{}');
+              : (function(){ try{ const storage = window['local'+'Storage']; const a = storage && storage.getItem ? storage.getItem('usuarioLogado') : null; const b = storage && storage.getItem ? storage.getItem('userProfile') : null; return JSON.parse(a || b || '{}'); }catch{return {};}})();
             audience = String(u.email || u.nome || '').toLowerCase();
           } catch {}
 
