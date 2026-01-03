@@ -2727,6 +2727,20 @@ app.get('/portal/eventos/:id/financeiro', (req, res) => {
   }
 });
 
+// GET /portal/eventos/:id/timeline — retorna timeline de um evento (portal)
+app.get('/portal/eventos/:id/timeline', verifyFirebaseToken, (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const TIMELINE_FILE = 'portal_timeline.json';
+    const all = loadJSON(TIMELINE_FILE, {});
+    const items = Array.isArray(all[id]) ? all[id] : [];
+    return res.json({ ok: true, items });
+  } catch (e) {
+    console.error('[portal] erro em GET /portal/eventos/:id/timeline', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao carregar timeline.' });
+  }
+});
+
 // ===== API minimal (temporário) — endpoints para `eventos-pagos.html`
 
 // Inicializa DB em memória do servidor quando ausente
