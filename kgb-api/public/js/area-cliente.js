@@ -130,6 +130,15 @@
     }catch{ return {}; }
   }
 
+  // Em modo portal preferimos o valor vindo do portal; em modo legado usamos a função
+  // que lê do armazenamento antigo. Isso evita que código em portal caia em readLS.
+  function portalOrLegacy(portalValue, legacyFn){
+    try{
+      if (isPortalMode()) return portalValue;
+      return (typeof legacyFn === 'function') ? legacyFn() : portalValue;
+    }catch{ return portalValue; }
+  }
+
   async function carregarEventoDoPortal() {
     // 1) modo portal online: usa token
     if (portalToken) {
@@ -191,8 +200,8 @@
     }
 
     // 2) modo antigo (interno): usa id + mem-backed store
-      const eidFromQuery = qs.get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '');
-    const eidFromLS    = (window.readLS ? window.readLS('eventoSelecionado','') : '');
+    const eidFromQuery = qs.get('id') || '';
+    const eidFromLS    = portalOrLegacy('', () => (window.readLS ? window.readLS('eventoSelecionado','') : ''));
     eid = eidFromQuery || eidFromLS || '';
 
     let eventos = [];
@@ -634,7 +643,7 @@
     const has=(v)=>v!==undefined && v!==null && String(v).trim()!=='';    
 
     const qs  = new URLSearchParams(location.search);
-    const eid = qs.get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '') || '';
+    const eid = portalOrLegacy(qs.get('id') || '', () => (window.readLS ? window.readLS('eventoSelecionado','') : '')) || '';
 
     const readFG = ()=>{ try{ if (isPortalMode()) return {}; return (window.readLS ? window.readLS('financeiroGlobal', {}) : {}); }catch{ return {}; } };
     const getCompLanc = (lancId)=>{ try{ if (isPortalMode()) return null; return (window.readLS ? window.readLS(`fg.comp:${lancId}`, null) : null); }catch{ return null; } };
@@ -817,7 +826,7 @@
 
     function renderDefCardapioBox(){
       const el=$id('defCardapioInfo'); if(!el) return;
-      const eid = new URLSearchParams(location.search).get('id') || (window.readLS ? window.readLS('eventoSelecionado','') : '') || '';
+      const eid = portalOrLegacy(new URLSearchParams(location.search).get('id') || '', () => (window.readLS ? window.readLS('eventoSelecionado','') : '')) || '';
       const s = loadDefsFromLS(eid);
       if(!s || !s.a4Html){
         el.innerHTML='<span class="badge warn">Pendente</span>'; return;
@@ -938,7 +947,7 @@
       if (_ev.cardapioContratado || _ev.menu || _ev.menuContracted) return true;
       if (has(_ev.cardapioId) || has(_ev.cardapioNome) || has(_ev.nomeCardapio)) return true;
       try{
-        const c = (window.readLS ? window.readLS('cardapioSelecionado', null) : null);
+        const c = portalOrLegacy(null, () => (window.readLS ? window.readLS('cardapioSelecionado', null) : null));
         if (c && (String(c.eventoId||_eid)===String(_eid)) && (has(c.id)||has(c.nome))) return true;
       }catch{}
       if (Array.isArray(_ev.itensSelecionados)){
