@@ -14,6 +14,7 @@ const EXCLUDE_DIRS = new Set([
 const EXCLUDE_SUBSTR = [
   "duplicates-archive",
   "backups",
+  "tools/legacy",
 ];
 
 function walk(dir, out = []) {

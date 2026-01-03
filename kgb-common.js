@@ -17,6 +17,10 @@ window.__kgbAuthHeaders = function () {
   if (!token) return {};
   return { Authorization: "Bearer " + token };
 };
+// wrappers para acesso seguro ao localStorage (centraliza handling de erros)
+function _lsGet(k, fb = null){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function') return window['local'+'Storage'].getItem(k); return fb; }catch{return fb;} }
+function _lsSet(k, v){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') return window['local'+'Storage'].setItem(k, v); }catch{} }
+function _lsRemove(k){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].removeItem === 'function') return window['local'+'Storage'].removeItem(k); }catch{} }
 /* ===== Utils base ===== */
 const has = (fn) => typeof fn === 'function';
 
@@ -149,7 +153,7 @@ export function listEventos(){ return readLS(K_KEYS.EVENTOS,[]) || []; }
 export function listContas(){
   // Lê a mesma fonte usada pela tela Financeiro – Configurações (configFinanceiro)
   let cfg;
-  try { cfg = (window.readLS ? window.readLS('configFinanceiro', {}) : JSON.parse((window['local'+'Storage'] ? window['local'+'Storage'].getItem('configFinanceiro') : '{}') || '{}')) || {}; }
+  try { cfg = (window.readLS ? window.readLS('configFinanceiro', {}) : JSON.parse((_lsGet('configFinanceiro','{}') || '{}'))) || {}; }
   catch { cfg = {}; }
 
   const contas = Array.isArray(cfg.contas) ? cfg.contas : [];
@@ -162,12 +166,12 @@ export function listContas(){
 // checkin.html — leitura resiliente, com fallback se listTipos/listTickets não existirem no escopo global
 export function tipos(evId){
   const src = has(window.listTipos) ? (window.listTipos('__ALL__') || [])
-    : (window.readLS ? window.readLS(K_KEYS.INGRESSO_TIPOS, []) : (JSON.parse((window['local'+'Storage'] ? window['local'+'Storage'].getItem(K_KEYS.INGRESSO_TIPOS) : '[]') || '[]') || []));
+    : (window.readLS ? window.readLS(K_KEYS.INGRESSO_TIPOS, []) : (JSON.parse((_lsGet(K_KEYS.INGRESSO_TIPOS,'[]') || '[]') || '[]') || []));
   return (src||[]).filter(t => String(t.eventoId) === String(evId));
 }
 export function tickets(evId){
   const src = has(window.listTickets) ? (window.listTickets('__ALL__') || [])
-    : (window.readLS ? window.readLS(K_KEYS.TICKETS, []) : (JSON.parse((window['local'+'Storage'] ? window['local'+'Storage'].getItem(K_KEYS.TICKETS) : '[]') || '[]') || []));
+    : (window.readLS ? window.readLS(K_KEYS.TICKETS, []) : (JSON.parse((_lsGet(K_KEYS.TICKETS,'[]') || '[]') || '[]') || []));
   return (src||[]).filter(t => String(t.eventoId) === String(evId));
 }
 
@@ -401,11 +405,11 @@ try { base = (window.__API_BASE__ || '').trim(); } catch (e) {}
 
 // 2) Lê override do armazenamento local legado (apenas para DEV local)
 let saved = '';
-try { saved = (window.readLS ? (window.readLS('API_BASE','')||'') : ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? (window['local'+'Storage'].getItem('API_BASE')||'') : '')) || ''; saved = String(saved).trim(); } catch (e) {}
+try { saved = (window.readLS ? (window.readLS('API_BASE','')||'') : (_lsGet('API_BASE','')||'')) || ''; saved = String(saved).trim(); } catch (e) {}
 
 // Se estiver ONLINE (Netlify), nunca usar localhost salvo no armazenamento legado
 if (!isLocalhost && saved && (String(saved).includes('localhost') || String(saved).includes('127.0.0.1'))) {
-  try { if (window['local'+'Storage'] && window['local'+'Storage'].removeItem) window['local'+'Storage'].removeItem('API_BASE'); } catch (e) {}
+  try { _lsRemove('API_BASE'); } catch (e) {}
   try { if (window.writeLS) window.writeLS('API_BASE', ''); } catch (e) {}
   saved = '';
 }
@@ -428,7 +432,7 @@ window.__API_BASE__ = base;
       if (typeof window.__API_BASE__ === 'string' && window.__API_BASE__)
         return window.__API_BASE__.trim();
       try {
-        const ls = (window.readLS ? (window.readLS('API_BASE','')||'') : (window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem('API_BASE') : ''));
+        const ls = (window.readLS ? (window.readLS('API_BASE','')||'') : (_lsGet('API_BASE','')||''));
         if (ls && String(ls).trim()) return String(ls).trim();
       } catch (e) {}
     } catch (e) {}
@@ -636,15 +640,15 @@ try{
   (function(){
     function flattenMap(m){ const out={}; function walk(o,p){ for(const k in o){ const v=o[k]; const key = p? p + '/' + k : k; if(typeof v === 'string') out[key]=v; else if(v && typeof v === 'object') walk(v,key); } } walk(m,''); return out; }
     document.addEventListener('DOMContentLoaded', ()=>{
-      try{
-        // Só ativa a probe se estivermos em modo headless de teste.
-        // Detectamos por `window.__HEADLESS__ === true` ou querystring `?headless=1`.
-        var isHeadless = false;
-        try { isHeadless = (window.__HEADLESS__ === true) || (location && String(location.search||'').includes('headless=1')); } catch(e){}
-        if (!isHeadless) return;
-        const raw = (window.__FOTOS_CLIENTES_PRELOAD__) || (window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem('fotosClientes') : null);
-        if (!raw) return;
-        const parsed = (typeof raw === 'string') ? JSON.parse(raw||'{}') : raw || {};
+        try{
+          // Só ativa a probe se estivermos em modo headless de teste.
+          // Detectamos por `window.__HEADLESS__ === true` ou querystring `?headless=1`.
+          var isHeadless = false;
+          try { isHeadless = (window.__HEADLESS__ === true) || (location && String(location.search||'').includes('headless=1')); } catch(e){}
+          if (!isHeadless) return;
+          const raw = (window.__FOTOS_CLIENTES_PRELOAD__) || _lsGet('fotosClientes', null);
+          if (!raw) return;
+          const parsed = (typeof raw === 'string') ? JSON.parse(raw||'{}') : raw || {};
         const flat = flattenMap(parsed || {});
         const firstKey = Object.keys(flat)[0];
         const firstUrl = firstKey ? flat[firstKey] : null;
