@@ -140,11 +140,20 @@
   }
 
   // Helpers únicos (para reduzir ocorrências e centralizar legado)
-  function legacyRead(key, fallback){
+  // Portal-safe storage helpers (adicionadas para centralizar checagem de portal)
+  function portalRead(key, fallback){
     try { if (isPortalMode()) return fallback; return (window.readLS ? window.readLS(key, fallback) : fallback); } catch { return fallback; }
   }
-  function legacyWrite(key, val){
+  function portalWrite(key, val){
     try { if (isPortalMode()) return; if (window.writeLS) window.writeLS(key, val); } catch {} 
+  }
+
+  // Helpers únicos (para reduzir ocorrências e centralizar legado)
+  function legacyRead(key, fallback){
+    try { return portalRead(key, fallback); } catch { return fallback; }
+  }
+  function legacyWrite(key, val){
+    try { portalWrite(key, val); } catch {} 
   }
 
   async function carregarEventoDoPortal() {
