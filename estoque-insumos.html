@@ -7,6 +7,54 @@
 
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  // Helpers portal-aware inseridos para evitar acessos diretos a localStorage
+  (function(){
+    function isPortalMode(){
+      try{ return !!(window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__); }catch(e){ return false; }
+    }
+
+    function portalRead(key){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return null;
+          const v = mem[key];
+          if (v === undefined) return null;
+          return (typeof v === 'string') ? v : JSON.stringify(v);
+        }
+        const ls = window['local'+'Storage'];
+        return ls ? ls.getItem(key) : null;
+      }catch(e){ return null; }
+    }
+
+    function portalWrite(key, value){
+      try{
+        if (isPortalMode()){
+          const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__;
+          if (!mem) return;
+          mem[key] = (typeof value === 'string') ? value : String(value);
+          return;
+        }
+        const ls = window['local'+'Storage'];
+        if (!ls) return;
+        ls.setItem(key, String(value));
+      }catch(e){}
+    }
+
+    function apiRequest(path, options){
+      try{
+        if (typeof window.apiFetch === 'function') return window.apiFetch(path, options);
+        const base = window.__API_BASE__ || '';
+        return fetch((path && path[0] === '/' ? (base+path) : path), options);
+      }catch(e){ return Promise.reject(e); }
+    }
+
+    window.portalRead = portalRead;
+    window.portalWrite = portalWrite;
+    window.isPortalMode = isPortalMode;
+    window.apiRequest = apiRequest;
+  })();
+
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -20,7 +68,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { portalWrite("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -30,7 +78,7 @@
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- (opcional) ativar ENFORCE do guard p/ testes -->
-<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+<script>try{ portalWrite('guard.enforce','1'); }catch(e){};</script>
 
 <!-- Guard de permissões (usa coisas do common) -->
 <script src="js/auth-helper.js"></script>
@@ -206,14 +254,14 @@ body.no-scroll{ overflow:hidden; }
 
     function loadEstoqueInsumos(){
       try {
-        return JSON.parse(localStorage.getItem(KEY_ESTOQUE_INSUMOS) || '[]');
+        return JSON.parse((portalRead(KEY_ESTOQUE_INSUMOS) || '[]'));
       } catch {
         return [];
       }
     }
     function saveEstoqueInsumos(arr){
       try {
-        localStorage.setItem(KEY_ESTOQUE_INSUMOS, JSON.stringify(arr));
+        portalWrite(KEY_ESTOQUE_INSUMOS, JSON.stringify(arr));
       } catch {}
     }
 
@@ -250,7 +298,7 @@ body.no-scroll{ overflow:hidden; }
     // ======= Eventos (para mostrar nome do evento) =======
     const KEY_EVENTOS = 'eventos';
 
-    const getObj = (k)=> JSON.parse(localStorage.getItem(k)||'null');
+    const getObj = (k)=> JSON.parse((portalRead(k)||'null'));
     function loadEventos(){ return getObj(KEY_EVENTOS) || []; }
 
     function nomeVisivelEvento(ev){
