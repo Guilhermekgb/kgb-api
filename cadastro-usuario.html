@@ -17,7 +17,7 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    try { window['local'+'Storage']?.setItem("API_BASE", base); } catch(e) {}
     window.__API_BASE__ = base;
     console.log("[KGB] __API_BASE__ =", base);
   })();
@@ -263,13 +263,39 @@
   <script type="module">
     import { handleRequest } from './api/routes.js';
 
+    // Helpers portal/memStore + api wrapper (page-local, minimal)
+    const isPortalMode = () => !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__);
+
+    const portalRead = (key, fallback = null) => {
+      try {
+        const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+        if (mem && Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
+        const ls = window['local' + 'Storage'];
+        const ss = window['session' + 'Storage'];
+        const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+        return v != null ? v : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    };
+
+    const portalWrite = (key, value) => {
+      try {
+        const mem = window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__;
+        if (mem) { mem[key] = value; return; }
+        const ls = window['local' + 'Storage'];
+        if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+      } catch (e) {}
+    };
+
     const authHeader = () => {
-      const t = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const t = portalRead('token');
       return t ? { Authorization: 'Bearer ' + t } : {};
     };
 
     const api = (endpoint, req = {}) => {
       const headers = { ...authHeader(), ...(req.headers || {}) };
+      if (window.apiFetch) return window.apiFetch(endpoint, { ...req, headers });
       return new Promise(resolve => handleRequest(endpoint, { ...req, headers }, resolve));
     };
 
@@ -446,8 +472,8 @@
         try {
           const chave = 'usuarios_dev_local';
 
-          // carrega lista atual do navegador
-          const lista = JSON.parse(localStorage.getItem(chave) || '[]');
+          // carrega lista atual do navegador (portal-aware)
+          const lista = JSON.parse(portalRead(chave, '[]') || '[]');
 
           // gera um id fake se não tiver
           const novoId = body.id || Date.now();
@@ -459,7 +485,7 @@
           };
 
           lista.push(novoUsuario);
-          localStorage.setItem(chave, JSON.stringify(lista));
+          portalWrite(chave, JSON.stringify(lista));
 
           alert('Usuário salvo apenas neste navegador (modo teste - backend sem /usuarios).');
           location.replace('usuarios.html');
