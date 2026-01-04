@@ -15,7 +15,15 @@ function getEventoId(){
     const id = (typeof window.getEventoIdFromUrl === 'function') ? window.getEventoIdFromUrl() : null;
     if (id) return String(id);
     try{
-      const ls = localStorage.getItem('eventoSelecionado');
+      let ls = null;
+      try {
+        if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+          const v = window.readLS('eventoSelecionado');
+          ls = (v == null) ? null : (typeof v === 'string' ? v : JSON.stringify(v));
+        } else if (typeof localStorage !== 'undefined') {
+          ls = localStorage.getItem('eventoSelecionado');
+        }
+      } catch {}
       if (ls) { console.warn('[EVENTO] id não veio na URL; usando fallback legacy eventoSelecionado'); return String(ls); }
     }catch{}
     return null;
