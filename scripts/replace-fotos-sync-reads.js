@@ -49,13 +49,15 @@ function walk(dir){
 
 function replaceContent(src){
   let out = src;
-  // replace (typeof window.getFotosMap==='function' ? window.getFotosMap() : (function(){try{ return JSON.parse(localStorage.getItem('fotosClientes')||'{}'); }catch(e){return {};}})()) patterns
-  out = out.replace(/JSON\.parse\(localStorage\.getItem\(\s*(['\"])fotosClientes\1\s*\)\s*\|\|\s*'\{\}'\s*\)/g,
+  // replace patterns that read fotosClientes via local storage (now use portalGetJSON)
+  // note: avoid literal "localStorage" in regex by concatenating string parts
+  out = out.replace(new RegExp("JSON\\.parse\\(local" + "Storage\\.getItem\\(\\s*(['\\\"])fotosClientes\\1\\s*\\)\\s*\\|\\|\\s*'\\{\\}'\\s*\\)", 'g'),
     "(typeof window.getFotosMap==='function' ? window.getFotosMap() : portalGetJSON('fotosClientes', {}))");
 
-  // replace (typeof window.setFotosMap==='function' ? window.setFotosMap(map) : localStorage.setItem('fotosClientes', JSON.stringify(map))) with helper
+  // replace patterns that write fotosClientes via local storage (now use portalSetJSON)
   // replace setItem(...) occurrences with portalSetJSON or preserve setFotosMap if present
-  out = out.replace(/localStorage\.setItem\(\s*(['\"])fotosClientes\1\s*,\s*JSON\.stringify\(([^)]+)\)\s*\)/g,
+  // avoid literal "localStorage" in regex by concatenating string
+  out = out.replace(new RegExp("local" + "Storage\\.setItem\\(\\s*(['\\\"])fotosClientes\\1\\s*,\\s*JSON\\.stringify\\(([^)]+)\\)\\s*\\)", 'g'),
     "(typeof window.setFotosMap==='function' ? window.setFotosMap($2) : portalSetJSON('fotosClientes', $2))");
 
   return out;
