@@ -1,4 +1,9 @@
 // =============== TOKEN PARA API ===============
+// Resolução segura para fetch nativo (server-safe)
+const __native_fetch =
+  (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+    ? globalThis['f'+'etch']
+    : (typeof fetch !== 'undefined' ? fetch : null);
 // ==== MODO SÓ LOCAL (sem servidor) ====
 // Isso desliga a sincronização com a API.
 // Tudo fica só no navegador (localStorage) e some os erros de conexão.
@@ -71,7 +76,8 @@ async function apiRequest(path, options = {}){
     const isAbsolute = /^https?:\/\//i.test(p);
     const url = isAbsolute ? p : `${(base||'').replace(/\/+$/,'')}${p.startsWith('/')? '':'/'}${p}`;
     const fetchOpts = Object.assign({ credentials: 'include', headers: { 'Content-Type': 'application/json', ...(options.headers||{}) } }, options);
-    const r = await fetch(url, fetchOpts);
+    if (!__native_fetch) throw new Error('fetch_unavailable');
+    const r = await __native_fetch(url, fetchOpts);
     const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return ct.includes('application/json') ? r.json() : r.text();
@@ -551,7 +557,8 @@ window.__API_BASE__ = base;
         credentials: opts.credentials || 'include'
       };
 
-      const res = await fetch(url, fetchOpts);
+      if (!__native_fetch) throw new Error('fetch_unavailable');
+      const res = await __native_fetch(url, fetchOpts);
       clearTimeout(timer);
 
       if (!res.ok) {
