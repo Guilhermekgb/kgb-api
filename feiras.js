@@ -745,7 +745,7 @@ function brToNum(v){
   return parseFloat(String(v||'').replace(/\./g,'').replace(',','.')) || 0;
 }
 
-  function renderTabela(){
+  async function renderTabela(){
     // Permissão: marketing não vê leads individuais
 const tabelaWrap = document.querySelector('.tabela')?.parentElement || document.querySelector('.tabela');
 if (!canVerLeads()) {
@@ -880,7 +880,7 @@ function popularVendedoresFiltro(){
   $('#wrapFiltroVendedor')?.classList.remove('hidden');
 
   // 1) tenta ler da área de Usuários do sistema
-  const usuarios = getUsuariosCadastrados(); // <- helper logo abaixo
+  const usuarios = await getUsuariosCloudFirst(); // <- cloud-first (API) com fallback
   let options = [];
 
   if (usuarios.length){
@@ -923,6 +923,19 @@ function popularVendedoresFiltro(){
 // === COLE ESTES DOIS HELPERS ABAIXO DA FUNÇÃO ACIMA ===
 
 // Lê usuários de chaves comuns do localStorage e deduplica por nome/email minúsculo
+async function getUsuariosCloudFirst(){
+  try {
+    // tenta API real do sistema (cloud)
+    const resp = await apiGet('/usuarios');
+    const arr = Array.isArray(resp) ? resp : (Array.isArray(resp?.data) ? resp.data : resp);
+    if (Array.isArray(arr) && arr.length) return arr;
+  } catch (e) {
+    console.warn('[feiras] GET /usuarios falhou, fallback local:', e);
+  }
+  // fallback (portal-aware / cache local)
+  return getUsuariosCadastrados();
+}
+
 function getUsuariosCadastrados(){
   const keysPossiveis = [
     'usuarios', 'usuariosSistema', 'usuariosPerfis', 'cadastroUsuarios'
