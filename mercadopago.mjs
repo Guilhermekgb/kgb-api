@@ -1,6 +1,13 @@
 // kgb-api/providers/mercadopago.js  (ESM - Node 18+ tem fetch nativo)
 const API = 'https://api.mercadopago.com';
-const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+
+// Cloud-only: usar globalThis['apiFetch'] como transport HTTP
+function requireApiFetch() {
+  if (typeof globalThis === 'undefined' || typeof globalThis['apiFetch'] !== 'function') {
+    throw new Error('api_unavailable');
+  }
+  return globalThis['apiFetch'];
+}
 
 /**
  * Resolve o access token: prioridade para credenciais recebidas na chamada,
@@ -23,10 +30,15 @@ export async function testConnection({ env = 'sandbox', credentials = {} } = {})
   const token = resolveToken(credentials);
   if (!token) return false;
 
-  const r = await (__native_fetch ? __native_fetch(`${API}/users/me`, {
-    headers: { Authorization: `Bearer ${token}` }
-  }) : Promise.reject(new Error('fetch_unavailable')));
-  return r.ok;
+  const apiFetch = requireApiFetch();
+  const _raw = await apiFetch(`${API}/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+  // normaliza diferentes formatos possíveis de retorno
+  if (_raw && typeof _raw === 'object') {
+    if ('ok' in _raw) return !!_raw.ok;
+    if ('status' in _raw && 'data' in _raw) return (_raw.status >= 200 && _raw.status < 300);
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -91,16 +103,35 @@ export async function createCharge(p = {}) {
     throw new Error(`Método não suportado: ${method}`);
   }
 
-  const r = await (__native_fetch ? __native_fetch(`${API}/v1/payments`, {
+  const apiFetch = requireApiFetch();
+  const _raw = await apiFetch(`${API}/v1/payments`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  }) : Promise.reject(new Error('fetch_unavailable')));
+  });
 
-  const data = await r.json().catch(() => ({}));
+  // normalize response shapes
+  let r = null;
+  let data = null;
+  if (_raw && typeof _raw === 'object') {
+    if ('ok' in _raw) {
+      r = _raw;
+      try { data = (typeof _raw.json === 'function') ? await _raw.json().catch(()=>_raw.data||{}) : (_raw.data || {}); } catch { data = _raw.data || {}; }
+    } else if ('status' in _raw && 'data' in _raw) {
+      r = { ok: (_raw.status >= 200 && _raw.status < 300), status: _raw.status };
+      data = _raw.data;
+    } else {
+      r = { ok: true, status: 200 };
+      data = _raw;
+    }
+  } else {
+    r = { ok: false, status: 500 };
+    data = {};
+  }
+
   if (!r.ok) {
     const msg = data?.message || data?.error || JSON.stringify(data);
     throw new Error(`Mercado Pago: falha ao criar pagamento: ${msg}`);
