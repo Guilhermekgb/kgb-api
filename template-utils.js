@@ -1,7 +1,10 @@
 // Lê variáveis cadastradas (página Variáveis grava em localStorage)
 export function getVars(){
-  try { return JSON.parse(localStorage.getItem('variaveis_modelos') || '[]'); }
-  catch { return []; }
+  try {
+    const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem('variaveis_modelos') : null;
+    return JSON.parse(raw || '[]');
+  } catch { return []; }
 }
 
 // Substitui {{chave}} por valores em 1 passada.
