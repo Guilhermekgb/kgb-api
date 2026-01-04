@@ -10,8 +10,28 @@
   });
 
   /* ===== helpers ===== */
-  const rLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-  const wLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  const rLS = (k, fb) => {
+    try {
+      if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+        const v = window.readLS(k);
+        return (v == null ? fb : v);
+      }
+      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      return (v == null ? fb : v);
+    } catch {
+      return fb;
+    }
+  };
+
+  const wLS = (k, v) => {
+    try {
+      if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+        window.writeLS(k, v);
+        return;
+      }
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {}
+  };
   const byId = id => document.getElementById(id);
 
   // Worker (?worker=1): mini-UI para permitir o clique de conexão exigido pelo Web Bluetooth
