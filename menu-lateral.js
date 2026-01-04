@@ -31,6 +31,13 @@
   }
   const BASE = __getBaseURLForThisFile();
 
+  // exige que window.apiFetch exista em tempo de execução; lança `api_unavailable` se ausente
+  function __require_apiFetch() {
+    const w = (typeof window !== 'undefined') ? window : null;
+    if (!w || typeof w.apiFetch !== 'function') throw new Error('api_unavailable');
+    return w;
+  }
+
   // helper p/ importar relativo a este arquivo
   const imp = (rel) => import(new URL(rel, BASE).href);
 
@@ -92,7 +99,7 @@ function initMenuLateral() {
   const base = __getBaseURLForThisFile();
   const menuURL = new URL('menu-lateral.html', base);
 
-  window.apiFetch(menuURL.href, { method: 'GET', headers: { 'accept': 'text/html' } })
+  __require_apiFetch().apiFetch(menuURL.href, { method: 'GET', headers: { 'accept': 'text/html' } })
     .then((html) => {
       container.innerHTML = html;
 
@@ -106,7 +113,7 @@ function initMenuLateral() {
         // limpa dados de sessão
         try {
             // primary logout via API (cookie/session)
-            try { window.apiFetch((window.__API_BASE__||'') + '/auth/logout', { method: 'POST' }).catch(()=>{}); } catch {}
+            try { __require_apiFetch().apiFetch((window.__API_BASE__||'') + '/auth/logout', { method: 'POST' }).catch(()=>{}); } catch {}
             // fallback: clear legacy items in module memStore (non-primary)
             try { if (window.memRemoveMenu) window.memRemoveMenu('auth:user'); } catch {}
             try { if (window.memRemoveMenu) window.memRemoveMenu('usuarioLogado'); } catch {}
