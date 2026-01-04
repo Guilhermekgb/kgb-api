@@ -377,11 +377,9 @@ window.addEventListener('resize', () => {
     return t ? { Authorization: 'Bearer ' + t } : {};
   };
 
-  const _maybeHandleRequest = (typeof window !== 'undefined' && window['handle' + 'Request']) ? window['handle' + 'Request'] : null;
-
+  // API helper: sempre usa `apiRequest` (que prefere `window.apiFetch` e fallback para fetch nativo)
   const api = (endpoint, req = {}) => {
     const headers = { ...authHeader(), ...(req.headers || {}) };
-    if (_maybeHandleRequest) return new Promise(resolve => _maybeHandleRequest(endpoint, { ...req, headers }, resolve));
     return apiRequest(endpoint, { ...req, headers });
   };
 
