@@ -1,8 +1,33 @@
 // logs.js (module)
-import { handleRequest } from './api/routes.js';
+// Cloud-first API helper: prefere window.apiFetch, fallback apenas para fetch nativo
+const api = async (endpoint, req = {}) => {
+  const method = (req.method || 'GET').toUpperCase();
+  const safeBody = (method === 'GET' || method === 'HEAD') ? undefined : req.body;
 
-const api = (endpoint, req = {}) =>
-  new Promise(resolve => handleRequest(endpoint, req, resolve));
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+    const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method }, safeBody !== undefined ? { body: safeBody } : {}));
+    return { status: 200, data: payload };
+  }
+
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+  if (!__native_fetch) throw new Error('fetch_unavailable');
+
+  const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '');
+  const url = String(endpoint || '');
+  const finalUrl = url.startsWith('/') ? (base.replace(/\/\/+$/, '') + url) : url;
+
+  const opts = { method, credentials: 'include', headers: { ...(req.headers || {}) } };
+  if (safeBody !== undefined) {
+    if (safeBody instanceof FormData) opts.body = safeBody;
+    else if (typeof safeBody === 'string') opts.body = safeBody;
+    else { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(safeBody); }
+  }
+
+  const res = await __native_fetch(finalUrl, opts);
+  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+  const data = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  return { status: res.status, data };
+};
 
 function formatar(ts) {
   const d = new Date(Number(ts) || 0);
