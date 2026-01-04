@@ -223,10 +223,16 @@
 
 
 <script src="https://unpkg.com/html5-qrcode"></script>
-<script type="module">
+  <script type="module">
 
   (() => {
     'use strict';
+
+    /* ==== Resolução segura de fetch (cloud-first) ==== */
+    const __native_fetch =
+      (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+        ? globalThis['f'+'etch']
+        : null;
 
     /* ===== CHAVES & LEITURA COMPATÍVEL ===== */
     const K = {
