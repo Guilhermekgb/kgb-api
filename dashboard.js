@@ -3410,9 +3410,37 @@ function bindRealtimeDashboardCarol() {
 const fmtBRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 
 async function apiLocal(path, {method='GET', body=null}={}) {
-  return new Promise((resolve) => {
-    (window.handleRequest||window.handleRequestLocal)(path, { method, body }, (resp)=>resolve(resp));
-  });
+  // Cloud-first helper: prefere `window.apiFetch`, fallback apenas para fetch nativo.
+  const m = (method || 'GET').toUpperCase();
+  const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
+
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+    try {
+      const payload = await window.apiFetch(String(path || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+      return { status: 200, data: payload };
+    } catch (err) {
+      console.warn('[apiLocal] window.apiFetch falhou', err);
+      throw err;
+    }
+  }
+
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+  if (!__native_fetch) throw new Error('fetch_unavailable');
+
+  const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '');
+  const url = (String(path || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(path || '')) : String(path || '');
+
+  const opts = { method: m, credentials: 'include', headers: {} };
+  if (safeBody !== undefined) {
+    if (safeBody instanceof FormData) opts.body = safeBody;
+    else if (typeof safeBody === 'string') opts.body = safeBody;
+    else { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(safeBody); }
+  }
+
+  const res = await __native_fetch(url, opts);
+  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+  const payload = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  return { status: res.status, data: payload };
 }
 
 async function atualizarKPIs(range='mes'){
