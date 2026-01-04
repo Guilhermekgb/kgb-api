@@ -64,29 +64,17 @@ export async function syncEntity(entity) {
   const since = getSyncCheckpoint(ent);
 
   try {
-    // cloud-first request: prefere window.apiFetch, fallback para fetch nativo
+    // cloud-first: exigir window.apiFetch; se ausente, lançar api_unavailable
     const w = (typeof window !== 'undefined') ? window : null;
-    const af = w && typeof w.apiFetch === 'function' ? w.apiFetch : null;
+    if (!w || typeof w.apiFetch !== 'function') throw new Error('api_unavailable');
 
     const body = { entity: ent, since };
+    const path = '/sync/pull';
+    const finalPath = (w.__API_BASE__ && String(path).startsWith('/')) ? (String(w.__API_BASE__).replace(/\/\/+$/, '') + path) : path;
 
-    let resp;
-    if (af) {
-      const payload = await af('/sync/pull', { method: 'POST', body });
-      resp = { status: 200, data: payload };
-    } else {
-      const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch === 'function' ? fetch : null);
-      if (!__native_fetch) throw new Error('fetch_unavailable');
-
-      const base = (w && w.__API_BASE__) ? w.__API_BASE__ : (w && w.location && w.location.origin ? w.location.origin : '');
-      const url = '/sync/pull'.startsWith('/') ? (base.replace(/\/\/+$/, '') + '/sync/pull') : '/sync/pull';
-
-      const fopts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-      const r = await __native_fetch(url, fopts);
-      const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
-      const data = ct.includes('application/json') ? await r.json().catch(() => null) : await r.text().catch(() => null);
-      resp = { status: r.status, data };
-    }
+    // Chama window.apiFetch e assume que ele retorna o payload (JSON já parseado) ou lança em caso de erro
+    const payload = await w.apiFetch(finalPath, { method: 'POST', body });
+    const resp = { status: 200, data: payload };
 
     const data = resp && resp.data ? resp.data : {};
     let items = Array.isArray(data.items) ? data.items : [];
