@@ -607,7 +607,8 @@
 
       function carregarEscolas(){
         try{
-          const texto = localStorage.getItem(STORAGE_KEY);
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          const texto = (storage && typeof storage.getItem === 'function') ? storage.getItem(STORAGE_KEY) : null;
           if (!texto) return [];
           const arr = JSON.parse(texto);
           return Array.isArray(arr) ? arr : [];
@@ -619,7 +620,8 @@
 
       function salvarEscolas(lista){
         try{
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(lista));
         }catch(e){
           console.warn('Erro ao salvar escolas no localStorage:', e);
         }
