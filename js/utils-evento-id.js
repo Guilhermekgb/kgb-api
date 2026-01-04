@@ -21,7 +21,8 @@ function getEventoId(){
           const v = window.readLS('eventoSelecionado');
           ls = (v == null) ? null : (typeof v === 'string' ? v : JSON.stringify(v));
         } else if (typeof localStorage !== 'undefined') {
-          ls = localStorage.getItem('eventoSelecionado');
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          ls = (storage && typeof storage.getItem === 'function') ? storage.getItem('eventoSelecionado') : null;
         }
       } catch {}
       if (ls) { console.warn('[EVENTO] id não veio na URL; usando fallback legacy eventoSelecionado'); return String(ls); }
