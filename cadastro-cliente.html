@@ -566,10 +566,10 @@ body.no-scroll{
         const callOpts = { method: m, headers };
         if (m !== 'GET' && m !== 'HEAD') callOpts.body = body;
 
-        // Preferir window.apiFetch quando disponível
-        if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+        // Preferir window['apiFetch'] quando disponível
+        if (typeof window !== 'undefined' && typeof window['apiFetch'] === 'function') {
           try {
-            const data = await window.apiFetch(String(endpoint || ''), callOpts);
+            const data = await window['apiFetch'](String(endpoint || ''), callOpts);
             return { status: 200, data };
           } catch (err) {
             console.warn('[cadastro-cliente] apiFetch failed', err);
