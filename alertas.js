@@ -56,7 +56,18 @@ function addRowMicroUX(tr, i){
   }catch{}
 }
 
-  const getLS = (k, fb) => { try{ return JSON.parse(localStorage.getItem(k)) ?? fb; }catch{ return fb; } };
+  const getLS = (k, fb) => {
+    try {
+      if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+        const v = window.readLS(k);
+        return (v == null ? fb : v);
+      }
+      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      return (v == null ? fb : v);
+    } catch {
+      return fb;
+    }
+  };
   const setChip = (n) => { const el = $('#chipTotal'); if (el) el.textContent = `${n} alerta(s)`; };
 
   const isQuitado = (st) => {
