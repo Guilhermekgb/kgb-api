@@ -1,3 +1,254 @@
+/* menu-lateral.js — INJETOR GLOBAL ÚNICO (SEM BACKEND / SEM FETCH) */
+(function () {
+  "use strict";
+
+  var CFG = {
+    menuUrl: "menu-lateral.html",
+    layoutCssHref: "layout.css",
+    desktopMin: 1024
+  };
+
+  function ready(fn) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
+  }
+
+  function ensureLayoutCss() {
+    var links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute("href") || "").trim();
+      if (href === CFG.layoutCssHref || href.endsWith("/" + CFG.layoutCssHref)) return;
+    }
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = CFG.layoutCssHref;
+    document.head.appendChild(link);
+  }
+
+  function ensureBaseLayout() {
+    // Se já existir layout, só garante sidebar/main/topbar
+    var layout = document.querySelector(".layout");
+    if (!layout) {
+      layout = document.createElement("div");
+      layout.className = "layout";
+
+      var sidebar = document.createElement("aside");
+      sidebar.className = "sidebar";
+      sidebar.id = "menuLateral";
+
+      var main = document.createElement("div");
+      main.className = "main";
+
+      var topbar = document.createElement("header");
+      topbar.className = "topbar";
+
+      var burger = document.createElement("button");
+      burger.className = "hamburger";
+      burger.type = "button";
+      burger.setAttribute("aria-label", "Abrir menu");
+      burger.setAttribute("aria-expanded", "false");
+      burger.textContent = "☰";
+
+      var title = document.createElement("div");
+      title.className = "topbar-title";
+      title.textContent = document.title || "KGB Buffet";
+
+      topbar.appendChild(burger);
+      topbar.appendChild(title);
+
+      var content = document.createElement("main");
+      content.className = "content";
+      content.setAttribute("role", "main");
+
+      // move tudo do body pra dentro do content (exceto scripts)
+      var nodes = Array.prototype.slice.call(document.body.childNodes);
+      for (var j = 0; j < nodes.length; j++) {
+        var node = nodes[j];
+        if (node.nodeType === 1 && node.tagName === "SCRIPT") continue;
+        content.appendChild(node);
+      }
+
+      // reconstruir body
+      document.body.innerHTML = "";
+      main.appendChild(topbar);
+      main.appendChild(content);
+      layout.appendChild(sidebar);
+      layout.appendChild(main);
+      document.body.appendChild(layout);
+    }
+
+    // garantir sidebar
+    var sidebar2 = document.getElementById("menuLateral") || document.querySelector(".sidebar");
+    if (!sidebar2) {
+      sidebar2 = document.createElement("aside");
+      sidebar2.className = "sidebar";
+      sidebar2.id = "menuLateral";
+      layout.insertBefore(sidebar2, layout.firstChild || null);
+    } else {
+      sidebar2.id = "menuLateral";
+      sidebar2.classList.add("sidebar");
+    }
+
+    // garantir main
+    var main2 = layout.querySelector(".main");
+    if (!main2) {
+      main2 = document.createElement("div");
+      main2.className = "main";
+      // move tudo que não é sidebar pro main
+      var kids = Array.prototype.slice.call(layout.children);
+      for (var k = 0; k < kids.length; k++) if (kids[k] !== sidebar2) main2.appendChild(kids[k]);
+      layout.appendChild(main2);
+    }
+
+    // garantir topbar + burger
+    var topbar2 = main2.querySelector(".topbar");
+    if (!topbar2) {
+      topbar2 = document.createElement("header");
+      topbar2.className = "topbar";
+      main2.insertBefore(topbar2, main2.firstChild || null);
+    }
+    var burger2 = topbar2.querySelector(".hamburger");
+    if (!burger2) {
+      burger2 = document.createElement("button");
+      burger2.className = "hamburger";
+      burger2.type = "button";
+      burger2.setAttribute("aria-label", "Abrir menu");
+      burger2.setAttribute("aria-expanded", "false");
+      burger2.textContent = "☰";
+      topbar2.insertBefore(burger2, topbar2.firstChild || null);
+    }
+
+    // garantir content
+    var content2 = main2.querySelector(".content");
+    if (!content2) {
+      content2 = document.createElement("main");
+      content2.className = "content";
+      content2.setAttribute("role", "main");
+      // move tudo que não é topbar para content
+      var toMove = [];
+      var cn = Array.prototype.slice.call(main2.childNodes);
+      for (var m = 0; m < cn.length; m++) {
+        var n = cn[m];
+        if (n.nodeType === 1 && n.classList && n.classList.contains("topbar")) continue;
+        toMove.push(n);
+      }
+      for (var p = 0; p < toMove.length; p++) content2.appendChild(toMove[p]);
+      main2.appendChild(content2);
+    }
+
+    return { sidebar: sidebar2, burger: burger2 };
+  }
+
+  function defaultMenuHtml() {
+    return [
+      '<div class="sidebar-brand">KGB Buffet</div>',
+      '<nav class="sidebar-nav">',
+      '  <a class="sidebar-link" href="dashboard.html">Dashboard</a>',
+      '  <a class="sidebar-link" href="financeiro-resumo.html">Financeiro</a>',
+      '  <a class="sidebar-link" href="backup.html">Backup</a>',
+      "</nav>"
+    ].join("\n");
+  }
+
+  function ensureLucideThenRender() {
+    try {
+      if (window.lucide && typeof window.lucide.createIcons === "function") {
+        window.lucide.createIcons();
+        return;
+      }
+    } catch (e) {}
+    // carrega lucide uma vez (se necessário)
+    if (document.querySelector('script[data-lucide-loader="1"]')) return;
+    var s = document.createElement("script");
+    s.src = "https://unpkg.com/lucide@latest";
+    s.async = true;
+    s.setAttribute("data-lucide-loader", "1");
+    s.onload = function () {
+      try { window.lucide && window.lucide.createIcons && window.lucide.createIcons(); } catch (e) {}
+    };
+    document.head.appendChild(s);
+  }
+
+  function extractMenuFragment(html) {
+    // menu-lateral.html é página completa; vamos extrair apenas o miolo do menu
+    var tmp = document.createElement("div");
+    tmp.innerHTML = html;
+
+    // tenta encontrar a estrutura padrão do menu
+    var el =
+      tmp.querySelector("#menuLateral .menu-lateral") ||
+      tmp.querySelector("aside#menuLateral .menu-lateral") ||
+      tmp.querySelector(".menu-lateral") ||
+      tmp;
+
+    // queremos inserir o HTML do bloco do menu
+    if (el === tmp) return tmp.innerHTML;
+    return el.outerHTML || el.innerHTML;
+  }
+
+  function loadMenuInto(sidebar) {
+    // fallback imediato
+    try { sidebar.innerHTML = defaultMenuHtml(); } catch (e) {}
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", CFG.menuUrl, true);
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+        sidebar.innerHTML = extractMenuFragment(xhr.responseText);
+        ensureLucideThenRender();
+      }
+    };
+    try { xhr.send(); } catch (e) {}
+  }
+
+  function bindUI(burger) {
+    var overlay = document.querySelector(".sidebar-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "sidebar-overlay";
+      overlay.setAttribute("aria-hidden", "true");
+      document.body.appendChild(overlay);
+    }
+
+    function setOpen(open) {
+      document.body.classList.toggle("sidebar-open", !!open);
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    burger.addEventListener("click", function (e) {
+      e.preventDefault();
+      var isOpen = document.body.classList.contains("sidebar-open");
+      setOpen(!isOpen);
+    });
+
+    overlay.addEventListener("click", function () {
+      if (window.innerWidth < CFG.desktopMin) setOpen(false);
+    });
+
+    window.addEventListener("resize", function () {
+      if (window.innerWidth >= CFG.desktopMin) setOpen(true);
+      else setOpen(false);
+    });
+
+    // desktop aberto por padrão
+    setOpen(window.innerWidth >= CFG.desktopMin);
+  }
+
+  ready(function () {
+    ensureLayoutCss();
+    var parts = ensureBaseLayout();
+
+    if (!parts.sidebar.dataset.menuReady) {
+      parts.sidebar.dataset.menuReady = "1";
+      loadMenuInto(parts.sidebar);
+    }
+    bindUI(parts.burger);
+
+    document.body.classList.add("layout-ready");
+    console.log("[menu-lateral] OK");
+  });
+})();
 /* menu-lateral.js — INJETOR GLOBAL (SEM BACKEND / SEM FETCH) */
 (function () {
   "use strict";
