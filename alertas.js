@@ -62,7 +62,9 @@ function addRowMicroUX(tr, i){
         const v = window.readLS(k);
         return (v == null ? fb : v);
       }
-      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+      const v = raw ? JSON.parse(raw) : null;
       return (v == null ? fb : v);
     } catch {
       return fb;
