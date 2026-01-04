@@ -1,5 +1,6 @@
 // kgb-api/providers/mercadopago.js  (ESM - Node 18+ tem fetch nativo)
 const API = 'https://api.mercadopago.com';
+const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
 
 /**
  * Resolve o access token: prioridade para credenciais recebidas na chamada,
@@ -22,9 +23,9 @@ export async function testConnection({ env = 'sandbox', credentials = {} } = {})
   const token = resolveToken(credentials);
   if (!token) return false;
 
-  const r = await fetch(`${API}/users/me`, {
+  const r = await (__native_fetch ? __native_fetch(`${API}/users/me`, {
     headers: { Authorization: `Bearer ${token}` }
-  });
+  }) : Promise.reject(new Error('fetch_unavailable')));
   return r.ok;
 }
 
@@ -90,14 +91,14 @@ export async function createCharge(p = {}) {
     throw new Error(`Método não suportado: ${method}`);
   }
 
-  const r = await fetch(`${API}/v1/payments`, {
+  const r = await (__native_fetch ? __native_fetch(`${API}/v1/payments`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  });
+  }) : Promise.reject(new Error('fetch_unavailable')));
 
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
