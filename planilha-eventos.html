@@ -332,9 +332,17 @@
 
     async function carregarEventos(){
       try {
-        const resp = await fetch(`${API_BASE}/eventos`);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const json = await resp.json();
+        let resp;
+        const url = `${API_BASE}/eventos`;
+        if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+          resp = await window.apiFetch(url);
+        } else {
+          const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
+          if (!nativeFetch) throw new Error('fetch_unavailable');
+          resp = await nativeFetch(url);
+        }
+        if (!resp || (resp.ok === false)) throw new Error('HTTP error');
+        const json = (typeof resp.json === 'function') ? await resp.json() : resp;
         // servidor responde { ok:true, data:[...] }
         state.rows = Array.isArray(json.data) ? json.data : [];
         render();
@@ -351,13 +359,17 @@
         : `${API_BASE}/eventos`;
       const method = isEdit ? 'PUT' : 'POST';
 
-      const resp = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(obj)
-      });
+      let resp;
+      const opts = { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) };
+      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+        resp = await window.apiFetch(url, opts);
+      } else {
+        const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
+        if (!nativeFetch) throw new Error('fetch_unavailable');
+        resp = await nativeFetch(url, opts);
+      }
 
-      const json = await resp.json().catch(() => ({}));
+      const json = (resp && typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : (resp || {});
 
       if (!resp.ok || json.ok === false){
         throw new Error(json.error || 'Erro ao salvar evento no servidor.');
@@ -368,13 +380,20 @@
     }
 
     async function removerEventoNoServidor(id){
-      const resp = await fetch(`${API_BASE}/eventos/${id}`, {
-        method: 'DELETE'
-      });
+      let resp;
+      const opts = { method: 'DELETE' };
+      const urlDel = `${API_BASE}/eventos/${id}`;
+      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+        resp = await window.apiFetch(urlDel, opts);
+      } else {
+        const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
+        if (!nativeFetch) throw new Error('fetch_unavailable');
+        resp = await nativeFetch(urlDel, opts);
+      }
 
-      const json = await resp.json().catch(() => ({}));
+      const json = (resp && typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : (resp || {});
 
-      if (!resp.ok || json.ok === false){
+      if (resp && resp.ok === false || json.ok === false){
         throw new Error(json.error || 'Erro ao remover evento.');
       }
     }
