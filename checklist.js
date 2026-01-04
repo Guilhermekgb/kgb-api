@@ -35,17 +35,10 @@ async function apiRequest(path, options = {}) {
   if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     return window.apiFetch((String(path || '').startsWith('/') ? (base.replace(/\/\/+$/, '') + path) : path), opts);
   }
-
-  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
-    ? globalThis['f'+'etch']
-    : (typeof fetch !== 'undefined' ? fetch : null);
-  if (!__native_fetch) throw new Error('fetch_unavailable');
-
+  // Cloud-only: exigir window.apiFetch; lançar `api_unavailable` se ausente
+  if (!window || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
   const url = (String(path || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + path) : String(path || '');
-  const res = await __native_fetch(url, opts);
-  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-  if (ct.includes('application/json')) return await res.json().catch(() => null);
-  return await res.text().catch(() => null);
+  return await window.apiFetch(url, opts);
 }
 
 /* =========================
