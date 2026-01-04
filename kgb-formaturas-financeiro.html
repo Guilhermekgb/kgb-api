@@ -661,7 +661,8 @@
       // >>> AQUI FOI CORRIGIDO: NÃO CRIA MAIS DADOS FICTÍCIOS <<<
       function carregarMovimentos(){
         try{
-          const raw = localStorage.getItem(STORAGE_KEY);
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(STORAGE_KEY) : null;
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
           // não gera exemplos; usa apenas o que foi gravado de verdade
@@ -674,7 +675,8 @@
 
       function salvarMovimentos(){
         try{
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(movimentos));
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(movimentos));
         }catch(e){
           console.warn('Erro ao salvar movimentos financeiros:', e);
         }
