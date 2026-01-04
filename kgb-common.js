@@ -440,93 +440,19 @@ window.__API_BASE__ = base;
   }
   // === FIM PATCH API-BASE RESOLVER ===
 
-  // 2) Helper padrão para chamadas REST da API real (com timeout + toasts)
-  // Uso: apiFetch('/audit/log')  ou  apiFetch('/fin/metrics')
-  const DEFAULT_TIMEOUT_MS = 12000;
+  // 2) Transport: usar APENAS window.apiFetch fornecido externamente.
+  // Se não existir `window.apiFetch`, falhamos rapidamente com erro explicito `api_unavailable`.
+  function __require_window_apiFetch() {
+    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch;
+    try { window.toast?.('Recurso API indisponível (apiFetch não encontrado).', 'error'); } catch {}
+    throw new Error('api_unavailable');
+  }
 
-  // Evita usar o token literal "fetch" no código fonte para passar na auditoria;
-  // resolvemos a referência em runtime como `globalThis['f'+'etch']`.
-  const __kgb_native_fcall = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : ((typeof window !== 'undefined' && window['f'+'etch']) ? window['f'+'etch'] : null);
-
-  window.apiFetch = async function apiFetch(path, opts = {}) {
-    const base = (__kgbGetAPIBase() || '').replace(/\/+$/, '');
-    const p = String(path || '');
-    const isAbsolute = /^https?:\/\//i.test(p);
-
-    // Só exige API_BASE quando o caminho for relativo
-    if (!isAbsolute && !base) {
-      try { window.toast?.('API_BASE não configurada.', 'warn'); } catch {}
-      throw new Error('API_BASE vazia');
-    }
-
-    const url = isAbsolute ? p : `${base}${p.startsWith('/') ? '' : '/'}${p}`;
-
-    // Timeout
-    const ctrl = new AbortController();
-    const timeoutMs = opts.timeout ?? DEFAULT_TIMEOUT_MS;
-    const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
-
-    try {
-      // --- monta headers padrão + opcionais do caller
-      const baseHeaders = (typeof __kgbAuthHeaders === 'function') ? __kgbAuthHeaders() : {};
-      const headers = new Headers({ ...baseHeaders, ...(opts.headers || {}) });
-
-      // Se method for GET/HEAD, remover body e não setar Content-Type
-      const method = (opts.method || (opts.body ? 'POST' : 'GET')).toUpperCase();
-      let body = opts.body;
-      if (method === 'GET' || method === 'HEAD') {
-        body = undefined;
-        if (headers.has('content-type')) headers.delete('content-type');
-      } else {
-        // Se body for objeto (e não FormData) e não houver content-type, serialize como JSON
-        if (body && typeof body === 'object' && !(body instanceof FormData) && !headers.has('content-type')) {
-          headers.set('content-type', 'application/json');
-          try { body = JSON.stringify(body); } catch {}
-        }
-      }
-
-      const fetchOpts = {
-        method,
-        headers,
-        signal: ctrl.signal,
-        credentials: opts.credentials || 'include'
-      };
-      if (body !== undefined) fetchOpts.body = body;
-
-      const res = await (__kgb_native_fcall ? __kgb_native_fcall(url, fetchOpts) : Promise.reject(new Error('native_fetch_unavailable')));
-      clearTimeout(timer);
-
-      if (!res.ok) {
-        let detail = '';
-        try {
-          const ctErr = res.headers.get('content-type') || '';
-          if (ctErr.includes('application/json')) {
-            const j = await res.json();
-            detail = j?.error || j?.message || JSON.stringify(j);
-          } else {
-            detail = await res.text();
-          }
-        } catch {}
-        const msg = `API ${res.status}: ${detail || res.statusText}`;
-        try { window.toast?.(msg, 'error'); } catch {}
-        const err = new Error(msg);
-        err.status = res.status;
-        err.url = url;
-        throw err;
-      }
-
-      const ct = res.headers.get('content-type') || '';
-      return ct.includes('application/json') ? res.json() : res.text();
-
-    } catch (err) {
-      clearTimeout(timer);
-      if (String(err?.message || err) === 'timeout' || err?.name === 'AbortError') {
-        try { window.toast?.('Tempo de resposta da API esgotado.', 'warn'); } catch {}
-        throw new Error('timeout');
-      }
-      throw err;
-    }
-  };
+  // Exposição interna compatível: replace calls to apiFetch(...) with the external implementation.
+  async function __call_apiFetch(path, opts = {}) {
+    const af = __require_window_apiFetch();
+    return af(path, opts);
+  }
 
   /* === INÍCIO PATCH G — Toasts globais === */
   (function(){
@@ -584,7 +510,7 @@ window.__API_BASE__ = base;
       try {
         // se vier array, envelopa como {changes: [...]} (formato que o backend espera)
         const body = Array.isArray(changes) ? { changes } : changes;
-        await apiFetch('/sync/push', { method:'POST', body });
+        await __call_apiFetch('/sync/push', { method:'POST', body });
         return true;
       } catch (e) {
         console.warn('[syncPush] falhou:', e);
@@ -596,7 +522,7 @@ window.__API_BASE__ = base;
     async function syncPull(sinceTs = 0) {
       try {
         const qs = sinceTs ? `?since=${encodeURIComponent(String(sinceTs))}` : '';
-        const data = await apiFetch(`/sync/pull${qs}`);
+        const data = await __call_apiFetch(`/sync/pull${qs}`);
         // aqui você decide como aplicar: mesclar FG, eventos, etc.
         return data || {};
       } catch (e) {
