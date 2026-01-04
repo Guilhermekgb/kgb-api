@@ -16,11 +16,10 @@
     function criarLead() {
       document.getElementById('status').textContent = 'Enviando...';
 
-      fetch((window.__API_BASE__ || window.location.origin) + "/leads", {
+      const url = (window.__API_BASE__ || window.location.origin) + "/leads";
+      const opts = {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nome: "Casamento Teste",
           telefone: "11999999999",
@@ -30,16 +29,35 @@
           origem: "Manual",
           origemTipo: "Teste"
         })
-      })
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('status').textContent = 'Lead criado com sucesso!';
-        document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
-      })
-      .catch(err => {
-        document.getElementById('status').textContent = 'Erro ao criar lead. Veja o console.';
-        console.error(err);
-      });
+      };
+
+      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+        window.apiFetch(url, opts)
+          .then(data => {
+            document.getElementById('status').textContent = 'Lead criado com sucesso!';
+            document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+          })
+          .catch(err => {
+            document.getElementById('status').textContent = 'Erro ao criar lead. Veja o console.';
+            console.error(err);
+          });
+      } else {
+        const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
+        if (!nativeFetch){
+          document.getElementById('status').textContent = 'Fetch não disponível no ambiente.';
+          return;
+        }
+        nativeFetch(url, opts)
+          .then(r => r.json())
+          .then(data => {
+            document.getElementById('status').textContent = 'Lead criado com sucesso!';
+            document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+          })
+          .catch(err => {
+            document.getElementById('status').textContent = 'Erro ao criar lead. Veja o console.';
+            console.error(err);
+          });
+      }
     }
   </script>
 </body>
