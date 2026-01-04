@@ -812,8 +812,11 @@
           if (isPortalMode()) {
             return getJSON(LS_KEY_EVENTOS, []) || [];
           }
-          const storage = window['local'+'Storage'];
-          const raw = storage && storage.getItem ? storage.getItem(LS_KEY_EVENTOS) : null;
+          const raw = (typeof window !== 'undefined' && typeof window.readLS === 'function')
+            ? window.readLS(LS_KEY_EVENTOS)
+            : (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+              ? window['local'+'Storage'].getItem(LS_KEY_EVENTOS)
+              : null;
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
           return arr;
@@ -826,7 +829,13 @@
       function salvarEventos(lista){
         try{
           if (isPortalMode()) { setJSON(LS_KEY_EVENTOS, lista); return; }
-          try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista)); }catch(e){}
+          try{
+            if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+              window.writeLS(LS_KEY_EVENTOS, lista);
+            } else {
+              const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista));
+            }
+          }catch(e){}
         }catch(e){
           console.error('Erro ao salvar eventos', e);
         }
@@ -837,8 +846,11 @@
       function carregarConvites(eventos){
         try{
           if (isPortalMode()) return getJSON(LS_KEY_CONVITES, []) || [];
-          const storage = window['local'+'Storage'];
-          const raw = storage && storage.getItem ? storage.getItem(LS_KEY_CONVITES) : null;
+          const raw = (typeof window !== 'undefined' && typeof window.readLS === 'function')
+            ? window.readLS(LS_KEY_CONVITES)
+            : (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+              ? window['local'+'Storage'].getItem(LS_KEY_CONVITES)
+              : null;
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
           return arr;
@@ -851,7 +863,13 @@
       function salvarConvites(lista){
         try{
           if (isPortalMode()) { setJSON(LS_KEY_CONVITES, lista); return; }
-          try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_CONVITES, JSON.stringify(lista)); }catch(e){}
+          try{
+            if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+              window.writeLS(LS_KEY_CONVITES, lista);
+            } else {
+              const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_CONVITES, JSON.stringify(lista));
+            }
+          }catch(e){}
         }catch(e){
           console.error('Erro ao salvar convites', e);
         }
@@ -862,8 +880,11 @@
       function carregarFormandos(eventos){
         try{
           if (isPortalMode()) return getJSON(LS_KEY_FORMANDOS, []) || [];
-          const storage = window['local'+'Storage'];
-          const raw = storage && storage.getItem ? storage.getItem(LS_KEY_FORMANDOS) : null;
+          const raw = (typeof window !== 'undefined' && typeof window.readLS === 'function')
+            ? window.readLS(LS_KEY_FORMANDOS)
+            : (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+              ? window['local'+'Storage'].getItem(LS_KEY_FORMANDOS)
+              : null;
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
           return arr;
@@ -876,7 +897,13 @@
       function salvarFormandos(lista){
         try{
           if (isPortalMode()) { setJSON(LS_KEY_FORMANDOS, lista); return; }
-          try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_FORMANDOS, JSON.stringify(lista)); }catch(e){}
+          try{
+            if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+              window.writeLS(LS_KEY_FORMANDOS, lista);
+            } else {
+              const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_FORMANDOS, JSON.stringify(lista));
+            }
+          }catch(e){}
         }catch(e){
           console.error('Erro ao salvar formandos', e);
         }
@@ -887,8 +914,11 @@
       function carregarHistorico(){
         try{
           if (isPortalMode()) return getJSON(LS_KEY_HISTORICO, []) || [];
-          const storage = window['local'+'Storage'];
-          const raw = storage && storage.getItem ? storage.getItem(LS_KEY_HISTORICO) : null;
+          const raw = (typeof window !== 'undefined' && typeof window.readLS === 'function')
+            ? window.readLS(LS_KEY_HISTORICO)
+            : (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+              ? window['local'+'Storage'].getItem(LS_KEY_HISTORICO)
+              : null;
           let arr = raw ? JSON.parse(raw) : [];
           if (!Array.isArray(arr)) arr = [];
           return arr;
@@ -901,7 +931,13 @@
       function salvarHistorico(lista){
         try{
           if (isPortalMode()) { setJSON(LS_KEY_HISTORICO, lista); return; }
-          try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_HISTORICO, JSON.stringify(lista)); }catch(e){}
+          try{
+            if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+              window.writeLS(LS_KEY_HISTORICO, lista);
+            } else {
+              const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_HISTORICO, JSON.stringify(lista));
+            }
+          }catch(e){}
         }catch(e){
           console.error('Erro ao salvar histórico', e);
         }
