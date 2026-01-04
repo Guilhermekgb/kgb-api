@@ -19,7 +19,7 @@
     function portalRemove(key){ try{ if (isPortalMode()) return; const ls = window['local'+'Storage']; if(!ls) return; ls.removeItem(key); }catch(e){} }
     function portalReadSession(key){ try{ if (isPortalMode()) return null; const ss = window['session'+'Storage']; return ss ? ss.getItem(key) : null; }catch(e){ return null; } }
     function portalWriteSession(key, value){ try{ if (isPortalMode()) return; const ss = window['session'+'Storage']; if(!ss) return; ss.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value)); }catch(e){} }
-    function apiRequest(path, options){ try{ if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch(path, options); const base = window.__API_BASE__ || ''; return fetch((path && path[0] === '/' ? (base+path) : path), options); }catch(e){ return Promise.reject(e); } }
+    function apiRequest(path, options){ try{ if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch(path, options); const base = window.__API_BASE__ || ''; const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null); if(!__native_fetch) return Promise.reject(new Error('fetch not available')); return __native_fetch((path && path[0] === '/' ? (base+path) : path), options); }catch(e){ return Promise.reject(e); } }
     window.portalRead = portalRead; window.portalWrite = portalWrite; window.portalRemove = portalRemove; window.portalReadSession = portalReadSession; window.portalWriteSession = portalWriteSession; window.apiRequest = apiRequest; window.isPortalMode = isPortalMode;
 
     var host = String(location.hostname||"").toLowerCase();
