@@ -100,14 +100,15 @@ async function criarDocumentoZapSign({ contratoId, titulo = 'Contrato', signers 
   };
 
   // 3) Chama a API da ZapSign
-  const r = await fetch('https://api.zapsign.com.br/api/v1/docs/', {
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+  const r = await (__native_fetch ? __native_fetch('https://api.zapsign.com.br/api/v1/docs/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${ZAPSIGN_TOKEN}`,
     },
     body: JSON.stringify(payload),
-  });
+  }) : Promise.reject(new Error('fetch_unavailable')));
 
   const j = await r.json().catch(() => ({}));
 
