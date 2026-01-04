@@ -752,7 +752,8 @@
 
       function carregarTipos(){
         try{
-          const bruto = localStorage.getItem(LS_KEY);
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          const bruto = (storage && typeof storage.getItem === 'function') ? storage.getItem(LS_KEY) : null;
           if(!bruto) return [];
           const arr = JSON.parse(bruto);
           return Array.isArray(arr) ? arr : [];
@@ -764,7 +765,8 @@
 
       function salvarTipos(lista){
         try{
-          localStorage.setItem(LS_KEY, JSON.stringify(lista));
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          if (storage && typeof storage.setItem === 'function') storage.setItem(LS_KEY, JSON.stringify(lista));
         }catch(e){
           console.error('Erro salvando tipos de evento no localStorage', e);
         }
