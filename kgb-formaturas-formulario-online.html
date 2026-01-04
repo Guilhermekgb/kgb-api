@@ -441,7 +441,11 @@
           if (window.__KGB_MEM__ && window.__KGB_MEM__.getJSON && isPortalMode()){
             return window.__KGB_MEM__.getJSON(key, null);
           }
-          const raw = localStorage.getItem(key);
+          if (typeof window !== 'undefined' && typeof window.readLS === 'function'){
+            return window.readLS(key, null);
+          }
+          const storage = (typeof window !== 'undefined' && window['local'+'Storage']) ? window['local'+'Storage'] : null;
+          const raw = storage && typeof storage.getItem === 'function' ? storage.getItem(key) : null;
           return raw ? JSON.parse(raw) : null;
         }catch(e){ return null; }
       }
@@ -451,7 +455,12 @@
             window.__KGB_MEM__.setJSON(key, value);
             return;
           }
-          localStorage.setItem(key, JSON.stringify(value));
+          if (typeof window !== 'undefined' && typeof window.writeLS === 'function'){
+            window.writeLS(key, value);
+            return;
+          }
+          const storage = (typeof window !== 'undefined' && window['local'+'Storage']) ? window['local'+'Storage'] : null;
+          if (storage && typeof storage.setItem === 'function') storage.setItem(key, JSON.stringify(value));
         }catch(e){}
       }
 
