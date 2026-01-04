@@ -77,9 +77,9 @@ function portalWrite(key, value){
   }catch{}
 }
 
-async function apiGet(path) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'GET' }) : null); }
-async function apiPost(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'POST', body }) : null); }
-async function apiPut(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'PUT', body }) : null); }
+async function apiGet(path) { if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') throw new Error('api_unavailable'); return await window['apiFetch'](path, { method: 'GET' }); }
+async function apiPost(path, body) { if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') throw new Error('api_unavailable'); return await window['apiFetch'](path, { method: 'POST', body }); }
+async function apiPut(path, body) { if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') throw new Error('api_unavailable'); return await window['apiFetch'](path, { method: 'PUT', body }); }
 
 // === END PATCH PHASE 1 ===
 
@@ -92,12 +92,12 @@ async function api(endpoint, method = 'GET', body = {}) {
   const m = (method || 'GET').toUpperCase();
   const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
-  if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') {
+  if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') {
     throw new Error('api_unavailable');
   }
 
   try {
-    const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+    const payload = await window['apiFetch'](String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
     return { status: 200, data: payload };
   } catch (err) {
     console.warn('[clientes-lista] window.apiFetch falhou', err);
