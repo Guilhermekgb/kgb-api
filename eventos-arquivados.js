@@ -11,28 +11,22 @@ function portalSetJSON(key, obj) { try { portalWrite(key, JSON.stringify(obj)); 
 async function apiRequest(path, opts) {
   const o = opts || {};
   const w = (typeof window !== 'undefined') ? window : null;
-  // prefer window.apiFetch
-  try { const af = w && w['api'+'Fetch']; if (typeof af === 'function') return af(path, o); } catch(e) {}
-  // try window['handle'+'Request']
-  try { const hr = w && w['handle'+'Request']; if (typeof hr === 'function') return hr(path, o); } catch(e) {}
-  // try dynamic import of local routes module (bracket-notation on export)
+  // Cloud-only: exigir window['apiFetch'] e lançar 'api_unavailable' se ausente
+  if (!w || typeof w['apiFetch'] !== 'function') {
+    return Promise.reject(new Error('api_unavailable'));
+  }
+
   try {
-    const mod = await import('./api/routes.js');
-    const hrMod = mod && mod['handle'+'Request'];
-    if (typeof hrMod === 'function') return hrMod(path, o);
-  } catch(e) {}
-  // fallback via fetch using __API_BASE__ if available
-  try {
-    const base = (w && (w.__API_BASE__ || w.API_BASE)) ? (w.__API_BASE__ || w.API_BASE) : '';
-    const url = (String(path).startsWith('http') ? path : (base + path));
-    const headers = Object.assign({ 'content-type': 'application/json' }, (o.headers || {}));
-    const body = (o.body && typeof o.body !== 'string') ? JSON.stringify(o.body) : o.body;
-    const f = (w && w['fe'+'tch']) ? w['fe'+'tch'] : (typeof fetch === 'function' ? fetch : null);
-    if (!f) throw new Error('no fetch available');
-    const r = await f(url, { method: o.method || 'GET', headers, body });
-    const ct = r.headers && r.headers.get ? (r.headers.get('content-type') || '') : '';
-    const data = ct.includes('application/json') ? await r.json() : await r.text();
-    return { ok: r.ok, status: r.status, data };
+    const payload = await w['apiFetch'](path, o);
+    // Normaliza alguns formatos possíveis de retorno
+    if (payload && typeof payload === 'object') {
+      if ('status' in payload && 'data' in payload) return payload;
+      if ('ok' in payload) {
+        try { const data = (typeof payload.json === 'function') ? await payload.json().catch(()=>payload.data||null) : (payload.data || null); return { ok: payload.ok, status: payload.status || (payload.ok?200:500), data }; } catch(e){ return { ok: payload.ok, status: payload.status||500, data: payload.data||null }; }
+      }
+      return { ok: true, status: 200, data: payload };
+    }
+    return { ok: false, status: 500, data: null };
   } catch (e) {
     return Promise.reject(e);
   }
@@ -70,25 +64,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Carrega base dos arquivados da API (quando disponível) com fallback pro localStorage
 async function carregar() {
   let eventos = [];
-
-  if (IS_REMOTE) {
+  // Cloud-only load: require remote API
+  if (!IS_REMOTE) {
+    console.warn('[arq] API não configurada (modo local). eventos-arquivados agora exige API.');
+    eventos = [];
+  } else {
     try {
       const resp = await callApi('/eventos', 'GET', {});
       if (resp && Array.isArray(resp.data)) {
         eventos = resp.data;
-        // espelha no localStorage para telas antigas (portal-safe)
-        setLS('eventos', eventos);
       } else {
-        console.warn('[arq] Resposta da API sem lista de eventos, usando cache local.');
-        eventos = getLS('eventos', []);
+        console.warn('[arq] Resposta da API sem lista de eventos; retornando lista vazia.');
+        eventos = [];
       }
     } catch (e) {
-      console.warn('[arq] Falha ao carregar eventos da API, usando cache local.', e);
-      eventos = getLS('eventos', []);
+      console.warn('[arq] Falha ao carregar eventos da API; retornando lista vazia.', e);
+      eventos = [];
     }
-  } else {
-    // modo antigo: só local
-    eventos = getLS('eventos', []);
   }
 
   // É arquivado se status = "arquivado"
@@ -259,8 +251,7 @@ function render() {
 async function desarquivar(id) {
   if (!confirm("Deseja desarquivar este evento? Ele voltará para a tela operacional.")) return;
 
-  let eventos = getLS("eventos", []);
-  const i = eventos.findIndex(e => String(e.id) === String(id));
+  const i = TODOS.findIndex(e => String(e.id) === String(id));
   if (i === -1) {
     alert("Evento não encontrado.");
     return;
@@ -268,10 +259,10 @@ async function desarquivar(id) {
 
   // monta versão atualizada do evento
   const atualizado = {
-    ...eventos[i],
+    ...TODOS[i],
     status: "ativo",
     arquivamento: {
-      ...(eventos[i].arquivamento || {}),
+      ...(TODOS[i].arquivamento || {}),
       desarquivadoEm: new Date().toISOString()
     }
   };
@@ -282,24 +273,20 @@ async function desarquivar(id) {
       const resp = await callApi(`/eventos/${encodeURIComponent(id)}`, 'PUT', atualizado);
       if (resp && (resp.status === 200 || resp.status === 204)) {
         // se o backend devolver o evento atualizado, usamos ele; senão usamos o nosso
-        eventos[i] = resp.data || atualizado;
+        TODOS[i] = resp.data || atualizado;
       } else {
-        console.warn('[arq] Falha ao desarquivar na API, mantendo alteração só local.', resp);
-        eventos[i] = atualizado;
-        alert('Não foi possível sincronizar com a nuvem agora. O evento foi desarquivado apenas neste navegador.');
+        console.warn('[arq] Falha ao desarquivar na API; alteração não aplicada no servidor.', resp);
+        TODOS[i] = atualizado;
+        alert('Não foi possível sincronizar com a nuvem agora. A alteração foi aplicada apenas localmente na sessão.');
       }
     } catch (e) {
-      console.warn('[arq] Erro na API ao desarquivar, mantendo alteração só local.', e);
-      eventos[i] = atualizado;
-      alert('Não foi possível falar com a nuvem agora. O evento foi desarquivado apenas neste navegador.');
+      console.warn('[arq] Erro na API ao desarquivar; alteração aplicada localmente na sessão.', e);
+      TODOS[i] = atualizado;
+      alert('Não foi possível falar com a nuvem agora. A alteração foi aplicada apenas localmente na sessão.');
     }
   } else {
-    // modo antigo: apenas local
-    eventos[i] = atualizado;
+    // modo antigo: este fluxo não é mais suportado (cloud-only)
   }
-
-  // 2) atualiza o cache local
-  setLS("eventos", eventos);
 
   // 3) recarrega lista e reaplica filtros/ordenação
   await carregar();
