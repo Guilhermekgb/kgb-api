@@ -211,3 +211,7 @@ body {
   background: rgba(255,255,255,.10);
 }
 
+/* PATCH emergência: garantir sidebar acima e visível */
+.sidebar{ z-index: 9999 !important; display:block !important; visibility:visible !important; opacity:1 !important; }
+.layout{ overflow: visible !important; }
+
