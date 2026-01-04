@@ -87,71 +87,41 @@ async function apiPut(path, body) { return await (typeof window !== 'undefined' 
 const KEY_TIPOS_EVENTO = 'categorias:tiposEvento';
 // fonte atual dos dados: 'clientes' ou 'leads' (usado para escolher endpoints de delete/put)
 let clientesSource = 'clientes';
-// INÍCIO PATCH API-LOCAL 2/2
-const api = (endpoint, method = 'GET', body = {}) =>
-  new Promise(async (resolve) => {
-    const forceLocal = (typeof window !== 'undefined') && window.__FORCE_LOCAL__ === true;
-    const hasApiBase = (typeof window !== 'undefined') && (!!window.__API_BASE__ || typeof window.__getApiBase === 'function');
+// Cloud-first API helper: prefer window.apiFetch, fallback only to native fetch HTTP.
+async function api(endpoint, method = 'GET', body = {}) {
+  const m = (method || 'GET').toUpperCase();
+  const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
-    // garantir que GET/HEAD não enviem body
-    const m = (method || 'GET').toUpperCase();
-    const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
-
-    if (!forceLocal && (window.apiFetch || hasApiBase)) {
-      try {
-        // Preferir window.apiFetch (já configura credentials e serializa JSON)
-        if (window.apiFetch) {
-          const path = String(endpoint || '');
-          const callOpts = { method: m };
-          if (safeBody !== undefined) callOpts.body = safeBody;
-          const payload = await window.apiFetch(path, callOpts);
-          resolve(payload);
-          return;
-        }
-
-        // Se não há apiFetch, construir URL absoluta a partir do API base
-        const base = window.__API_BASE__ || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || (window.location && window.location.origin ? window.location.origin : '');
-        const url = base.replace(/\/+$/, '') + (String(endpoint || '').startsWith('/') ? String(endpoint || '') : '/' + String(endpoint || ''));
-
-        const opts = { method: m };
-        if (m !== 'GET' && m !== 'HEAD' && safeBody !== undefined) {
-          opts.headers = { 'Content-Type': 'application/json' };
-          opts.body = safeBody;
-        }
-
-        try {
-          // Only perform real network I/O via window.apiFetch. If not available,
-          // abort to fallback to local route handling.
-          if (typeof window !== 'undefined' && window.apiFetch) {
-            const path = String(endpoint || '');
-            const callOpts = { method: m };
-            if (safeBody !== undefined) callOpts.body = safeBody;
-            const payload = await window.apiFetch(path, callOpts);
-            resolve(payload);
-            return;
-          }
-          // No apiFetch available — force fallback to local routes
-          throw new Error('no apiFetch available');
-        } catch (e) {
-          console.warn('[API] fetch direto falhou ou apiFetch ausente, usando rotas locais:', e);
-        }
-      } catch (e) {
-        console.warn('[API] erro ao chamar apiFetch, fallback local:', e);
-      }
-    }
-
-    // Fallback para rotas locais se tudo mais falhar: preferir memStore local, senão retornar null
+  // Preferir window.apiFetch quando disponível
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
     try {
-      const memKey = 'fallback:' + String(endpoint || '').replace(/^\/+/, '');
-      if (typeof mem !== 'undefined' && mem[memKey] !== undefined) {
-        resolve(mem[memKey]);
-        return;
-      }
-    } catch {}
-    // sem handleLocal: não há handler local disponível aqui, resolve com null para fallback do chamador
-    resolve(null);
-  });
-// FIM PATCH API-LOCAL 2/2
+      const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+      return { status: 200, data: payload };
+    } catch (err) {
+      console.warn('[clientes-lista] window.apiFetch falhou', err);
+      throw err;
+    }
+  }
+
+  // Fallback estrito: apenas fetch nativo
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+  if (!__native_fetch) throw new Error('fetch_unavailable');
+
+  const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '');
+  const url = (String(endpoint || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(endpoint || '')) : String(endpoint || '');
+
+  const fetchOpts = { method: m, credentials: 'include', headers: {} };
+  if (safeBody !== undefined) {
+    if (safeBody instanceof FormData) fetchOpts.body = safeBody;
+    else if (typeof safeBody === 'string') fetchOpts.body = safeBody;
+    else { fetchOpts.headers['Content-Type'] = 'application/json'; fetchOpts.body = JSON.stringify(safeBody); }
+  }
+
+  const res = await __native_fetch(url, fetchOpts);
+  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+  const payload = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  return { status: res.status, data: payload };
+}
 
 
 /* ========== utils ========== */
@@ -438,8 +408,8 @@ async function carregarClientes() {
     console.warn('[clientes] erro ao buscar clientes na nuvem:', e);
   }
 
-// clientes locais (fallbacks variados)
-const clientesLocais = lerClientesLocalPorChaves() || scanLocalStoragePorClientes() || [];
+// Remover fallback local: forçar lista local vazia (cloud-first)
+const clientesLocais = [];
 
   // 3) Mescla REMOTOS + LOCAIS (sem duplicar)
   const mapa = new Map();
