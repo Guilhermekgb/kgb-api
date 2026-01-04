@@ -519,9 +519,10 @@ body.no-scroll{
       if (!force && cep === _ultimoCepBuscado) return;
       _ultimoCepBuscado = cep;
 
-      setEnderecoLoading(true);
-      try {
-          const r = await (globalThis['f'+'etch'] || window['f'+'etch'])(`https://viacep.com.br/ws/${cep}/json/`);
+        setEnderecoLoading(true);
+        try {
+          if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') throw new Error('api_unavailable');
+          const r = await window['apiFetch'](`https://viacep.com.br/ws/${cep}/json/`, { method: 'GET' });
           const d = await r.json();
         if (d && !d.erro) {
           set('#rua', d.logradouro || '');
@@ -530,8 +531,8 @@ body.no-scroll{
           set('#estado', (d.uf || '').toUpperCase());
           return;
         }
-        const r2 = await (globalThis['f'+'etch'] || window['f'+'etch'])(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-        if (r2.ok) {
+        const r2 = await window['apiFetch'](`https://brasilapi.com.br/api/cep/v2/${cep}`, { method: 'GET' });
+        if (r2 && r2.ok) {
           const b = await r2.json();
           set('#rua', b.street || '');
           set('#bairro', b.neighborhood || '');
@@ -576,22 +577,13 @@ body.no-scroll{
           }
         }
 
-        // Fallback estrito: apenas fetch nativo via __native_fetch
-        const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
-        if (!__native_fetch) throw new Error('fetch_unavailable');
-
-        const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : '';
-        const url = (endpoint && endpoint[0] === '/') ? (base + endpoint) : endpoint;
-
-        const fetchOpts = Object.assign({ credentials: 'include', headers: callOpts.headers }, callOpts || {});
-        if (fetchOpts.body && typeof fetchOpts.body === 'object' && !(fetchOpts.body instanceof FormData)) {
-          try { fetchOpts.body = JSON.stringify(fetchOpts.body); fetchOpts.headers = fetchOpts.headers || {}; if (!fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json'; } catch(e){}
+        // Cloud-only: exigir window['apiFetch'] e lançar api_unavailable se ausente
+        if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') {
+          throw new Error('api_unavailable');
         }
 
-        const res = await __native_fetch(url, fetchOpts);
-        const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-        const payload = ct.includes('application/json') ? await res.json().catch(()=>null) : await res.text().catch(()=>null);
-        return { status: res.status, data: payload };
+        const data = await window['apiFetch'](String(endpoint || ''), callOpts);
+        return { status: 200, data };
       };
 
 
