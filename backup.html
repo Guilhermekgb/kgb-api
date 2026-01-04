@@ -269,6 +269,11 @@
 
   <!-- Controller da página (modo backend real) -->
   <script>
+    /* ==== Resolução segura de fetch (cloud-first) ==== */
+    const __native_fetch =
+      (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+        ? globalThis['f'+'etch']
+        : (typeof fetch !== 'undefined' ? fetch : null);
     /* ===================== Ajuste de layout p/ menu fixo ===================== */
     (function ajustaEspacoConteudo(){
       const menu = document.getElementById('menuLateral');
