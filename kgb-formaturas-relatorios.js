@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       // 2) Opcional: ler um resumo salvo no localStorage (se você quiser usar isso no futuro)
-      var salvo = localStorage.getItem('kgb_relatorios_base');
+      var storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      var salvo = (storage && typeof storage.getItem === 'function') ? storage.getItem('kgb_relatorios_base') : null;
       if (salvo) {
         var parsed = JSON.parse(salvo);
         if (parsed && typeof parsed === 'object') {
@@ -140,7 +141,8 @@ anos.forEach(function (ano, idx) {
 
     // Aproveita os tipos cadastrados na tela "Tipos de Evento"
     try {
-      var tiposRaw = localStorage.getItem('kgb_formaturas_tiposEvento');
+      var storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      var tiposRaw = (storage && typeof storage.getItem === 'function') ? storage.getItem('kgb_formaturas_tiposEvento') : null;
       if (!tiposRaw) return;
       var arr = JSON.parse(tiposRaw);
       if (!Array.isArray(arr)) return;
