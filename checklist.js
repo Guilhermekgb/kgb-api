@@ -28,11 +28,17 @@ async function apiRequest(path, options = {}) {
     return window.apiFetch(path, options);
   }
   const base = window.__API_BASE__ || '';
-  const r = await fetch(base + path, {
+  const opts = {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
-  });
+  };
+  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+    return window.apiFetch(base + path, opts);
+  }
+  const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : ((typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch)) ? (window['f'+'etch'] || window.fetch) : null);
+  if (!nativeFetch) throw new Error('fetch unavailable');
+  const r = await nativeFetch(base + path, opts);
   return r.json();
 }
 
