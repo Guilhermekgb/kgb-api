@@ -348,8 +348,10 @@
   };
 
   const apiRequest = (url, opts) => {
-    if (window.apiFetch) return window.apiFetch(url, opts);
-    return fetch(url, opts);
+    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch(url, opts);
+    const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+    if (!__native_fetch) return Promise.reject(new Error('fetch not available'));
+    return __native_fetch(url, opts);
   };
 
   // Descobre base da API
