@@ -167,3 +167,39 @@ body {
     flex-direction: column;
   }
 }
+
+/* ===== MENU: garantir visibilidade do conteúdo dentro da sidebar ===== */
+.sidebar{
+  background: var(--brown, #3b2413);
+  color: #fff;
+  padding: 18px 14px;
+  box-sizing: border-box;
+}
+
+.sidebar a,
+.sidebar a:visited{
+  color:#fff !important;
+  text-decoration:none;
+}
+
+.sidebar-brand{
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: .3px;
+  margin: 6px 8px 14px;
+  font-size: 18px;
+  color:#fff;
+}
+
+.sidebar-nav{ display:flex; flex-direction:column; gap:6px; }
+.sidebar-link{
+  display:block;
+  padding:10px 12px;
+  border-radius:12px;
+  font-weight:600;
+  color:#fff !important;
+}
+.sidebar-link:hover{
+  background: rgba(255,255,255,.10);
+}
+

@@ -178,6 +178,8 @@
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
     };
+    // mostra fallback imediatamente para evitar invisibilidade por CSS/espera
+    try { sidebar.innerHTML = defaultMenuHtml(); } catch (e) {}
     try { xhr.send(); } catch (e) {
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
@@ -431,6 +433,8 @@
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
     };
+    // mostra fallback imediatamente para evitar invisibilidade por CSS/espera
+    try { sidebar.innerHTML = defaultMenuHtml(); } catch (e) {}
     try { xhr.send(); } catch (e) {
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
@@ -684,6 +688,8 @@
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
     };
+    // mostra fallback imediatamente para evitar invisibilidade por CSS/espera
+    try { sidebar.innerHTML = defaultMenuHtml(); } catch (e) {}
     try { xhr.send(); } catch (e) {
       sidebar.innerHTML = defaultMenuHtml();
       done(false);
