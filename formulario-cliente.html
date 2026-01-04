@@ -275,14 +275,25 @@
     document.getElementById("cep").addEventListener("blur", function () {
       const cep = this.value.replace(/\D/g, '');
       if (cep.length === 8) {
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-          .then(res => res.json())
-          .then(d => {
-            if (!d.erro) {
-              document.getElementById("endereco").value =
-                `${d.logradouro}, ${d.bairro} - ${d.localidade}/${d.uf}`;
-            }
-          });
+        const url = `https://viacep.com.br/ws/${cep}/json/`;
+        if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+          window.apiFetch(url)
+            .then(d => {
+              if (!d.erro) {
+                document.getElementById("endereco").value = `${d.logradouro}, ${d.bairro} - ${d.localidade}/${d.uf}`;
+              }
+            })
+            .catch(()=>{});
+        } else {
+          const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
+          if (nativeFetch){
+            nativeFetch(url).then(res => res.json()).then(d => {
+              if (!d.erro) {
+                document.getElementById("endereco").value = `${d.logradouro}, ${d.bairro} - ${d.localidade}/${d.uf}`;
+              }
+            }).catch(()=>{});
+          }
+        }
       }
     });
 
