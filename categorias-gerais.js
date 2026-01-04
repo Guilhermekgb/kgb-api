@@ -86,8 +86,19 @@ function getLocal(key) {
       return (typeof v === 'string') ? v : JSON.stringify(v);
     }
     // Legacy behavior: read from localStorage when not in portal mode
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem(key);
+    const __storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (__storage) {
+      try{
+        if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+          const v = window.readLS(key);
+          if (v == null) return null;
+          return (typeof v === 'string') ? v : JSON.stringify(v);
+        }
+        const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+        return (storage && typeof storage.getItem === 'function') ? storage.getItem(key) : null;
+      }catch{
+        return null;
+      }
     }
   } catch (e) {
     console.warn('[Categorias] getLocal erro:', e);
@@ -101,8 +112,18 @@ function setLocal(chaveLocal, arr) {
       setJSON(chaveLocal, arr);
       return;
     }
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(chaveLocal, JSON.stringify(arr));
+    const __storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+    if (__storage) {
+      try{
+        if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+          window.writeLS(chaveLocal, arr);
+          return;
+        }
+        const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+        if (storage && typeof storage.setItem === 'function') {
+          storage.setItem(chaveLocal, JSON.stringify(arr));
+        }
+      }catch{}
       return;
     }
   } catch (e) {
