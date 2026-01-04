@@ -137,9 +137,14 @@
       };
       $('#bkGet').onclick = async () => {
         try{
-          const r = await fetch(window.__API_BASE__ + '/backup/snapshot?name=cfg.json');
-          const txt = await r.text();
-          show(txt, 'GET /backup/snapshot?name=cfg.json (texto)');
+          if (typeof window !== 'undefined' && typeof window.apiFetch === 'function'){
+            const txt = await window.apiFetch(window.__API_BASE__ + '/backup/snapshot?name=cfg.json');
+            show(txt, 'GET /backup/snapshot?name=cfg.json (texto)');
+          } else {
+            const r = await (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch)(window.__API_BASE__ + '/backup/snapshot?name=cfg.json') : Promise.reject(new Error('fetch unavailable')));
+            const txt = await r.text();
+            show(txt, 'GET /backup/snapshot?name=cfg.json (texto)');
+          }
         }catch(e){ show({erro:e.message}, 'GET /backup/snapshot?name=cfg.json'); }
       };
       $('#bkDel').onclick = async () => {
