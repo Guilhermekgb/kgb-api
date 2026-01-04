@@ -211,6 +211,12 @@
  <script>
 "use strict";
 
+/* ==== Resolução segura de fetch (cloud-first) ==== */
+const __native_fetch =
+  (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+    ? globalThis['f'+'etch']
+    : (typeof fetch !== 'undefined' ? fetch : null);
+
 /* ==== Config da API (igual aos outros módulos) ==== */
 const IS_REMOTE = !!(window.__API_BASE__ && String(window.__API_BASE__).trim());
 
