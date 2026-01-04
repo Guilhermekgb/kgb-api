@@ -242,13 +242,15 @@
 
       async function apiPost(path, body){
         try{
-          if (window.apiFetch) return await window.apiFetch(path, { method: 'POST', body });
+          if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return await window.apiFetch(path, { method: 'POST', body });
           const base = window.__API_BASE__ || portalRead('API_BASE', '');
           if (!base) return null;
           const url = base.replace(/\/+$/, '') + (String(path||'').startsWith('/') ? String(path||'') : '/' + String(path||''));
-          const resp = await fetch(url, { method: 'POST', headers: buildApiHeaders(), body: JSON.stringify(body)});
-          if (resp.ok) return await resp.json().catch(()=>null);
-          return { status: resp.status };
+          const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+          if (!__native_fetch) return null;
+          const resp = await __native_fetch(url, { method: 'POST', headers: buildApiHeaders(), body: JSON.stringify(body)});
+          if (resp && resp.ok) return await resp.json().catch(()=>null);
+          return { status: resp ? resp.status : 500 };
         }catch(e){ console.warn('[formulario] apiPost failed', e); return null; }
       }
 
@@ -272,7 +274,7 @@
       }
     })();
 
-    document.getElementById("cep").addEventListener("blur", function () {
+      document.getElementById("cep").addEventListener("blur", function () {
       const cep = this.value.replace(/\D/g, '');
       if (cep.length === 8) {
         const url = `https://viacep.com.br/ws/${cep}/json/`;
@@ -285,9 +287,9 @@
             })
             .catch(()=>{});
         } else {
-          const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch) ? (window['f'+'etch'] || window.fetch) : null);
-          if (nativeFetch){
-            nativeFetch(url).then(res => res.json()).then(d => {
+          const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+          if (__native_fetch){
+            __native_fetch(url).then(res => res.json()).then(d => {
               if (!d.erro) {
                 document.getElementById("endereco").value = `${d.logradouro}, ${d.bairro} - ${d.localidade}/${d.uf}`;
               }
