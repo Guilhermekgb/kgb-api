@@ -46,7 +46,19 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     (function () {
       // --- util ---
       const safeJSON = (s)=>{ try{ return JSON.parse(s); }catch{ return null; } };
-      const get = (k)=> window.localStorage.getItem(k);
+      const get = (k) => {
+        try {
+          if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+            const v = window.readLS(k);
+            if (v == null) return null;
+            return (typeof v === 'string') ? v : JSON.stringify(v);
+          }
+          const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+          return (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+        } catch {
+          return null;
+        }
+      };
 
       // -> checa várias chaves que você já usa no projeto
       function isLogged() {
