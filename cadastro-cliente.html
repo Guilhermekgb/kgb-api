@@ -462,39 +462,7 @@ body.no-scroll{
     const val = sel => (document.querySelector(sel)?.value || '').trim();
     const set = (sel, v) => { const el=document.querySelector(sel); if(el) el.value = v || ''; };
 
-    function buildLocalApi(){
-      const ok  = (data, resolve) => resolve({ status: 200, data });
-      const okC = (data, resolve) => resolve({ status: 201, data });
-      const err = (msg, resolve)  => resolve({ status: 400, error: msg || 'Erro' });
-      const getLS = (k, fb) => { try { const raw = (window.storageAdapter && typeof window.storageAdapter.getRaw === 'function') ? window.storageAdapter.getRaw(k) : ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); return JSON.parse(raw) ?? fb; } catch { return fb; } };
-      const setLS = (k, v)  => { try { const txt = JSON.stringify(v); if(window.storageAdapter && typeof window.storageAdapter.setRaw === 'function'){ window.storageAdapter.setRaw(k, txt); } else { window['local'+'Storage'].setItem(k, txt); } } catch(e){} };
-      return (endpoint, req, resolve) => {
-        const { method = 'GET', body = {} } = req || {};
-        if (endpoint === '/clientes') {
-          if (method === 'GET')  return ok(getLS('clientes', []), resolve);
-          if (method === 'POST') {
-            const arr  = getLS('clientes', []); const novo = { id:String(Date.now()), ...body };
-            arr.push(novo); setLS('clientes',arr); return okC(novo, resolve);
-          }
-          if (method === 'PUT') {
-            const arr = getLS('clientes', []); const i = arr.findIndex(c => String(c.id) === String(body.id));
-            if (i === -1) return err('Cliente não encontrado', resolve);
-            arr[i] = { ...arr[i], ...body }; setLS('clientes', arr); return ok(arr[i], resolve);
-          }
-          return err('Método não suportado em /clientes', resolve);
-        }
-        if (endpoint === '/leads') {
-          if (method === 'GET') return ok(getLS('leads', []), resolve);
-          if (method === 'PUT') {
-            const arr = getLS('leads', []); const i = arr.findIndex(l => String(l.id) === String(body.id));
-            if (i === -1) return err('Lead não encontrado', resolve);
-            arr[i] = { ...arr[i], ...body }; setLS('leads', arr); return ok(arr[i], resolve);
-          }
-          return err('Método não suportado em /leads', resolve);
-        }
-        return err(`Endpoint não suportado: ${endpoint}`, resolve);
-      };
-    }
+    // Removed local fallback handler to enforce cloud-first behavior for client creation.
 
     function getEventoReturnUrl() {
       const qs = new URLSearchParams(location.search);
@@ -590,34 +558,40 @@ body.no-scroll{
         return t ? { Authorization: 'Bearer ' + t } : {};
       };
 
-      // 3) Helper de API
-      const api = (endpoint, method = 'GET', body = {}) => {
+      // 3) Helper de API — Cloud-first: use window.apiFetch, fallback apenas para __native_fetch
+      const api = async (endpoint, method = 'GET', body = {}) => {
         const headers = auth();
+        const m = (method || 'GET').toUpperCase();
+        const callOpts = { method: m, headers };
+        if (m !== 'GET' && m !== 'HEAD') callOpts.body = body;
 
-        // Preferir window.apiFetch (same-origin + credentials)
-        if (!forceLocal && typeof window !== 'undefined') {
-          if (window.apiFetch) {
-            const m = (method || 'GET').toUpperCase();
-            const callOpts = { method: m };
-            if (m !== 'GET' && m !== 'HEAD') callOpts.body = body;
-            return window.apiFetch(String(endpoint || ''), callOpts)
-              .then(data => ({ status: 200, data }))
-              .catch(err => { console.warn('[cadastro-cliente] apiFetch failed', err); throw err; });
-          }
-
-          // then try window handler (if provided)
-          if (!forceLocal && temRemoto && (window['handle'+'Request'] && typeof window['handle'+'Request'] === 'function')) {
-            return new Promise((resolve) => {
-              window['handle'+'Request'](endpoint, { method, body, headers }, resolve);
-            });
+        // Preferir window.apiFetch quando disponível
+        if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+          try {
+            const data = await window.apiFetch(String(endpoint || ''), callOpts);
+            return { status: 200, data };
+          } catch (err) {
+            console.warn('[cadastro-cliente] apiFetch failed', err);
+            throw err;
           }
         }
 
-        // Fallback: mini-API local em cima do armazenamento legado (apenas este navegador)
-        const localHandler = buildLocalApi();
-        return new Promise((resolve) => {
-          localHandler(endpoint, { method, body, headers: {} }, resolve);
-        });
+        // Fallback estrito: apenas fetch nativo via __native_fetch
+        const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
+        if (!__native_fetch) throw new Error('fetch_unavailable');
+
+        const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : '';
+        const url = (endpoint && endpoint[0] === '/') ? (base + endpoint) : endpoint;
+
+        const fetchOpts = Object.assign({ credentials: 'include', headers: callOpts.headers }, callOpts || {});
+        if (fetchOpts.body && typeof fetchOpts.body === 'object' && !(fetchOpts.body instanceof FormData)) {
+          try { fetchOpts.body = JSON.stringify(fetchOpts.body); fetchOpts.headers = fetchOpts.headers || {}; if (!fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json'; } catch(e){}
+        }
+
+        const res = await __native_fetch(url, fetchOpts);
+        const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+        const payload = ct.includes('application/json') ? await res.json().catch(()=>null) : await res.text().catch(()=>null);
+        return { status: res.status, data: payload };
       };
 
 
@@ -789,6 +763,11 @@ body.no-scroll{
         }
       } catch (err) {
         console.error('[cadastro-cliente] erro ao salvar', err);
+      }
+
+      if (!rdata || !(rdata.id || rdata._id || rdata.idCliente)) {
+        alert('Erro ao salvar cliente: resposta inválida do servidor.');
+        return false;
       }
 
       const novoCliente = {
