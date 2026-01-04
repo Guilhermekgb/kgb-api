@@ -36,8 +36,28 @@ function isISODate(s){
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s||''));
 }
 
-function readLS(k, fb){ try{ const v=JSON.parse(localStorage.getItem(k)||'null'); return v??fb; }catch{ return fb; } }
-function writeLS(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+function readLS(k, fb){
+  try{
+    if (typeof window !== 'undefined' && typeof window.readLS === 'function'){
+      const v = window.readLS(k);
+      return (v == null ? fb : v);
+    }
+    const v = JSON.parse(localStorage.getItem(k) || 'null');
+    return (v == null ? fb : v);
+  } catch {
+    return fb;
+  }
+}
+
+function writeLS(k, v){
+  try{
+    if (typeof window !== 'undefined' && typeof window.writeLS === 'function'){
+      window.writeLS(k, v);
+      return;
+    }
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+}
 function getFG(){ return readLS('financeiroGlobal', {}); }
 function getEventos(){ return readLS('eventos', []); }
 
