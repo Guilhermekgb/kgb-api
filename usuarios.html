@@ -216,36 +216,16 @@
     async function apiRequest(path, opts) {
       const o = opts || {};
 
-      const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : '';
-
-      // Preferir window.apiFetch quando disponível (app padrão)
-      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-        try {
-          const payload = await window.apiFetch(path, o);
-          return { status: 200, data: payload };
-        } catch (err) {
-          return { status: err?.status || 500, error: err?.payload || err?.message || String(err) };
-        }
+      if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') {
+        throw new Error('api_unavailable');
       }
 
-      // Fallback estrito: apenas fetch nativo via __native_fetch (sem handleRequest/logic local)
-      const __native_fetch =
-        (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
-          ? globalThis['f'+'etch']
-          : (typeof fetch !== 'undefined' ? fetch : null);
-
-      if (!__native_fetch) throw new Error('fetch_unavailable');
-
-      const url = (path && path[0] === '/') ? (base + path) : path;
-      const fetchOpts = Object.assign({ credentials: 'include', headers: (o.headers || {}) }, o || {});
-      if (fetchOpts.body && typeof fetchOpts.body === 'object' && !(fetchOpts.body instanceof FormData)) {
-        try { fetchOpts.body = JSON.stringify(fetchOpts.body); fetchOpts.headers = fetchOpts.headers || {}; if (!fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json'; } catch(e){}
+      try {
+        const payload = await window['apiFetch'](path, o);
+        return { status: 200, data: payload };
+      } catch (err) {
+        return { status: err?.status || 500, error: err?.payload || err?.message || String(err) };
       }
-
-      const res = await __native_fetch(url, fetchOpts);
-      const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-      const payload = ct.includes('application/json') ? await res.json().catch(()=>null) : await res.text().catch(()=>null);
-      return { status: res.status, data: payload };
     }
     // Menu mobile (padrão agenda/configurações)
     const hb = document.getElementById('hamburguer');
