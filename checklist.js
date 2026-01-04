@@ -24,22 +24,28 @@ function portalReadSession(key, fallback) {
 }
 
 async function apiRequest(path, options = {}) {
-  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-    return window.apiFetch(path, options);
-  }
-  const base = window.__API_BASE__ || '';
+  // Cloud-first request: prefer `window.apiFetch`, fallback only to native fetch
+  const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : '';
   const opts = {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   };
+
   if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-    return window.apiFetch(base + path, opts);
+    return window.apiFetch((String(path || '').startsWith('/') ? (base.replace(/\/\/+$/, '') + path) : path), opts);
   }
-  const nativeFetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : ((typeof window !== 'undefined' && (window['f'+'etch'] || window.fetch)) ? (window['f'+'etch'] || window.fetch) : null);
-  if (!nativeFetch) throw new Error('fetch unavailable');
-  const r = await nativeFetch(base + path, opts);
-  return r.json();
+
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+    ? globalThis['f'+'etch']
+    : (typeof fetch !== 'undefined' ? fetch : null);
+  if (!__native_fetch) throw new Error('fetch_unavailable');
+
+  const url = (String(path || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + path) : String(path || '');
+  const res = await __native_fetch(url, opts);
+  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+  if (ct.includes('application/json')) return await res.json().catch(() => null);
+  return await res.text().catch(() => null);
 }
 
 /* =========================
