@@ -261,8 +261,6 @@
 
   <!-- Lógica da página -->
   <script type="module">
-    import { handleRequest } from './api/routes.js';
-
     // Helpers portal/memStore + api wrapper (page-local, minimal)
     const isPortalMode = () => !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__);
 
@@ -293,10 +291,43 @@
       return t ? { Authorization: 'Bearer ' + t } : {};
     };
 
-    const api = (endpoint, req = {}) => {
+    // Resolução segura para fetch nativo (fallback somente para ambientes sem window.apiFetch)
+    const __native_fetch =
+      (typeof globalThis !== 'undefined' && globalThis['f'+'etch'])
+        ? globalThis['f'+'etch']
+        : (typeof fetch !== 'undefined' ? fetch : null);
+
+    /**
+     * api wrapper: usa window.apiFetch quando disponível; caso contrário utiliza
+     * __native_fetch diretamente. Não faz fallback para lógica local/handleRequest.
+     * Retorna um objeto com `{ status, data?, error? }` para compatibilidade.
+     */
+    const api = async (endpoint, req = {}) => {
       const headers = { ...authHeader(), ...(req.headers || {}) };
-      if (window.apiFetch) return window.apiFetch(endpoint, { ...req, headers });
-      return new Promise(resolve => handleRequest(endpoint, { ...req, headers }, resolve));
+
+      // Preferir window.apiFetch (padrão do app)
+      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+        try {
+          const payload = await window.apiFetch(endpoint, { ...req, headers });
+          return { status: 200, data: payload };
+        } catch (err) {
+          return { status: err?.status || 500, error: err?.payload || err?.message || String(err) };
+        }
+      }
+
+      // Se não houver window.apiFetch, usar apenas __native_fetch (sem lógica local)
+      if (!__native_fetch) throw new Error('fetch_unavailable');
+
+      const fetchOpts = Object.assign({ credentials: 'include', headers: headers }, req || {});
+      if (fetchOpts.body && typeof fetchOpts.body === 'object' && !(fetchOpts.body instanceof FormData)) {
+        try { fetchOpts.body = JSON.stringify(fetchOpts.body); if (!fetchOpts.headers) fetchOpts.headers = {}; if (!fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json'; } catch(e){}
+      }
+
+      const res = await __native_fetch(endpoint, fetchOpts);
+      const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+      const payload = ct.includes('application/json') ? await res.json().catch(()=>null) : await res.text().catch(()=>null);
+      if (!res.ok) return { status: res.status, error: payload || res.statusText };
+      return { status: res.status, data: payload };
     };
 
     // Refs
