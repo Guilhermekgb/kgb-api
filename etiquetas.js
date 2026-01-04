@@ -16,7 +16,9 @@
         const v = window.readLS(k);
         return (v == null ? fb : v);
       }
-      const v = JSON.parse(localStorage.getItem(k) || 'null');
+      const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+      const v = raw ? JSON.parse(raw) : null;
       return (v == null ? fb : v);
     } catch {
       return fb;
@@ -29,7 +31,10 @@
         window.writeLS(k, v);
         return;
       }
-      localStorage.setItem(k, JSON.stringify(v));
+      const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+      if (storage && typeof storage.setItem === 'function') {
+        storage.setItem(k, JSON.stringify(v));
+      }
     } catch {}
   };
   const byId = id => document.getElementById(id);
