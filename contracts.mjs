@@ -99,18 +99,42 @@ async function criarDocumentoZapSign({ contratoId, titulo = 'Contrato', signers 
       : {}),
   };
 
-  // 3) Chama a API da ZapSign
-  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
-  const r = await (__native_fetch ? __native_fetch('https://api.zapsign.com.br/api/v1/docs/', {
+  // 3) Chama a API da ZapSign — cloud-only via globalThis['apiFetch'] (sem fetch nativo)
+  if (typeof globalThis === 'undefined' || typeof globalThis['apiFetch'] !== 'function') {
+    throw new Error('api_unavailable');
+  }
+
+  const _raw = await globalThis['apiFetch']('https://api.zapsign.com.br/api/v1/docs/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${ZAPSIGN_TOKEN}`,
     },
     body: JSON.stringify(payload),
-  }) : Promise.reject(new Error('fetch_unavailable')));
+  });
 
-  const j = await r.json().catch(() => ({}));
+  // Compatível com diferentes formatos retornados por apiFetch: Response-like, {status,data}, ou JSON direto
+  let r = null;
+  let j = null;
+  if (_raw && typeof _raw === 'object') {
+    if ('ok' in _raw || ('status' in _raw && 'data' in _raw)) {
+      if ('ok' in _raw) {
+        r = _raw;
+        try { j = (typeof _raw.json === 'function') ? await _raw.json().catch(()=>_raw.data||{}) : (_raw.data || {}); } catch { j = _raw.data || {}; }
+      } else {
+        // shape: { status, data }
+        r = { ok: (_raw.status >= 200 && _raw.status < 300), status: _raw.status };
+        j = _raw.data;
+      }
+    } else {
+      // Parsed JSON directly
+      r = { ok: true, status: 200 };
+      j = _raw;
+    }
+  } else {
+    r = { ok: false, status: 500 };
+    j = {};
+  }
 
   if (!r.ok) {
     const err = new Error(j?.detail || 'Erro na ZapSign');
