@@ -42,25 +42,23 @@ function portalWriteSession(key, value) {
   } catch(e) {}
 }
 
-// Wrapper para requests: tenta window['handle'+'Request'], depois import dinâmico do módulo de rotas, depois apiFetch, depois fetch
+// Wrapper cloud-first para requests: prefere `window.apiFetch`, fallback apenas para fetch nativo
 async function apiRequest(path, opts) {
   const w = (typeof window !== 'undefined') ? window : null;
-  const hrWindow = w && w['handle'+'Request'] ? w['handle'+'Request'] : null;
-  if (typeof hrWindow === 'function') return hrWindow(path, opts);
 
-  // tentar import dinâmico do provider local (sem usar o identificador literal)
-  try {
-    const mod = await import('./api/routes.js');
-    const hrMod = mod && mod['handle'+'Request'];
-    if (typeof hrMod === 'function') return hrMod(path, opts);
-  } catch(e) {}
+  // Preferir window.apiFetch quando disponível
+  const af = w && typeof w.apiFetch === 'function' ? w.apiFetch : null;
+  if (af) return af(path, opts);
 
-  const af = w && w['api'+'Fetch'] ? w['api'+'Fetch'] : null;
-  if (typeof af === 'function') return af(path, opts);
+  // Fallback estrito para fetch nativo
+  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch === 'function' ? fetch : null);
+  if (!__native_fetch) throw new Error('fetch_unavailable');
 
-  const f = (w && w['fe'+'tch']) ? w['fe'+'tch'] : (typeof fetch === 'function' ? fetch : null);
-  if (!f) throw new Error('No fetch available');
-  return f(path, opts);
+  // Construir URL absoluta se path começar com '/'
+  const base = (w && w.__API_BASE__) ? w.__API_BASE__ : (w && w.location && w.location.origin ? w.location.origin : '');
+  const url = (String(path || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(path || '')) : String(path || '');
+
+  return __native_fetch(url, opts);
 }
 
 const perfisFixos = [
@@ -77,7 +75,7 @@ const authHeader = () => {
   return t ? { Authorization: "Bearer " + t } : {};
 };
 
-// Atalho pra chamar a API usando wrapper seguro (usa window['handle'+'Request'] quando disponível)
+// Atalho pra chamar a API usando wrapper cloud-first (prefere window.apiFetch)
 const api = (endpoint, req = {}) => {
   const headers = { ...authHeader(), ...(req.headers || {}) };
   return apiRequest(endpoint, { ...req, headers });
