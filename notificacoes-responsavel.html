@@ -424,9 +424,10 @@
   // BOTÃO/FORM de exemplo: publique um aviso interno
   function publicarAvisoInterno({ idInterno, titulo, dataISO, timeStart, audience }) {
     // (opcional) se quiser manter uma lista própria de avisos:
-    // const arr = JSON.parse(localStorage.getItem('avisosInternos')||'[]');
+    // (legado removido do comentário) exemplo antigo usava storage para avisosInternos
+    // const arr = JSON.parse(STORAGE_GET('avisosInternos')||'[]');
     // arr.unshift({id:idInterno, titulo, dataISO, timeStart, audience});
-    // localStorage.setItem('avisosInternos', JSON.stringify(arr));
+    // STORAGE_SET('avisosInternos', JSON.stringify(arr));
 
     // Para integrar com agendaUnified/notificationsFeed, delegamos à ponte, se existir:
     try{
