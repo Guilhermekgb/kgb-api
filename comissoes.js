@@ -5,8 +5,28 @@
    ========================= */
 
 // ---------- Helpers básicos ----------
-const getLS = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
-const setLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const getLS = (k, fb) => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+      const v = window.readLS(k);
+      return (v == null ? fb : v);
+    }
+    const v = JSON.parse(localStorage.getItem(k) || 'null');
+    return (v == null ? fb : v);
+  } catch {
+    return fb;
+  }
+};
+
+const setLS = (k, v) => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.writeLS === 'function') {
+      window.writeLS(k, v);
+      return;
+    }
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {}
+};
 const todayISO = () => new Date().toISOString().slice(0,10);
 const ddmmyyyy = (iso) => {
   if (!iso) return "—";
