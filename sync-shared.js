@@ -1,14 +1,6 @@
 // sync-shared.js
-// Helper genérico para sincronizar entidades via /sync/pull
-// usando um checkpoint salvo no localStorage.
-//
-// Ideia: em qualquer lugar você poderá fazer:
-//   import { syncEntity } from './sync-shared.js';
-//   const novos = await syncEntity('clientes');
-//   // aplicar "novos" no seu cache local.
-//
-// O backend deve expor POST /sync/pull { entity, since? }
-// respondendo { items: [...], nextSince }.
+// Helper genérico para sincronizar entidades via /sync/pull (cloud-first).
+// Mantém checkpoints apenas em modo portal; fora dele não usa armazenamento local.
 
 const SYNC_PREFIX = 'syncCheckpoint:';
 
@@ -18,31 +10,26 @@ function isPortalMode() {
 }
 
 function portalRead(key, fallback) {
-  if (isPortalMode()) return fallback;
-  try {
-    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
-    const v = s && s.getItem ? s.getItem(key) : null;
-    if (v == null) return fallback;
-    try { return JSON.parse(v); } catch (e) { return v; }
-  } catch (e) { return fallback; }
+  // Em modo portal, a implementação de getJSON / __MEM_CACHE__ pode prover persistência.
+  if (isPortalMode()) {
+    try { return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__ ? window.__MEM_CACHE__[key] : fallback)); } catch { return fallback; }
+  }
+  // Fora do portal, não usamos localStorage como fallback (cloud-first).
+  return fallback;
 }
 
 function portalWrite(key, value) {
-  if (isPortalMode()) return;
-  try {
-    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
-    if (!s || !s.setItem) return;
-    const v = (typeof value === 'string') ? value : JSON.stringify(value);
-    s.setItem(key, v);
-  } catch (e) {}
+  if (isPortalMode()) {
+    try { if (window.__MEM_CACHE__) window.__MEM_CACHE__[key] = (typeof value === 'string' ? value : JSON.stringify(value)); } catch {};
+  }
+  // Fora do portal, não grava em localStorage (proibido neste workflow).
 }
 
 function portalRemove(key) {
-  if (isPortalMode()) return;
-  try {
-    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
-    if (s && s.removeItem) s.removeItem(key);
-  } catch (e) {}
+  if (isPortalMode()) {
+    try { if (window.__MEM_CACHE__) delete window.__MEM_CACHE__[key]; } catch {};
+  }
+  // Fora do portal, nada a remover.
 }
 
 // Lê o checkpoint atual de uma entidade
@@ -74,37 +61,44 @@ export function setSyncCheckpoint(entity, since) {
 export async function syncEntity(entity) {
   const ent = String(entity || '').trim();
   if (!ent) return { items: [], nextSince: 0 };
-
-  const hr = (typeof window !== 'undefined') ? window['handle'+'Request'] : null;
-  if (typeof hr !== 'function') {
-    console.warn('[syncEntity] handleRequest não disponível; retornando vazio.');
-    return { items: [], nextSince: 0 };
-  }
-
   const since = getSyncCheckpoint(ent);
 
   try {
-    const resp = await hr('/sync/pull', {
-      method: 'POST',
-      body: { entity: ent, since }
-    });
+    // cloud-first request: prefere window.apiFetch, fallback para fetch nativo
+    const w = (typeof window !== 'undefined') ? window : null;
+    const af = w && typeof w.apiFetch === 'function' ? w.apiFetch : null;
 
-    // esperamos { items, nextSince } em resp.data
-    const data = resp && resp.data ? resp.data : {};
-    let items     = Array.isArray(data.items) ? data.items : [];
-    let nextSince = Number(data.nextSince || since || Date.now());
+    const body = { entity: ent, since };
 
-    if (!Number.isFinite(nextSince) || nextSince <= 0) {
-      nextSince = Date.now();
+    let resp;
+    if (af) {
+      const payload = await af('/sync/pull', { method: 'POST', body });
+      resp = { status: 200, data: payload };
+    } else {
+      const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch === 'function' ? fetch : null);
+      if (!__native_fetch) throw new Error('fetch_unavailable');
+
+      const base = (w && w.__API_BASE__) ? w.__API_BASE__ : (w && w.location && w.location.origin ? w.location.origin : '');
+      const url = '/sync/pull'.startsWith('/') ? (base.replace(/\/\/+$/, '') + '/sync/pull') : '/sync/pull';
+
+      const fopts = { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+      const r = await __native_fetch(url, fopts);
+      const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+      const data = ct.includes('application/json') ? await r.json().catch(() => null) : await r.text().catch(() => null);
+      resp = { status: r.status, data };
     }
 
-    // salva o novo checkpoint
+    const data = resp && resp.data ? resp.data : {};
+    let items = Array.isArray(data.items) ? data.items : [];
+    let nextSince = Number(data.nextSince || since || Date.now());
+    if (!Number.isFinite(nextSince) || nextSince <= 0) nextSince = Date.now();
+
+    // salva o novo checkpoint apenas em modo portal
     setSyncCheckpoint(ent, nextSince);
 
     return { items, nextSince };
   } catch (e) {
     console.warn('[syncEntity] erro ao sincronizar entity=', ent, e);
-    // não atualiza checkpoint em caso de erro
     return { items: [], nextSince: since || 0 };
   }
 }
