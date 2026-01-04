@@ -495,7 +495,25 @@
     const escapeHtml = s => String(s==null?'':s).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
 
     function getParam(name){ const u = new URL(location.href); return u.searchParams.get(name); }
-    function getEventId(){ return getParam('eventId') || getParam('id') || localStorage.getItem('eventoSelecionado') || ''; }
+    function getEventId(){
+      const byUrl = getParam('eventId') || getParam('id');
+      if (byUrl) return byUrl;
+
+      try {
+        if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+          const v = window.readLS('eventoSelecionado');
+          if (v != null) return String(v);
+        }
+      } catch {}
+
+      try {
+        const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+        const v = (storage && typeof storage.getItem === 'function') ? storage.getItem('eventoSelecionado') : null;
+        return v || '';
+      } catch {
+        return '';
+      }
+    }
 
     async function loadExtrato(){
       const base = window.__API_BASE__ || '';
