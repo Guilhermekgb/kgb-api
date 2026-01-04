@@ -347,12 +347,12 @@
     } catch (e) {}
   };
 
-  const apiRequest = (url, opts) => {
-    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch(url, opts);
-    const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
-    if (!__native_fetch) return Promise.reject(new Error('fetch not available'));
-    return __native_fetch(url, opts);
-  };
+  async function apiRequest(url, opts) {
+    if (!window || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
+    const finalUrl = (API_BASE ? API_BASE.replace(/\/$/, '') : '') + String(url || '');
+    const payload = await window.apiFetch(finalUrl, opts);
+    return { ok: true, status: 200, json: async () => payload, data: payload };
+  }
 
   // Descobre base da API
   const API_BASE = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__.trim())
