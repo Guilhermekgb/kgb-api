@@ -559,7 +559,7 @@ body.no-scroll{
         return t ? { Authorization: 'Bearer ' + t } : {};
       };
 
-      // 3) Helper de API — Cloud-first: use window.apiFetch, fallback apenas para __native_fetch
+      // 3) Helper de API — Cloud-first: use window['apiFetch'] somente (sem fallback nativo)
       const api = async (endpoint, method = 'GET', body = {}) => {
         const headers = auth();
         const m = (method || 'GET').toUpperCase();
