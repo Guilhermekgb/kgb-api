@@ -11,54 +11,45 @@ function portalRead(key, fallback) {
     if (isPortalMode()){
       try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{ return typeof fallback==='function'?fallback():fallback; }
     }
-    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
-    const v = s && s.getItem ? s.getItem(key) : null;
-    return (v == null ? (typeof fallback==='function'?fallback():fallback) : v);
+    // Fora do portal, NÃO usar localStorage como fallback (cloud-first)
+    return typeof fallback === 'function' ? fallback() : fallback;
   } catch(e) { return typeof fallback==='function'?fallback():fallback; }
 }
 
 function portalWrite(key, value) {
   try {
-    if (isPortalMode()) return;
-    const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
-    if (s && s.setItem) s.setItem(key, String(value));
+    // Em modo portal, grava no cache em memória se disponível; fora do portal, não grava em localStorage
+    if (isPortalMode()) {
+      try { if (window.__MEM_CACHE__) window.__MEM_CACHE__[key] = (typeof value === 'string' ? value : JSON.stringify(value)); } catch {};
+    }
   } catch(e) {}
 }
 
 function portalReadSession(key, fallback) {
   try {
+    // Apenas leitura em modo portal; fora do portal não usar sessionStorage
     if (isPortalMode()) return typeof fallback==='function'?fallback():fallback;
-    const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null;
-    const v = s && s.getItem ? s.getItem(key) : null;
-    return (v == null ? (typeof fallback==='function'?fallback():fallback) : v);
+    return typeof fallback === 'function' ? fallback() : fallback;
   } catch(e) { return typeof fallback==='function'?fallback():fallback; }
 }
 
 function portalWriteSession(key, value) {
   try {
-    if (isPortalMode()) return;
-    const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null;
-    if (s && s.setItem) s.setItem(key, String(value));
+    // Apenas grava em modo portal; fora do portal não usar sessionStorage
+    if (isPortalMode()) {
+      try { if (window.__MEM_CACHE__) window.__MEM_CACHE__[key] = (typeof value === 'string' ? value : JSON.stringify(value)); } catch {};
+    }
   } catch(e) {}
 }
 
-// Wrapper cloud-first para requests: prefere `window.apiFetch`, fallback apenas para fetch nativo
+// Wrapper cloud-only para requests: exige `window.apiFetch`; se ausente, lança `api_unavailable`
 async function apiRequest(path, opts) {
   const w = (typeof window !== 'undefined') ? window : null;
+  if (!w || typeof w.apiFetch !== 'function') throw new Error('api_unavailable');
 
-  // Preferir window.apiFetch quando disponível
-  const af = w && typeof w.apiFetch === 'function' ? w.apiFetch : null;
-  if (af) return af(path, opts);
-
-  // Fallback estrito para fetch nativo
-  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch === 'function' ? fetch : null);
-  if (!__native_fetch) throw new Error('fetch_unavailable');
-
-  // Construir URL absoluta se path começar com '/'
-  const base = (w && w.__API_BASE__) ? w.__API_BASE__ : (w && w.location && w.location.origin ? w.location.origin : '');
-  const url = (String(path || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(path || '')) : String(path || '');
-
-  return __native_fetch(url, opts);
+  const p = String(path || '');
+  const finalPath = (w.__API_BASE__ && p.startsWith('/')) ? (String(w.__API_BASE__).replace(/\/\/+$/, '') + p) : p;
+  return w.apiFetch(finalPath, opts);
 }
 
 const perfisFixos = [
