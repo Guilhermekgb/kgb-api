@@ -87,40 +87,22 @@ async function apiPut(path, body) { return await (typeof window !== 'undefined' 
 const KEY_TIPOS_EVENTO = 'categorias:tiposEvento';
 // fonte atual dos dados: 'clientes' ou 'leads' (usado para escolher endpoints de delete/put)
 let clientesSource = 'clientes';
-// Cloud-first API helper: prefer window.apiFetch, fallback only to native fetch HTTP.
+// Cloud-first API helper: exigir window.apiFetch e lançar api_unavailable se ausente.
 async function api(endpoint, method = 'GET', body = {}) {
   const m = (method || 'GET').toUpperCase();
   const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
-  // Preferir window.apiFetch quando disponível
-  if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-    try {
-      const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
-      return { status: 200, data: payload };
-    } catch (err) {
-      console.warn('[clientes-lista] window.apiFetch falhou', err);
-      throw err;
-    }
+  if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') {
+    throw new Error('api_unavailable');
   }
 
-  // Fallback estrito: apenas fetch nativo
-  const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
-  if (!__native_fetch) throw new Error('fetch_unavailable');
-
-  const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '');
-  const url = (String(endpoint || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(endpoint || '')) : String(endpoint || '');
-
-  const fetchOpts = { method: m, credentials: 'include', headers: {} };
-  if (safeBody !== undefined) {
-    if (safeBody instanceof FormData) fetchOpts.body = safeBody;
-    else if (typeof safeBody === 'string') fetchOpts.body = safeBody;
-    else { fetchOpts.headers['Content-Type'] = 'application/json'; fetchOpts.body = JSON.stringify(safeBody); }
+  try {
+    const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+    return { status: 200, data: payload };
+  } catch (err) {
+    console.warn('[clientes-lista] window.apiFetch falhou', err);
+    throw err;
   }
-
-  const res = await __native_fetch(url, fetchOpts);
-  const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-  const payload = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
-  return { status: res.status, data: payload };
 }
 
 
