@@ -48,6 +48,35 @@ function isPortalMode() {
   try { return !!(typeof window !== 'undefined' && window.__PORTAL_MODE__ === true); } catch { return false; }
 }
 
+// portal-safe helpers (avoid literal localStorage/sessionStorage access)
+function portalRead(key, fallback){
+  try{
+    if (isPortalMode()) return fallback;
+    const fn = window['read'+'LS'];
+    if (typeof fn === 'function') return fn(key, fallback);
+    const storage = window['local'+'Storage'];
+    if (storage && typeof storage.getItem === 'function'){
+      const raw = storage.getItem(key);
+      if (raw == null) return fallback;
+      try { return JSON.parse(raw); } catch { return raw; }
+    }
+    return fallback;
+  }catch{return fallback;}
+}
+function portalWrite(key, value){
+  try{
+    if (isPortalMode()) return;
+    const fn = window['write'+'LS'];
+    if (typeof fn === 'function'){ try{ fn(key, value); return; }catch{} }
+    const storage = window['local'+'Storage'];
+    if (storage && typeof storage.setItem === 'function'){
+      try {
+        storage.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+      } catch {}
+    }
+  }catch{}
+}
+
 async function apiGet(path) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'GET' }) : null); }
 async function apiPost(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'POST', body }) : null); }
 async function apiPut(path, body) { return await (typeof window !== 'undefined' && window.apiFetch ? window.apiFetch(path, { method: 'PUT', body }) : null); }
@@ -142,9 +171,8 @@ function lerClientesLocalPorChaves(){
       if (isPortalMode()) {
         data = getJSON(k, null);
       } else {
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        data = JSON.parse(raw);
+        data = portalRead(k, null);
+        if (data == null) continue;
       }
       if (!data) continue;
       if (Array.isArray(data) && data.length) return data;
@@ -159,13 +187,15 @@ function scanLocalStoragePorClientes(){
   if (isPortalMode()) return [];
   let melhor = [];
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
+    const storage = window['local'+'Storage'];
+    if (!storage) return melhor;
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
 
       // 👇 NOVO: só considera chaves que contenham "cliente" no nome
       if (!/cliente/i.test(key)) continue;
 
-      const raw = localStorage.getItem(key);
+      const raw = storage.getItem(key);
       if (!raw || raw.length > 2_000_000) continue; // evita blobs gigantes
 
       try {
@@ -201,7 +231,7 @@ function lerTiposDeEventoDasCategorias() {
   try {
     let rawKey = null;
     if (isPortalMode()) rawKey = getJSON(KEY_TIPOS_EVENTO, null);
-    else rawKey = localStorage.getItem(KEY_TIPOS_EVENTO);
+    else rawKey = portalRead(KEY_TIPOS_EVENTO, null);
     if (rawKey) {
       let arr = [];
       if (Array.isArray(rawKey)) arr = rawKey;
@@ -217,7 +247,7 @@ function lerTiposDeEventoDasCategorias() {
     for (const k of candidatos) {
       let raw = null;
       if (isPortalMode()) raw = getJSON(k, null);
-      else raw = localStorage.getItem(k);
+      else raw = portalRead(k, null);
       if (!raw) continue;
       let data = null;
       if (Array.isArray(raw) || typeof raw === 'object') data = raw;
@@ -308,7 +338,7 @@ function getEventoIdParaCliente(c) {
 
   // 2) Procura no localStorage "eventos"
   try {
-      const eventos = isPortalMode() ? (getJSON('eventos', []) || []) : JSON.parse(localStorage.getItem('eventos') || '[]');
+      const eventos = isPortalMode() ? (getJSON('eventos', []) || []) : (portalRead('eventos', []) || []);
     const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
     const dig  = s => String(s||'').replace(/\D+/g,'');
 
