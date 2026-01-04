@@ -179,6 +179,12 @@
     }
 
 </style>
+<style>
+/* PATCH: neutraliza layout antigo quando menu global (.layout) estiver ativo */
+.layout .wrapper{ display:block !important; min-height:auto !important; }
+.layout #menuLateral{ position:static !important; width:auto !important; height:auto !important; }
+.layout main.conteudo-principal{ margin-left:0 !important; padding:18px !important; }
+</style>
 </head>
 <body>
   <!-- Botão mobile -->
@@ -296,7 +302,7 @@
     </div>
   </dialog>
 
-  <script type="module" src="menu-lateral.js"></script>
+  <script src="menu-lateral.js" defer></script>
 
   <!-- ===== Página: Resumo (saldos, contas, cartões) ===== -->
   <script>

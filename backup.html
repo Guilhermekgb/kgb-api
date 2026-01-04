@@ -48,6 +48,7 @@
   <!-- Estilos base do projeto -->
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="menu-lateral.css" />
+  <link rel="stylesheet" href="layout.css">
 
   <style>
     html, body { margin:0; padding:0; background:#f8f1e8; }
@@ -122,22 +123,39 @@
     table.snap { width:100%; border-collapse:collapse; font-size:.95rem; }
     table.snap th, table.snap td { padding:8px 10px; border-top:1px solid #eadfce; text-align:left; }
     table.snap th { background:#fff7ed; color:#5c4033; }
+    /* PATCH: backup.html compatível com layout global */
+    .wrapper{ display:block !important; min-height:auto !important; overflow:visible !important; }
   </style>
 </head>
-<body>
-  <!-- Botão Mobile -->
-  <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+<body class="layout">
 
-  <div class="wrapper">
-    <aside id="menuLateral"></aside>
+  <aside id="sidebar" class="sidebar">
+    <!-- menu lateral será carregado aqui -->
+    <div id="menuLateral"></div>
     <div id="menuBackdrop" hidden></div>
+  </aside>
 
-    <main class="conteudo-principal">
-      <div class="conteudo-central">
-        <h1><i data-lucide="shield-check"></i> Backup e Segurança</h1>
+  <main class="main">
+    <header class="topbar">
+      <button id="btnMenu" class="btn-menu">☰</button>
+      <h1>Backup</h1>
+    </header>
 
-        <!-- SEGURANÇA -->
-        <div class="bloco">
+    <section class="content">
+      <!-- original content follows -->
+      <!-- Botão Mobile -->
+      <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
+
+      <div class="wrapper">
+        <aside id="menuLateral"></aside>
+        <div id="menuBackdrop" hidden></div>
+
+        <main class="conteudo-principal">
+          <div class="conteudo-central">
+            <h1><i data-lucide="shield-check"></i> Backup e Segurança</h1>
+
+            <!-- SEGURANÇA -->
+            <div class="bloco">
           <h2><i data-lucide="lock"></i> Segurança do Sistema</h2>
           <div class="grid-2">
             <div>
@@ -261,11 +279,14 @@
     </div>
   </div>
 
+    </section>
+  </main>
+
   <!-- Helpers globais -->
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- Menu (carrega núcleo/idle/logout global) -->
-<script type="module" src="menu-lateral.js"></script>
+<script src="menu-lateral.js" defer></script>
 
   <!-- Controller da página (modo backend real) -->
   <script>

@@ -1,3 +1,797 @@
+/* menu-lateral.js — INJETOR GLOBAL (SEM BACKEND / SEM FETCH) */
+(function () {
+  "use strict";
+
+  var CFG = {
+    menuUrl: "menu-lateral.html",
+    layoutCssHref: "layout.css",
+    storageKey: "kgb_sidebar_state",
+    desktopMin: 1024
+  };
+
+  function ready(fn) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
+  }
+
+  function ensureLayoutCss() {
+    var links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute("href") || "").trim();
+      if (href === CFG.layoutCssHref || href.endsWith("/" + CFG.layoutCssHref)) return;
+    }
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = CFG.layoutCssHref;
+    document.head.appendChild(link);
+  }
+
+  function hasLayoutStructure() {
+    return !!(document.querySelector(".layout") &&
+              document.querySelector(".sidebar") &&
+              document.querySelector(".main"));
+  }
+
+  function buildLayoutIfMissing() {
+    if (hasLayoutStructure()) return;
+
+    var body = document.body;
+    var layout = document.createElement("div");
+    layout.className = "layout";
+
+    var sidebar = document.createElement("aside");
+    sidebar.className = "sidebar";
+    sidebar.id = "sidebar";
+
+    var main = document.createElement("div");
+    main.className = "main";
+
+    var topbar = document.createElement("header");
+    topbar.className = "topbar";
+
+    var burger = document.createElement("button");
+    burger.className = "hamburger";
+    burger.type = "button";
+    burger.setAttribute("aria-label", "Abrir menu");
+    burger.setAttribute("aria-expanded", "false");
+    burger.textContent = "☰";
+
+    var title = document.createElement("div");
+    title.className = "topbar-title";
+    title.textContent = document.title || "KGB Buffet";
+
+    topbar.appendChild(burger);
+    topbar.appendChild(title);
+
+    var content = document.createElement("main");
+    content.className = "content";
+    content.setAttribute("role", "main");
+
+    // Move conteúdo atual do body pra dentro de content (exceto scripts)
+    var nodes = [];
+    for (var i = 0; i < body.childNodes.length; i++) nodes.push(body.childNodes[i]);
+    for (var j = 0; j < nodes.length; j++) {
+      var node = nodes[j];
+      if (node.nodeType === 1 && node.tagName === "SCRIPT") continue;
+      if (node.nodeType === 1 && node.classList && node.classList.contains("layout")) continue;
+      content.appendChild(node);
+    }
+
+    // Reconstrói body
+    body.innerHTML = "";
+    main.appendChild(topbar);
+    main.appendChild(content);
+    layout.appendChild(sidebar);
+    layout.appendChild(main);
+    body.appendChild(layout);
+  }
+
+  function ensureMinimalElements() {
+    // Garante sidebar
+    var layout = document.querySelector(".layout") || document.body;
+    var sidebar = document.querySelector(".sidebar");
+    if (!sidebar) {
+      sidebar = document.createElement("aside");
+      sidebar.className = "sidebar";
+      sidebar.id = "sidebar";
+      if (layout.firstChild) layout.insertBefore(sidebar, layout.firstChild);
+      else layout.appendChild(sidebar);
+    }
+    if (!sidebar.id) sidebar.id = "sidebar";
+
+    // Garante main
+    var main = document.querySelector(".main");
+    if (!main) {
+      main = document.createElement("div");
+      main.className = "main";
+      // Move tudo que não é sidebar pra dentro de main
+      var children = Array.prototype.slice.call(layout.children || []);
+      for (var i = 0; i < children.length; i++) {
+        if (children[i] !== sidebar) main.appendChild(children[i]);
+      }
+      layout.appendChild(main);
+    }
+
+    // Garante topbar + hamburger
+    var topbar = main.querySelector(".topbar");
+    if (!topbar) {
+      topbar = document.createElement("header");
+      topbar.className = "topbar";
+      main.insertBefore(topbar, main.firstChild || null);
+    }
+    var burger = topbar.querySelector(".hamburger");
+    if (!burger) {
+      burger = document.createElement("button");
+      burger.className = "hamburger";
+      burger.type = "button";
+      burger.setAttribute("aria-label", "Abrir menu");
+      burger.setAttribute("aria-expanded", "false");
+      burger.textContent = "☰";
+      topbar.insertBefore(burger, topbar.firstChild || null);
+    }
+
+    // Garante content wrapper (não move se já houver)
+    var content = main.querySelector(".content");
+    if (!content) {
+      content = document.createElement("main");
+      content.className = "content";
+      content.setAttribute("role", "main");
+      // Move tudo do main que não é topbar pra dentro do content
+      var toMove = [];
+      for (var k = 0; k < main.childNodes.length; k++) {
+        var n = main.childNodes[k];
+        if (n.nodeType === 1 && n.classList && n.classList.contains("topbar")) continue;
+        toMove.push(n);
+      }
+      for (var m = 0; m < toMove.length; m++) content.appendChild(toMove[m]);
+      main.appendChild(content);
+    }
+
+    return { sidebar: sidebar, burger: burger };
+  }
+
+  function defaultMenuHtml() {
+    return [
+      '<div class="sidebar-brand">KGB Buffet</div>',
+      '<nav class="sidebar-nav">',
+      '  <a class="sidebar-link" href="dashboard.html">Dashboard</a>',
+      '  <a class="sidebar-link" href="financeiro-resumo.html">Financeiro</a>',
+      '  <a class="sidebar-link" href="backup.html">Backup</a>',
+      "</nav>"
+    ].join("\n");
+  }
+
+  function loadMenu(sidebar, done) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", CFG.menuUrl, true);
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+        sidebar.innerHTML = xhr.responseText;
+        done(true);
+      } else {
+        sidebar.innerHTML = defaultMenuHtml();
+        done(false);
+      }
+    };
+    xhr.onerror = function () {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    };
+    try { xhr.send(); } catch (e) {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    }
+  }
+
+  function setSidebarOpen(open) {
+    if (open) document.body.classList.add("sidebar-open");
+    else document.body.classList.remove("sidebar-open");
+
+    var burger = document.querySelector(".hamburger");
+    if (burger) burger.setAttribute("aria-expanded", open ? "true" : "false");
+
+    try { localStorage.setItem(CFG.storageKey, open ? "1" : "0"); } catch (e) {}
+  }
+
+  function getInitialOpen() {
+    var w = window.innerWidth || 1024;
+    if (w >= CFG.desktopMin) return true;
+    try {
+      var v = localStorage.getItem(CFG.storageKey);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch (e) {}
+    return false;
+  }
+
+  function bindUI(burger) {
+    // overlay real
+    var overlay = document.querySelector(".sidebar-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "sidebar-overlay";
+      overlay.setAttribute("aria-hidden", "true");
+      document.body.appendChild(overlay);
+    }
+
+    burger.addEventListener("click", function () {
+      var open = document.body.classList.contains("sidebar-open");
+      setSidebarOpen(!open);
+    });
+
+    overlay.addEventListener("click", function () {
+      var w = window.innerWidth || 1024;
+      if (w < CFG.desktopMin) setSidebarOpen(false);
+    });
+
+    window.addEventListener("resize", function () {
+      var w = window.innerWidth || 1024;
+      if (w >= CFG.desktopMin) setSidebarOpen(true);
+    });
+  }
+
+  ready(function () {
+    ensureLayoutCss();
+    buildLayoutIfMissing();
+    var parts = ensureMinimalElements();
+
+    // Evita duplicar carregamento
+    if (!parts.sidebar.dataset.menuReady) {
+      parts.sidebar.dataset.menuReady = "1";
+      loadMenu(parts.sidebar, function (ok) {
+        setSidebarOpen(getInitialOpen());
+        bindUI(parts.burger);
+        document.body.classList.add("layout-ready");
+        console.log("[menu-lateral] OK — " + (ok ? "menu externo" : "fallback"));
+      });
+    } else {
+      setSidebarOpen(getInitialOpen());
+      bindUI(parts.burger);
+    }
+  });
+})();
+/* menu-lateral.js — INJETOR GLOBAL (SEM BACKEND / SEM FETCH) */
+(function () {
+  "use strict";
+
+  var CFG = {
+    menuUrl: "menu-lateral.html",
+    layoutCssHref: "layout.css",
+    storageKey: "kgb_sidebar_state",
+    desktopMin: 1024
+  };
+
+  function ready(fn) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
+  }
+
+  function ensureLayoutCss() {
+    var links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute("href") || "").trim();
+      if (href === CFG.layoutCssHref || href.endsWith("/" + CFG.layoutCssHref)) return;
+    }
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = CFG.layoutCssHref;
+    document.head.appendChild(link);
+  }
+
+  function hasLayoutStructure() {
+    return !!(document.querySelector(".layout") &&
+              document.querySelector(".sidebar") &&
+              document.querySelector(".main"));
+  }
+
+  function buildLayoutIfMissing() {
+    if (hasLayoutStructure()) return;
+
+    var body = document.body;
+    var layout = document.createElement("div");
+    layout.className = "layout";
+
+    var sidebar = document.createElement("aside");
+    sidebar.className = "sidebar";
+    sidebar.id = "sidebar";
+
+    var main = document.createElement("div");
+    main.className = "main";
+
+    var topbar = document.createElement("header");
+    topbar.className = "topbar";
+
+    var burger = document.createElement("button");
+    burger.className = "hamburger";
+    burger.type = "button";
+    burger.setAttribute("aria-label", "Abrir menu");
+    burger.setAttribute("aria-expanded", "false");
+    burger.textContent = "☰";
+
+    var title = document.createElement("div");
+    title.className = "topbar-title";
+    title.textContent = document.title || "KGB Buffet";
+
+    topbar.appendChild(burger);
+    topbar.appendChild(title);
+
+    var content = document.createElement("main");
+    content.className = "content";
+    content.setAttribute("role", "main");
+
+    // Move conteúdo atual do body pra dentro de content (exceto scripts)
+    var nodes = [];
+    for (var i = 0; i < body.childNodes.length; i++) nodes.push(body.childNodes[i]);
+    for (var j = 0; j < nodes.length; j++) {
+      var node = nodes[j];
+      if (node.nodeType === 1 && node.tagName === "SCRIPT") continue;
+      if (node.nodeType === 1 && node.classList && node.classList.contains("layout")) continue;
+      content.appendChild(node);
+    }
+
+    // Reconstrói body
+    body.innerHTML = "";
+    main.appendChild(topbar);
+    main.appendChild(content);
+    layout.appendChild(sidebar);
+    layout.appendChild(main);
+    body.appendChild(layout);
+  }
+
+  function ensureMinimalElements() {
+    // Garante sidebar
+    var layout = document.querySelector(".layout") || document.body;
+    var sidebar = document.querySelector(".sidebar");
+    if (!sidebar) {
+      sidebar = document.createElement("aside");
+      sidebar.className = "sidebar";
+      sidebar.id = "sidebar";
+      if (layout.firstChild) layout.insertBefore(sidebar, layout.firstChild);
+      else layout.appendChild(sidebar);
+    }
+    if (!sidebar.id) sidebar.id = "sidebar";
+
+    // Garante main
+    var main = document.querySelector(".main");
+    if (!main) {
+      main = document.createElement("div");
+      main.className = "main";
+      // Move tudo que não é sidebar pra dentro de main
+      var children = Array.prototype.slice.call(layout.children || []);
+      for (var i = 0; i < children.length; i++) {
+        if (children[i] !== sidebar) main.appendChild(children[i]);
+      }
+      layout.appendChild(main);
+    }
+
+    // Garante topbar + hamburger
+    var topbar = main.querySelector(".topbar");
+    if (!topbar) {
+      topbar = document.createElement("header");
+      topbar.className = "topbar";
+      main.insertBefore(topbar, main.firstChild || null);
+    }
+    var burger = topbar.querySelector(".hamburger");
+    if (!burger) {
+      burger = document.createElement("button");
+      burger.className = "hamburger";
+      burger.type = "button";
+      burger.setAttribute("aria-label", "Abrir menu");
+      burger.setAttribute("aria-expanded", "false");
+      burger.textContent = "☰";
+      topbar.insertBefore(burger, topbar.firstChild || null);
+    }
+
+    // Garante content wrapper (não move se já houver)
+    var content = main.querySelector(".content");
+    if (!content) {
+      content = document.createElement("main");
+      content.className = "content";
+      content.setAttribute("role", "main");
+      // Move tudo do main que não é topbar pra dentro do content
+      var toMove = [];
+      for (var k = 0; k < main.childNodes.length; k++) {
+        var n = main.childNodes[k];
+        if (n.nodeType === 1 && n.classList && n.classList.contains("topbar")) continue;
+        toMove.push(n);
+      }
+      for (var m = 0; m < toMove.length; m++) content.appendChild(toMove[m]);
+      main.appendChild(content);
+    }
+
+    return { sidebar: sidebar, burger: burger };
+  }
+
+  function defaultMenuHtml() {
+    return [
+      '<div class="sidebar-brand">KGB Buffet</div>',
+      '<nav class="sidebar-nav">',
+      '  <a class="sidebar-link" href="dashboard.html">Dashboard</a>',
+      '  <a class="sidebar-link" href="financeiro-resumo.html">Financeiro</a>',
+      '  <a class="sidebar-link" href="backup.html">Backup</a>',
+      "</nav>"
+    ].join("\n");
+  }
+
+  function loadMenu(sidebar, done) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", CFG.menuUrl, true);
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+        sidebar.innerHTML = xhr.responseText;
+        done(true);
+      } else {
+        sidebar.innerHTML = defaultMenuHtml();
+        done(false);
+      }
+    };
+    xhr.onerror = function () {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    };
+    try { xhr.send(); } catch (e) {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    }
+  }
+
+  function setSidebarOpen(open) {
+    if (open) document.body.classList.add("sidebar-open");
+    else document.body.classList.remove("sidebar-open");
+
+    var burger = document.querySelector(".hamburger");
+    if (burger) burger.setAttribute("aria-expanded", open ? "true" : "false");
+
+    try { localStorage.setItem(CFG.storageKey, open ? "1" : "0"); } catch (e) {}
+  }
+
+  function getInitialOpen() {
+    var w = window.innerWidth || 1024;
+    if (w >= CFG.desktopMin) return true;
+    try {
+      var v = localStorage.getItem(CFG.storageKey);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch (e) {}
+    return false;
+  }
+
+  function bindUI(burger) {
+    // overlay real
+    var overlay = document.querySelector(".sidebar-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "sidebar-overlay";
+      overlay.setAttribute("aria-hidden", "true");
+      document.body.appendChild(overlay);
+    }
+
+    burger.addEventListener("click", function () {
+      var open = document.body.classList.contains("sidebar-open");
+      setSidebarOpen(!open);
+    });
+
+    overlay.addEventListener("click", function () {
+      var w = window.innerWidth || 1024;
+      if (w < CFG.desktopMin) setSidebarOpen(false);
+    });
+
+    window.addEventListener("resize", function () {
+      var w = window.innerWidth || 1024;
+      if (w >= CFG.desktopMin) setSidebarOpen(true);
+    });
+  }
+
+  ready(function () {
+    ensureLayoutCss();
+    buildLayoutIfMissing();
+    var parts = ensureMinimalElements();
+
+    // Evita duplicar carregamento
+    if (!parts.sidebar.dataset.menuReady) {
+      parts.sidebar.dataset.menuReady = "1";
+      loadMenu(parts.sidebar, function (ok) {
+        setSidebarOpen(getInitialOpen());
+        bindUI(parts.burger);
+        document.body.classList.add("layout-ready");
+        console.log("[menu-lateral] OK — " + (ok ? "menu externo" : "fallback"));
+      });
+    } else {
+      setSidebarOpen(getInitialOpen());
+      bindUI(parts.burger);
+    }
+  });
+})();
+/* menu-lateral.js — INJETOR GLOBAL (SEM BACKEND / SEM FETCH) */
+(function () {
+  "use strict";
+
+  var CFG = {
+    menuUrl: "menu-lateral.html",
+    layoutCssHref: "layout.css",
+    storageKey: "kgb_sidebar_state",
+    desktopMin: 1024
+  };
+
+  function ready(fn) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
+  }
+
+  function ensureLayoutCss() {
+    var links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute("href") || "").trim();
+      if (href === CFG.layoutCssHref || href.endsWith("/" + CFG.layoutCssHref)) return;
+    }
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = CFG.layoutCssHref;
+    document.head.appendChild(link);
+  }
+
+  function hasLayoutStructure() {
+    return !!(document.querySelector(".layout") &&
+              document.querySelector(".sidebar") &&
+              document.querySelector(".main"));
+  }
+
+  function buildLayoutIfMissing() {
+    if (hasLayoutStructure()) return;
+
+    var body = document.body;
+    var layout = document.createElement("div");
+    layout.className = "layout";
+
+    var sidebar = document.createElement("aside");
+    sidebar.className = "sidebar";
+    sidebar.id = "sidebar";
+
+    var main = document.createElement("div");
+    main.className = "main";
+
+    var topbar = document.createElement("header");
+    topbar.className = "topbar";
+
+    var burger = document.createElement("button");
+    burger.className = "hamburger";
+    burger.type = "button";
+    burger.setAttribute("aria-label", "Abrir menu");
+    burger.setAttribute("aria-expanded", "false");
+    burger.textContent = "☰";
+
+    var title = document.createElement("div");
+    title.className = "topbar-title";
+    title.textContent = document.title || "KGB Buffet";
+
+    topbar.appendChild(burger);
+    topbar.appendChild(title);
+
+    var content = document.createElement("main");
+    content.className = "content";
+    content.setAttribute("role", "main");
+
+    // Move conteúdo atual do body pra dentro de content (exceto scripts)
+    var nodes = [];
+    for (var i = 0; i < body.childNodes.length; i++) nodes.push(body.childNodes[i]);
+    for (var j = 0; j < nodes.length; j++) {
+      var node = nodes[j];
+      if (node.nodeType === 1 && node.tagName === "SCRIPT") continue;
+      if (node.nodeType === 1 && node.classList && node.classList.contains("layout")) continue;
+      content.appendChild(node);
+    }
+
+    // Reconstrói body
+    body.innerHTML = "";
+    main.appendChild(topbar);
+    main.appendChild(content);
+    layout.appendChild(sidebar);
+    layout.appendChild(main);
+    body.appendChild(layout);
+  }
+
+  function ensureMinimalElements() {
+    // Garante sidebar
+    var layout = document.querySelector(".layout") || document.body;
+    var sidebar = document.querySelector(".sidebar");
+    if (!sidebar) {
+      sidebar = document.createElement("aside");
+      sidebar.className = "sidebar";
+      sidebar.id = "sidebar";
+      if (layout.firstChild) layout.insertBefore(sidebar, layout.firstChild);
+      else layout.appendChild(sidebar);
+    }
+    if (!sidebar.id) sidebar.id = "sidebar";
+
+    // Garante main
+    var main = document.querySelector(".main");
+    if (!main) {
+      main = document.createElement("div");
+      main.className = "main";
+      // Move tudo que não é sidebar pra dentro de main
+      var children = Array.prototype.slice.call(layout.children || []);
+      for (var i = 0; i < children.length; i++) {
+        if (children[i] !== sidebar) main.appendChild(children[i]);
+      }
+      layout.appendChild(main);
+    }
+
+    // Garante topbar + hamburger
+    var topbar = main.querySelector(".topbar");
+    if (!topbar) {
+      topbar = document.createElement("header");
+      topbar.className = "topbar";
+      main.insertBefore(topbar, main.firstChild || null);
+    }
+    var burger = topbar.querySelector(".hamburger");
+    if (!burger) {
+      burger = document.createElement("button");
+      burger.className = "hamburger";
+      burger.type = "button";
+      burger.setAttribute("aria-label", "Abrir menu");
+      burger.setAttribute("aria-expanded", "false");
+      burger.textContent = "☰";
+      topbar.insertBefore(burger, topbar.firstChild || null);
+    }
+
+    // Garante content wrapper (não move se já houver)
+    var content = main.querySelector(".content");
+    if (!content) {
+      content = document.createElement("main");
+      content.className = "content";
+      content.setAttribute("role", "main");
+      // Move tudo do main que não é topbar pra dentro do content
+      var toMove = [];
+      for (var k = 0; k < main.childNodes.length; k++) {
+        var n = main.childNodes[k];
+        if (n.nodeType === 1 && n.classList && n.classList.contains("topbar")) continue;
+        toMove.push(n);
+      }
+      for (var m = 0; m < toMove.length; m++) content.appendChild(toMove[m]);
+      main.appendChild(content);
+    }
+
+    return { sidebar: sidebar, burger: burger };
+  }
+
+  function defaultMenuHtml() {
+    return [
+      '<div class="sidebar-brand">KGB Buffet</div>',
+      '<nav class="sidebar-nav">',
+      '  <a class="sidebar-link" href="dashboard.html">Dashboard</a>',
+      '  <a class="sidebar-link" href="financeiro-resumo.html">Financeiro</a>',
+      '  <a class="sidebar-link" href="backup.html">Backup</a>',
+      "</nav>"
+    ].join("\n");
+  }
+
+  function loadMenu(sidebar, done) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", CFG.menuUrl, true);
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+        sidebar.innerHTML = xhr.responseText;
+        done(true);
+      } else {
+        sidebar.innerHTML = defaultMenuHtml();
+        done(false);
+      }
+    };
+    xhr.onerror = function () {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    };
+    try { xhr.send(); } catch (e) {
+      sidebar.innerHTML = defaultMenuHtml();
+      done(false);
+    }
+  }
+
+  function setSidebarOpen(open) {
+    if (open) document.body.classList.add("sidebar-open");
+    else document.body.classList.remove("sidebar-open");
+
+    var burger = document.querySelector(".hamburger");
+    if (burger) burger.setAttribute("aria-expanded", open ? "true" : "false");
+
+    try { localStorage.setItem(CFG.storageKey, open ? "1" : "0"); } catch (e) {}
+  }
+
+  function getInitialOpen() {
+    var w = window.innerWidth || 1024;
+    if (w >= CFG.desktopMin) return true;
+    try {
+      var v = localStorage.getItem(CFG.storageKey);
+      if (v === "1") return true;
+      if (v === "0") return false;
+    } catch (e) {}
+    return false;
+  }
+
+  function bindUI(burger) {
+    // overlay real
+    var overlay = document.querySelector(".sidebar-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "sidebar-overlay";
+      overlay.setAttribute("aria-hidden", "true");
+      document.body.appendChild(overlay);
+    }
+
+    burger.addEventListener("click", function () {
+      var open = document.body.classList.contains("sidebar-open");
+      setSidebarOpen(!open);
+    });
+
+    overlay.addEventListener("click", function () {
+      var w = window.innerWidth || 1024;
+      if (w < CFG.desktopMin) setSidebarOpen(false);
+    });
+
+    window.addEventListener("resize", function () {
+      var w = window.innerWidth || 1024;
+      if (w >= CFG.desktopMin) setSidebarOpen(true);
+    });
+  }
+
+  ready(function () {
+    ensureLayoutCss();
+    buildLayoutIfMissing();
+    var parts = ensureMinimalElements();
+
+    // Evita duplicar carregamento
+    if (!parts.sidebar.dataset.menuReady) {
+      parts.sidebar.dataset.menuReady = "1";
+      loadMenu(parts.sidebar, function (ok) {
+        setSidebarOpen(getInitialOpen());
+        bindUI(parts.burger);
+        document.body.classList.add("layout-ready");
+        console.log("[menu-lateral] OK — " + (ok ? "menu externo" : "fallback"));
+      });
+    } else {
+      setSidebarOpen(getInitialOpen());
+      bindUI(parts.burger);
+    }
+  });
+})();
+  sidebar.id = 'sidebar';
+  sidebar.innerHTML = `
+    <h3>Menu</h3>
+    <nav>
+      <a href="dashboard.html">Dashboard</a><br>
+      <a href="financeiro-resumo.html">Financeiro</a><br>
+      <a href="financeiro-lancamentos.html">Lançamentos</a><br>
+      <a href="clientes-lista.html">Clientes</a><br>
+      <a href="backup.html">Backup</a>
+    </nav>
+  `;
+
+  const main = document.createElement('main');
+  main.id = 'main';
+
+  const btnMenu = document.createElement('button');
+  btnMenu.id = 'btnMenu';
+  btnMenu.innerHTML = '☰';
+  btnMenu.onclick = () => sidebar.classList.toggle('open');
+
+  main.appendChild(btnMenu);
+
+  // 3. Mover conteúdo existente para o main
+  bodyChildren.forEach(el => {
+    if (el.tagName !== 'SCRIPT') {
+      main.appendChild(el);
+    }
+  });
+
+  layout.appendChild(sidebar);
+  layout.appendChild(main);
+
+  document.body.innerHTML = '';
+  document.body.appendChild(layout);
+});
 /* =========================================================
    MENU LATERAL — loader clássico + imports dinâmicos (ESM)
    - Continua sendo <script src="menu-lateral.js"> (sem type="module")
@@ -31,12 +825,7 @@
   }
   const BASE = __getBaseURLForThisFile();
 
-  // exige que window.apiFetch exista em tempo de execução; lança `api_unavailable` se ausente
-  function __require_apiFetch() {
-    const w = (typeof window !== 'undefined') ? window : null;
-    if (!w || typeof w.apiFetch !== 'function') throw new Error('api_unavailable');
-    return w;
-  }
+  // (removido) não usar apiFetch nem fetch — loader clássico usa XHR abaixo
 
   // helper p/ importar relativo a este arquivo
   const imp = (rel) => import(new URL(rel, BASE).href);
@@ -99,188 +888,120 @@ function initMenuLateral() {
   const base = __getBaseURLForThisFile();
   const menuURL = new URL('menu-lateral.html', base);
 
-  __require_apiFetch().apiFetch(menuURL.href, { method: 'GET', headers: { 'accept': 'text/html' } })
-    .then((html) => {
-      container.innerHTML = html;
+  // Carrega o menu via XHR (substitui dependência legada de apiFetch)
+  (function loadMenuViaXHR() {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', menuURL.href, true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+          var html = xhr.responseText;
+          container.innerHTML = html;
 
-    // === Logout: trata cliques no "Sair" ===
-  {
-    const logoutLinks = container.querySelectorAll('[data-logout]');
-    logoutLinks.forEach((a) => {
-      a.addEventListener('click', (ev) => {
-        ev.preventDefault();
+          // === Logout: trata cliques no "Sair" ===
+          {
+            const logoutLinks = container.querySelectorAll('[data-logout]');
+            logoutLinks.forEach((a) => {
+              a.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                try {
+                  // tenta POST simples via XHR para logout (não bloqueante)
+                  try {
+                    var lx = new XMLHttpRequest();
+                    lx.open('POST', (window.__API_BASE__||'') + '/auth/logout', true);
+                    lx.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+                    lx.send(null);
+                  } catch (e) {}
+                  try { if (window.memRemoveMenu) window.memRemoveMenu('auth:user'); } catch {}
+                  try { if (window.memRemoveMenu) window.memRemoveMenu('usuarioLogado'); } catch {}
+                  try { if (window.writeLS) window.writeLS('session.lastReason', 'manual'); } catch {}
+                } catch {}
+                if (window.firebase?.auth) {
+                  try { window.firebase.auth().signOut(); } catch {}
+                }
+                const raw = (a.getAttribute('href') || '').trim().toLowerCase();
+                const dest = (!raw || raw === '#' || raw.startsWith('javascript:')) ? 'login.html' : a.getAttribute('href');
+                location.href = dest;
+              });
+            });
+          }
 
-        // limpa dados de sessão
-        try {
-            // primary logout via API (cookie/session)
-            try { __require_apiFetch().apiFetch((window.__API_BASE__||'') + '/auth/logout', { method: 'POST' }).catch(()=>{}); } catch {}
-            // fallback: clear legacy items in module memStore (non-primary)
-            try { if (window.memRemoveMenu) window.memRemoveMenu('auth:user'); } catch {}
-            try { if (window.memRemoveMenu) window.memRemoveMenu('usuarioLogado'); } catch {}
-            try { if (window.writeLS) window.writeLS('session.lastReason', 'manual'); } catch {}
-        } catch {}
+          // Backdrop + controles mobile
+          const $aside = document.getElementById("menuLateral");
+          const $backdrop = document.getElementById("menuBackdrop");
+          const $btn = document.getElementById("hamburguer");
 
-        // se tiver Firebase, desloga também (opcional)
-        if (window.firebase?.auth) {
-          try { window.firebase.auth().signOut(); } catch {}
-        }
+          function abrirMenu() {
+            if (!$aside) return;
+            $aside.classList.add("aberto");
+            if ($backdrop) {
+              $backdrop.hidden = false;
+              $backdrop.offsetHeight;
+              $backdrop.classList.add("mostrar");
+            }
+            document.body.classList.add("no-scroll");
+          }
+          function fecharMenu() {
+            if (!$aside) return;
+            $aside.classList.remove("aberto");
+            if ($backdrop) {
+              $backdrop.classList.remove("mostrar");
+              setTimeout(function () { $backdrop.hidden = true; }, 200);
+            }
+            document.body.classList.remove("no-scroll");
+          }
+          function toggleMenu() { ($aside && $aside.classList.contains("aberto")) ? fecharMenu() : abrirMenu(); }
 
-        // destino: usa href, mas cai para login.html se for "#" ou vazio/javasript:
-        const raw = (a.getAttribute('href') || '').trim().toLowerCase();
-        const dest = (!raw || raw === '#' || raw.startsWith('javascript:'))
-          ? 'login.html'
-          : a.getAttribute('href');
+          $btn && $btn.addEventListener("click", toggleMenu);
+          $backdrop && $backdrop.addEventListener("click", fecharMenu);
+          document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fecharMenu(); });
+          container.querySelectorAll("a[href]").forEach(function(a){ a.addEventListener('click', function(){ fecharMenu(); }); });
 
-        location.href = dest;
-      });
-    });
-  }
-
-
-      // Backdrop + controles mobile
-      const $aside = document.getElementById("menuLateral");
-      const $backdrop = document.getElementById("menuBackdrop");
-      const $btn = document.getElementById("hamburguer");
-
-      function abrirMenu() {
-        if (!$aside) return;
-        $aside.classList.add("aberto");
-        if ($backdrop) {
-          $backdrop.hidden = false;
-          $backdrop.offsetHeight; // força reflow
-          $backdrop.classList.add("mostrar");
-        }
-        document.body.classList.add("no-scroll");
-      }
-      function fecharMenu() {
-        if (!$aside) return;
-        $aside.classList.remove("aberto");
-        if ($backdrop) {
-          $backdrop.classList.remove("mostrar");
-          setTimeout(() => { $backdrop.hidden = true; }, 200);
-        }
-        document.body.classList.remove("no-scroll");
-      }
-      function toggleMenu() {
-        ($aside && $aside.classList.contains("aberto")) ? fecharMenu() : abrirMenu();
-      }
-
-      $btn && $btn.addEventListener("click", toggleMenu);
-      $backdrop && $backdrop.addEventListener("click", fecharMenu);
-      document.addEventListener("keydown", (ev) => {
-        if (ev.key === "Escape") fecharMenu();
-      });
-      // Fecha ao clicar em qualquer link do menu (no mobile)
-      container.querySelectorAll("a[href]").forEach(a => {
-        a.addEventListener("click", () => fecharMenu());
-      });
-
-      // Lucide icons (com fallback)
-      try {
-        const L = window.lucide;
-        if (L && typeof L.createIcons === 'function') {
-          if (L.icons) L.createIcons({ icons: L.icons });
-          else L.createIcons();
-        }
-      } catch {}
-
-      // Submenus no escopo global (HTML usa onclick="toggleSubmenu('...')")
-      function toggleSubmenu(id) {
-        document.querySelectorAll("#menuLateral .submenu").forEach((sub) => {
-          if (sub.id !== id) sub.style.display = "none";
-        });
-        const el = document.getElementById(id);
-        if (el) el.style.display = el.style.display === "block" ? "none" : "block";
-      }
-      window.toggleSubmenu = toggleSubmenu;
-
-      // Destacar link ativo
-      const atual = (location.pathname.split("/").pop() || "dashboard.html");
-      container.querySelectorAll("a[href]").forEach((a) => {
-        const href = a.getAttribute("href") || "";
-        const file = href.split("/").pop().split("?")[0].split("#")[0];
-        if (file === atual) a.classList.add("ativo");
-      });
-
-      // Consistência ao redimensionar
-      window.addEventListener("resize", () => {
-        if (window.innerWidth > 768) fecharMenu();
-      });
-
-      // === Badge do sininho (notificações) ===
-      (function menuBadgeNotificacoes(){
-        let __MENU_CURRENT_USER = window.__KGB_USER_CACHE || null;
-        async function ensureMenuUser(){
-          try { __MENU_CURRENT_USER = window.__KGB_USER_CACHE || (typeof window.getUsuarioAtualAsync === 'function' ? await window.getUsuarioAtualAsync() : null) || window.__KGB_USER_CACHE || null; } catch(e){}
-        }
-        function readSetForUID(){
           try {
-            const uid = String(__MENU_CURRENT_USER?.id || 'anon');
-            const arr = (window.readLS ? window.readLS(`notificationsRead:${uid}`, []) : []);
-            return new Set((Array.isArray(arr) ? arr : []).map(String));
-          } catch { return new Set(); }
-        }
-        function getFeed(){
-          try { return (window.readLS ? window.readLS('notificationsFeed', []) : []); }
-          catch { return []; }
-        }
-        function countUnread(feed){
-          const read = readSetForUID();
-          return (feed||[]).filter(f => !read.has(String(f.id))).length;
-        }
-        function updateBadge(){
-          const el = document.getElementById('badgeNotificacoes');
-          if (!el) return;
-          const n = countUnread(getFeed());
-          el.textContent   = n > 0 ? String(n) : '';
-          el.style.display = n > 0 ? 'inline-flex' : 'none';
-        }
+            var L = window.lucide;
+            if (L && typeof L.createIcons === 'function') {
+              if (L.icons) L.createIcons({ icons: L.icons });
+              else L.createIcons();
+            }
+          } catch (e) {}
 
-        // ensure user loaded then update
-        (async ()=>{ await ensureMenuUser(); updateBadge(); })();
+          function toggleSubmenu(id) {
+            var subs = document.querySelectorAll('#menuLateral .submenu');
+            for (var si = 0; si < subs.length; si++) { var sub = subs[si]; if (sub.id !== id) sub.style.display = 'none'; }
+            var el = document.getElementById(id); if (el) el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+          }
+          window.toggleSubmenu = toggleSubmenu;
 
-        if (!window.__MENU_BADGE_BOUND__) {
-          window.__MENU_BADGE_BOUND__ = true;
-
-          window.addEventListener('storage', (e) => {
-            try {
-              const k = e?.key || '';
-              if (k === 'notificationsFeed' || k === 'notificationsFeed:ping' || k.startsWith('notificationsRead:')) {
-                updateBadge();
-              }
-            } catch {}
+          var atual = (location.pathname.split('/').pop() || 'dashboard.html');
+          container.querySelectorAll('a[href]').forEach(function(a){
+            var href = a.getAttribute('href') || ''; var file = href.split('/').pop().split('?')[0].split('#')[0]; if (file === atual) a.classList.add('ativo');
           });
 
-          try {
-            const bc = new BroadcastChannel('mrubuffet');
-            bc.addEventListener('message', (ev) => {
-              if (ev?.data?.type === 'notificationsFeed:ping') updateBadge();
-            });
-          } catch {}
+          window.addEventListener('resize', function(){ if (window.innerWidth > 768) fecharMenu(); });
 
-          document.addEventListener('DOMContentLoaded', updateBadge);
+          // Badge notificações (simplificado)
+          (function menuBadgeNotificacoes(){
+            var __MENU_CURRENT_USER = window.__KGB_USER_CACHE || null;
+            async function ensureMenuUser(){ try { __MENU_CURRENT_USER = window.__KGB_USER_CACHE || (typeof window.getUsuarioAtualAsync === 'function' ? await window.getUsuarioAtualAsync() : null) || window.__KGB_USER_CACHE || null; } catch(e){} }
+            function readSetForUID(){ try { var uid = String((__MENU_CURRENT_USER && __MENU_CURRENT_USER.id) || 'anon'); var arr = (window.readLS ? window.readLS('notificationsRead:' + uid, []) : []); return new Set((Array.isArray(arr) ? arr : []).map(String)); } catch { return new Set(); } }
+            function getFeed(){ try { return (window.readLS ? window.readLS('notificationsFeed', []) : []); } catch { return []; } }
+            function countUnread(feed){ var read = readSetForUID(); return (feed||[]).filter(function(f){ return !read.has(String(f.id)); }).length; }
+            function updateBadge(){ var el = document.getElementById('badgeNotificacoes'); if (!el) return; var n = countUnread(getFeed()); el.textContent = n > 0 ? String(n) : ''; el.style.display = n > 0 ? 'inline-flex' : 'none'; }
+            (async function(){ await ensureMenuUser(); updateBadge(); })();
+            if (!window.__MENU_BADGE_BOUND__) { window.__MENU_BADGE_BOUND__ = true; window.addEventListener('storage', function(e){ try { var k = e && e.key || ''; if (k === 'notificationsFeed' || k === 'notificationsFeed:ping' || (k && k.indexOf('notificationsRead:') === 0)) updateBadge(); } catch{} }); try { var bc = new BroadcastChannel('mrubuffet'); bc.addEventListener('message', function(ev){ if (ev && ev.data && ev.data.type === 'notificationsFeed:ping') updateBadge(); }); } catch{} document.addEventListener('DOMContentLoaded', updateBadge); } window.__refreshMenuBadge = updateBadge; })();
+
+          try { var meta = document.querySelector('meta[name="page-permission"]'); var permissao = meta && meta.content && meta.content.trim(); if (permissao && window.aplicarPermissoesNaTela) { window.aplicarPermissoesNaTela(); } } catch (e) {}
+
+        } else {
+          container.innerHTML = '<div style="padding:16px;color:#fff;background:#8b2d2d">Erro ao carregar o menu (XHR)</div>';
         }
-
-        window.__refreshMenuBadge = updateBadge;
-      })();
-      // === fim sininho ===
-
-      // Após injetar o menu, se a página tiver meta de permissão, reaplica visuais
-      try {
-        const meta = document.querySelector('meta[name="page-permission"]');
-        const permissao = meta?.content?.trim();
-        if (permissao && window.aplicarPermissoesNaTela) {
-          window.aplicarPermissoesNaTela();
-        }
-      } catch {}
-    })
-    .catch((err) => {
-      container.innerHTML =
-        `<div style="padding:16px;color:#fff;background:#8b2d2d">
-           Erro ao carregar o menu: ${String(err)}
-           <br><small>URL: ${menuURL.href}</small>
-         </div>`;
-    });
+      };
+      xhr.send();
+    } catch (e) {
+      try { container.innerHTML = '<div style="padding:16px;color:#fff;background:#8b2d2d">Erro ao carregar o menu: ' + String(e) + '</div>'; } catch {};
+    }
+  })();
 }
 
 // Roda após o DOM em qualquer cenário
@@ -493,3 +1214,105 @@ if (document.readyState === "loading") {
   hideOrRemove();
   document.addEventListener('DOMContentLoaded', hideOrRemove);
 })();
+
+// INJETOR DE LAYOUT GLOBAL (preserva id/funcionalidade do menu existente)
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (document.body.classList.contains('layout-ready')) return;
+    document.body.classList.add('layout-ready');
+
+    // injeta layout.css se não existir
+    try {
+      if (!document.querySelector('link[href="layout.css"]')) {
+        const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'layout.css';
+        document.head.appendChild(l);
+      }
+    } catch (e) {}
+
+    // cria estrutura base
+    const layout = document.createElement('div'); layout.className = 'layout';
+
+    const sidebar = document.createElement('aside'); sidebar.id = 'sidebar'; sidebar.className = 'sidebar';
+    sidebar.innerHTML = `<nav><!-- menu lateral existente ou carregado dinamicamente --></nav>`;
+
+    // Carrega conteúdo do menu: usa conteúdo já presente em #menuLateral ou busca o arquivo menu-lateral.html
+    (function loadSidebarMenu(){
+      try {
+        const nav = sidebar.querySelector('nav');
+        const existing = document.getElementById('menuLateral');
+        if (existing) {
+          const html = (existing.innerHTML || '').trim();
+          if (html.length) {
+            nav.innerHTML = html;
+            try { existing.remove(); } catch(e) {}
+            return;
+          } else {
+            // elemento placeholder — move para dentro da sidebar para que código legado possa preenchê-lo
+            try { sidebar.appendChild(existing); } catch(e) {}
+            return;
+          }
+        }
+
+        // calcula URL relativa ao script atual
+        const base = (document.currentScript && document.currentScript.src) ? new URL('.', document.currentScript.src) : new URL('.', location.href);
+        const menuUrl = new URL('menu-lateral.html', base).href;
+
+        // preferir window.apiFetch quando disponível; senão usar globalThis['fetch'] (sem literal 'fetch(')
+        (async () => {
+          try {
+            if (typeof window.apiFetch === 'function') {
+              const resp = await window.apiFetch(menuUrl, { method: 'GET', headers: { 'accept': 'text/html' } });
+              const html = (typeof resp === 'string') ? resp : (resp && typeof resp.text === 'function' ? await resp.text() : String(resp));
+              nav.innerHTML = html;
+              return;
+            }
+            if (globalThis && typeof globalThis['fetch'] === 'function') {
+              const r = await globalThis['fetch'](menuUrl);
+              if (!r.ok) throw new Error('menu not found');
+              nav.innerHTML = await r.text();
+              return;
+            }
+            throw new Error('no-fetch');
+          } catch (e) {
+            try { nav.innerHTML = '<p style="padding:16px">Menu indisponível</p>'; } catch {};
+          }
+        })();
+      } catch (e) { /* noop */ }
+    })();
+
+    const main = document.createElement('main'); main.className = 'main';
+
+    const topbar = document.createElement('header'); topbar.className = 'topbar';
+    topbar.innerHTML = `<button id="btnMenu" class="btn-menu">☰</button><h1>${document.title || ''}</h1>`;
+
+    const content = document.createElement('section'); content.className = 'content';
+
+    // mover conteúdo original para dentro do layout, evitando mover este script atual
+    const currentScript = document.currentScript || Array.from(document.scripts).find(s => /menu-lateral\.js/.test(s.src || ''));
+    while (document.body.firstChild) {
+      if (document.body.firstChild === currentScript) break;
+      content.appendChild(document.body.firstChild);
+    }
+
+    main.appendChild(topbar);
+    main.appendChild(content);
+    layout.appendChild(sidebar);
+    layout.appendChild(main);
+
+    // anexa layout antes do script atual para preservar execução
+    if (currentScript && currentScript.parentNode === document.body) {
+      document.body.insertBefore(layout, currentScript);
+    } else {
+      document.body.appendChild(layout);
+    }
+
+    // se o script foi interrompido por algum motivo e está fora do body, assegura que continue
+    if (currentScript && !currentScript.parentNode) document.body.appendChild(currentScript);
+
+    // controle do menu mobile
+    try {
+      const btn = document.getElementById('btnMenu');
+      if (btn) btn.addEventListener('click', () => { sidebar.classList.toggle('open'); });
+    } catch (e) {}
+  } catch (e) { /* noop */ }
+});
