@@ -433,33 +433,13 @@
       const m = (method || 'GET').toUpperCase();
       const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
-      if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
-        try {
-          const payload = await window.apiFetch(String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
-          return { status: 200, data: payload };
-        } catch (err) {
-          console.warn('[cliente-detalhado] window.apiFetch falhou', err);
-          throw err;
-        }
-      }
-
-      const __native_fetch = (typeof globalThis !== 'undefined' && globalThis['f'+'etch']) ? globalThis['f'+'etch'] : (typeof fetch !== 'undefined' ? fetch : null);
-      if (!__native_fetch) throw new Error('fetch_unavailable');
-
-      const base = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : (typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '');
-      const url = (String(endpoint || '').startsWith('/')) ? (base.replace(/\/\/+$/, '') + String(endpoint || '')) : String(endpoint || '');
-
-      const fetchOpts = { method: m, credentials: 'include', headers: {} };
-      if (safeBody !== undefined) {
-        if (safeBody instanceof FormData) fetchOpts.body = safeBody;
-        else if (typeof safeBody === 'string') fetchOpts.body = safeBody;
-        else { fetchOpts.headers['Content-Type'] = 'application/json'; fetchOpts.body = JSON.stringify(safeBody); }
-      }
-
-      const res = await __native_fetch(url, fetchOpts);
-      const ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-      const payload = ct.includes('application/json') ? await res.json().catch(() => null) : await res.text().catch(() => null);
-      return { status: res.status, data: payload };
+      // Cloud-only: exigir window.apiFetch; lançar `api_unavailable` se ausente
+      if (!window || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
+      const p = String(endpoint || '');
+      const finalEndpoint = (window.__API_BASE__ && p.startsWith('/')) ? (String(window.__API_BASE__).replace(/\/\/+$/, '') + p) : p;
+      const opts = Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {});
+      const payload = await window.apiFetch(finalEndpoint, opts);
+      return { status: 200, data: payload };
     };
 
     const $  = s => document.querySelector(s);
