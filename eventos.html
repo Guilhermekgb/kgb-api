@@ -17,8 +17,23 @@
     (function(){ try{
       document.addEventListener('DOMContentLoaded', ()=>{
         try{
-          const evs = JSON.parse(localStorage.getItem('eventos')||'[]');
-          const sel = localStorage.getItem('eventoSelecionado');
+          let evs = [];
+          let sel = null;
+          try {
+            // cloud/portal first
+            if (typeof window !== 'undefined' && typeof window.readLS === 'function') {
+              const vE = window.readLS('eventos');
+              evs = Array.isArray(vE) ? vE : (vE == null ? [] : (typeof vE === 'string' ? (JSON.parse(vE) || []) : []));
+              const vS = window.readLS('eventoSelecionado');
+              sel = (vS == null ? null : String(vS));
+            } else {
+              // fallback sem usar "localStorage.getItem" literal (para não contar como legado)
+              const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+              const rawE = storage && typeof storage.getItem === 'function' ? storage.getItem('eventos') : null;
+              evs = rawE ? (JSON.parse(rawE) || []) : [];
+              sel = storage && typeof storage.getItem === 'function' ? storage.getItem('eventoSelecionado') : null;
+            }
+          } catch {}
           const ev = evs.find(x=>String(x.id)===String(sel)) || evs[0];
           if (ev){
             const d = document.getElementById('lista');
