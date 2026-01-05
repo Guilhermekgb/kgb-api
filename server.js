@@ -382,6 +382,9 @@ function savePortalTokens(tokens) {
 // ========================= App / CORS =========================
 const app = express();
 
+// Parse JSON bodies early so auth routes receive parsed bodies
+app.use(express.json({ limit: '50mb' }));
+
 app.use(cors({
   origin(origin, cb) {
     // Permite ferramentas locais (sem Origin) e as origens na allowlist

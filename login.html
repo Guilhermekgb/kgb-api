@@ -195,20 +195,23 @@
         const loginUrl = isSameOrigin3333 ? '/auth/login' : (base || '') + '/auth/login';
 
         const payload = { email, senha };
-        console.log('[LOGIN] payload sent', payload);
+        const method = 'POST';
+        const urlToCall = loginUrl;
+        console.log('[LOGIN] will call', { method, url: urlToCall, payload });
 
         let j = null;
         try {
           // apiFetch throws on non-OK and returns parsed payload on success
-          j = await window['apiFetch'](loginUrl, {
-            method: 'POST',
+          j = await window['apiFetch'](urlToCall, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          console.log('[LOGIN] call succeeded', { method, url: urlToCall, response: j });
         } catch (err) {
           const status = err && err.status;
           const payloadErr = err && err.payload;
-          console.warn('[LOGIN] /auth/login failed', status, payloadErr, err);
+          console.error('[LOGIN] failed', { method, url: urlToCall, status, response: payloadErr, message: err && err.message });
           // mostra resultado na tela para depuração
           let dbg = document.getElementById('login-debug');
           if (!dbg) {
@@ -222,7 +225,7 @@
             dbg.style.marginTop = '12px';
             form.appendChild(dbg);
           }
-          dbg.textContent = JSON.stringify({ payload, status, response: payloadErr }, null, 2);
+          dbg.textContent = JSON.stringify({ payload, status, response: payloadErr, message: err && err.message }, null, 2);
           alert('Login falhou: ' + (payloadErr && payloadErr.error ? payloadErr.error : 'ver console para detalhes'));
           return;
         }
