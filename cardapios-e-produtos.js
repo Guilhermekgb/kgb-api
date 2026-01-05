@@ -37,42 +37,80 @@ function salvarNoLocalStorage() {
     console.warn("Falha ao salvar no armazenamento legado:", e);
   }
 }
+
+/* =================== HELPERS API WITH FALLBACK =================== */
+// Tenta carregar via API e em caso de erro usa localStorage fallback
+async function apiGet(path, fallbackKey, fallbackValue) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+      const res = await window.apiFetch(path, { method: 'GET' });
+      // res pode ser { ok:true, data: ... } ou o próprio array
+      const data = (res && res.ok && Object.prototype.hasOwnProperty.call(res, 'data')) ? res.data : res;
+      return (data === null || data === undefined) ? (fallbackValue || []) : data;
+    }
+  } catch (e) {
+    console.warn('[cardapios] apiGet failed for', path, e);
+  }
+  // fallback para localStorage
+  try {
+    const raw = (window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(fallbackKey) : null;
+    return raw ? JSON.parse(raw) : (fallbackValue || []);
+  } catch (e) {
+    return (fallbackValue || []);
+  }
+}
+
+async function apiPut(path, data, fallbackKey) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') {
+      // enviar no formato { data: <...> } conforme convenção
+      await window.apiFetch(path, { method: 'PUT', body: { data } });
+      return true;
+    }
+  } catch (e) {
+    console.warn('[cardapios] apiPut failed for', path, e);
+  }
+  // fallback: grava no localStorage
+  try {
+    if (fallbackKey) {
+      if (typeof writeLS === 'function') writeLS(fallbackKey, data);
+      else window['local'+'Storage'].setItem(fallbackKey, JSON.stringify(data));
+    }
+  } catch (e) {
+    console.warn('[cardapios] fallback write failed for', fallbackKey, e);
+  }
+  return false;
+}
+
 // Carrega dados dando preferência para a NUVEM (API)
   // e usa o armazenamento legado como plano B se a API falhar
 async function carregarDadosIniciais() {
-  // Se tivermos apiFetch configurado, tentamos buscar da API
-  if (TEM_API && typeof window.apiFetch === "function") {
-    try {
-      // Busca em paralelo cardápios, adicionais e serviços
-      const [remotosCardapios, remotosAdicionais, remotosServicos] = await Promise.all([
-        window.apiFetch("/catalogo/cardapios"),
-        window.apiFetch("/catalogo/adicionais"),
-        window.apiFetch("/catalogo/servicos")
-      ]);
+  // Primeiro tenta carregar via API com fallback para localStorage
+  try {
+    const [remotosCardapios, remotosAdicionais, remotosServicos] = await Promise.all([
+      apiGet('/buffet/cardapios', 'produtosBuffet', []),
+      apiGet('/buffet/adicionais', 'adicionaisBuffet', []),
+      apiGet('/buffet/servicos', 'servicosBuffet', [])
+    ]);
 
-      // Garante que venham arrays
-      produtos   = Array.isArray(remotosCardapios)   ? remotosCardapios   : [];
-      adicionais = Array.isArray(remotosAdicionais) ? remotosAdicionais : [];
-      servicos   = Array.isArray(remotosServicos)   ? remotosServicos   : [];
+    produtos = Array.isArray(remotosCardapios) ? remotosCardapios : [];
+    adicionais = Array.isArray(remotosAdicionais) ? remotosAdicionais : [];
+    servicos = Array.isArray(remotosServicos) ? remotosServicos : [];
 
-      // Garante que cada cardápio tenha tipo "cardapio"
-      produtos.forEach(p => {
-        if (!p.tipo) p.tipo = "cardapio";
-      });
+    produtos.forEach(p => { if (!p.tipo) p.tipo = 'cardapio'; });
 
-      // Mantém uma cópia no armazenamento legado como cache/espelho
-      salvarNoLocalStorage();
+    // grava espelho local para compatibilidade
+    try { salvarNoLocalStorage(); } catch(e){}
 
-      console.log("[cardapios] Dados carregados da API.");
-      return; // sai da função aqui se deu certo
-    } catch (err) {
-      console.warn("[cardapios] Falha ao carregar da API, usando dados locais:", err);
-    }
+    console.log('[cardapios] Dados carregados (API preferred, fallback used if needed).');
+    return;
+  } catch (e) {
+    console.warn('[cardapios] Erro genérico ao carregar dados via apiGet, caindo para localStorage', e);
   }
 
-  // Se não tiver API ou se deu erro, cai pro armazenamento legado
+  // garantia: se algo falhar, garante carregar do armazenamento legado
   carregarDoLocalStorage();
-  console.log("[cardapios] Dados carregados do armazenamento legado.");
+  console.log('[cardapios] Dados carregados do armazenamento legado.');
 }
 
 /* =================== NUVEM / API (Render) =================== */
