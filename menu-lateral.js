@@ -1,15 +1,16 @@
-﻿/* menu-lateral.js  MENU GLOBAL NÃO-INVASIVO (FOCO: DASHBOARD OK)
-   - NÃO envolve o conteúdo da página em wrappers
-   - Garante: #menuLateral existe, injeta menu-lateral.html via XHR
-   - Garante: toggleSubmenu() global (submenus funcionam)
-   - Aplica CSS isolado SÓ dentro do #menuLateral (fundo, fontes, links)
+﻿/* menu-lateral.js  MENU GLOBAL NÃO-INVASIVO (fix: offset dashboard + submenus)
+   - Injeta menu-lateral.html via XHR
+   - Expõe toggleSubmenu() global (submenus)
+   - Aplica CSS isolado no #menuLateral
+   - Ajusta automaticamente o OFFSET do conteúdo (wrapper/main/body) para não ficar atrás do menu
 */
 (function () {
   "use strict";
 
   var CFG = {
     menuUrl: "menu-lateral.html",
-    desktopMin: 980
+    desktopMin: 980,
+    sidebarW: 240 // <<< MENU MAIS ESTREITO (antes 280)
   };
 
   function ready(fn) {
@@ -51,16 +52,18 @@
     st.id = "kgbSidebarTheme";
     st.textContent = `
 /* ===== Sidebar theme (isolado) ===== */
+:root{ --sidebar-w:${CFG.sidebarW}px; }
+
 #menuLateral{
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  width: 280px;
-  background: #2b170d; /* marrom escuro */
+  width: var(--sidebar-w);
+  background: #532b03; /* espresso sólido */
   color: #fff;
   overflow: auto;
   z-index: 9999;
   padding: 18px 14px;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset;
+  box-shadow: 2px 0 14px rgba(0,0,0,.18);
 }
 #menuLateral, #menuLateral *{
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
@@ -125,7 +128,7 @@
   z-index: 9998;
 }
 
-/* desktop: deixa menu sempre visível */
+/* desktop: menu sempre visível; o offset do conteúdo será aplicado via JS */
 @media (min-width:${CFG.desktopMin}px){
   #menuLateral{ transform: none !important; }
 }
@@ -190,12 +193,10 @@
     var tmp = document.createElement("div");
     tmp.innerHTML = html;
     var aside = tmp.querySelector('aside#menuLateral') || tmp.querySelector("aside") || tmp;
-    // queremos só o conteúdo interno do aside (pra não duplicar <aside>)
     return aside.innerHTML || tmp.innerHTML;
   }
 
-  function loadMenu(sidebar) {
-    // se não carregar, mantém o básico
+  function loadMenu(sidebar, onDone) {
     sidebar.innerHTML = `
       <div class="menu-lateral">
         <div class="menu-scroll">
@@ -215,9 +216,60 @@
           markActiveLinks(sidebar);
           renderLucide();
         }
+        if (typeof onDone === "function") onDone();
       };
       xhr.send();
+    } catch (e) {
+      if (typeof onDone === "function") onDone();
+    }
+  }
+
+  // >>>> AQUI É O FIX DO DASHBOARD: cria OFFSET no conteúdo <<<<
+  function applyOffset() {
+    var isDesk = (window.innerWidth || 1024) >= CFG.desktopMin;
+    var w = CFG.sidebarW;
+
+    try {
+      var r = document.getElementById("menuLateral")?.getBoundingClientRect?.();
+      if (r && r.width) w = Math.round(r.width);
     } catch (e) {}
+
+    // Mobile não precisa offset
+    if (!isDesk) {
+      // limpa offsets para não empurrar em telas pequenas
+      try { document.documentElement.style.removeProperty("--sidebar-w"); } catch(e){}
+      try { document.body.style.removeProperty("padding-left"); } catch(e){}
+      var wrap0 = document.querySelector(".wrapper");
+      if (wrap0) wrap0.style.paddingLeft = "";
+      var mains0 = document.querySelectorAll("main, main.kgb-content, main.conteudo-principal, .conteudo, .conteudo-principal");
+      for (var j=0;j<mains0.length;j++) mains0[j].style.marginLeft = "";
+      return;
+    }
+
+    // Desktop: salva var e aplica offset na estrutura que existir
+    try { document.documentElement.style.setProperty("--sidebar-w", w + "px"); } catch(e){}
+
+    // 1) Se existir .wrapper (como nas telas que já funcionam), usa padding-left
+    var wrap = document.querySelector(".wrapper");
+    if (wrap) {
+      wrap.style.paddingLeft = "var(--sidebar-w)";
+      return;
+    }
+
+    // 2) Se existir main.conteudo-principal / main / container principal, usa margin-left
+    var main = document.querySelector("main.conteudo-principal") ||
+               document.querySelector("main.kgb-content") ||
+               document.querySelector("main") ||
+               document.querySelector(".conteudo-principal") ||
+               document.querySelector(".conteudo");
+
+    if (main) {
+      main.style.marginLeft = "var(--sidebar-w)";
+      return;
+    }
+
+    // 3) Fallback final: empurra o body
+    try { document.body.style.paddingLeft = "var(--sidebar-w)"; } catch(e){}
   }
 
   function bindMobile(overlay) {
@@ -237,14 +289,17 @@
     if (sidebar.dataset.menuReady === "1") return;
     sidebar.dataset.menuReady = "1";
 
-    loadMenu(sidebar);
     bindMobile(overlay);
 
-    // desktop: mantém aberto
-    if ((window.innerWidth || 1024) >= CFG.desktopMin) {
-      document.body.classList.remove("sidebar-open");
-    }
+    loadMenu(sidebar, function () {
+      // aplica offset assim que o menu carregar
+      applyOffset();
+    });
 
-    console.log("[menu-lateral] OK (dashboard focus)");
+    window.addEventListener("resize", function () {
+      applyOffset();
+    });
+
+    console.log("[menu-lateral] OK (offset fix + width " + CFG.sidebarW + ")");
   });
 })();
