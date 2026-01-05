@@ -10,7 +10,7 @@ Resumo das alterações aplicadas em `cardapios-e-produtos.js`:
 
 - Alterado fluxo de carregamento inicial (`carregarDadosIniciais`) para usar API-first:
   - Endpoints consultados (preferenciais):
-    - `/buffet/cardapios` -> fallback `produtosBuffet`
+    - `/buffet/produtos` -> fallback `produtosBuffet`  (produtos é a fonte verdadeira; cardápios são derivados)
     - `/buffet/adicionais` -> fallback `adicionaisBuffet`
     - `/buffet/servicos` -> fallback `servicosBuffet`
   - Se a API responder, dados são usados e em seguida espelhados no `localStorage` (compatibilidade).
@@ -25,7 +25,7 @@ Chaves locais afetadas (legado):
 - `servicosBuffet`
 
 Observações / próximos passos:
-- Backend: confirme existência dos endpoints GET/PUT em `/buffet/*` (ou adapte para `/catalogo/*` se preferir manter o backend atual).
+- Backend: confirme existência dos endpoints GET/PUT em `/buffet/*` (ou adapte para `/catalogo/*` se preferir manter o backend atual). Se `/buffet/cardapios` existir, trate-o como opcional/futuro — a fonte principal agora é `/buffet/produtos`.
 - É intencional manter uma cópia em `localStorage` para compatibilidade com telas legadas; ao estabilizar a API, podemos remover gradualmente a dependência local.
 - Testes: abrir a tela de cardápios, validar carregamento sem erros com e sem API disponível; verificar console para mensagens de fallback.
 

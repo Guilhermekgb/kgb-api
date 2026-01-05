@@ -88,7 +88,7 @@ async function carregarDadosIniciais() {
   // Primeiro tenta carregar via API com fallback para localStorage
   try {
     const [remotosCardapios, remotosAdicionais, remotosServicos] = await Promise.all([
-      apiGet('/buffet/cardapios', 'produtosBuffet', []),
+      apiGet('/buffet/produtos', 'produtosBuffet', []),
       apiGet('/buffet/adicionais', 'adicionaisBuffet', []),
       apiGet('/buffet/servicos', 'servicosBuffet', [])
     ]);
