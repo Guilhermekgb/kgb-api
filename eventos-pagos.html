@@ -42,8 +42,21 @@
 </script>
 
 <style>
-  :root{ --sidebar-w:260px; }
   html, body{ margin:0; padding:0; background:#f8f1e8; }
+</style>
+
+  <style id="kgb-page-sidebar-w">
+    :root{ --sidebar-w:220px; }
+  </style>
+
+  <style id="kgb-page-layout-fix">
+    /* Fix: garantir que o conteúdo respeite o menu lateral */
+    body{ --kgb-sidebar-w: var(--sidebar-w, 220px); }
+    main, .wrapper, .conteudo, .conteudo-principal, .container, .page, .page-content{ box-sizing: border-box; }
+    @media (min-width: 980px){
+      main, .wrapper, .conteudo, .conteudo-principal, .page, .page-content{ padding-left: var(--kgb-sidebar-w); }
+    }
+  </style>
   .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
   #menuLateral{ flex-shrink:0; }
   @media (min-width:769px){
@@ -129,7 +142,7 @@ aside#menuLateral .submenu{
 }
 
 </style>
-</head>
+  
 <body>
 <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
 

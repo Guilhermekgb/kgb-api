@@ -186,6 +186,20 @@
 .layout main.conteudo-principal{ margin-left:0 !important; padding:18px !important; }
 </style>
 </head>
+  <style id="kgb-page-sidebar-w">
+    :root{ --sidebar-w:200px; }
+  </style>
+
+  <style id="kgb-page-layout-fix">
+    /* Fix: garantir que o conteúdo respeite o menu lateral */
+    body{ --kgb-sidebar-w: var(--sidebar-w, 200px); }
+    main, .wrapper, .conteudo, .conteudo-principal, .container, .page, .page-content{ box-sizing: border-box; }
+    @media (min-width: 980px){
+      main, .wrapper, .conteudo, .conteudo-principal, .page, .page-content{ padding-left: var(--kgb-sidebar-w); }
+    }
+  </style>
+
+</head>
 <body>
   <!-- Botão mobile -->
   <button id="hamburguer" aria-label="Abrir menu">

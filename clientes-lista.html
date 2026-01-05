@@ -129,6 +129,19 @@ var DEV_API  = window.location.origin;
       main.conteudo-principal { padding: 20px; }
     }
   </style>
+  <style id="kgb-page-sidebar-w">
+    :root{ --sidebar-w:200px; }
+  </style>
+
+  <style id="kgb-page-layout-fix">
+    /* Fix: garantir que o conteúdo respeite o menu lateral */
+    body{ --kgb-sidebar-w: var(--sidebar-w, 200px); }
+    main, .wrapper, .conteudo, .conteudo-principal, .container, .page, .page-content{ box-sizing: border-box; }
+    @media (min-width: 980px){
+      main, .wrapper, .conteudo, .conteudo-principal, .page, .page-content{ padding-left: var(--kgb-sidebar-w); }
+    }
+  </style>
+
 </head>
 <body>
 
