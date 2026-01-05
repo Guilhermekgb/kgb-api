@@ -475,12 +475,18 @@ app.use(express.json({ limit: '50mb' }));
 
 // Diagnostic endpoint and boot log should be available early (before static/catch-all)
 console.log('[BOOT]', 'express.json configured', new Date().toISOString());
+// Track which feature routes are registered so deployed server can report
+const BOOT_ROUTES = [];
 app.get('/__debug/boot', (req, res) => {
+  const hasBuffetRoutes = BOOT_ROUTES.includes('buffet');
+  const hasEventosRoutes = BOOT_ROUTES.includes('eventos');
   res.json({
     ok: true,
     file: 'kgb-api/server.js',
     time: new Date().toISOString(),
-    hasBuffetRoutes: false
+    hasBuffetRoutes,
+    hasEventosRoutes,
+    routes: BOOT_ROUTES
   });
 });
 
@@ -692,6 +698,7 @@ app.get('/auth/me', (req, res) => {
 // ==================== Endpoints /buffet/* (KV-backed) ====================
 // Persistem pequenos blobs JSON por chave no SQLite (kv_store)
 console.log('[BOOT]', 'Registering /buffet routes');
+if (!BOOT_ROUTES.includes('buffet')) BOOT_ROUTES.push('buffet');
 app.get('/buffet/produtos', requireAuth, (req, res) => {
   try {
     const data = kvGet('buffet_produtos', '[]');
@@ -751,6 +758,70 @@ app.put('/buffet/servicos', requireAuth, (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('[PUT /buffet/servicos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// ==================== Endpoints /eventos/* (KV-backed minimal API)
+// Simple storage for frontend migration (eventos list persisted as JSON)
+console.log('[BOOT]', 'Registering /eventos routes');
+if (!BOOT_ROUTES.includes('eventos')) BOOT_ROUTES.push('eventos');
+
+// GET /eventos -> retorna array de eventos (chave KV: 'eventos')
+app.get('/eventos', requireAuth, (req, res) => {
+  try {
+    const data = kvGet('eventos', '[]');
+    return res.json({ ok: true, data });
+  } catch (e) {
+    console.error('[GET /eventos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// PUT /eventos -> substitui lista completa de eventos
+app.put('/eventos', requireAuth, (req, res) => {
+  try {
+    const data = (req.body && (req.body.data !== undefined ? req.body.data : req.body)) || [];
+    kvPut('eventos', data);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /eventos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// GET /eventos/:id -> retorna 1 evento por id (404 se não existir)
+app.get('/eventos/:id', requireAuth, (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
+    const all = kvGet('eventos', '[]');
+    const ev = Array.isArray(all) ? all.find(e => String(e.id) === id) : null;
+    if (!ev) return res.status(404).json({ ok: false, error: 'Evento não encontrado' });
+    return res.json({ ok: true, data: ev });
+  } catch (e) {
+    console.error('[GET /eventos/:id] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// PUT /eventos/:id -> atualiza um evento específico (upsert na lista)
+app.put('/eventos/:id', requireAuth, (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
+    const body = req.body || {};
+    const all = kvGet('eventos', '[]');
+    const arr = Array.isArray(all) ? all.slice() : [];
+    const idx = arr.findIndex(e => String(e.id) === id);
+    const now = new Date().toISOString();
+
+    const updated = { ...(idx >= 0 ? arr[idx] : {}), ...body, id, updatedAt: now };
+    if (idx >= 0) arr[idx] = updated; else arr.push(updated);
+    kvPut('eventos', arr);
+    return res.json({ ok: true, data: updated });
+  } catch (e) {
+    console.error('[PUT /eventos/:id] erro', e && e.message);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
