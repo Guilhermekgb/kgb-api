@@ -397,6 +397,32 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'kgb-api', ts: Date.now() });
 });
 
+// Minimal auth probe for frontend (/auth/me)
+app.get('/auth/me', (req, res) => {
+  try {
+    const auth = String(req.headers.authorization || '');
+    // check Authorization: Bearer <token>
+    if (auth && auth.toLowerCase().startsWith('bearer ')) {
+      const token = auth.slice(7).trim();
+      if (!token) return res.status(401).json({ error: 'not_authenticated' });
+      // minimal valid token behavior: accept any non-empty token as authenticated
+      return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
+    }
+
+    // fallback: try to read cookie header (no cookie-parser required)
+    const cookieHeader = String(req.headers.cookie || '');
+    if (cookieHeader && /auth.token|kgb_token|auth_token/.test(cookieHeader)) {
+      return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
+    }
+
+    // not authenticated
+    return res.status(401).json({ error: 'not_authenticated' });
+  } catch (err) {
+    console.error('[auth] GET /auth/me erro:', err);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // ========================= PATCH F.0 — bases, storage utils, journal =========================
 const DATA_DIR = path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}

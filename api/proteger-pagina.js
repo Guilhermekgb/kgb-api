@@ -39,31 +39,26 @@ async function fetchMe() {
     // Não enviar Authorization Bearer quando same-origin; usar cookie httpOnly
     const headers = (!isSameOrigin3333 && window.__KGB_TOKEN) ? { Authorization: `Bearer ${window.__KGB_TOKEN}` } : {};
 
-    const resp = await window.apiFetch(meUrl, { method: 'GET', credentials: 'include', headers });
-
-    const status = resp && (resp.status || (resp.code || 200));
-    if (status === 401 && !window.__KGB_AUTH_INITIAL_SUPPRESSED) {
-      window.__KGB_AUTH_INITIAL_SUPPRESSED = true;
-      try { window.__KGB_LAST_AUTH_DEBUG = String(resp && (resp.data || resp) || ''); } catch(e){}
-      return null;
-    }
-
-    if (__AUTH_DEBUG__) console.debug('[AUTH] fetchMe -> API_BASE=', API_BASE, 'isSameOrigin3333=', isSameOrigin3333, 'headers=', headers);
-    if (__AUTH_DEBUG__) console.warn('[AUTH] /auth/me status:', status);
-    try { if (__AUTH_DEBUG__) console.debug('[AUTH] /auth/me response:', resp); } catch (e) {}
-
-    if (!status || status === 401) {
-      try { window.__KGB_LAST_AUTH_DEBUG = String(resp && (resp.data || resp) || ''); } catch(e){}
-      return null;
-    }
-
-    if (status === 200) {
+    try {
+      const resp = await window.apiFetch(meUrl, { method: 'GET', credentials: 'include', headers });
+      if (__AUTH_DEBUG__) console.debug('[AUTH] /auth/me response:', resp);
       const j = resp && (resp.data || resp) || null;
       const user = (j && j.data) ? j.data : j || null;
-      if (user) window.__KGB_USER_CACHE = user;
-      return user;
+      if (user) {
+        window.__KGB_USER_CACHE = user;
+        return user;
+      }
+      return null;
+    } catch (err) {
+      // window.apiFetch throws an Error with .status for non-OK responses
+      try { if (__AUTH_DEBUG__) console.warn('[AUTH] fetchMe error:', err); } catch(e){}
+      if (err && err.status === 401) {
+        // Unauthenticated -> go to login
+        try { window.location.href = 'login.html'; } catch(e){}
+        return null;
+      }
+      return null;
     }
-    return null;
   } catch (e) {
     console.error('[guard] /auth/me erro', e);
     return null;
