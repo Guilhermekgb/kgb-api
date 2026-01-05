@@ -1,0 +1,5 @@
+(Lista de páginas HTML que NÃO contêm referência a menu-lateral.js)
+
+Observação: a busca mostrou 114 arquivos HTML e 114 matches para 'menu-lateral.js' — aparentemente todas as páginas referenceiam o script direta ou indiretamente.
+
+Se quiser, posso reexecutar uma checagem por arquivo para confirmar quais, se houver, não incluem o script.

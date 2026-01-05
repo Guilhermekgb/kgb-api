@@ -1,0 +1,33 @@
+Arquivos que definem --sidebar-w explicitamente (extrato):
+
+- dashboard.html | :root{ --sidebar-w:200px; }
+- estoque-setores.html | --sidebar-w:260px; /* mesmo do modelo-base */
+- eventos-pagos.html | :root{ --sidebar-w:260px; }
+- financeiro-lancamentos.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-configuracoes.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-dashboard.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-eventos.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-financeiro.html | --sidebar-w:260px;
+- kgb-formaturas-formularios-recebidos.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-inadimplentes-arquivo.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-relatorios.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-tipos-evento.html | :root{ --sidebar-w:260px; }
+- kgb-formaturas-modelos-convite.html | :root{ --sidebar-w:260px; }
+- layout-editor.html | :root{ --sidebar-w:260px; }
+- lista-propostas.html | --sidebar-w:260px;
+- modelo-base.html | :root{ --sidebar-w:260px; }
+- planilha-eventos.html | --sidebar-w:260px; --bg:#f8f1e8; --card:#fff;
+- painel-cobrancas.html | --sidebar-w:260px;
+- responsavel-eventos.html | --sidebar-w:260px;
+- pdv.html | :root{ --sidebar-w:260px; --card-bg:#fff; --muted:#666; }
+- montagem-cardapio.html | --sidebar-w:260px;
+- funil-leads.html | --sidebar-w:260px;
+- etiquetas.html | :root{ --sidebar-w:260px; }
+- equipe.html | :root{ --sidebar-w: 260px; } (várias vezes)
+- entradas-saidas.html | :root{ --sidebar-w:260px; --card-bg:#fff; --muted:#666; }
+- detalhes-responsavel-evento.html | --sidebar-w:260px;
+- auditoria.html | --sidebar-w:260px; --bg:#f8f1e8; --card:#fff; --line:#e8dcc9;
+- agenda.html | --sidebar-w:260px;
+- agenda-equipe.html | --sidebar-w:260px;
+
+(Quantidade: 36 ocorrências encontradas.)

@@ -1,0 +1,25 @@
+(Extrato de hits encontrados)
+
+Veja padrões relevantes (trechos):
+
+- dashboard.html | :root{ --sidebar-w:200px; } /* <<< MENU MAIS ESTREITO AQUI */
+- dashboard.html | .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+- dashboard.html | #menuLateral{ flex-shrink:0; }
+- dashboard.html | .wrapper{ padding-left:var(--sidebar-w); }
+- financeiro-resumo.html | #menuLateral{position:fixed;top:0;left:0;width:260px;height:100vh;z-index:100;}
+- financeiro-resumo.html | main.conteudo-principal{flex:1;padding:28px;margin-left:260px;}
+- backup.html | .wrapper { display:flex; min-height:100vh; overflow:hidden; }
+- backup.html | <aside id="menuLateral"></aside>
+- menu-lateral.html | <div class="wrapper">
+- modelos-checklist.html | main.conteudo-principal { flex:1; padding:40px; height:100vh; overflow-y:auto; transition:margin-left .2s ease; }
+- detalhes-responsavel-evento.html | --sidebar-w:260px;
+- detalhes-responsavel-evento.html | .wrapper{display:flex;min-height:100vh;overflow:hidden}
+- responsavel-eventos.html | --sidebar-w:260px;
+- responsavel-eventos.html | #menuLateral{ position: fixed; left:0; top:0; width: var(--sidebar-w); height:100vh; z-index:999; overflow:auto; background:#5a3e2b; }
+- planilha-eventos.html | --sidebar-w:260px; ... .wrapper{ padding-left:var(--sidebar-w); }
+- permissoes.html | #menuLateral { flex-shrink: 0; width: 260px; min-height: 100vh; background-color: #5C4033; }
+- variaveis-modelos.html | #menuLateral { flex-shrink:0; background-color:#5a3e2b; min-width:240px; }
+- perfis.html | padding-left: 280px;
+- notificaciones/varios (muitas páginas) usam margin-left:8px para pequenos elementos
+
+(Arquivo gerado automaticamente via busca de padrões.)
