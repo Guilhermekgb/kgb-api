@@ -230,17 +230,16 @@
           return;
         }
 
-        if (j && (j.ok || j.status === 200)) {
-          if (j && (j.token && j.user)) {
-            try {
-              if (typeof window.setAuthToken === 'function') window.setAuthToken(String(j.token));
-              window.__KGB_USER_CACHE = j.user;
-              console.log('[LOGIN] success', j.user);
-              window.location.href = 'dashboard.html';
-              return;
-            } catch (e) {
-              console.warn('[LOGIN] failed to store token/user', e);
-            }
+        if (j && j.token && j.user) {
+          try {
+            if (typeof window.setAuthToken === 'function') window.setAuthToken(String(j.token));
+            window.__KGB_USER_CACHE = j.user;
+            console.log('[LOGIN] success', j.user);
+            window.location.href = 'dashboard.html';
+            return;
+          } catch (e) {
+            console.warn('[LOGIN] failed to store token/user', e);
+          }
         }
 
         // Fallback dev: se o backend não responder, ainda aceitamos credenciais dev
