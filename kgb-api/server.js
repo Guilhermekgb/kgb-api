@@ -476,6 +476,20 @@ function verifyToken(token) {
   try { return jwt.verify(token, JWT_SECRET); } catch (e) { return null; }
 }
 
+// In-memory token store for simple Bearer token support (mock for Render)
+const tokenStore = new Map();
+
+const mockUsers = {
+  'admin@kgb.com': { id: 'kgb-admin', nome: 'Administrador', email: 'admin@kgb.com', perfil: 'Administrador', permissoes: ['*'] },
+  'vendas@kgb.com': { id: 'kgb-vendas', nome: 'Vendas', email: 'vendas@kgb.com', perfil: 'Vendedor', permissoes: ['vendas'] }
+};
+
+function createInMemoryTokenFor(user) {
+  const token = 'kgb_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+  tokenStore.set(token, user);
+  return token;
+}
+
 function requireAuth(req, res, next) {
   const token = req.cookies && req.cookies.kgb_token;
   if (!token) return res.status(401).json({ ok: false, error: 'Unauthorized' });
@@ -495,31 +509,61 @@ app.post('/auth/login', (req, res) => {
   if (!email || !senha) return res.status(400).json({ ok: false, error: 'Missing email/senha' });
 
   try {
-    const identifier = String(email || '').toLowerCase();
-    let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(email) = ?').get(identifier);
-    if (!row) {
-      // tentar buscar por nome (username) caso o usuário tenha digitado seu nome ao invés do e-mail
-      row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(nome) = ?').get(identifier);
-    }
-    if (!row || String(row.senha || '') !== String(senha)) {
+      const identifier = String(email || '').toLowerCase();
+      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(email) = ?').get(identifier);
+      if (!row) {
+        // tentar buscar por nome (username) caso o usuário tenha digitado seu nome ao invés do e-mail
+        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(nome) = ?').get(identifier);
+      }
+
+      // Se encontrou no DB, valida senha
+      if (row) {
+        if (String(row.senha || '') !== String(senha)) {
+          return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+        }
+
+        const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
+        const token = signToken(payload);
+
+        // Em DEV: cookie httpOnly estático e consistente
+        res.cookie('kgb_token', token, {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        // Also create an in-memory bearer token for front-end use
+        try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
+        const memToken = createInMemoryTokenFor(payload);
+        // Expor o token também no header para clientes que armazenam KGB_TOKEN
+        try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
+        return res.json({ ok: true, data: payload, token: memToken });
+      }
+
+      // Fallback: aceitar usuários mock em memória quando não existirem no DB
+      if (mockUsers[identifier]) {
+        // aceitar senha padrão '123' ou qualquer senha (preferir 123)
+        if (String(senha) !== '123' && String(senha).length === 0) {
+          return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+        }
+        const payload = mockUsers[identifier];
+        const token = signToken(payload);
+        res.cookie('kgb_token', token, {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+        const memToken = createInMemoryTokenFor(payload);
+        // Expor o token também no header para clientes que armazenam KGB_TOKEN
+        try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
+        return res.json({ ok: true, data: payload, token: memToken });
+      }
+
       return res.status(401).json({ ok: false, error: 'Invalid credentials' });
-    }
-
-    const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
-    const token = signToken(payload);
-
-    // Em DEV: cookie httpOnly estático e consistente
-    res.cookie('kgb_token', token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    if (isDev) {
-      try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
-    }
-    return res.json({ ok: true, data: payload });
   } catch (err) {
     console.error('[auth] POST /auth/login erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
@@ -546,7 +590,7 @@ app.post('/auth/logout', (req, res) => {
 });
 
 app.get('/auth/me', (req, res) => {
-  // Apenas ler cookie; se ausente, retornar erro padrão
+  // Suporta Authorization: Bearer <token> (in-memory tokenStore) OU cookie JWT (kgb_token)
   try {
     if (process.env.NODE_ENV !== 'production') {
       console.log('[AUTH] GET /auth/me req.cookies=', req.cookies);
@@ -554,8 +598,29 @@ app.get('/auth/me', (req, res) => {
       try { console.log('[AUTH] req.cookies:', Object.keys(req.cookies || {})); } catch(e){}
     }
   } catch(e){}
+
+  // Primeiro: Authorization header (Bearer token) -> verificar tokenStore
+  try {
+    const authH = String(req.headers.authorization || '');
+    if (authH.toLowerCase().startsWith('bearer ')) {
+      const bearer = authH.split(' ')[1];
+      if (bearer && tokenStore.has(bearer)) {
+        const user = tokenStore.get(bearer);
+        return res.json({ ok: true, data: user });
+      }
+    }
+
+    // Alternativas: header `kgb_token` ou `x-kgb-token` (front pode enviar KGB_TOKEN)
+    const alt = req.headers['kgb_token'] || req.headers['x-kgb-token'] || req.headers['kgb-token'];
+    if (alt && tokenStore.has(String(alt))) {
+      const user = tokenStore.get(String(alt));
+      return res.json({ ok: true, data: user });
+    }
+  } catch (e) { /* continuar para cookie fallback */ }
+
+  // Fallback: cookie JWT (existing behavior)
   const token = req.cookies && req.cookies.kgb_token;
-  if (!token) return res.status(401).json({ ok: false, error: 'No token cookie' });
+  if (!token) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
 
   const decoded = verifyToken(token);
   if (!decoded) return res.status(401).json({ ok: false, error: 'Invalid token' });
