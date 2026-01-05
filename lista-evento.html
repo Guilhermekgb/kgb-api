@@ -734,9 +734,17 @@ async function excluirEvento(idFromButton) {
 
   eventos = eventos.filter(ev => String(ev.id) !== idStr);
 
-  if (typeof window.safeSaveEventos === "function") {
-    window.safeSaveEventos(eventos);
-  } else {
+  // Persist via API-first, fallback to localStorage
+  try {
+    if (typeof window.eventosApiPut === 'function') {
+      const ok = await window.eventosApiPut(eventos, 'eventos');
+      if (!ok) {
+        if (typeof window.safeSaveEventos === "function") window.safeSaveEventos(eventos); else try{ window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); }catch{}
+      }
+    } else {
+      try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+    }
+  } catch (e) {
     try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
   }
 
@@ -781,9 +789,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Se tiver API configurada, tentar buscar da nuvem e atualizar o armazenamento legado
   if (IS_REMOTE) {
     try {
-      const resp = await callApi('/eventos', 'GET', {});
-      if ((resp?.status === 200 || resp?.status === 201 || resp?.ok) && Array.isArray(resp.data)) {
-        window.safeSaveEventos(resp.data);
+      const arr = (typeof window.eventosApiGet === 'function') ? await window.eventosApiGet('eventos') : (await callApi('/eventos', 'GET', {}))?.data || [];
+      if (Array.isArray(arr)) {
+        try { window.safeSaveEventos(arr); } catch(e){}
       }
     } catch (e) {
       console.warn('[KGB] Falha ao carregar eventos da API; usando apenas dados locais.', e);

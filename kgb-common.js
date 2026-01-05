@@ -209,6 +209,57 @@ export function setLS(key, updater){
   return next;
 }
 
+// ===== Eventos API helpers (API-first with fallback to localStorage)
+async function _callApiFetch(path, opts={}){
+  try {
+    if (typeof window.apiFetch === 'function') return await window.apiFetch(path, opts);
+    if (typeof fetch === 'function') {
+      const base = window.__API_BASE__ || '';
+      const url = path.startsWith('http') ? path : (base + path);
+      const headers = Object.assign({'content-type':'application/json'}, window.__kgbAuthHeaders && window.__kgbAuthHeaders());
+      const res = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      const txt = await res.text();
+      try { return JSON.parse(txt); } catch { return { ok: res.ok, status: res.status, data: txt }; }
+    }
+  } catch (e) { /* swallow */ }
+  return null;
+}
+
+async function eventosApiGet(fallbackKey='eventos'){
+  try {
+    const r = await _callApiFetch('/eventos', { method: 'GET' });
+    if (r && (r.ok || r.status === 200 || Array.isArray(r.data))) {
+      const arr = Array.isArray(r.data) ? r.data : (r || []);
+      try { if (typeof writeLS === 'function') writeLS(fallbackKey, arr); } catch {}
+      try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') window['local'+'Storage'].setItem(fallbackKey, JSON.stringify(arr)); } catch {}
+      return arr;
+    }
+  } catch (e) {}
+  try {
+    const raw = (typeof readLS === 'function') ? readLS(fallbackKey, []) : JSON.parse((_lsGet(fallbackKey,'[]')||'[]'));
+    return Array.isArray(raw) ? raw : [];
+  } catch (e) { return []; }
+}
+
+async function eventosApiPut(eventos, fallbackKey='eventos'){
+  try {
+    const r = await _callApiFetch('/eventos', { method: 'PUT', body: { data: eventos } });
+    if (r && (r.ok || r.status === 200 || r.status === 201)) {
+      try { if (typeof writeLS === 'function') writeLS(fallbackKey, eventos); } catch {}
+      try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') window['local'+'Storage'].setItem(fallbackKey, JSON.stringify(eventos)); } catch {}
+      return true;
+    }
+  } catch (e) {}
+  try { if (typeof writeLS === 'function') writeLS(fallbackKey, eventos); } catch {}
+  try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') window['local'+'Storage'].setItem(fallbackKey, JSON.stringify(eventos)); } catch {}
+  return false;
+}
+
+// Expose as globals for legacy scripts
+try{ if (typeof window !== 'undefined') { window.eventosApiGet = window.eventosApiGet || eventosApiGet; window.eventosApiPut = window.eventosApiPut || eventosApiPut; } }catch(e){}
+
+export { eventosApiGet, eventosApiPut };
+
 /* ===== Tickets (ingressos) ===== */
 export function gerarLoteIngressos({eventoId,tipoId,qtd=100,digits=4}){
   const lotes = readLS(K_KEYS.LOTES,[]) || [];

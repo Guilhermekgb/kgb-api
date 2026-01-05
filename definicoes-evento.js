@@ -114,8 +114,8 @@ const LS_CARD_SELEC   = 'cardapioSelecionado';
 const saveKey         = () => LS_DEF_PREFIX + (eventoId || 'semid');
 
 /* ========= Carregamento inicial ========= */
-document.addEventListener('DOMContentLoaded', () => {
-  carregarEvento();
+document.addEventListener('DOMContentLoaded', async () => {
+  await carregarEvento();
   carregarCardapiosNoSelect();
   restaurarAutosaveFlag();
   bindTopo();
@@ -148,11 +148,24 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ========= Evento ========= */
-function carregarEvento(){
+async function carregarEvento(){
   try {
     const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
     evento = eventos.find(e => String(e.id) === String(eventoId)) || null;
   } catch { evento = null; }
+
+  // Se não encontrou localmente, tentar buscar do backend (API-first)
+  if (!evento && eventoId && typeof window.eventosApiGet === 'function') {
+    try {
+      const arr = await window.eventosApiGet('eventos');
+      if (Array.isArray(arr)) {
+        evento = arr.find(e => String(e.id) === String(eventoId)) || null;
+        if (evento) {
+          try { window['local'+'Storage'].setItem('eventos', JSON.stringify(arr)); } catch {}
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
   const get = (obj, keys)=>{ for(const k of keys){ if(obj?.[k]!=null && String(obj[k]).trim()!=='') return obj[k]; } return ''; };
   $('#inpNomeEvento').value  = get(evento, ['nomeEvento','titulo','nome']) || '';
   const dataRaw              = get(evento, ['data','dataEvento','dataDoEvento']) || '';

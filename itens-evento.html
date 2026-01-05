@@ -677,7 +677,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
       // Salvar e voltar
 // Salvar e voltar (atualiza 'itensSelecionados' dentro do vetor 'eventos')
-qs("#salvarItensSelecionados")?.addEventListener("click", () => {
+qs("#salvarItensSelecionados")?.addEventListener("click", async () => {
   const selecionados = [];
   document.querySelectorAll('input[type="checkbox"][data-key]:checked').forEach(chk => {
     const key   = chk.dataset.key;
@@ -710,22 +710,32 @@ qs("#salvarItensSelecionados")?.addEventListener("click", () => {
   const origem = usp.get("origem") || usp.get("from") || "";
 
   // >>> grava no vetor 'eventos' (fonte da verdade)
-  try {
-    const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
-    const i = eventos.findIndex(e => String(e.id) === String(id));
-    if (i > -1) {
-      // se usuário não marcou nada, preserva o que já tinha
-      eventos[i].itensSelecionados = selecionados.length ? selecionados : (eventos[i].itensSelecionados || []);
-      if (qtd > 0) {
-        eventos[i].quantidadeConvidados = qtd;
-        eventos[i].qtdConvidados = qtd;
+    try {
+      const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
+      const i = eventos.findIndex(e => String(e.id) === String(id));
+      if (i > -1) {
+        // se usuário não marcou nada, preserva o que já tinha
+        eventos[i].itensSelecionados = selecionados.length ? selecionados : (eventos[i].itensSelecionados || []);
+        if (qtd > 0) {
+          eventos[i].quantidadeConvidados = qtd;
+          eventos[i].qtdConvidados = qtd;
+        }
+        // Persist via API-first, fallback to localStorage
+        try {
+          if (typeof window.eventosApiPut === 'function') {
+            const ok = await window.eventosApiPut(eventos, 'eventos');
+            if (!ok) try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+          } else {
+            try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+          }
+        } catch (e) {
+          try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+        }
       }
-      try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+      try { window['local'+'Storage'].setItem("evt:lastUpdate:" + id, String(Date.now())); } catch {}
+    } catch (err) {
+      console.warn("Falha ao persistir itens:", err);
     }
-    try { window['local'+'Storage'].setItem("evt:lastUpdate:" + id, String(Date.now())); } catch {}
-  } catch (err) {
-    console.warn("Falha ao persistir itens:", err);
-  }
 
   // limpa ponte (opcional)
   try { window['local'+'Storage'].removeItem("itensEvento:returnTo"); } catch {}
