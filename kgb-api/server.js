@@ -326,6 +326,15 @@ CREATE TABLE IF NOT EXISTS docs_uploads (
 CREATE INDEX IF NOT EXISTS idx_docs_uploads_event ON docs_uploads(event_id);
 `);
 
+// KV store para pequenos blobs JSON (usado por endpoints /buffet/*)
+db.exec(`
+CREATE TABLE IF NOT EXISTS kv_store (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+`);
+
 // ========================= Firebase Admin (Storage) =========================
 const admin = require('firebase-admin');
 
@@ -491,12 +500,43 @@ function createInMemoryTokenFor(user) {
 }
 
 function requireAuth(req, res, next) {
-  const token = req.cookies && req.cookies.kgb_token;
-  if (!token) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ ok: false, error: 'Invalid token' });
-  req.user = decoded;
-  next();
+  try {
+    // 1) Authorization: Bearer <token> -> check in-memory tokenStore
+    const authH = String(req.headers.authorization || '');
+    if (authH.toLowerCase().startsWith('bearer ')) {
+      const bearer = authH.split(' ')[1];
+      if (bearer && tokenStore.has(bearer)) {
+        req.user = tokenStore.get(bearer);
+        return next();
+      }
+    }
+
+    // 2) alternative headers: kgb_token | x-kgb-token | kgb-token
+    const alt = req.headers['kgb_token'] || req.headers['x-kgb-token'] || req.headers['kgb-token'];
+    if (alt && tokenStore.has(String(alt))) {
+      req.user = tokenStore.get(String(alt));
+      return next();
+    }
+
+    // 3) cookie JWT fallback
+    const token = req.cookies && req.cookies.kgb_token;
+    if (!token) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    const decoded = verifyToken(token);
+    if (!decoded) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+
+    // Load user from DB to ensure fresh data
+    try {
+      const user = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?').get(decoded.id);
+      if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+      req.user = user;
+      return next();
+    } catch (e) {
+      console.error('[requireAuth] erro ao buscar usuario no DB', e && e.message);
+      return res.status(500).json({ error: 'Erro interno' });
+    }
+  } catch (e) {
+    return res.status(401).json({ error: 'UNAUTHENTICATED' });
+  }
 }
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
@@ -635,6 +675,71 @@ app.get('/auth/me', (req, res) => {
   }
 });
 
+// ==================== Endpoints /buffet/* (KV-backed) ====================
+// Persistem pequenos blobs JSON por chave no SQLite (kv_store)
+app.get('/buffet/produtos', requireAuth, (req, res) => {
+  try {
+    const data = kvGet('buffet_produtos', '[]');
+    return res.json({ ok: true, data });
+  } catch (e) {
+    console.error('[GET /buffet/produtos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+app.put('/buffet/produtos', requireAuth, (req, res) => {
+  try {
+    const data = (req.body && (req.body.data !== undefined ? req.body.data : req.body)) || [];
+    kvPut('buffet_produtos', data);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /buffet/produtos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+app.get('/buffet/adicionais', requireAuth, (req, res) => {
+  try {
+    const data = kvGet('buffet_adicionais', '[]');
+    return res.json({ ok: true, data });
+  } catch (e) {
+    console.error('[GET /buffet/adicionais] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+app.put('/buffet/adicionais', requireAuth, (req, res) => {
+  try {
+    const data = (req.body && (req.body.data !== undefined ? req.body.data : req.body)) || [];
+    kvPut('buffet_adicionais', data);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /buffet/adicionais] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+app.get('/buffet/servicos', requireAuth, (req, res) => {
+  try {
+    const data = kvGet('buffet_servicos', '[]');
+    return res.json({ ok: true, data });
+  } catch (e) {
+    console.error('[GET /buffet/servicos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+app.put('/buffet/servicos', requireAuth, (req, res) => {
+  try {
+    const data = (req.body && (req.body.data !== undefined ? req.body.data : req.body)) || [];
+    kvPut('buffet_servicos', data);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[PUT /buffet/servicos] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
 // Rota de debug para inspecionar headers e cookies (apenas em desenvolvimento)
 // Removed /auth/debug (dev-only debug endpoint) as part of debug cleanup
 
@@ -671,6 +776,29 @@ function saveJSON(file, obj) {
         }
       }
     })();
+  }
+}
+// Simple KV store persisted in SQLite for small JSON blobs (used by frontend)
+function kvGet(key, fallbackJsonString = '[]') {
+  try {
+    const row = db.prepare('SELECT value FROM kv_store WHERE key = ?').get(key);
+    if (!row || !row.value) return JSON.parse(fallbackJsonString);
+    try { return JSON.parse(row.value); } catch (e) { return JSON.parse(fallbackJsonString); }
+  } catch (e) {
+    console.warn('[kvGet] erro ao ler key', key, e && e.message);
+    try { return JSON.parse(fallbackJsonString); } catch { return []; }
+  }
+}
+
+function kvPut(key, data) {
+  try {
+    const value = JSON.stringify(data ?? null);
+    const now = Date.now();
+    db.prepare(`INSERT INTO kv_store(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`).run(key, value, now);
+    return { ok: true };
+  } catch (e) {
+    console.error('[kvPut] falha ao gravar key', key, e && e.message);
+    return { ok: false, error: e && e.message };
   }
 }
 // === CONVITES / CHECK-IN (M30/M31) ===
