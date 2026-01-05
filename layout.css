@@ -215,3 +215,98 @@ body {
 .sidebar{ z-index: 9999 !important; display:block !important; visibility:visible !important; opacity:1 !important; }
 .layout{ overflow: visible !important; }
 
+/* =========================================================
+   MENU GLOBAL (NON-INVASIVE) — base
+   ========================================================= */
+:root{
+  --sidebar-w: 260px;
+}
+
+/* quando o menu existe, empurra conteúdo no desktop */
+body.has-sidebar{
+  padding-left: var(--sidebar-w);
+  box-sizing: border-box;
+}
+
+/* sidebar */
+#menuLateral.sidebar{
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: #3b2413;
+  color: #fff;
+  overflow: auto;
+  z-index: 999;
+}
+
+/* overlay */
+.sidebar-overlay{
+  display:none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.25);
+  z-index: 998;
+}
+
+/* botão flutuante (aparece no mobile) */
+.sidebar-fab{
+  display:none;
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(0,0,0,.12);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+/* menu visual básico */
+#menuLateral .sidebar-brand{
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 700;
+  margin: 16px 16px 10px;
+  font-size: 18px;
+}
+#menuLateral .sidebar-nav{ padding: 0 10px 14px; }
+#menuLateral .sidebar-link{
+  display:block;
+  color:#fff;
+  text-decoration:none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin: 6px 6px;
+  font-weight: 600;
+}
+#menuLateral .sidebar-link:hover{ background: rgba(255,255,255,.10); }
+
+/* mobile: vira drawer */
+@media (max-width: 980px){
+  body.has-sidebar{ padding-left: 0; }
+  .sidebar-fab{ display: inline-flex; align-items:center; justify-content:center; }
+
+  #menuLateral.sidebar{
+    transform: translateX(-110%);
+    transition: transform .22s ease;
+    box-shadow: 0 10px 30px rgba(0,0,0,.10);
+  }
+  body.sidebar-open #menuLateral.sidebar{
+    transform: translateX(0);
+  }
+  body.sidebar-open .sidebar-overlay{
+    display:block;
+  }
+}
+
+/* desktop: sempre aberto */
+@media (min-width: 981px){
+  .sidebar-overlay{ display:none !important; }
+  .sidebar-fab{ display:none !important; }
+  body{ }
+}
+
+/* neutraliza conflitos comuns */
+body.has-sidebar main.conteudo-principal{ margin-left: 0 !important; }
+
