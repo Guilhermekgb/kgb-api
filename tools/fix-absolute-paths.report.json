@@ -1,0 +1,334 @@
+{
+  "total_files_scanned": 115,
+  "total_replacements": 151,
+  "by_file": [
+    {
+      "file": "agenda.html",
+      "replacements": 3
+    },
+    {
+      "file": "alertas.html",
+      "replacements": 3
+    },
+    {
+      "file": "auditoria.html",
+      "replacements": 3
+    },
+    {
+      "file": "backup.html",
+      "replacements": 3
+    },
+    {
+      "file": "categorias-gerais.html",
+      "replacements": 3
+    },
+    {
+      "file": "checkin.html",
+      "replacements": 3
+    },
+    {
+      "file": "escala-evento.html",
+      "replacements": 3
+    },
+    {
+      "file": "funil-leads.html",
+      "replacements": 3
+    },
+    {
+      "file": "integracoes.html",
+      "replacements": 3
+    },
+    {
+      "file": "itens-evento.html",
+      "replacements": 3
+    },
+    {
+      "file": "kgb-formaturas-aluno-detalhe.html",
+      "replacements": 3
+    },
+    {
+      "file": "layout-editor.html",
+      "replacements": 3
+    },
+    {
+      "file": "links.html",
+      "replacements": 3
+    },
+    {
+      "file": "lista-propostas.html",
+      "replacements": 3
+    },
+    {
+      "file": "orcamento-arquivado.html",
+      "replacements": 3
+    },
+    {
+      "file": "orcamento-detalhado.html",
+      "replacements": 3
+    },
+    {
+      "file": "painel-cobrancas.html",
+      "replacements": 3
+    },
+    {
+      "file": "painel-leads.html",
+      "replacements": 3
+    },
+    {
+      "file": "seguranca.html",
+      "replacements": 3
+    },
+    {
+      "file": "agenda-equipe.html",
+      "replacements": 2
+    },
+    {
+      "file": "cadastro-cliente.html",
+      "replacements": 2
+    },
+    {
+      "file": "cadastro-evento.html",
+      "replacements": 2
+    },
+    {
+      "file": "cadastro-usuario.html",
+      "replacements": 2
+    },
+    {
+      "file": "cardapios-e-produtos.html",
+      "replacements": 2
+    },
+    {
+      "file": "cliente-detalhado.html",
+      "replacements": 2
+    },
+    {
+      "file": "comissoes.html",
+      "replacements": 2
+    },
+    {
+      "file": "configuracoes.html",
+      "replacements": 2
+    },
+    {
+      "file": "degustacoes-disponiveis.html",
+      "replacements": 2
+    },
+    {
+      "file": "detalhes-responsavel-evento.html",
+      "replacements": 2
+    },
+    {
+      "file": "entradas-saidas.html",
+      "replacements": 2
+    },
+    {
+      "file": "equipe.html",
+      "replacements": 2
+    },
+    {
+      "file": "etiquetas.html",
+      "replacements": 2
+    },
+    {
+      "file": "eventos.html",
+      "replacements": 2
+    },
+    {
+      "file": "fornecedores.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-alunos.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-dashboard.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-escolas.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-eventos.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-financeiro.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-modelos-convite.html",
+      "replacements": 2
+    },
+    {
+      "file": "kgb-formaturas-tipos-evento.html",
+      "replacements": 2
+    },
+    {
+      "file": "modelos-checklist.html",
+      "replacements": 2
+    },
+    {
+      "file": "montagem-cardapio.html",
+      "replacements": 2
+    },
+    {
+      "file": "notificacoes-internas.html",
+      "replacements": 2
+    },
+    {
+      "file": "notificacoes-responsavel.html",
+      "replacements": 2
+    },
+    {
+      "file": "perfis.html",
+      "replacements": 2
+    },
+    {
+      "file": "permissoes.html",
+      "replacements": 2
+    },
+    {
+      "file": "planilha-eventos.html",
+      "replacements": 2
+    },
+    {
+      "file": "responsavel-eventos.html",
+      "replacements": 2
+    },
+    {
+      "file": "usuarios.html",
+      "replacements": 2
+    },
+    {
+      "file": "checklist-materiais.html",
+      "replacements": 1
+    },
+    {
+      "file": "checklist.html",
+      "replacements": 1
+    },
+    {
+      "file": "colaboradores.html",
+      "replacements": 1
+    },
+    {
+      "file": "contrato.html",
+      "replacements": 1
+    },
+    {
+      "file": "custos-fixo.html",
+      "replacements": 1
+    },
+    {
+      "file": "definicoes-evento.html",
+      "replacements": 1
+    },
+    {
+      "file": "documentos-evento.html",
+      "replacements": 1
+    },
+    {
+      "file": "estoque-insumos.html",
+      "replacements": 1
+    },
+    {
+      "file": "estoque-materiais.html",
+      "replacements": 1
+    },
+    {
+      "file": "estoque-setores.html",
+      "replacements": 1
+    },
+    {
+      "file": "evento-detalhado.html",
+      "replacements": 1
+    },
+    {
+      "file": "eventos-arquivados.html",
+      "replacements": 1
+    },
+    {
+      "file": "eventos-pagos.html",
+      "replacements": 1
+    },
+    {
+      "file": "feiras.html",
+      "replacements": 1
+    },
+    {
+      "file": "fichas-tecnicas.html",
+      "replacements": 1
+    },
+    {
+      "file": "financeiro-analises.html",
+      "replacements": 1
+    },
+    {
+      "file": "financeiro-categorias.html",
+      "replacements": 1
+    },
+    {
+      "file": "financeiro-config.html",
+      "replacements": 1
+    },
+    {
+      "file": "financeiro-lancamentos.html",
+      "replacements": 1
+    },
+    {
+      "file": "financeiro-resumo.html",
+      "replacements": 1
+    },
+    {
+      "file": "gerenciar-convites.html",
+      "replacements": 1
+    },
+    {
+      "file": "lista-evento.html",
+      "replacements": 1
+    },
+    {
+      "file": "logs-tecnicos.html",
+      "replacements": 1
+    },
+    {
+      "file": "logs.html",
+      "replacements": 1
+    },
+    {
+      "file": "modelos.html",
+      "replacements": 1
+    },
+    {
+      "file": "notificacoes-vendedor.html",
+      "replacements": 1
+    },
+    {
+      "file": "notificacoes.html",
+      "replacements": 1
+    },
+    {
+      "file": "orcamento.html",
+      "replacements": 1
+    },
+    {
+      "file": "pdv.html",
+      "replacements": 1
+    },
+    {
+      "file": "pos-evento.html",
+      "replacements": 1
+    },
+    {
+      "file": "relatorio-evento.html",
+      "replacements": 1
+    },
+    {
+      "file": "variaveis-modelos.html",
+      "replacements": 1
+    }
+  ]
+}
