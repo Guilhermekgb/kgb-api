@@ -45,7 +45,7 @@
       try{
         if (typeof window.apiFetch === 'function') return window.apiFetch(path, options);
         const base = window.__API_BASE__ || '';
-        return fetch((path && path[0] === '/' ? (base+path) : path), options);
+        return window.apiFetch((path && path[0] === '/' ? (base+path) : path), options);
       }catch(e){ return Promise.reject(e); }
     }
 
