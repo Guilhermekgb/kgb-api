@@ -13,6 +13,9 @@ const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
 
+// Boot log to help identify which server.js is running on the host
+console.log('[BOOT]', 'KGB API SERVER LOADED', new Date().toISOString());
+
 // Optional AWS S3 presign support (enabled when AWS env vars are provided)
 let s3Client = null;
 let hasS3 = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.S3_BUCKET && process.env.AWS_REGION);
@@ -470,6 +473,17 @@ app.options('*', cors({
 // Mantemos rotas webhook que usam `rawJson` especificando `express.raw()` localmente.
 app.use(express.json({ limit: '50mb' }));
 
+// Diagnostic endpoint and boot log should be available early (before static/catch-all)
+console.log('[BOOT]', 'express.json configured', new Date().toISOString());
+app.get('/__debug/boot', (req, res) => {
+  res.json({
+    ok: true,
+    file: 'kgb-api/server.js',
+    time: new Date().toISOString(),
+    hasBuffetRoutes: false
+  });
+});
+
 // Cookies e JWT (autenticação por sessão via cookie httpOnly)
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
@@ -677,6 +691,7 @@ app.get('/auth/me', (req, res) => {
 
 // ==================== Endpoints /buffet/* (KV-backed) ====================
 // Persistem pequenos blobs JSON por chave no SQLite (kv_store)
+console.log('[BOOT]', 'Registering /buffet routes');
 app.get('/buffet/produtos', requireAuth, (req, res) => {
   try {
     const data = kvGet('buffet_produtos', '[]');
