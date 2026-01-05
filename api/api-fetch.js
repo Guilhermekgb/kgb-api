@@ -19,6 +19,17 @@
       return base + pp;
     }
 
+    // ensure headers object
+    opts.headers = Object.assign({}, opts.headers || {});
+
+    // include Authorization if token is present (use unified helper)
+    try {
+      const token = (typeof window.getAuthToken === 'function') ? (window.getAuthToken() || '') : (window.__KGB_TOKEN || '');
+      if (token && !opts.headers['Authorization'] && !opts.headers['authorization']) {
+        opts.headers['Authorization'] = 'Bearer ' + String(token);
+      }
+    } catch (e) {}
+
     const res = await fetch(buildUrl(path), opts);
 
     // tenta ler json; se falhar, retorna texto

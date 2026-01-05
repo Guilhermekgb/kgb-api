@@ -397,26 +397,17 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'kgb-api', ts: Date.now() });
 });
 
-// Minimal auth probe for frontend (/auth/me)
+// Minimal auth probe for frontend (/auth/me) — accepts ONLY Authorization: Bearer <token>
 app.get('/auth/me', (req, res) => {
   try {
     const auth = String(req.headers.authorization || '');
-    // check Authorization: Bearer <token>
-    if (auth && auth.toLowerCase().startsWith('bearer ')) {
-      const token = auth.slice(7).trim();
-      if (!token) return res.status(401).json({ error: 'not_authenticated' });
-      // minimal valid token behavior: accept any non-empty token as authenticated
-      return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
+    if (!auth.toLowerCase().startsWith('bearer ')) {
+      return res.status(401).json({ error: 'not_authenticated' });
     }
-
-    // fallback: try to read cookie header (no cookie-parser required)
-    const cookieHeader = String(req.headers.cookie || '');
-    if (cookieHeader && /auth.token|kgb_token|auth_token/.test(cookieHeader)) {
-      return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
-    }
-
-    // not authenticated
-    return res.status(401).json({ error: 'not_authenticated' });
+    const token = auth.slice(7).trim();
+    if (!token) return res.status(401).json({ error: 'not_authenticated' });
+    // minimal valid token behavior: accept any non-empty token as authenticated
+    return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
   } catch (err) {
     console.error('[auth] GET /auth/me erro:', err);
     return res.status(500).json({ error: 'server_error' });

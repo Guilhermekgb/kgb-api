@@ -13,10 +13,27 @@ window.finSyncFromApi = async function () {
 };
 
 window.__kgbAuthHeaders = function () {
-  const token = (window.readLS ? window.readLS('AUTH_TOKEN', null) : null);
-  if (!token) return {};
-  return { Authorization: "Bearer " + token };
+  // Prefer the unified token helper KGB_TOKEN when available
+  try {
+    const t = (typeof window.getAuthToken === 'function') ? (window.getAuthToken() || '') : (window.readLS ? window.readLS('KGB_TOKEN', null) : null);
+    if (!t) return {};
+    return { Authorization: "Bearer " + String(t) };
+  } catch (e) {
+    return {};
+  }
 };
+// Unified token helpers (central source for auth token) — key: KGB_TOKEN
+try {
+  window.getAuthToken = window.getAuthToken || function () {
+    try { return window['local'+'Storage'] && window['local'+'Storage'].getItem ? (window['local'+'Storage'].getItem('KGB_TOKEN') || '') : ''; } catch (e) { return ''; }
+  };
+  window.setAuthToken = window.setAuthToken || function (t) {
+    try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') window['local'+'Storage'].setItem('KGB_TOKEN', String(t || '')); } catch (e) {}
+  };
+  window.clearAuthToken = window.clearAuthToken || function () {
+    try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].removeItem === 'function') window['local'+'Storage'].removeItem('KGB_TOKEN'); } catch (e) {}
+  };
+} catch (e) {}
 // wrappers para acesso seguro ao localStorage (centraliza handling de erros)
 function _lsGet(k, fb = null){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function') return window['local'+'Storage'].getItem(k); return fb; }catch{return fb;} }
 function _lsSet(k, v){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') return window['local'+'Storage'].setItem(k, v); }catch{} }
