@@ -490,6 +490,31 @@ app.get('/__debug/boot', (req, res) => {
   });
 });
 
+// List registered routes (methods + path) for debugging deployments
+app.get('/__debug/routes', (req, res) => {
+  try {
+    const routes = [];
+    const stack = (app._router && app._router.stack) || [];
+    stack.forEach(layer => {
+      if (layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods || {}).map(m => m.toUpperCase());
+        routes.push({ path: layer.route.path, methods });
+      } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+        layer.handle.stack.forEach(n => {
+          if (n.route && n.route.path) {
+            const methods = Object.keys(n.route.methods || {}).map(m => m.toUpperCase());
+            routes.push({ path: n.route.path, methods });
+          }
+        });
+      }
+    });
+    return res.json({ ok: true, count: routes.length, routes });
+  } catch (e) {
+    console.error('[DEBUG /__debug/routes] erro', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
 // Cookies e JWT (autenticação por sessão via cookie httpOnly)
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
