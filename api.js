@@ -25,6 +25,52 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '2mb' }));
 
+// --- Autenticação mínima (mock) — registra /auth/login e /auth/me
+const tokenStore = new Map();
+
+app.post('/auth/login', (req, res) => {
+  try {
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const senha = String(body.senha || '');
+    if (!email || !senha) return res.status(400).json({ error: 'missing_fields' });
+
+    let perfil = null;
+    let user = null;
+    if (email === 'admin@kgb.com' && senha === '1234') {
+      perfil = 'ADMIN';
+      user = { id: 'u-admin', nome: 'Administrador', email, perfil };
+    } else if (email === 'vendas@kgb.com' && senha === '1234') {
+      perfil = 'VENDAS';
+      user = { id: 'u-vendas', nome: 'Usuário Vendas', email, perfil };
+    } else {
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
+
+    const token = `mock-${String(perfil).toLowerCase()}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    tokenStore.set(token, user);
+    return res.json({ token, user });
+  } catch (err) {
+    console.error('[auth] POST /auth/login erro:', err);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+app.get('/auth/me', (req, res) => {
+  try {
+    const auth = String(req.headers.authorization || '');
+    if (!auth.toLowerCase().startsWith('bearer ')) return res.status(401).json({ error: 'not_authenticated' });
+    const token = auth.slice(7).trim();
+    if (!token) return res.status(401).json({ error: 'not_authenticated' });
+    const user = tokenStore.get(token);
+    if (!user) return res.status(401).json({ error: 'invalid_token' });
+    return res.json(user);
+  } catch (err) {
+    console.error('[auth] GET /auth/me erro:', err);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // HEALTH
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
