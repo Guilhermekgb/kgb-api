@@ -26,7 +26,6 @@
   }
 
   function ensureBaseLayout() {
-    // Se já existir layout, só garante sidebar/main/topbar
     var layout = document.querySelector(".layout");
     if (!layout) {
       layout = document.createElement("div");
@@ -60,7 +59,6 @@
       content.className = "content";
       content.setAttribute("role", "main");
 
-      // move tudo do body pra dentro do content (exceto scripts)
       var nodes = Array.prototype.slice.call(document.body.childNodes);
       for (var j = 0; j < nodes.length; j++) {
         var node = nodes[j];
@@ -68,7 +66,6 @@
         content.appendChild(node);
       }
 
-      // reconstruir body
       document.body.innerHTML = "";
       main.appendChild(topbar);
       main.appendChild(content);
@@ -77,7 +74,6 @@
       document.body.appendChild(layout);
     }
 
-    // garantir sidebar
     var sidebar2 = document.getElementById("menuLateral") || document.querySelector(".sidebar");
     if (!sidebar2) {
       sidebar2 = document.createElement("aside");
@@ -89,18 +85,15 @@
       sidebar2.classList.add("sidebar");
     }
 
-    // garantir main
     var main2 = layout.querySelector(".main");
     if (!main2) {
       main2 = document.createElement("div");
       main2.className = "main";
-      // move tudo que não é sidebar pro main
       var kids = Array.prototype.slice.call(layout.children);
       for (var k = 0; k < kids.length; k++) if (kids[k] !== sidebar2) main2.appendChild(kids[k]);
       layout.appendChild(main2);
     }
 
-    // garantir topbar + burger
     var topbar2 = main2.querySelector(".topbar");
     if (!topbar2) {
       topbar2 = document.createElement("header");
@@ -118,13 +111,11 @@
       topbar2.insertBefore(burger2, topbar2.firstChild || null);
     }
 
-    // garantir content
     var content2 = main2.querySelector(".content");
     if (!content2) {
       content2 = document.createElement("main");
       content2.className = "content";
       content2.setAttribute("role", "main");
-      // move tudo que não é topbar para content
       var toMove = [];
       var cn = Array.prototype.slice.call(main2.childNodes);
       for (var m = 0; m < cn.length; m++) {
@@ -150,53 +141,21 @@
     ].join("\n");
   }
 
-  function ensureLucideThenRender() {
-    try {
-      if (window.lucide && typeof window.lucide.createIcons === "function") {
-        window.lucide.createIcons();
-        return;
-      }
-    } catch (e) {}
-    // carrega lucide uma vez (se necessário)
-    if (document.querySelector('script[data-lucide-loader="1"]')) return;
-    var s = document.createElement("script");
-    s.src = "https://unpkg.com/lucide@latest";
-    s.async = true;
-    s.setAttribute("data-lucide-loader", "1");
-    s.onload = function () {
-      try { window.lucide && window.lucide.createIcons && window.lucide.createIcons(); } catch (e) {}
-    };
-    document.head.appendChild(s);
-  }
-
   function extractMenuFragment(html) {
-    // menu-lateral.html é página completa; vamos extrair apenas o miolo do menu
     var tmp = document.createElement("div");
     tmp.innerHTML = html;
-
-    // tenta encontrar a estrutura padrão do menu
-    var el =
-      tmp.querySelector("#menuLateral .menu-lateral") ||
-      tmp.querySelector("aside#menuLateral .menu-lateral") ||
-      tmp.querySelector(".menu-lateral") ||
-      tmp;
-
-    // queremos inserir o HTML do bloco do menu
-    if (el === tmp) return tmp.innerHTML;
-    return el.outerHTML || el.innerHTML;
+    var el = tmp.querySelector(".menu-lateral") || tmp;
+    return (el === tmp) ? tmp.innerHTML : (el.outerHTML || el.innerHTML);
   }
 
   function loadMenuInto(sidebar) {
-    // fallback imediato
-    try { sidebar.innerHTML = defaultMenuHtml(); } catch (e) {}
-
+    sidebar.innerHTML = defaultMenuHtml();
     var xhr = new XMLHttpRequest();
     xhr.open("GET", CFG.menuUrl, true);
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
       if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
         sidebar.innerHTML = extractMenuFragment(xhr.responseText);
-        ensureLucideThenRender();
       }
     };
     try { xhr.send(); } catch (e) {}
@@ -231,20 +190,17 @@
       else setOpen(false);
     });
 
-    // desktop aberto por padrão
     setOpen(window.innerWidth >= CFG.desktopMin);
   }
 
   ready(function () {
     ensureLayoutCss();
     var parts = ensureBaseLayout();
-
     if (!parts.sidebar.dataset.menuReady) {
       parts.sidebar.dataset.menuReady = "1";
       loadMenuInto(parts.sidebar);
     }
     bindUI(parts.burger);
-
     document.body.classList.add("layout-ready");
     console.log("[menu-lateral] OK");
   });
