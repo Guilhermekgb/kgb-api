@@ -197,7 +197,7 @@
         const payload = { email, senha };
         const method = 'POST';
         const urlToCall = loginUrl;
-        console.log('[LOGIN] will call', { method, url: urlToCall, payload });
+          console.log('[LOGIN] will call', { method, url: '/auth/login', payload: { email, senha: '***' } });
 
         let j = null;
         try {
@@ -231,40 +231,16 @@
         }
 
         if (j && (j.ok || j.status === 200)) {
-          // If backend returned a token, store it in the unified helper
-          try {
-            if (j.token && typeof window.setAuthToken === 'function') {
-              window.setAuthToken(String(j.token));
-            }
-            if (j.user) {
-              window.__KGB_USER_CACHE = j.user;
-            }
-          } catch (e) { console.warn('[LOGIN] failed to store token/user', e); }
-
-          const is3333 = String(location.port || '') === '3333' || base === location.origin;
-          const meUrl = is3333 ? '/auth/me' : (base || '') + '/auth/me';
-          const maxAttempts = 6;
-          const delayMs = 300;
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          if (j && (j.token && j.user)) {
             try {
-              try {
-                const meResp = await window['apiFetch'](meUrl, { method: 'GET' });
-                console.log('[LOGIN] /auth/me attempt', attempt, 'status=', meResp && meResp.status);
-                if (meResp && meResp.ok) {
-                  const dest = (is3333 ? location.origin : (base || location.origin)) + '/dashboard.html';
-                  window.location.assign(dest);
-                  return;
-                }
-              } catch (e) {
-                console.warn('[LOGIN] /auth/me attempt error', attempt, e);
-              }
+              if (typeof window.setAuthToken === 'function') window.setAuthToken(String(j.token));
+              window.__KGB_USER_CACHE = j.user;
+              console.log('[LOGIN] success', j.user);
+              window.location.href = 'dashboard.html';
+              return;
             } catch (e) {
-              console.warn('[LOGIN] /auth/me attempt error', attempt, e);
+              console.warn('[LOGIN] failed to store token/user', e);
             }
-            await new Promise(r => setTimeout(r, delayMs));
-          }
-          alert('Falha ao confirmar sessão após login. Verifique o console e tente novamente.');
-          return;
         }
 
         // Fallback dev: se o backend não responder, ainda aceitamos credenciais dev
