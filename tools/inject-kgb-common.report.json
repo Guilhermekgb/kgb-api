@@ -1,0 +1,568 @@
+{
+  "total_files_scanned": 112,
+  "total_injections": 36,
+  "skipped_login": 1,
+  "skipped_backend_kgb_api": 0,
+  "by_file": [
+    {
+      "file": "assinatura.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "criar-lead-teste.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "escala-evento.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "formulario-cliente.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "formulario-lead.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "fornecedores.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "funil-leads.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "index.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-aluno-detalhe.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-alunos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-checkin.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-configuracoes.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-contratos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-dashboard.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-escolas.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-eventos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-financeiro.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-formularios-recebidos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-inadimplentes-arquivo.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-modelos-convite.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-relatorios.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "kgb-formaturas-tipos-evento.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "links.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "modelo-base.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "orcamento-arquivado.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "orcamento-detalhado.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "painel-cobrancas.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "painel-leads.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "perfis.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "planilha-eventos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "proposta.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "redefinir-senha.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "responsavel-eventos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "seguranca.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "usuarios.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "variaveis-modelos.html",
+      "injected": true,
+      "reason": "injected before protect/local/head/body"
+    },
+    {
+      "file": "acesso-negado.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "agenda-equipe.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "agenda.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "alertas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "area-cliente.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "auditoria.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "backup.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "cadastro-cliente.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "cadastro-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "cadastro-usuario.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "cardapios-e-produtos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "categorias-gerais.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "checkin.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "checklist-execucao.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "checklist-materiais.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "checklist.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "cliente-detalhado.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "clientes-lista.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "colaboradores.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "comissoes.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "configuracoes.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "contrato.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "custos-fixo.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "dashboard.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "definicoes-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "degustacoes-disponiveis.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "detalhes-responsavel-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "documentacao-api.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "documentos-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "entradas-saidas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "equipe.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "esqueci-senha.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "estoque-insumos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "estoque-materiais.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "estoque-setores.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "etiquetas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "evento-detalhado.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "eventos-arquivados.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "eventos-pagos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "eventos.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "feiras.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "fichas-tecnicas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-analises.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-categorias.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-config.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-lancamentos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "financeiro-resumo.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "gerenciar-convites.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "integracoes.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "itens-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "kgb-formaturas-formulario-online.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "layout-editor.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "lista-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "lista-propostas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "login.html",
+      "injected": false,
+      "reason": "login.html skipped"
+    },
+    {
+      "file": "logs-tecnicos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "logs.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "menu-lateral.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "modelos-checklist.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "modelos.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "montagem-cardapio.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "notificacoes-internas.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "notificacoes-responsavel.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "notificacoes-vendedor.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "notificacoes.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "obrigado.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "orcamento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "pdv.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "permissoes.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "pos-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "relatorio-evento.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "set-api.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "teste-api.html",
+      "injected": false,
+      "reason": "already has kgb-common"
+    },
+    {
+      "file": "uploads/orcamento.html",
+      "injected": false,
+      "reason": "no indicators"
+    },
+    {
+      "file": "_audit/hub-testes.html",
+      "injected": false,
+      "reason": "no indicators"
+    }
+  ]
+}

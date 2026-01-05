@@ -590,7 +590,8 @@
   </script>
 
   <!-- Guard/Permissões (opcional) -->
-  <script type="module">
+  <script src="./kgb-common.js"></script>
+<script type="module">
     import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();
