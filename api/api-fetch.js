@@ -11,7 +11,15 @@
       opts.body = JSON.stringify(opts.body);
     }
 
-    const res = await fetch(path, opts);
+    function buildUrl(p) {
+      if (!p) return (window.__API_BASE__ || '');
+      if (/^https?:\/\//i.test(p)) return p;
+      const base = (window.__API_BASE__ || '').replace(/\/$/, '');
+      const pp = String(p).startsWith('/') ? p : '/' + String(p);
+      return base + pp;
+    }
+
+    const res = await fetch(buildUrl(path), opts);
 
     // tenta ler json; se falhar, retorna texto
     const ct = res.headers.get('content-type') || '';

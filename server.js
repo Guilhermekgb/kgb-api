@@ -392,6 +392,11 @@ app.use(cors({
   credentials: true
 }));
 
+// Health check endpoint (quick test)
+app.get('/health', (req, res) => {
+  res.json({ ok: true, service: 'kgb-api', ts: Date.now() });
+});
+
 // ========================= PATCH F.0 — bases, storage utils, journal =========================
 const DATA_DIR = path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}

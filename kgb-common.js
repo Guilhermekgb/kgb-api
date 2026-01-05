@@ -391,67 +391,89 @@ export function fecharSessao(sessaoId){
 
 /* === INÍCIO PATCH FASE F — API BASE + apiFetch (fica no final do arquivo) === */
 (function(){
-  // 1) Define e expõe a base da API (Render em produção)
-const DEFAULT_PROD_API = (typeof window !== 'undefined' && window.__API_BASE__) ? window.__API_BASE__ : ((typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '');
+  // === API BASE (cloud-first) ===
+  (() => {
+    const RENDER_API_FALLBACK = "https://kgb-api.onrender.com";
+    const DEFAULT_PROD_API = RENDER_API_FALLBACK;
 
-// Detecta se está rodando local (VS Code/Live Server) ou online (Netlify)
-const isLocalhost =
-  (typeof location !== 'undefined') &&
-  (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+    const isLocal = /localhost|127\.0\.0\.1/i.test(origin) || (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
 
-// 1) Se já veio definido por config.env.js, respeita (mas preferimos override salvo em override de ambiente)
-let base = '';
-try { base = (window.__API_BASE__ || '').trim(); } catch (e) {}
+    // lê override (se existir)
+    let override = null;
+    try { override = window['local'+'Storage'] ? window['local'+'Storage'].getItem('API_BASE') || null : null; } catch (e) { override = null; }
 
-// 2) Lê override do armazenamento local legado (apenas para DEV local)
-let saved = '';
-try { saved = (window.readLS ? (window.readLS('API_BASE','')||'') : (_lsGet('API_BASE','')||'')) || ''; saved = String(saved).trim(); } catch (e) {}
+    // saneia override (não pode ser o mesmo origin do FRONT)
+    if (override) {
+      const ok = /^https?:\/\//i.test(override) && override !== origin;
+      if (!ok) {
+        try { window['local'+'Storage'] && window['local'+'Storage'].removeItem('API_BASE'); } catch (e) {}
+        override = null;
+      }
+    }
 
-// Se estiver ONLINE (Netlify), nunca usar localhost salvo no armazenamento legado
-if (!isLocalhost && saved && (String(saved).includes('localhost') || String(saved).includes('127.0.0.1'))) {
-  try { _lsRemove('API_BASE'); } catch (e) {}
-  try { if (window.writeLS) window.writeLS('API_BASE', ''); } catch (e) {}
-  saved = '';
-}
+    // regra final
+    let base = override || RENDER_API_FALLBACK;
 
-// Regra final (prioriza `saved` se disponível):
-// - Se houver `saved` explícito (ex.: via api-config.js ou override de ambiente), usamos ele.
-// - Caso contrário, usamos `base` (vindo de window.__API_BASE__ ou DEFAULT_PROD_API).
-if (saved) {
-  base = saved;
-} else if (!base) {
-  base = (isLocalhost && saved) ? saved : DEFAULT_PROD_API;
-}
+    // EM LOCALHOST sempre força cloud
+    if (isLocal) base = RENDER_API_FALLBACK;
 
-window.__API_BASE__ = base;
+    window.__API_BASE__ = base;
 
+    console.log('[KGB] origin =', origin);
+    console.log('[KGB] API_BASE =>', window.__API_BASE__);
+  })();
 
-  // === INÍCIO PATCH API-BASE RESOLVER ===
-  function __kgbGetAPIBase() {
-    try {
-      if (typeof window.__API_BASE__ === 'string' && window.__API_BASE__)
-        return window.__API_BASE__.trim();
+  // 2) Transport: se não existir `window.apiFetch`, criamos um wrapper padrão.
+  // Este wrapper monta a URL usando `window.__API_BASE__` e trata JSON automaticamente.
+  if (typeof window !== 'undefined' && typeof window.apiFetch !== 'function') {
+    window.apiFetch = async function apiFetch(path, opts = {}) {
       try {
-        const ls = (window.readLS ? (window.readLS('API_BASE','')||'') : (_lsGet('API_BASE','')||''));
-        if (ls && String(ls).trim()) return String(ls).trim();
-      } catch (e) {}
-    } catch (e) {}
-    return '';
-  }
-  // === FIM PATCH API-BASE RESOLVER ===
+        const baseUrl = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__) ? String(window.__API_BASE__).replace(/\/+$/,'') : DEFAULT_PROD_API;
 
-  // 2) Transport: usar APENAS window.apiFetch fornecido externamente.
-  // Se não existir `window.apiFetch`, falhamos rapidamente com erro explicito `api_unavailable`.
-  function __require_window_apiFetch() {
-    if (typeof window !== 'undefined' && typeof window.apiFetch === 'function') return window.apiFetch;
-    try { window.toast?.('Recurso API indisponível (apiFetch não encontrado).', 'error'); } catch {}
-    throw new Error('api_unavailable');
+        // Se path é URL absoluta, usa direto
+        const isAbsolute = typeof path === 'string' && /^(https?:)?\/\//i.test(path);
+        const finalUrl = isAbsolute ? path : (String(path).startsWith('/') ? (baseUrl + String(path)) : (baseUrl + '/' + String(path)));
+
+        const method = (opts && opts.method) ? String(opts.method).toUpperCase() : 'GET';
+        const headers = Object.assign({}, (opts && opts.headers) ? opts.headers : {}, window.__kgbAuthHeaders ? window.__kgbAuthHeaders() : {});
+
+        const fetchOpts = { method, headers };
+        if (opts && opts.body !== undefined && opts.body !== null) {
+          // aceita body já serializado ou objetos — padroniza para JSON
+          if (typeof opts.body === 'string' || opts.body instanceof FormData) {
+            fetchOpts.body = opts.body;
+            // se for string presumimos JSON quando não for FormData
+            if (typeof opts.body === 'string' && !fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json';
+          } else {
+            fetchOpts.body = JSON.stringify(opts.body);
+            fetchOpts.headers['Content-Type'] = 'application/json';
+          }
+        }
+
+        const resp = await fetch(finalUrl, fetchOpts);
+        const contentType = resp.headers.get('content-type') || '';
+        if (!resp.ok) {
+          const text = await resp.text().catch(()=>null);
+          const err = new Error('HTTP ' + resp.status + ' ' + resp.statusText + (text ? (': '+ text) : ''));
+          err.status = resp.status;
+          err.body = text;
+          throw err;
+        }
+        if (contentType.includes('application/json')) return await resp.json();
+        // fallback: texto
+        return await resp.text();
+      } catch (e) {
+        // rethrow para os callers lidarem
+        throw e;
+      }
+    };
   }
 
-  // Exposição interna compatível: replace calls to apiFetch(...) with the external implementation.
+  // pequeno helper para uso interno: chama window.apiFetch e propaga erro api_unavailable
   async function __call_apiFetch(path, opts = {}) {
-    const af = __require_window_apiFetch();
-    return af(path, opts);
+    if (typeof window === 'undefined' || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
+    return window.apiFetch(path, opts);
   }
 
   /* === INÍCIO PATCH G — Toasts globais === */

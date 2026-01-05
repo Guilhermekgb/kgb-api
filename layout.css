@@ -100,13 +100,18 @@ body{
   display:none;
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.25);
+    --sidebar-w: 260px; /* padrão desktop (padroniza com agenda-equipe) */
   z-index:950;
 }
 
 /* ===== Mobile Drawer ===== */
 @media (max-width: 980px){
   .main{margin-left:0;}
+  /* Conteúdo central padrão: largura máxima e centralização como no modelo Agenda */
+  .conteudo-central {
+    max-width: 1040px;
+    margin: 0 auto;
+  }
   .btn-menu{display:inline-flex; align-items:center; justify-content:center;}
 
   .sidebar{
@@ -125,43 +130,77 @@ body{
 }
 
 /* ================================
-   DASHBOARD – ajuste para sidebar (FORÇADO)
+   DASHBOARD – ajuste para sidebar (aplica somente quando o menu global existir)
    ================================ */
 
-/* Desktop */
+/* Desktop: aplica offset apenas se o body indicar presença do sidebar global */
 @media (min-width: 980px) {
-  /* 1) força o recuo no body */
-  body {
-    padding-left: 280px !important; /* mesma largura do menu */
+  body.has-sidebar {
+    padding-left: var(--sidebar-w) !important;
   }
 
-  /* 2) zera margens antigas em containers comuns */
-  main,
-  .conteudo-principal,
-  .container,
-  .container-dashboard,
-  .page,
-  .page-content,
-  .content,
-  #app,
-  #main,
-  #conteudo {
+  /* zera margens antigas em containers comuns quando sidebar existe */
+  body.has-sidebar main,
+  body.has-sidebar .conteudo-principal,
+  body.has-sidebar .container,
+  body.has-sidebar .container-dashboard,
+  body.has-sidebar .page,
+  body.has-sidebar .page-content,
+  body.has-sidebar .content,
+  body.has-sidebar #app,
+  body.has-sidebar #main,
+  body.has-sidebar #conteudo {
     margin-left: 0 !important;
   }
 
-  /* 3) PLANO B: empurra qualquer “bloco principal” direto do body */
-  body > :not(#menuLateral):not(#menuOverlay):not(.sidebar-overlay):not(script):not(style) {
-    margin-left: 280px !important;
-  }
+  /* (intentionally empty) — central offset is handled by the normalizer below */
 }
 
-/* Mobile */
+/* Mobile: não aplica offset mesmo com sidebar presente (menu overlay) */
 @media (max-width: 979px) {
-  body {
+  body.has-sidebar {
     padding-left: 0 !important;
   }
 
-  body > :not(#menuLateral):not(#menuOverlay):not(.sidebar-overlay):not(script):not(style) {
-    margin-left: 0 !important;
+  /* no-op: mobile overlay handled by normalizer */
+}
+
+
+/* =========================
+   KGB — SIDEBAR NORMALIZER
+   Objetivo: padronizar offset do conteúdo quando o menu global existe,
+   e neutralizar margens/paddings antigos que empurram demais para a direita.
+   ========================= */
+
+/* Desktop: força conteúdo a começar após o menu (usa o --sidebar-w definido no :root acima) */
+@media (min-width: 980px){
+  body.has-sidebar main,
+  body.has-sidebar .conteudo-principal,
+  body.has-sidebar .wrapper,
+  body.has-sidebar .page,
+  body.has-sidebar .container,
+  body.has-sidebar .app,
+  body.has-sidebar .content,
+  body.has-sidebar #conteudo,
+  body.has-sidebar #app{
+    margin-left: var(--sidebar-w) !important;
+    padding-left: 0 !important;
   }
 }
+
+/* Mobile: não empurra conteúdo; menu fica por cima (overlay) */
+@media (max-width: 979px){
+  body.has-sidebar main,
+  body.has-sidebar .conteudo-principal,
+  body.has-sidebar .wrapper,
+  body.has-sidebar .page,
+  body.has-sidebar .container,
+  body.has-sidebar .app,
+  body.has-sidebar .content,
+  body.has-sidebar #conteudo,
+  body.has-sidebar #app{
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+}
+

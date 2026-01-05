@@ -149,6 +149,63 @@
 
   <!-- Estilo desta página -->
   <link rel="stylesheet" href="dashboard.css" />
+  <style>
+    :root{ --sidebar-w:260px; }
+    html, body{ margin:0; padding:0; }
+    .wrapper{ display:flex; min-height:100vh; overflow:hidden; }
+    #menuLateral{ flex-shrink:0; }
+
+    /* Desktop: menu fixo + conteúdo deslocado */
+    @media (min-width:769px){
+      #menuLateral{ position:fixed; inset:0 auto 0 0; width:var(--sidebar-w); z-index:9999; }
+      /* offset aplicado pelo menu global via layout.css quando body.has-sidebar estiver presente */
+      .wrapper{ /* neutralizado: padding-left controlado globalmente */ }
+    }
+
+    /* Mobile: menu abre/fecha por classe .aberto */
+    @media (max-width:768px){
+      #menuLateral{
+        position:fixed;
+        top:0; left:0;
+        width:var(--sidebar-w);
+        height:100vh;
+        transform:translateX(-100%);
+        transition:transform .3s ease;
+        z-index:9999;
+      }
+      #menuLateral.aberto{ transform:translateX(0); }
+      .wrapper{ padding-left:0; }
+    }
+
+    /* Conteúdo principal do dashboard */
+    main.kgb-content{
+      flex:1;
+      min-height:100vh;
+      height:auto;
+      overflow-y:auto;
+      width:100%;
+    }
+
+    /* Botão hamburguer (somente mobile) */
+    #hamburguer{
+      position:fixed;
+      top:12px;
+      left:12px;
+      z-index:10000;
+      background:#c29a5d;
+      color:#fff;
+      border:none;
+      border-radius:8px;
+      padding:6px 12px;
+      font-size:24px;
+      box-shadow:0 6px 16px rgba(0,0,0,0.18);
+      cursor:pointer;
+      display:none;
+    }
+    @media (max-width:768px){
+      #hamburguer{ display:block; }
+    }
+  </style>
 </head>
 
 <body>
@@ -611,6 +668,14 @@
       });
     }
   </script>
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('hamburguer');
+    const menu = document.getElementById('menuLateral');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', () => menu.classList.toggle('aberto'));
+  });
 </script>
 </body>
 </html>

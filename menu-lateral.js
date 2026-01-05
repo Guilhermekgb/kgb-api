@@ -10,7 +10,7 @@
   var CFG = {
     menuUrl: "menu-lateral.html",
     desktopMin: 980,
-    sidebarW: 240 // <<< MENU MAIS ESTREITO (antes 280)
+    sidebarW: 260 // padroniza com agenda-equipe
   };
 
   function ready(fn) {
@@ -52,12 +52,12 @@
     st.id = "kgbSidebarTheme";
     st.textContent = `
 /* ===== Sidebar theme (isolado) ===== */
-:root{ --sidebar-w:${CFG.sidebarW}px; }
+:root{ --sidebar-w:260px; }
 
 #menuLateral{
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  width: var(--sidebar-w);
+  width: var(--sidebar-w, 260px);
   background: #532b03; /* espresso sólido */
   color: #fff;
   overflow: auto;
@@ -285,6 +285,9 @@
     var sidebar = ensureSidebar();
     var overlay = ensureOverlay();
     ensureCSS();
+
+    // marca a página como tendo um sidebar global (usado pelo layout normalizer)
+    try { if (!document.body.classList.contains('has-sidebar')) document.body.classList.add('has-sidebar'); } catch(e){}
 
     if (sidebar.dataset.menuReady === "1") return;
     sidebar.dataset.menuReady = "1";

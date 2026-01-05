@@ -130,12 +130,12 @@ var DEV_API  = window.location.origin;
     }
   </style>
   <style id="kgb-page-sidebar-w">
-    :root{ --sidebar-w:200px; }
+    :root{ --sidebar-w:260px; }
   </style>
 
   <style id="kgb-page-layout-fix">
     /* Fix: garantir que o conteúdo respeite o menu lateral */
-    body{ --kgb-sidebar-w: var(--sidebar-w, 200px); }
+    body{ --kgb-sidebar-w: var(--sidebar-w, 260px); }
     main, .wrapper, .conteudo, .conteudo-principal, .container, .page, .page-content{ box-sizing: border-box; }
     @media (min-width: 980px){
       main, .wrapper, .conteudo, .conteudo-principal, .page, .page-content{ padding-left: var(--kgb-sidebar-w); }
@@ -202,7 +202,12 @@ var DEV_API  = window.location.origin;
     function aplicar() {
       if (!menu || !main) return;
       const desktop = window.innerWidth >= 1024;
+      // Se o layout global já controla o offset via .has-sidebar, não aplicamos margin-left local
       if (desktop) {
+        if (document.body.classList.contains('has-sidebar')) {
+          main.style.marginLeft = '';
+          return;
+        }
         const w = menu.getBoundingClientRect().width || 0;
         main.style.marginLeft = w ? (w + 'px') : '0px';
       } else {
