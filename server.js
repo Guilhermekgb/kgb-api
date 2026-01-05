@@ -397,6 +397,15 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'kgb-api', ts: Date.now() });
 });
 
+// In-memory token store for development (token -> user)
+const tokenStore = new Map();
+
+// Mock users available for /auth/login (development/testing)
+const mockUsers = [
+  { id: 'u-admin', email: 'admin@buffet.com', nome: 'Admin Buffet', perfil: 'Administrador' },
+  { id: 'u-user',  email: 'user@buffet.com',  nome: 'Usuário Normal', perfil: 'Operador' }
+];
+
 // Minimal auth probe for frontend (/auth/me) — accepts ONLY Authorization: Bearer <token>
 app.get('/auth/me', (req, res) => {
   try {
@@ -406,10 +415,39 @@ app.get('/auth/me', (req, res) => {
     }
     const token = auth.slice(7).trim();
     if (!token) return res.status(401).json({ error: 'not_authenticated' });
-    // minimal valid token behavior: accept any non-empty token as authenticated
-    return res.json({ id: 'dev-user', nome: 'Usuário Dev', perfil: 'ADMIN' });
+    const user = tokenStore.get(token);
+    if (!user) return res.status(401).json({ error: 'not_authenticated' });
+    return res.json({ ok: true, data: user });
   } catch (err) {
     console.error('[auth] GET /auth/me erro:', err);
+    return res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// Mock login endpoint (development): POST /auth/login { email, senha }
+app.post('/auth/login', express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    const email = String(body.email || '').trim().toLowerCase();
+    const senha  = String(body.senha || '');
+
+    if (!email || !senha) return res.status(400).json({ error: 'email_e_senha_obrigatorios' });
+
+    // Simple credential check for mock users — password is '123456' for both
+    const found = mockUsers.find(u => u.email === email);
+    if (!found || senha !== '123456') {
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
+
+    const token = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)));
+    // store a shallow copy of the user (avoid leaking internal refs)
+    const user = { id: found.id, email: found.email, nome: found.nome, perfil: found.perfil };
+    tokenStore.set(token, user);
+
+    // Return token and user for the frontend to consume
+    return res.json({ ok: true, token, user });
+  } catch (err) {
+    console.error('[auth] POST /auth/login erro:', err);
     return res.status(500).json({ error: 'server_error' });
   }
 });

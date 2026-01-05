@@ -129,7 +129,7 @@ function showKgbDebugPanel(){
     </div>
     <div id="kgb-debug-server-result" style="margin-top:8px;font-size:11px;color:#ddd"></div>
   `;
-
+        if (err && (err.status === 401 || err.status === 404)) {
   document.body.appendChild(panel);
 
   panel.querySelector('#kgb-debug-close').addEventListener('click', ()=>{ panel.remove(); });

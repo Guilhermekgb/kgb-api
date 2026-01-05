@@ -197,15 +197,18 @@
         const payload = { email, senha };
         console.log('[LOGIN] payload sent', payload);
 
-        const resp = await window['apiFetch'](loginUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!resp.ok) {
-          const errJson = await resp.json().catch(() => null);
-          console.warn('[LOGIN] /auth/login failed', resp.status, errJson);
+        let j = null;
+        try {
+          // apiFetch throws on non-OK and returns parsed payload on success
+          j = await window['apiFetch'](loginUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (err) {
+          const status = err && err.status;
+          const payloadErr = err && err.payload;
+          console.warn('[LOGIN] /auth/login failed', status, payloadErr, err);
           // mostra resultado na tela para depuração
           let dbg = document.getElementById('login-debug');
           if (!dbg) {
@@ -219,14 +222,22 @@
             dbg.style.marginTop = '12px';
             form.appendChild(dbg);
           }
-          dbg.textContent = JSON.stringify({ payload, status: resp.status, response: errJson }, null, 2);
-          alert('Login falhou: ' + (errJson && errJson.error ? errJson.error : 'ver console para detalhes'));
+          dbg.textContent = JSON.stringify({ payload, status, response: payloadErr }, null, 2);
+          alert('Login falhou: ' + (payloadErr && payloadErr.error ? payloadErr.error : 'ver console para detalhes'));
           return;
         }
 
-        // sucesso inicial — confirma sessão via /auth/me antes de redirecionar
-        const j = await resp.json().catch(() => null);
         if (j && (j.ok || j.status === 200)) {
+          // If backend returned a token, store it in the unified helper
+          try {
+            if (j.token && typeof window.setAuthToken === 'function') {
+              window.setAuthToken(String(j.token));
+            }
+            if (j.user) {
+              window.__KGB_USER_CACHE = j.user;
+            }
+          } catch (e) { console.warn('[LOGIN] failed to store token/user', e); }
+
           const is3333 = String(location.port || '') === '3333' || base === location.origin;
           const meUrl = is3333 ? '/auth/me' : (base || '') + '/auth/me';
           const maxAttempts = 6;
