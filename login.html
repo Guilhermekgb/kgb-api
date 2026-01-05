@@ -166,6 +166,7 @@
         <a href="esqueci-senha.html">Esqueci minha senha</a>
       </div>
     </form>
+    <div id="login-erro" style="color:#a12; margin-top:12px; display:none"></div>
   </div>
 
 <script>
@@ -226,7 +227,13 @@
             form.appendChild(dbg);
           }
           dbg.textContent = JSON.stringify({ payload, status, response: payloadErr, message: err && err.message }, null, 2);
-          alert('Login falhou: ' + (payloadErr && payloadErr.error ? payloadErr.error : 'ver console para detalhes'));
+          // show friendly error to user
+          try{
+            let errEl = document.getElementById('login-erro');
+            if (!errEl) { errEl = document.createElement('div'); errEl.id = 'login-erro'; form.appendChild(errEl); }
+            errEl.style.display = 'block';
+            errEl.textContent = `Falha no login (status ${status || 'unknown'}). Se estiver em deploy, aguarde o Render atualizar e tente novamente.`;
+          }catch(e){}
           return;
         }
 
