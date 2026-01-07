@@ -44,8 +44,8 @@
   // Guarda enforcements em memória (cache em memória do módulo)
   try{ (window.__mem_entradas_saidas ||= new Map()).set('guard.enforce','1'); }catch(e){}
 </script>
-<script type="module">
-  import guard from './api/proteger-pagina.js';
+<script src="./api/proteger-pagina.js"></script>
+<script>
   const meta = document.querySelector('meta[name="page-permission"]');
   const permissao = meta?.content?.trim() || 'page:entradas-saida.html';
   guard({ permissao });
@@ -1518,16 +1518,15 @@ setInterval(() => {
 
 <!-- === FIM PATCH MENU LATERAL === -->
 <!-- === INÍCIO PATCH PERMISSÕES LEVES (opcional) === -->
-<script type="module">
-  import { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
+<script>
   window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
+    setTimeout(() => window.aplicarPermissoesConteudoLeve(document), 0);
   });
 </script>
 <!-- === FIM PATCH PERMISSÕES LEVES (opcional) === -->
 
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

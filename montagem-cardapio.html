@@ -28,10 +28,10 @@
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO PATCH COMMON + GUARD (montagem-cardapio) === -->
 <script type="module" src="./kgb-common.js"></script>
-<script type="module">
-  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-  guard({ permissao: 'page:montagem-cardapio.html' });
-  aplicarPermissoesNaTela();
+<script src="./api/proteger-pagina.js"></script>
+<script>
+  try { window.guard && window.guard({ permissao: 'page:montagem-cardapio.html' }); } catch(e){}
+  try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 </script>
 <!-- === FIM PATCH COMMON + GUARD (montagem-cardapio) === -->
 
@@ -431,7 +431,7 @@
     });
   </script>
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

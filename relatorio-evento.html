@@ -43,7 +43,7 @@
   <link rel="stylesheet" href="relatorio-evento.css" />
 
   <!-- Guard (RBAC) e helpers globais (module não bloqueia) -->
-  <script src="js/auth-helper.js"></script>
+  <script type="module" src="js/auth-helper.js">
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script type="module" src="./kgb-common.js"></script>
 
@@ -585,6 +585,6 @@
   })();
   </script>
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

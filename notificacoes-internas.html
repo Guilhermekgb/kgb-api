@@ -245,26 +245,26 @@
   <script type="module" src="menu-lateral.js"></script>
 
   <!-- Proteção -->
-  <script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  <script src="./api/proteger-pagina.js"></script>
+  <script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();
-    if (permissao) guard({ permissao });
-    aplicarPermissoesNaTela();
+    try { if (permissao) window.guard({ permissao }); } catch(e){}
+    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
     try {
       const alvo = document.getElementById('menuLateral');
       if (alvo) {
-        const obs = new MutationObserver((m,o)=>{ if (alvo.firstElementChild){ aplicarPermissoesNaTela(); o.disconnect(); } });
+        const obs = new MutationObserver((m,o)=>{ if (alvo.firstElementChild){ try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}; o.disconnect(); } });
         obs.observe(alvo, { childList:true });
       }
-    } catch {}
+    } catch(e){}
   </script>
 
   <!-- Ponte opcional para integrar agendaUnified/notificationsFeed -->
   <script src="agenda-bridge.js"></script>
 
-  <!-- Script principal da página -->
-  <script defer src="notificacoes-internas.js"></script>
+  <!-- Script principal da página (module) -->
+  <script type="module" src="notificacoes-internas.js"></script>
 
   <script>
   // BOTÃO/FORM de exemplo: publique um aviso interno

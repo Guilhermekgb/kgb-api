@@ -1,0 +1,203 @@
+{
+  "page": "cliente-detalhado.html",
+  "url": "http://127.0.0.1:5500/cliente-detalhado.html",
+  "timestamp": "2026-01-07T17:17:28.603Z",
+  "consoleErrors": [],
+  "consoleWarns": [
+    {
+      "time": "2026-01-07T17:17:29.508Z",
+      "text": "[remote-adapter] stub carregado (disabled)",
+      "location": {
+        "url": "http://127.0.0.1:5500/api/remote-adapter.js",
+        "lineNumber": 4,
+        "columnNumber": 8
+      }
+    }
+  ],
+  "pageErrors": [],
+  "requests": [
+    {
+      "time": "2026-01-07T17:17:29.060Z",
+      "url": "http://127.0.0.1:5500/cliente-detalhado.html",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.103Z",
+      "url": "http://127.0.0.1:5500/kgb-common.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.104Z",
+      "url": "http://127.0.0.1:5500/style.css",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.106Z",
+      "url": "http://127.0.0.1:5500/config.env.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.107Z",
+      "url": "http://127.0.0.1:5500/api/remote-adapter.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.108Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.109Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.css",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.109Z",
+      "url": "http://127.0.0.1:5500/api/proteger-pagina.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.112Z",
+      "url": "http://127.0.0.1:5500/js/auth-helper.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.113Z",
+      "url": "http://127.0.0.1:5500/api/api-fetch.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.249Z",
+      "url": "https://unpkg.com/lucide@latest",
+      "status": 302
+    },
+    {
+      "time": "2026-01-07T17:17:29.313Z",
+      "url": "https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.490Z",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNSIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJXaW5kb3dUZXh0IiBkPSJNMjAgM2gtMVYxaC0ydjJIN1YxSDV2Mkg0Yy0xLjEgMC0yIC45LTIgMnYxNmMwIDEuMS45IDIgMiAyaDE2YzEuMSAwIDItLjkgMi0yVjVjMC0xLjEtLjktMi0yLTJ6bTAgMThINFY4aDE2djEzeiIvPjxwYXRoIGZpbGw9Im5vbmUiIGQ9Ik0wIDBoMjR2MjRIMHoiLz48L3N2Zz4=",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.547Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.html",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.576Z",
+      "url": "http://127.0.0.1:5500/logo.png",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.741Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 204
+    },
+    {
+      "time": "2026-01-07T17:17:29.918Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:30.130Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 200
+    }
+  ],
+  "note": "waitForNetworkIdle timeout",
+  "lastRequests": [
+    {
+      "time": "2026-01-07T17:17:29.060Z",
+      "url": "http://127.0.0.1:5500/cliente-detalhado.html",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.103Z",
+      "url": "http://127.0.0.1:5500/kgb-common.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.104Z",
+      "url": "http://127.0.0.1:5500/style.css",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.106Z",
+      "url": "http://127.0.0.1:5500/config.env.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.107Z",
+      "url": "http://127.0.0.1:5500/api/remote-adapter.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.108Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.109Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.css",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.109Z",
+      "url": "http://127.0.0.1:5500/api/proteger-pagina.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.112Z",
+      "url": "http://127.0.0.1:5500/js/auth-helper.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.113Z",
+      "url": "http://127.0.0.1:5500/api/api-fetch.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.249Z",
+      "url": "https://unpkg.com/lucide@latest",
+      "status": 302
+    },
+    {
+      "time": "2026-01-07T17:17:29.313Z",
+      "url": "https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.490Z",
+      "url": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNSIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJXaW5kb3dUZXh0IiBkPSJNMjAgM2gtMVYxaC0ydjJIN1YxSDV2Mkg0Yy0xLjEgMC0yIC45LTIgMnYxNmMwIDEuMS45IDIgMiAyaDE2YzEuMSAwIDItLjkgMi0yVjVjMC0xLjEtLjktMi0yLTJ6bTAgMThINFY4aDE2djEzeiIvPjxwYXRoIGZpbGw9Im5vbmUiIGQ9Ik0wIDBoMjR2MjRIMHoiLz48L3N2Zz4=",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.547Z",
+      "url": "http://127.0.0.1:5500/menu-lateral.html",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.576Z",
+      "url": "http://127.0.0.1:5500/logo.png",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:29.741Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 204
+    },
+    {
+      "time": "2026-01-07T17:17:29.918Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 200
+    },
+    {
+      "time": "2026-01-07T17:17:30.130Z",
+      "url": "https://kgb-api.onrender.com/auth/me",
+      "status": 200
+    }
+  ]
+}

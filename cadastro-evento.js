@@ -795,22 +795,32 @@ document.getElementById("origemObs").value        = eventoTemp.origemObs || "";
      if (Array.isArray(lead?.historico)) historicoInicial = historicoInicial.concat(lead.historico);
     }
   } catch {}
-// === INÍCIO PATCH: salvar evento remoto com fallback local ===
-async function postComFallbackDeRotas(evento) {
-  // tenta estas rotas em ordem; se 404, tenta a próxima
-  const rotas = ['/eventos', '/api/eventos', '/events'];
-  for (const rota of rotas) {
-    try {
-      const res = await callApi(rota, 'POST', evento);
-      if (res?.status === 200 || res?.status === 201) return res;
-      if (res?.status === 400) return res; // erro de validação real — não adianta tentar outras
-      // 404 continua tentando a próxima rota
-    } catch (err) {
-      // erro de rede ou CORS — tenta próxima rota
-      console.warn('[KGB] Falha ao chamar', rota, err);
+async function postEventoApi(evento) {
+  // backend espera { data: [...] }
+  const payload = { data: [evento] };
+
+  console.log('[KGB] Salvando evento via API', evento);
+
+  try {
+    const res = await window.apiFetch('/eventos', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res || res.ok !== true) {
+      console.error('[KGB] Falha na API /eventos PUT', res);
+      alert('Falha ao salvar evento na API. Veja console para detalhes.');
+      throw new Error('Falha ao salvar evento na API');
     }
+
+    console.log('[KGB] API /eventos PUT ok');
+    return res;
+  } catch (err) {
+    console.error('[KGB] Erro ao chamar API /eventos PUT', err);
+    alert('Falha ao salvar evento na API. Veja console para detalhes.');
+    throw err;
   }
-  return { status: 404, error: 'Nenhuma rota de eventos encontrada no backend.' };
 }
 
 function salvarEventoLocalEIr(evento, novoIdOverride) {
@@ -878,70 +888,66 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
       let novoIdRemoto = null;
 
       if (IS_REMOTE) {
+        let res;
         try {
-          let res;
+          res = await postEventoApi(evento);
+        } catch (e) {
+          // API-first: propaga o erro para ser tratado pelo catch externo
+          throw e;
+        }
 
-          // se existir helper centralizado, usa ele; senão chama a rota /eventos direto
-          if (typeof window.postComFallbackDeRotas === 'function') {
-            res = await window.postComFallbackDeRotas(evento);
-          } else if (typeof callApi === 'function') {
-            res = await callApi('/eventos', 'POST', evento);
-          }
+        if (res && (res.status === 200 || res.status === 201 || res.ok === true)) {
+          const body = res.data || res;
 
-          if (res && (res.status === 200 || res.status === 201)) {
-            const body = res.data || res;
+          novoIdRemoto = String(
+            (body && (body.id || body._id)) ||
+            res.id ||
+            evento.id ||
+            Date.now()
+          );
 
-            novoIdRemoto = String(
-              (body && (body.id || body._id)) ||
-              res.id ||
-              evento.id ||
-              Date.now()
-            );
-
-            // notifica criação (modo remoto)
-            try {
-              if (typeof notifyEventoCriado === 'function') {
-                const finalEvento = {
-                  ...evento,
-                  id: novoIdRemoto,
-                  dataISO: evento.data,
-                  qtdPessoas: Number(evento.quantidadeConvidados || 0),
-                };
-                notifyEventoCriado(finalEvento);
-              }
-            } catch (e) {
-              console.warn('[KGB] Falha ao notificar criação de evento (remoto)', e);
-            }
-
-            // espelha em memória para compatibilidade com telas antigas
-            try {
-              const eventosLocais = memGetJSON('eventos', []);
-              const registroLocal = {
+          // notifica criação (modo remoto)
+          try {
+            if (typeof notifyEventoCriado === 'function') {
+              const finalEvento = {
                 ...evento,
                 id: novoIdRemoto,
-                status: evento.status || 'ativo',
+                dataISO: evento.data,
+                qtdPessoas: Number(evento.quantidadeConvidados || 0),
               };
-              eventosLocais.push(registroLocal);
-
-              if (typeof safeSaveEventos === 'function') {
-                safeSaveEventos(eventosLocais);
-              } else {
-                memSetJSON('eventos', eventosLocais);
-              }
-            } catch (e) {
-              console.warn('[KGB] Falha ao espelhar evento em memória (remoto)', e);
+              notifyEventoCriado(finalEvento);
             }
-
-            salvouRemoto = true;
-          } else if (res && res.status === 400) {
-            // erro de validação vindo da API
-            alert('Erro ao salvar evento na API. Verifique os dados e tente novamente.');
-            return;
-          } else if (res) {
-            console.warn('[KGB] API respondeu status', res.status, '– usando fallback local.');
+          } catch (e) {
+            console.warn('[KGB] Falha ao notificar criação de evento (remoto)', e);
           }
-        } catch (e) {
-          console.warn('[KGB] Falha na API de eventos, salvando localmente.', e);
+
+          // espelha em memória para compatibilidade com telas antigas
+          try {
+            const eventosLocais = memGetJSON('eventos', []);
+            const registroLocal = {
+              ...evento,
+              id: novoIdRemoto,
+              status: evento.status || 'ativo',
+            };
+            eventosLocais.push(registroLocal);
+
+            if (typeof safeSaveEventos === 'function') {
+              safeSaveEventos(eventosLocais);
+            } else {
+              memSetJSON('eventos', eventosLocais);
+            }
+          } catch (e) {
+            console.warn('[KGB] Falha ao espelhar evento em memória (remoto)', e);
+          }
+
+          salvouRemoto = true;
+        } else if (res && res.status === 400) {
+          // erro de validação vindo da API
+          alert('Erro ao salvar evento na API. Verifique os dados e tente novamente.');
+          return;
+        } else if (res) {
+          console.warn('[KGB] API respondeu status', res.status, '– operação abortada.');
+          throw new Error('Falha ao salvar evento na API');
         }
       }
 
@@ -955,11 +961,7 @@ function salvarEventoLocalEIr(evento, novoIdOverride) {
         return;
       }
 
-      // Sem fallback local silencioso: aborta se não salvou remoto
-      if (!salvouRemoto) {
-        alert('Evento não salvo: falha na API de eventos. Operação cancelada.');
-        return;
-      }
+      
 
       // limpa rascunhos em memória e redireciona para o evento remoto
       try { memRemove('eventoTemp'); } catch {}

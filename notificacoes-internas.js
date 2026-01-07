@@ -1,4 +1,13 @@
-import { apiUrl, getAuthHeaders } from './api-config.js'; // se apiUrl não estiver exportado, depois ajustamos
+// Compatibilidade: `api-config.js` neste projeto define `window.__API_BASE__`.
+// Removemos o import (já que `api-config.js` não exporta named exports) e
+// fornecemos shims leves que usam os globals existentes.
+const apiUrl = window.__API_BASE__ || '';
+function getAuthHeaders(){
+  try{
+    const t = (typeof window.getAuthToken === 'function') ? (window.getAuthToken() || '') : (window.__KGB_TOKEN || '');
+    return t ? { Authorization: 'Bearer ' + String(t) } : {};
+  }catch(e){ return {}; }
+}
 // notificacoes-internas.js
 // Painel operacional (Checklist + Fontes unificadas).
 // - Checklist: usa espelho em memória `agenda` (tipo: "checklist")
@@ -34,7 +43,7 @@ const setLS = (k, v) => {
   } catch {}
 };
 // ===== Base da API (nuvem) =====
-const API_BASE = null; // cloud-only: não ler de storage local
+const apiBase = (typeof window !== 'undefined' && (window.__API_BASE__ || window.API_BASE)) || '';
 // Marca uma notificação como lida diretamente no backend
 async function marcarNotificacaoLidaNoBackend(id) {
   if (!id || typeof window?.apiFetch !== 'function') return;

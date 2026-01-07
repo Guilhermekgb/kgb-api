@@ -32,9 +32,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
 
-  <script src="https://unpkg.com/lucide@latest"></script>
-<!-- 1) Helpers globais -->
-<script type="module" src="./kgb-common.js"></script>
+  <!-- Ícones (CDN) - UMD build: evita módulos ESM em tags clássicas -->
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
+<!-- 1) Helpers globais (moved to page end to ensure proper load order) -->
 <!-- Storage adapter (público) e shim para espelhar fotosClientes → storageAdapter -->
 <!-- estilos base do seu sistema -->
   <link rel="stylesheet" href="style.css" />
@@ -42,10 +42,10 @@
 
   <!-- estilos específicos desta página -->
   <link rel="stylesheet" href="cadastro-evento.css" />
+  
+  </head>
+  <body>
   <script src="./agenda-bridge.js"></script>
-
-</head>
-<body>
 
 <button id="hamburguer" aria-label="Abrir menu"><i data-lucide="menu"></i></button>
 
@@ -306,9 +306,9 @@
   </main>
 </div>
 
+
 <script type="module" src="menu-lateral.js"></script>
 <!-- storage-adapter centralizado via kgb-common.js loader -->
-<script type="module" src="cadastro-evento.js"></script>
 
 <!-- Modal de clientes -->
 <div id="modalClientes" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:2000; align-items:center; justify-content:center;">
@@ -320,18 +320,27 @@
     <div id="listaClientesModal" style="display:grid; gap:8px;"></div>
   </div>
 </div>
-<!-- Guard / RBAC -->
-<script type="module">
-  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-  const meta = document.querySelector('meta[name="page-permission"]');
-  const permissao = meta?.content?.trim();
-  if (permissao) guard({ permissao });
-  aplicarPermissoesNaTela();
+<!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, script da página -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/api-fetch.js" defer>
+<script src="./api/proteger-pagina.js" defer></script>
+<script src="cadastro-evento.js"></script>
+
+<!-- Guard / RBAC helpers and auth (executar após scripts carregarem) -->
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    try {
+      const meta = document.querySelector('meta[name="page-permission"]');
+      const permissao = meta?.content?.trim();
+      if (permissao) {
+        try { (window.guard || guard)({ permissao }); } catch(e) { /* guard pode não existir, mas não quebrar */ }
+      }
+      try { (window.aplicarPermissoesNaTela || aplicarPermissoesNaTela)(); } catch(e) { /* ignore */ }
+    } catch(e) { /* ignore overall */ }
+  });
 </script>
 
-
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+<script type="module" src="./js/auth-helper.js">
 </body>
 </html>
 

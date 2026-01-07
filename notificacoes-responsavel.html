@@ -292,9 +292,9 @@
 </head>
 <body class="page-resp-evento">
   <!-- Guarda de permissão (protege a página) -->
-  <script type="module">
-    import { protegerPagina } from "./api/proteger-pagina.js";
-    protegerPagina("notificacoes-internas");
+  <script src="./api/proteger-pagina.js"></script>
+  <script>
+    try{ window.guard && window.guard({ permissao: 'notificacoes-internas' }); } catch(e){}
   </script>
 
   <button id="hamburguer" aria-label="Abrir menu lateral" aria-controls="menuLateral" aria-expanded="false">

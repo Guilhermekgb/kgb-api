@@ -27,9 +27,22 @@ function isDebugEnabled(){
 async function fetchMe() {
   try {
     if (typeof window.apiFetch !== 'function') {
-      console.error('[guard] window.apiFetch não disponível — bloqueando acesso protegido.');
-      try { window.location.href = 'acesso-negado.html'; } catch(e){}
-      return null;
+      // aguarda até 2000ms por window.apiFetch (poll a cada 50ms) antes de bloquear
+      const ok = await (async function waitForApiFetch(){
+        const start = Date.now();
+        while (Date.now() - start < 2000) {
+          if (typeof window.apiFetch === 'function') return true;
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(r => setTimeout(r, 50));
+        }
+        return false;
+      })();
+      if (!ok) {
+        console.error('[guard] window.apiFetch não disponível — bloqueando acesso protegido.');
+        try { window.location.href = 'acesso-negado.html'; } catch(e){}
+        return null;
+      }
+      // se apareceu dentro do timeout, continua normalmente
     }
     // Detectar explicitamente same-origin em :3333 para evitar host mismatch (127 vs localhost)
     const isSameOrigin3333 = String(location.port || '') === '3333';
@@ -129,14 +142,14 @@ function showKgbDebugPanel(){
     </div>
     <div id="kgb-debug-server-result" style="margin-top:8px;font-size:11px;color:#ddd"></div>
   `;
-        if (err && (err.status === 401 || err.status === 404)) {
+  // Anexar painel e configurar controles
   document.body.appendChild(panel);
 
   panel.querySelector('#kgb-debug-close').addEventListener('click', ()=>{ panel.remove(); });
 
   panel.querySelector('#kgb-debug-force').addEventListener('click', ()=>{ window.location.href = 'login.html'; });
 
-      panel.querySelector('#kgb-debug-check-server').addEventListener('click', async ()=>{
+  panel.querySelector('#kgb-debug-check-server').addEventListener('click', async ()=>{
     try{
       if (typeof window.apiFetch !== 'function') {
         panel.querySelector('#kgb-debug-server-result').textContent = 'apiFetch não disponível';
@@ -167,17 +180,25 @@ function showKgbDebugPanel(){
   }, 5000);
 }
 
-// Exports mínimos usados pelo sistema
-export default async function guard() {
+// Exports removidos — expor via `window` para compatibilidade com scripts não-module
+async function guard() {
   const u = window.__KGB_USER_CACHE || await fetchMe();
   if (u) return u;
   return null;
 }
 
-export function aplicarPermissoesConteudoLeve() { /* placeholder para compatibilidade */ }
-export function aplicarPermissoesNaTela() { /* placeholder para compatibilidade */ }
-export function aplicarPermissoesNoMenu() {
+function aplicarPermissoesConteudoLeve() { /* placeholder para compatibilidade */ }
+function aplicarPermissoesNaTela() { /* placeholder para compatibilidade */ }
+function aplicarPermissoesNoMenu() {
   // Stub seguro: evita crash por import quebrado.
   // Implementar controle de permissões do menu aqui quando necessário.
   return true;
 }
+
+// Tornar públicos no escopo global para compatibilidade com scripts antigos
+try {
+  window.guard = guard;
+  window.aplicarPermissoesConteudoLeve = aplicarPermissoesConteudoLeve;
+  window.aplicarPermissoesNaTela = aplicarPermissoesNaTela;
+  window.aplicarPermissoesNoMenu = aplicarPermissoesNoMenu;
+} catch (e) { /* ambiente sem window? ignorar */ }

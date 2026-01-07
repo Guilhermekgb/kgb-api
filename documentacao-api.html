@@ -293,13 +293,13 @@
   <!-- Menu precisa ser módulo (usa import.meta) -->
   <script type="module" src="menu-lateral.js"></script>
 <!-- === INÍCIO PATCH GUARD (doc API) === -->
-<script type="module">
-  import guard, { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
+<script src="./api/proteger-pagina.js"></script>
+<script>
   const meta = document.querySelector('meta[name="page-permission"]');
   const permissao = meta?.content?.trim() || 'page:documentacao-api.html';
-  guard({ permissao });
+  try { if (permissao) window.guard({ permissao }); } catch(e){}
   window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
+    setTimeout(() => window.aplicarPermissoesConteudoLeve && window.aplicarPermissoesConteudoLeve(document), 0);
   });
 </script>
 <!-- === FIM PATCH GUARD (doc API) === -->
@@ -356,8 +356,8 @@
     });
   </script>
 
-  <script src="./js/auth-helper.js" defer></script>
+  <script type="module" src="./js/auth-helper.js" defer>
   <script type="module" src="./kgb-common.js"></script>
-  <script src="./api/api-fetch.js" defer></script>
+  <script type="module" src="./api/api-fetch.js" defer>
 </body>
 </html>

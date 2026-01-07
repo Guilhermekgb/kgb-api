@@ -789,6 +789,11 @@ function getCfgConvite() {
        cfgMascaraConvite: cfg.cfgMascaraConvite || cfgPadrao.cfgMascaraConvite,
        cfgSequenciaInicial: parseInt(cfg.cfgSequenciaInicial, 10) || cfgPadrao.cfgSequenciaInicial
      };
+  } catch (e) {
+    console.warn('Erro ao ler configurações de convite:', e);
+    return cfgPadrao;
+  }
+}
 // Busca a letra do evento pelo cadastro de Tipos de Evento
 function getLetraDoTipoEvento(tipoEvento) {
   try {
@@ -1717,26 +1722,7 @@ var eventoRef = eventoRefEl ? eventoRefEl.value : '';
     });
   }
 
-  // Modal do comprovante: fechar ao clicar no X ou fora
-  var modalComprovanteOverlay = document.getElementById('modalComprovanteOverlay');
-  var btnFecharModalComprovante = document.getElementById('btnFecharModalComprovante');
-
-  function fecharModalComprovante() {
-    if (modalComprovanteOverlay) {
-      modalComprovanteOverlay.setAttribute('hidden', 'hidden');
-    }
-  }
-
-  if (btnFecharModalComprovante) {
-    btnFecharModalComprovante.addEventListener('click', fecharModalComprovante);
-  }
-  if (modalComprovanteOverlay) {
-    modalComprovanteOverlay.addEventListener('click', function (ev) {
-      if (ev.target === modalComprovanteOverlay) {
-        fecharModalComprovante();
-      }
-    });
-  }
+  
   // Eventos do modal financeiro
   if (modalFinValor) {
     modalFinValor.addEventListener('input', atualizarInfoDiferencaModal);
@@ -1822,8 +1808,6 @@ var eventoRef = eventoRefEl ? eventoRefEl.value : '';
       }
     });
   }
-
-
   // ------------- CONVITES – BOTÕES / WHATS --------------
     // Abre a página de modelos de convite já com alguns dados via query string
 function abrirModeloConvite(convite) {

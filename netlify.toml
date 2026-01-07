@@ -1,0 +1,37 @@
+[build]
+  publish = "."
+  
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-store"
+
+[[redirects]]
+  from = "/*"
+  to = "/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/orcamento"
+  to = "/orcamento.html"
+  status = 200
+
+[[redirects]]
+  from = "/lista-evento"
+  to = "/lista-evento.html"
+  status = 200
+
+[[redirects]]
+  from = "/cliente-detalhado"
+  to = "/cliente-detalhado.html"
+  status = 200
+
+[[redirects]]
+  from = "/cadastro-cliente"
+  to = "/cadastro-cliente.html"
+  status = 200
+
+[[redirects]]
+  from = "/funil-leads"
+  to = "/funil-leads.html"
+  status = 200

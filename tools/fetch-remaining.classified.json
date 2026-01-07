@@ -1,0 +1,26 @@
+{
+  "total": 2,
+  "safe_simple_string": 0,
+  "safe_relative": 0,
+  "dynamic_template": 0,
+  "dynamic_variable": 2,
+  "external": 0,
+  "by_file": {
+    "api/api-fetch.js": {
+      "total": 1,
+      "safe_simple_string": 0,
+      "safe_relative": 0,
+      "dynamic_template": 0,
+      "dynamic_variable": 1,
+      "external": 0
+    },
+    "kgb-common.js": {
+      "total": 1,
+      "safe_simple_string": 0,
+      "safe_relative": 0,
+      "dynamic_template": 0,
+      "dynamic_variable": 1,
+      "external": 0
+    }
+  }
+}

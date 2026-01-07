@@ -26,15 +26,14 @@
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
-<!-- Helpers globais SEMPRE antes do guard -->
-<script type="module" src="./kgb-common.js"></script>
+<!-- Helpers globais (moved to end to ensure correct load order) -->
 
 <!-- (Opcional) ativar ENFORCE do guard -->
 <script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
 
 <!-- Guard / RBAC (usa coisas do common) -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js">
+<!-- proteger-pagina.js será carregado após os scripts da página -->
 
   <!-- CSS globais existentes -->
   <link rel="stylesheet" href="menu-lateral.css">
@@ -286,8 +285,8 @@
     </main>
   </div>
 
-  <!-- Scripts -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Scripts (Lucide UMD para compatibilidade com tags clássicas) -->
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
   <script type="module" src="menu-lateral.js"></script>
   <!-- Deixa a função replaceVars disponível na página -->
 <script type="module">
@@ -297,8 +296,7 @@
 <!-- Ponte opcional para integrar agendaUnified/notificationsFeed -->
 <script src="agenda-bridge.js"></script>
 
-  <!-- JS desta página (unificado) -->
-  <script src="orcamento.js"></script>
+  <!-- JS desta página (unificado) - will be loaded after protector to ensure api-fetch availability -->
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     const btn  = document.getElementById('hamburguer');
@@ -397,6 +395,10 @@
 
 
 
-  <script src="./api/api-fetch.js"></script>
+  <!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, script da página -->
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/api-fetch.js" defer>
+  <script src="./api/proteger-pagina.js" defer></script>
+  <script src="orcamento.js"></script>
 </body>
 </html>

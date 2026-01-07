@@ -28,7 +28,7 @@
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO: Helpers globais + Guard (ordem importa) === -->
 <script type="module" src="./kgb-common.js"></script>
-<script src="js/auth-helper.js"></script>
+<script type="module" src="js/auth-helper.js">
 <script type="module" src="./api/proteger-pagina.js"></script>
 
 <!-- Permissão desta página para o guard (já existe no arquivo) -->
@@ -333,9 +333,9 @@
   <script src="agenda-bridge.js"></script>
 
    <!-- Lógica desta página -->
-  <script src="notificacoes.js" defer></script>
+  <script type="module" src="notificacoes.js" defer>
 
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

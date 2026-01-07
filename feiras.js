@@ -870,7 +870,7 @@ if (feiraSel){
 }
 
 // === SUBSTITUA a função popularVendedoresFiltro atual por esta versão ===
-function popularVendedoresFiltro(){
+async function popularVendedoresFiltro(){
   const user = getUsuarioAtual();
   // só admins enxergam esse filtro (mantém sua regra atual)
   if(!isAdmin(user)){

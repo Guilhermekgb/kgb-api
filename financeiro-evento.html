@@ -50,11 +50,20 @@
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- === INÍCIO PATCH COMMON + GUARD (financeiro-evento) === -->
 <!-- Helpers globais SEMPRE antes do guard -->
+<script>
+  // shim mínimo para evitar ReferenceError em outros scripts
+  (function(){
+    try{
+      if (typeof window.memGetEvt !== 'function') window.memGetEvt = function(k, fb=null){ return fb; };
+      if (typeof window.memSetEvt !== 'function') window.memSetEvt = function(k,v){ return true; };
+    }catch(e){}
+  })();
+</script>
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- Guard / RBAC (usa coisas do common) -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js">
+<script src="./api/proteger-pagina.js"></script>
 <!-- === FIM PATCH COMMON + GUARD (financeiro-evento) === -->
 
 

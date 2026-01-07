@@ -81,8 +81,8 @@
 <script>try{ portalWrite('guard.enforce','1'); }catch(e){};</script>
 
 <!-- Guard de permissões (usa coisas do common) -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js"></script>
+<script src="./api/proteger-pagina.js"></script>
 
   <title>Estoque de Insumos</title>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-      if (!btn || !menu) return;
+      if (typeof btn !== 'undefined' && typeof menu !== 'undefined' && btn && menu) {
 
       // abre/fecha
       btn.addEventListener('click', (e) => {
@@ -526,10 +526,12 @@ document.addEventListener('DOMContentLoaded', () => {
           document.body.style.overflow = '';
         }
       });
+
+      }
   
   </script>
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
 </body>
 </html>
 

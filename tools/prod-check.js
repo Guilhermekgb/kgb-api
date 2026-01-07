@@ -4,155 +4,187 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUTPUT_MD = path.join(__dirname, 'relatorio-prod.md');
-const OUTPUT_TXT = path.join(__dirname, 'relatorio-prod.txt');
-const BASE = 'http://127.0.0.1:5500/';
-
-const PAGES = [
-  'orcamento.html',
-  'orcamento-detalhado.html',
-  'funil-leads.html',
-  'cadastro-cliente.html',
-  'cliente-detalhado.html'
-];
+const OUTPUT_MD = path.join(__dirname, 'relatorio-prod-netlify.md');
+const OUTPUT_JSON = path.join(__dirname, 'relatorio-prod-netlify.json');
+const BASE = 'https://kgbprobuffet.netlify.app/';
+const PAGE = 'cliente-detalhado.html';
 
 function timestamp(){ return new Date().toISOString(); }
 
-async function tryLogin(){
-  try{
-    const resp = await fetch('https://kgb-api.onrender.com/auth/login', {
-      method: 'POST', headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ email: 'admin@kgb.com', senha: '123' })
-    });
-    const j = await resp.json();
-    const token = j && (j.token || j.access_token || j.jwt || (j.data && j.data.token));
-    const user = j && (j.data || j.user || null);
-    console.log('[prod-check] login token:', !!token);
-    return { token, user };
-  }catch(e){
-    console.warn('[prod-check] login falhou:', e && e.message ? e.message : e);
-    return { token: null, user: null };
-  }
+async function waitForNetworkIdle(page, timeout = 120000, idleTime = 500){
+  return new Promise((resolve, reject) => {
+    let inflight = 0;
+    let idleTimer = null;
+    let finished = false;
+    const onRequest = () => { inflight++; if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } };
+    const onRequestDone = () => {
+      inflight = Math.max(0, inflight - 1);
+      if (inflight === 0) {
+        idleTimer = setTimeout(() => {
+          if (!finished) { finished = true; cleanup(); resolve(); }
+        }, idleTime);
+      }
+    };
+
+    function cleanup(){
+      page.removeListener('request', onRequest);
+      page.removeListener('requestfinished', onRequestDone);
+      page.removeListener('requestfailed', onRequestDone);
+    }
+
+    page.on('request', onRequest);
+    page.on('requestfinished', onRequestDone);
+    page.on('requestfailed', onRequestDone);
+
+    // fallback timeout
+    const to = setTimeout(() => {
+      if (!finished) { finished = true; cleanup(); reject(new Error('network idle timeout')); }
+    }, timeout);
+  });
 }
 
 (async function main(){
-  const pagesToTest = PAGES.filter(p => {
-    const full = path.join(ROOT, p);
-    if (!fs.existsSync(full)) return false;
-    return true;
-  });
-
-  const missing = PAGES.filter(p => !pagesToTest.includes(p));
-  if (missing.length) console.log('[prod-check] páginas faltando, serão ignoradas:', missing.join(', '));
-
-  const login = await tryLogin();
+  const fullPath = path.join(ROOT, PAGE);
+  if (!fs.existsSync(fullPath)) {
+    console.error('[prod-check-cliente] arquivo não encontrado:', PAGE);
+    process.exit(1);
+  }
 
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-  const results = [];
+  const page = await browser.newPage();
 
-  for (const p of pagesToTest){
-    const url = BASE + p;
-    const page = await browser.newPage();
-
-    if (login.token){
-      try{
-        await page.evaluateOnNewDocument((t,u)=>{
-          try{ localStorage.setItem('KGB_TOKEN', t); }catch{};
-          try{ if (u) localStorage.setItem('KGB_USER', typeof u === 'string' ? u : JSON.stringify(u)); }catch{};
-        }, login.token, login.user ? JSON.stringify(login.user) : null);
-      }catch(e){ console.warn('[prod-check] evaluateOnNewDocument failed', e); }
-    }
-
-    const r = { page: p, url, opened: false, gotoError: null, consoleErrors: [], pageErrors: [], requests: [], renderCalls: new Set(), badResponses: [], localStorageUsage: false };
-
-    page.on('console', msg => {
-      try{
-        if (msg.type() === 'error') r.consoleErrors.push({ time: timestamp(), text: msg.text() });
-      }catch(e){}
+  // inject global error handlers before any page script runs
+  try{
+    await page.evaluateOnNewDocument(() => {
+      window.addEventListener('error', function(e){
+        try{
+          const info = { message: String(e && e.message), filename: String(e && e.filename), lineno: e && e.lineno, colno: e && e.colno, stack: (e && e.error && e.error.stack) ? String(e.error.stack) : null };
+          try{ console.error('[window.error]', JSON.stringify(info)); }catch(e){}
+        }catch(e){}
+      });
+      window.addEventListener('unhandledrejection', function(ev){
+        try{
+          const r = ev && ev.reason ? ev.reason : ev;
+          const info = { message: String(r && r.message ? r.message : String(r)), stack: (r && r.stack) ? String(r.stack) : null };
+          try{ console.error('[unhandledrejection]', JSON.stringify(info)); }catch(e){}
+        }catch(e){}
+      });
     });
-    page.on('pageerror', err => r.pageErrors.push({ time: timestamp(), message: String(err && err.stack ? err.stack : err) }));
+  }catch(e){}
 
-    page.on('response', async res => {
-      try{
-        const url = res.url();
-        const status = res.status();
-        r.requests.push({ time: timestamp(), url, status });
-        if (url.includes('kgb-api.onrender.com')){
-          // store full path
-          try{ r.renderCalls.add(new URL(url).pathname || url); }catch{ r.renderCalls.add(url); }
-        }
-        if (status >= 400) r.badResponses.push({ time: timestamp(), url, status });
+  const report = { page: PAGE, url: BASE + PAGE, timestamp: timestamp(), consoleErrors: [], consoleWarns: [], pageErrors: [], requests: [] };
 
-        // check script bodies for localStorage usage
-        const req = res.request();
-        if (req.resourceType && req.resourceType() === 'script'){
-          try{
-            const text = await res.text();
-            if (text && text.includes('localStorage.')) r.localStorageUsage = true;
-          }catch(e){}
-        }
-      }catch(e){}
-    });
+  // keep last 30 requests
+  // keep last 40 requests (diagnóstico mais profundo)
+  const lastRequests = [];
+  const maxKeep = 40;
 
+  page.on('console', msg => {
     try{
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-      r.opened = true;
-    }catch(err){
-      r.gotoError = String(err && err.message ? err.message : err);
+      const t = msg.type();
+      const text = msg.text();
+      const loc = (msg.location && typeof msg.location === 'function') ? msg.location() : (msg.location || {});
+      const entry = { time: timestamp(), text, location: loc };
+      if (t === 'error') report.consoleErrors.push(entry);
+      if (t === 'warning') report.consoleWarns.push(entry);
+    }catch(e){}
+  });
+
+  page.on('pageerror', err => {
+    try{
+      report.pageErrors.push({ time: timestamp(), message: String(err && err.message ? err.message : err), stack: String(err && err.stack ? err.stack : '') });
+    }catch(e){}
+  });
+
+  page.on('response', async res => {
+    try{
+      const url = res.url();
+      const status = res.status();
+      const entry = { time: timestamp(), url, status };
+      lastRequests.push(entry);
+      if (lastRequests.length > maxKeep) lastRequests.shift();
+      report.requests.push(entry);
+    }catch(e){}
+  });
+
+  page.on('requestfailed', req => {
+    try{
+      const entry = { time: timestamp(), url: req.url(), status: 'FAILED', error: (req.failure() && req.failure().errorText) || null };
+      lastRequests.push(entry);
+      if (lastRequests.length > maxKeep) lastRequests.shift();
+      report.requests.push(entry);
+    }catch(e){}
+  });
+
+  // try login token to populate localStorage before scripts run (reuse previous approach)
+  try{
+    const loginResp = await fetch('https://kgb-api.onrender.com/auth/login', {
+      method: 'POST', headers: { 'content-type':'application/json' },
+      body: JSON.stringify({ email: 'admin@kgb.com', senha: '123' })
+    }).catch(()=>null);
+    if (loginResp) {
+      const j = await loginResp.json().catch(()=>null);
+      const token = j && (j.token || j.access_token || j.jwt || (j.data && j.data.token));
+      const user = j && (j.data || j.user || null);
+      if (token) {
+        try{ await page.evaluateOnNewDocument((t,u)=>{ try{ localStorage.setItem('KGB_TOKEN', t); }catch{}; try{ if (u) localStorage.setItem('KGB_USER', typeof u === 'string' ? u : JSON.stringify(u)); }catch{} }, token, user ? JSON.stringify(user) : null); }catch(e){}
+      }
     }
+  }catch(e){}
 
-    await page.waitForTimeout(1200);
+  const url = BASE + PAGE;
+  let opened = false;
 
-    try{ await page.close(); }catch(e){}
-    results.push(r);
-    console.log(`[prod-check] ${p} -> opened:${r.opened} errors:${r.consoleErrors.length} pageErrors:${r.pageErrors.length} requests:${r.requests.length} renderCalls:${r.renderCalls.size} bad:${r.badResponses.length} localStorage:${r.localStorageUsage}`);
+  try{
+    // first try to get DOMContentLoaded quickly
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    opened = true;
+    // short wait to let synchronous onload handlers run
+    await page.waitForTimeout(3000);
+    // then wait for network to settle (up to 120s)
+    try{
+      await waitForNetworkIdle(page, 120000, 800);
+    }catch(e){
+      // network idle timeout - continue to collect what we have
+      report.note = 'waitForNetworkIdle timeout';
+    }
+  }catch(err){
+    report.gotoError = String(err && err.message ? err.message : err);
   }
 
-  await browser.close();
+  // snapshot last 30 requests
+  report.lastRequests = lastRequests.slice(-maxKeep);
 
-  // build markdown
+  // write outputs
   const md = [];
-  md.push('# Relatório PROD — Checagem de telas críticas');
+  md.push('# Relatório — cliente-detalhado diagnóstico');
   md.push(`> Gerado em: ${new Date().toISOString()}`);
   md.push('');
-  md.push('## Resumo');
-  md.push(`- Páginas pretendidas: ${PAGES.length}`);
-  md.push(`- Páginas testadas: ${results.length}`);
+  md.push(`- URL: ${report.url}`);
+  md.push(`- Abriu OK?: ${opened ? 'sim' : 'não'}`);
+  if (report.gotoError) md.push(`  - Erro ao abrir: \`${report.gotoError}\``);
   md.push('');
-
-  for (const r of results){
-    md.push('\n---\n');
-    md.push(`### ${r.page}`);
-    md.push(`- URL: ${r.url}`);
-    md.push(`- Abriu OK?: ${r.opened ? 'sim' : 'não'}`);
-    if (r.gotoError) md.push(`  - Erro ao abrir: \`${r.gotoError}\``);
-    md.push(`- Chamou API Render?: ${r.renderCalls.size ? 'sim' : 'não'}`);
-    if (r.renderCalls.size){
-      md.push('  - Rotas chamadas:');
-      for (const route of Array.from(r.renderCalls)) md.push(`    - ${route}`);
-    }
-    md.push(`- Teve status 4xx/5xx?: ${r.badResponses.length ? 'sim' : 'não'}`);
-    if (r.badResponses.length){
-      md.push('  - Respostas >= 400:');
-      for (const br of r.badResponses) md.push(`    - [${br.time}] ${br.status} ${br.url}`);
-    }
-    md.push(`- Teve uso de localStorage? (heurística): ${r.localStorageUsage ? 'sim' : 'não'}`);
-    md.push('');
-  }
+  md.push('## Console Errors');
+  if (report.consoleErrors.length) report.consoleErrors.forEach(e => md.push(`- [${e.time}] ${e.text}`)); else md.push('- nenhum');
+  md.push('');
+  md.push('## Console Warnings');
+  if (report.consoleWarns.length) report.consoleWarns.forEach(e => md.push(`- [${e.time}] ${e.text}`)); else md.push('- nenhum');
+  md.push('');
+  md.push('## Exceções não capturadas (pageerror)');
+  if (report.pageErrors.length) report.pageErrors.forEach(e => md.push(`- [${e.time}] ${e.message}`)); else md.push('- nenhuma');
+  md.push('');
+  md.push('## Últimas requisições (até 30)');
+  if (report.lastRequests.length) report.lastRequests.forEach(r => md.push(`- [${r.time}] ${r.status} ${r.url}${r.error ? ' — ' + r.error : ''}`)); else md.push('- nenhuma');
+  md.push('');
+  if (report.note) md.push(`> Nota: ${report.note}`);
 
   fs.writeFileSync(OUTPUT_MD, md.join('\n'), 'utf8');
-  fs.writeFileSync(OUTPUT_TXT, JSON.stringify(results, null, 2), 'utf8');
-  console.log('[prod-check] relatório gravado em', OUTPUT_MD);
-  console.log('[prod-check] dados brutos gravados em', OUTPUT_TXT);
+  fs.writeFileSync(OUTPUT_JSON, JSON.stringify(report, null, 2), 'utf8');
 
-  // final console summary
-  console.log('\n[prod-check] Resumo final:');
-  console.log(`- páginas pretendidas: ${PAGES.length}`);
-  console.log(`- testadas: ${results.length}`);
-  const calledRender = results.filter(r => r.renderCalls.size).length;
-  console.log(`- páginas que chamaram kgb-api.onrender.com: ${calledRender}`);
-  const hadErrors = results.filter(r => r.consoleErrors.length || r.pageErrors.length || r.badResponses.length).length;
-  console.log(`- páginas com problemas (errors/exceptions/4xx-5xx): ${hadErrors}`);
+  console.log('[prod-check-cliente] relatório gravado em', OUTPUT_MD);
+  console.log('[prod-check-cliente] dados brutos gravados em', OUTPUT_JSON);
 
+  await page.close();
+  await browser.close();
   process.exit(0);
 })();

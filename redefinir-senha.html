@@ -8,7 +8,7 @@
   // Não bloquear esta página pelo guard (se algum dia você proteger mais coisas)
   window.__KGB_GUARD_BYPASS__ = true;
 </script>
-<script src="./kgb-common.js"></script>
+<script type="module" src="./kgb-common.js">
 <script type="module" src="./api/remote-adapter.js"></script>
 
 
@@ -145,7 +145,7 @@
 
     // validação simples
     const form = document.getElementById('formReset');
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const a = document.getElementById('new-password');
       const b = document.getElementById('confirm-password');

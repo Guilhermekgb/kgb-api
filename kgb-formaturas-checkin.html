@@ -666,28 +666,27 @@
 
   <script type="module" src="menu-lateral.js"></script>
 
-  <script src="./kgb-common.js"></script>
-<script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-
+  <script type="module" src="./kgb-common.js">
+<script src="./api/proteger-pagina.js"></script>
+<script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim() || 'page:kgb-formaturas-checkin.html';
-    if (permissao) guard({ permissao });
+    try { if (permissao) window.guard({ permissao }); } catch(e){}
 
-    aplicarPermissoesNaTela();
+    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 
     try {
       const alvo = document.getElementById('menuLateral');
       if (alvo) {
         const obs = new MutationObserver((muts, o) => {
           if (alvo.firstElementChild) {
-            aplicarPermissoesNaTela();
+            try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
             o.disconnect();
           }
         });
         obs.observe(alvo, { childList: true });
       }
-    } catch {}
+    } catch(e){}
   </script>
 
   <script>

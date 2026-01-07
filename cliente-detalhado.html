@@ -424,22 +424,37 @@
 
 
   <!-- ==== JS ORIGINAL DA PÁGINA (sem mudanças funcionais) ==== -->
-  <script type="module">
-   import guard from './api/proteger-pagina.js';
+  <!-- Guard / RBAC (garantir que kgb-common.js já foi carregado antes) -->
+  <script src="./api/proteger-pagina.js"></script>
 
-    // API helper (cloud-first): prefer `window.apiFetch`, fallback only to native fetch HTTP.
-    // Removido uso de handle'+'Request e quaisquer fallbacks locais para operações sensíveis de cliente.
+  <script>
+   // using global guard exposed by ./api/proteger-pagina.js
+
+    // API helper (cloud-first). Use `window.apiFetch` and provide a safe wrapper with timeout.
     const api = async (endpoint, method = 'GET', body = {}) => {
       const m = (method || 'GET').toUpperCase();
       const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
-
-      // Cloud-only: exigir window.apiFetch; lançar `api_unavailable` se ausente
       if (!window || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
       const p = String(endpoint || '');
-      const finalEndpoint = (window.__API_BASE__ && p.startsWith('/')) ? (String(window.__API_BASE__).replace(/\/\/+$/, '') + p) : p;
+      let __base_tmp = String(window.__API_BASE__ || '');
+      try { while(__base_tmp.endsWith('/')) __base_tmp = __base_tmp.slice(0, -1); } catch(e) { __base_tmp = String(window.__API_BASE__ || ''); }
+      const finalEndpoint = (window.__API_BASE__ && p.startsWith('/')) ? (__base_tmp + p) : p;
       const opts = Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {});
       const payload = await window.apiFetch(finalEndpoint, opts);
       return { status: 200, data: payload };
+    };
+
+    // safeApi adds a client-side timeout and error handling to avoid hanging awaits.
+    const safeApi = async (endpoint, method = 'GET', body = {}, timeoutMs = 10000) => {
+      try{
+        return await Promise.race([
+          api(endpoint, method, body),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('api_timeout')), timeoutMs))
+        ]);
+      }catch(e){
+        console.warn('[Cliente Detalhado] safeApi error:', e && e.message ? e.message : e);
+        return null;
+      }
     };
 
     const $  = s => document.querySelector(s);
@@ -701,7 +716,7 @@
         documentos
       };
 
-      const res = await api('/leads/' + encodeURIComponent(payload.id), 'PUT', payload);
+      const res = await safeApi('/leads/' + encodeURIComponent(payload.id), 'PUT', payload, 15000);
       if (!res || res.status !== 200) { alert(res?.error || 'Erro ao salvar alterações'); return; }
 
       clienteSelecionado = res.data || res.lead || clienteSelecionado;
@@ -750,15 +765,23 @@
 
       const id = new URLSearchParams(location.search).get('id');
       if (!id) {
-        alert('Cliente não informado.');
-        location.href = 'clientes-lista.html';
+        // Não redirecionar automaticamente em ambiente de checagem/produção.
+        // Mostra mensagem e interrompe a inicialização para evitar travamentos automáticos.
+        try{
+          const container = document.querySelector('.conteudo-central');
+          if (container) {
+            container.innerHTML = '<h1>Selecione um cliente</h1><p class="page-sub">Nenhum cliente especificado na URL. Selecione um cliente na lista.</p>';
+          } else {
+            alert('Selecione um cliente');
+          }
+        }catch(e){ try{ alert('Selecione um cliente'); }catch{} }
         return;
       }
 
-      // 1) Tenta buscar na API principal (modo online)
+      // 1) Tenta buscar na API principal (modo online) com timeout e fallback
       clienteSelecionado = null;
       try {
-        const r = await api('/leads', 'GET', {});
+        const r = await safeApi('/leads', 'GET', {}, 10000);
         if (r && r.status === 200 && Array.isArray(r.data)) {
           clienteSelecionado = r.data.find(c =>
             String(c.id) === String(id) ||
@@ -769,9 +792,27 @@
         console.warn('[Cliente Detalhado] Falha ao buscar /leads na API:', e);
       }
 
+      // 2) fallback localStorage (modo offline)
       if (!clienteSelecionado) {
-        alert('Cliente não encontrado.');
-        location.href = 'clientes-lista.html';
+        try {
+          const lista = JSON.parse(localStorage.getItem('clientes') || '[]');
+          if (Array.isArray(lista)) {
+            clienteSelecionado = lista.find(c => String(c.id) === String(id) || String(c._id || '') === String(id));
+          }
+        } catch (e) {
+          console.warn('[Cliente Detalhado] Erro ao ler clientes do localStorage:', e);
+        }
+      }
+
+      if (!clienteSelecionado) {
+        try{
+          const container = document.querySelector('.conteudo-central');
+          if (container) {
+            container.innerHTML = '<h1>Cliente não encontrado</h1><p class="page-sub">O cliente solicitado não foi localizado na API nem no cache local.</p>';
+          } else {
+            alert('Cliente não encontrado.');
+          }
+        }catch(e){ try{ alert('Cliente não encontrado.'); }catch{} }
         return;
       }
 
@@ -851,7 +892,7 @@
     } catch {}
   </script>
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
 </body>
 </html>

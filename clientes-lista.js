@@ -1,5 +1,5 @@
 // clientes-lista.js — robusto: API + fallbacks locais
-import guard from './api/proteger-pagina.js';
+// Using global guard (window.guard) provided by ./api/proteger-pagina.js
 
 // local route handler import removed — Phase 1 uses memStore or window.apiFetch as fallback
 
@@ -92,16 +92,28 @@ async function api(endpoint, method = 'GET', body = {}) {
   const m = (method || 'GET').toUpperCase();
   const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
+  // Defensive: if apiFetch is not present, do not crash — show warning and return empty result
   if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') {
-    throw new Error('api_unavailable');
+    try { window.toast?.('API indisponível (cliente): recurso ausente', 'warn'); } catch (e) {}
+    return { status: 503, data: [] };
   }
 
   try {
     const payload = await window['apiFetch'](String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+    // normalize payload: if provider returned {status,data} keep it, else assume 200
+    if (payload && typeof payload === 'object' && typeof payload.status === 'number') {
+      return { status: payload.status, data: payload.data || [] };
+    }
     return { status: 200, data: payload };
   } catch (err) {
-    console.warn('[clientes-lista] window.apiFetch falhou', err);
-    throw err;
+    try { window.toast?.('API indisponível', 'warn'); } catch (e) {}
+    const st = err && err.status ? err.status : null;
+    if (st === 401) {
+      try { window.location.href = 'login.html'; } catch (e) {}
+      return { status: 401, data: null };
+    }
+    try { window.toast?.('API indisponível', 'warn'); } catch (e) {}
+    return { status: st || 500, data: [] };
   }
 }
 
@@ -223,7 +235,7 @@ function lerTiposDeEventoDasCategorias() {
 /* ========== boot ========== */
 function init() {
  // 1) Baseada na META da página (mais simples, usa <meta name="page-permission">):
-guard();
+(window.guard || guard)();
 
 // ou, se preferir forçar perfis via código nesta tela:
 // guard(['Administrador','Vendedor']);

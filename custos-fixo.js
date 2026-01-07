@@ -169,8 +169,19 @@ function limparFormulario() {
   editIndex = null;
   document.getElementById('formCustoFixo')?.reset();
   document.getElementById('ativo').checked = true;
-  document.getElementById('btnSalvar').querySelector('span').textContent = 'Salvar';
-  document.getElementById('hintEdicao').style.display = 'none';
+  const _btnSalvar = document.getElementById('btnSalvar');
+  const _btnSalvarSpan = _btnSalvar ? _btnSalvar.querySelector('span') : null;
+  if (!_btnSalvarSpan) {
+    console.warn('[custos-fixo] elemento não encontrado:', 'btnSalvar span');
+  } else {
+    _btnSalvarSpan.textContent = 'Salvar';
+  }
+  const _hintEd = document.getElementById('hintEdicao');
+  if (!_hintEd) {
+    console.warn('[custos-fixo] elemento não encontrado:', 'hintEdicao');
+  } else {
+    _hintEd.style.display = 'none';
+  }
   atualizarCamposRegra();
   window.lucide?.createIcons?.();
 }
@@ -231,8 +242,13 @@ function onSalvar(e) {
   } else {
     itens[editIndex] = novo;
     editIndex = null;
-    document.getElementById('btnSalvar').querySelector('span').textContent = 'Salvar';
-    document.getElementById('hintEdicao').style.display = 'none';
+    const _btnSalvar2 = document.getElementById('btnSalvar');
+    const _btnSalvarSpan2 = _btnSalvar2 ? _btnSalvar2.querySelector('span') : null;
+    if (!_btnSalvarSpan2) { console.warn('[custos-fixo] elemento não encontrado:', 'btnSalvar span'); }
+    else { _btnSalvarSpan2.textContent = 'Salvar'; }
+    const _hintEd2 = document.getElementById('hintEdicao');
+    if (!_hintEd2) { console.warn('[custos-fixo] elemento não encontrado:', 'hintEdicao'); }
+    else { _hintEd2.style.display = 'none'; }
   }
 
   salvar();
@@ -371,8 +387,13 @@ function editarItem(index) {
     document.getElementById('k_viagens').value = p.viagens ?? 1;
   }
 
-  document.getElementById('btnSalvar').querySelector('span').textContent = 'Atualizar';
-  document.getElementById('hintEdicao').style.display = 'inline';
+  const _btnSalvar3 = document.getElementById('btnSalvar');
+  const _btnSalvarSpan3 = _btnSalvar3 ? _btnSalvar3.querySelector('span') : null;
+  if (!_btnSalvarSpan3) { console.warn('[custos-fixo] elemento não encontrado:', 'btnSalvar span'); }
+  else { _btnSalvarSpan3.textContent = 'Atualizar'; }
+  const _hintEd3 = document.getElementById('hintEdicao');
+  if (!_hintEd3) { console.warn('[custos-fixo] elemento não encontrado:', 'hintEdicao'); }
+  else { _hintEd3.style.display = 'inline'; }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -446,10 +467,17 @@ function calcularTotaisPlanilha() {
     const qtd = toNum(tr.querySelector('input.qtd-sim')?.value || 0);
     const unit = toNum(tr.querySelector('[data-unit]')?.getAttribute('data-unit') || 0);
     const total = qtd * unit;
-    tr.querySelector('.total-item').textContent = fmtBRL.format(total);
+    const _totalItem = tr.querySelector('.total-item');
+    if (!_totalItem) {
+      console.warn('[custos-fixo] elemento não encontrado: .total-item (linha da planilha)');
+    } else {
+      _totalItem.textContent = fmtBRL.format(total);
+    }
     soma += total;
   });
-  document.getElementById('totalGeralPlanilha').textContent = fmtBRL.format(soma);
+  const _totalGeral = document.getElementById('totalGeralPlanilha');
+  if (!_totalGeral) { console.warn('[custos-fixo] elemento não encontrado:', 'totalGeralPlanilha'); }
+  else { _totalGeral.textContent = fmtBRL.format(soma); }
 }
 
 // ====== Exportar / Importar ======

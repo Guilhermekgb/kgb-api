@@ -25,15 +25,13 @@
 </script>
 
 <!-- Helpers globais SEMPRE antes do guard -->
-<script type="module" src="./kgb-common.js"></script>
-<script src="./js/auth-helper.js" defer></script>
-<script src="./api/api-fetch.js" defer></script>
+<!-- kgb-common moved to end to guarantee correct load order -->
+<script type="module" src="./js/auth-helper.js" defer>
 
 <!-- Opcional: ativar ENFORCE do guard (uma vez) -->
 <script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
 
-<!-- Guard (usa coisas do common) -->
-<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- Guard será carregado DEPOIS dos scripts da página (inserido no final do body) -->
 
 
   <meta charset="utf-8" />
@@ -44,8 +42,8 @@
   <link rel="icon" href="data:," />
 
 
-  <!-- Ícones e Gráficos -->
-  <script src="https://unpkg.com/lucide@0.462.0"></script>
+  <!-- Ícones e Gráficos (Lucide UMD para compatibilidade com tags clássicas) -->
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Estilos globais -->
@@ -567,16 +565,22 @@
     </div>
   </dialog>
 
-<script src="menu-lateral.js" defer></script>
 <script src="agenda-bridge.js" defer></script>
 
-<!-- Helpers globais do Financeiro (FG) -->
-<script type="module" src="financeiro-shared.js"></script>
+<!-- Helpers globais do Financeiro (FG) - TEMPORARIAMENTE comentados (export causava 'Unexpected token export') -->
+<!-- <script type="module" src="financeiro-shared.js"></script> -->
 
-<script src="fin-cartao.js" defer></script>
-<script type="module" src="financeiro-modal.js"></script>
-<script type="module" src="fin-cobranca-integ.js"></script>
+<!-- Helpers financeiros temporariamente desabilitados (causavam parse 'export') -->
+<!-- <script src="fin-cartao.js" defer></script> -->
+<!-- <script type="module" src="financeiro-modal.js"></script> -->
+<!-- <script type="module" src="fin-cobranca-integ.js"></script> -->
 <script>window.__USE_API_KPIS = true;</script>
+
+<!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, menu-lateral, script da página -->
+<script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/api-fetch.js" defer>
+<script src="./api/proteger-pagina.js" defer></script>
+<script type="module" src="menu-lateral.js"></script>
 <script src="dashboard.js"></script>
 
 <script>
@@ -639,14 +643,6 @@
 
 
 
-  <!-- Aplicação leve de permissões (após render do dashboard) -->
-  <script type="module">
-    import { aplicarPermissoesConteudoLeve } from './api/proteger-pagina.js';
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => aplicarPermissoesConteudoLeve(document), 0);
-    });
-  </script>
-
   <!-- Placeholders visuais para áreas sem permissão -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -668,7 +664,6 @@
       });
     }
   </script>
-</script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('hamburguer');

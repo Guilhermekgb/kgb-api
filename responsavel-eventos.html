@@ -106,17 +106,13 @@
   </div>
 
   <script type="module" src="menu-lateral.js"></script>
-  <script src="./kgb-common.js"></script>
-<script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  <script type="module" src="./kgb-common.js">
+  <script src="./api/proteger-pagina.js"></script>
+  <script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();
-    if (permissao) {
-      guard({ permissao });
-    } else {
-      guard(); // fallback, se um dia usar perfis na meta
-    }
-    aplicarPermissoesNaTela();
+    try { if (permissao) { window.guard({ permissao }); } else { window.guard && window.guard(); } } catch(e){}
+    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
   </script>
 
 
@@ -348,7 +344,7 @@
     document.addEventListener("DOMContentLoaded", render);
   </script>
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

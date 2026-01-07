@@ -34,8 +34,8 @@
 
 
 <!-- Guard / RBAC (usa coisas do common) -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js">
+<script src="./api/proteger-pagina.js"></script>
 <!-- === FIM PATCH COMMON + GUARD (analises) === -->
 
 
@@ -773,6 +773,6 @@ window.addEventListener('fin-store-changed', renderAll);
   });
 </script>
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

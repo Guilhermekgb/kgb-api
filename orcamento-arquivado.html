@@ -309,16 +309,26 @@ body.no-scroll{ overflow:hidden; }
     let out = [];
 
     // 1) chaves preferidas (arrays ou objetos) — prefer readLS, senão memStore cache
-    preferidas.forEach(k=>{
+    preferidas.forEach(k => {
       try {
-        const mv = getJSON("motivosArquivamento", []);
-        const motivos = Array.isArray(mv)
-          ? mv.map(x => typeof x === 'string' ? x : (x?.nome || x?.label || x?.titulo || '')).filter(Boolean)
-          : [];
-          val = JSON.parse(raw);
+        // tenta via readLS (helper) primeiro, senão busca em memStore.cache
+        let raw = null;
+        try { raw = (typeof readLS === 'function') ? readLS(k, null) : null; } catch (e) { raw = null; }
+
+        let val = null;
+        if (raw != null) {
+          try { val = JSON.parse(raw); } catch (e) { val = raw; }
+        } else {
+          try {
+            const memRaw = memStore.cache[k];
+            if (memRaw != null) {
+              try { val = JSON.parse(memRaw); } catch (e) { val = memRaw; }
+            }
+          } catch (e) { /* ignore */ }
         }
+
         arrayFromAny(val).forEach(r => { if (isArquivadoRegistro(r)) out.push(normalizeRegistro(r)); });
-      }catch{}
+      } catch (e) { /* swallow per original intent */ }
     });
 
     // 2) dedupe por id (caso o mesmo registro apareça em mais de uma chave)
@@ -370,12 +380,12 @@ body.no-scroll{ overflow:hidden; }
         window.location.href = alvos[0];
       });
       // Recuperar
-      card.querySelector('[data-recuperar]').addEventListener('click', () => {
+      card.querySelector('[data-recuperar]').addEventListener('click', async () => {
         if (!confirm("Deseja realmente recuperar este registro para o funil?")) return;
 
         let mudou = false;
         // tenta em orçamentos/leads
-        ['orcamentos','orçamentos','leads'].forEach(k=>{
+        ['orcamentos','orçamentos','leads'].forEach(async (k) => {
           try{
                 // tenta ler via helper (pode ser storage-shim/API) antes do memStore
                 let val = (typeof readLS === 'function') ? readLS(k, null) : null;
@@ -689,10 +699,10 @@ document.addEventListener("DOMContentLoaded",()=>{
 </script>
 
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
-  <script src="./kgb-common.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+  <script type="module" src="./js/auth-helper.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
 </body>
 </html>
 

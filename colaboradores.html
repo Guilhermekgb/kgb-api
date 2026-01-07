@@ -39,7 +39,8 @@
   function portalSetJSON(key, obj) {
     try { portalWrite(key, JSON.stringify(obj)); } catch (e) {}
   }
-
+  
+</script>
 <script>
   (function(){
     var host = String(location.hostname||"").toLowerCase();
@@ -64,11 +65,11 @@
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- Guard / RBAC -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js"></script>
+<script src="./api/proteger-pagina.js"></script>
 
   <!-- Ícones -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
 
   <!-- Estilos base do projeto -->
   <link rel="stylesheet" href="style.css" />
@@ -425,6 +426,6 @@ body.no-scroll{
 </script>
 
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
 </body>
 </html>

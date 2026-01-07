@@ -194,7 +194,7 @@ function filterLeadsByUser(leads){
 // ========== Colunas (vêm do categorias-gerais) ==========
 
 // Base da API (vem do patch do HTML)
-const API_BASE = window.__API_BASE__ || '';
+const apiBase = (typeof window !== 'undefined' && (window.__API_BASE__ || window.API_BASE)) || '';
 // --- Compat wrapper: apiFetch required
 // NOTE: este módulo exige window.apiFetch; não há fallback.
 
@@ -308,6 +308,8 @@ function ensureColunas(){
     } catch (e) {
       console.warn('[HIST] Erro ao preparar envio de movimentação para API:', e);
     }
+  return cols;
+}
 function isArquivado(ld){
   return equivalenteStatus(ld?.status, "Arquivados") || ld?.arquivado === true;
 }

@@ -251,12 +251,12 @@
 <script type="module" src="menu-lateral.js"></script>
 
   <!-- Guard do modelo base -->
-  <script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  <script src="./api/proteger-pagina.js"></script>
+  <script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();
-    if (permissao) guard({ permissao });
-    aplicarPermissoesNaTela();
+    try { if (permissao) window.guard({ permissao }); } catch(e){}
+    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
   </script>
 
   <!-- Lógica da página -->
@@ -526,7 +526,7 @@
       document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
   </script>
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

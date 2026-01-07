@@ -13,6 +13,8 @@
     const __memoryStore_finEvt = window.__memoryStore_finEvt || (window.__memoryStore_finEvt = {});
     function memGetEvt(k, fb=null){ try { const v = __memoryStore_finEvt[k]; return v == null ? fb : (typeof v === 'object' ? v : JSON.parse(String(v))); } catch { return fb; } }
     function memSetEvt(k, v){ try { __memoryStore_finEvt[k] = v; return true; } catch { return false; } }
+    // expose shims as globals to avoid ReferenceError in other scopes
+    try { window.memGetEvt = window.memGetEvt || memGetEvt; window.memSetEvt = window.memSetEvt || memSetEvt; } catch {}
     window.readLS = (k, fb=null) => { try { return memGetEvt(k, fb); } catch { return fb; } };
   }
   if (typeof window.writeLS !== 'function') {

@@ -6,8 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="./config.env.js"></script>
 
-  <!-- Helpers globais -->
-<script type="module" src="./kgb-common.js"></script>
+  <!-- Helpers globais (moved to page end to ensure proper load order) -->
 
 <!-- Guard de permissões (depende do kgb-common) -->
 <!--<script type="module" src="./api/proteger-pagina.js"></script> -->
@@ -45,12 +44,11 @@ var DEV_API  = window.location.origin;
 
 
  
-  <!-- Guard precisa carregar cedo para ler o meta acima -->
-  <script src="js/auth-helper.js"></script>
-  <script type="module" src="./api/proteger-pagina.js"></script>
+  <!-- Guard será carregado após os scripts da página (inserido no final do body) -->
+  <script type="module" src="js/auth-helper.js"></script>
 
-  <!-- Ícones (CDN) -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Ícones (CDN) - UMD build: evita módulos ESM em tags clássicas -->
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
 
   <!-- Estilos base -->
   <link rel="stylesheet" href="style.css" />
@@ -182,11 +180,7 @@ var DEV_API  = window.location.origin;
   </main>
 </div>
 
-<!-- Menu precisa ser módulo (usa import/export) -->
-<script type="module" src="menu-lateral.js"></script>
-
-<!-- Lógica da página -->
-<script type="module" src="clientes-lista.js"></script>
+<!-- Menu precisa ser módulo (usa import/export) - carregado no final do body -->
  
 
 <!-- Ícones + ajuste de margem no desktop + recriação de ícones após injeção do menu -->
@@ -241,6 +235,11 @@ var DEV_API  = window.location.origin;
   } catch {}
 </script>
 
+  <!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, menu-lateral, script da página -->
+  <script type="module" src="./kgb-common.js"></script>
   <script src="./api/api-fetch.js" defer></script>
+  <script src="./api/proteger-pagina.js" defer></script>
+  <script type="module" src="menu-lateral.js"></script>
+  <script type="module" src="clientes-lista.js"></script>
 </body>
 </html>

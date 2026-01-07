@@ -142,13 +142,12 @@ try{
 } catch(e){}
 
 // === Permissões: helpers de pós-render ===
-import { aplicarPermissoesNaTela, aplicarPermissoesNoMenu } from './api/proteger-pagina.js';
 
 // Substitui innerHTML e já aplica permissões no nó raiz passado
 export function setHTMLComPermissoes(el, html){
   if (!el) return;
   el.innerHTML = html;
-  try { aplicarPermissoesNaTela(el); } catch {}
+  try { (window.aplicarPermissoesNaTela || function(){}) (el); } catch {}
 }
 
 // Reaplica permissões em um container (útil após appendChild/insertAdjacentHTML)
@@ -158,7 +157,7 @@ export function reaplicarPermissoes(root=document){
 
 // Chama no carregamento para o menu lateral
 document.addEventListener('DOMContentLoaded', () => {
-  try { aplicarPermissoesNoMenu(document); } catch {}
+  try { (window.aplicarPermissoesNoMenu || function(){}) (document); } catch {}
 });
 
 /* ===== Helpers de domínio ===== */
@@ -486,10 +485,20 @@ export function fecharSessao(sessaoId){
     // EM LOCALHOST sempre força cloud
     if (isLocal) base = RENDER_API_FALLBACK;
 
-    window.__API_BASE__ = base;
+    try {
+      const d = Object.getOwnPropertyDescriptor(window, '__API_BASE__');
+      if (!d || d.writable || typeof d.set === 'function') {
+        window.__API_BASE__ = base;
+        console.log('[KGB] API_BASE =>', window.__API_BASE__);
+      } else {
+        console.warn('[API_BASE] __API_BASE__ é read-only, mantendo valor atual');
+      }
+    } catch (e) {
+      // fallback: tentar atribuir diretamente (ambientes sem descriptors)
+      try { window.__API_BASE__ = base; } catch (e2) { /* ignore */ }
+    }
 
     console.log('[KGB] origin =', origin);
-    console.log('[KGB] API_BASE =>', window.__API_BASE__);
   })();
 
   // 2) Transport: se não existir `window.apiFetch`, criamos um wrapper padrão.

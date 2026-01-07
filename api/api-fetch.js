@@ -30,7 +30,21 @@
       }
     } catch (e) {}
 
-    const res = await fetch(buildUrl(path), opts);
+    // Add optional timeout via AbortController. Default timeout 15000ms unless options.timeoutMs provided.
+    const timeoutMs = (typeof options.timeoutMs === 'number') ? options.timeoutMs : 15000;
+    const ac = new AbortController();
+    const id = setTimeout(() => ac.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(buildUrl(path), Object.assign({}, opts, { signal: ac.signal }));
+    } catch (err) {
+      clearTimeout(id);
+      const e = new Error('apiFetch failed or timed out');
+      e.cause = err;
+      e.timedout = err && err.name === 'AbortError';
+      throw e;
+    }
+    clearTimeout(id);
 
     // tenta ler json; se falhar, retorna texto
     const ct = res.headers.get('content-type') || '';

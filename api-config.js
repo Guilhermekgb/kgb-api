@@ -1,3 +1,15 @@
 // api-config.js — carregue este script antes dos demais scripts do frontend.
-// Após o deploy no Render, substitua a URL abaixo pela sua URL pública.
-window.__API_BASE__ = window.__API_BASE__ || window.location.origin;
+// Força API em produção / Netlify: detecta host e aponta para o backend no Render.
+(function () {
+	const host = (location.hostname || '').toLowerCase();
+
+	// Se estiver no Netlify, usa a API do Render
+	if (host.endsWith('netlify.app')) {
+		window.__API_BASE__ = 'https://kgb-api.onrender.com';
+		console.log('[api-config] Netlify detectado -> __API_BASE__ =', window.__API_BASE__);
+		return;
+	}
+
+	// Caso contrário, mantém o comportamento padrão (não sobrescreve)
+	window.__API_BASE__ = window.__API_BASE__ || window.location.origin;
+})();

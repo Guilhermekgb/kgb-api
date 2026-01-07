@@ -44,6 +44,7 @@
     window.portalRemove = portalRemove;
     window.isPortalMode = isPortalMode;
   })();
+</script>
 
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
@@ -77,7 +78,7 @@
 
 <link rel="stylesheet" href="./kgb-common.css"/>
 <link rel="stylesheet" href="./menu-lateral.css"/>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
 <script type="module" src="./kgb-common.js"></script>
 
 
@@ -809,8 +810,8 @@ $('#btnDel').addEventListener('click',removeSelected);
 </script>
 
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
   <script type="module" src="./api/proteger-pagina.js"></script>
 </body>
 </html>

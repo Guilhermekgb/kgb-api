@@ -65,12 +65,12 @@
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- 3.2 Guard: usa a meta page-permission -->
-<script type="module">
-  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+<script src="./api/proteger-pagina.js"></script>
+<script>
   const meta = document.querySelector('meta[name="page-permission"]');
   const permissao = meta?.content?.trim();
-  if (permissao) guard({ permissao });
-  aplicarPermissoesNaTela();
+  if (permissao) window.guard({ permissao });
+  try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 </script>
 
 <!-- (opcional) favicon vazio para evitar 404 -->
@@ -699,7 +699,7 @@
   </div>
 
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

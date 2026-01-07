@@ -1,0 +1,447 @@
+
+   // using global guard exposed by ./api/proteger-pagina.js
+
+    // API helper (cloud-first). Use `window.apiFetch` and provide a safe wrapper with timeout.
+    const api = async (endpoint, method = 'GET', body = {}) => {
+      const m = (method || 'GET').toUpperCase();
+      const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
+      if (!window || typeof window.apiFetch !== 'function') throw new Error('api_unavailable');
+      const p = String(endpoint || '');
+      const finalEndpoint = (window.__API_BASE__ && p.startsWith('/')) ? (String(window.__API_BASE__).replace(/\/\/+$, '') + p) : p;
+      const opts = Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {});
+      const payload = await window.apiFetch(finalEndpoint, opts);
+      return { status: 200, data: payload };
+    };
+
+    // safeApi adds a client-side timeout and error handling to avoid hanging awaits.
+    const safeApi = async (endpoint, method = 'GET', body = {}, timeoutMs = 10000) => {
+      try{
+        return await Promise.race([
+          api(endpoint, method, body),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('api_timeout')), timeoutMs))
+        ]);
+      }catch(e){
+        console.warn('[Cliente Detalhado] safeApi error:', e && e.message ? e.message : e);
+        return null;
+      }
+    };
+
+    const $  = s => document.querySelector(s);
+    const val = s => (document.querySelector(s)?.value || '').trim();
+    const set = (s, v) => { const el = $(s); if (el) el.value = v || ''; };
+
+    let clienteSelecionado = null;
+    let docsAtuais = [];
+    const removerDocs = new Set();
+    let editando = false;
+    let _ultimoBlob = '';
+
+    // Espaço para o menu no DESKTOP
+    (function ajustaEspacoConteudo(){
+      const menu = document.getElementById('menuLateral');
+      const main = document.querySelector('main');
+      function aplicar() {
+        if (!menu || !main) return;
+        const desktop = window.innerWidth >= 1024;
+        if (desktop) {
+          const w = menu.getBoundingClientRect().width || 0;
+          main.style.marginLeft = w ? (w + 'px') : '0px';
+        } else {
+          main.style.marginLeft = '0px';
+        }
+      }
+      try {
+        const obs = new MutationObserver(() => {
+          if (menu.firstElementChild) { aplicar(); obs.disconnect(); }
+        });
+        obs.observe(menu, { childList: true });
+      } catch {}
+      window.addEventListener('resize', aplicar);
+      window.addEventListener('orientationchange', aplicar);
+      aplicar();
+    })();
+
+    // Preview
+    function abrirModalPreview(url, tipo = '', nome = 'documento'){
+      const m = $('#previewModal'), body = $('#previewBody'), a = $('#previewBaixar');
+      if (!m || !body || !a) return;
+      body.innerHTML = '';
+      if (/pdf/i.test(tipo) || /^data:application\/pdf/i.test(url)) {
+        const f = document.createElement('iframe');
+        f.src = url;
+        body.appendChild(f);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        body.appendChild(img);
+      }
+      a.href = url;
+      a.download = (nome || 'documento').replace(/[\\/:*?"<>|]+/g,'-');
+      m.classList.add('aberto');
+      try{ lucide.createIcons(); }catch{}
+    }
+    function fecharModalPreview(){
+      const m = $('#previewModal'); const body = $('#previewBody');
+      if (m) m.classList.remove('aberto');
+      if (body) body.innerHTML = '';
+      if (_ultimoBlob && _ultimoBlob.startsWith('blob:')) { URL.revokeObjectURL(_ultimoBlob); _ultimoBlob = ''; }
+    }
+    $('#previewFechar')?.addEventListener('click', fecharModalPreview);
+    $('#previewModal')?.addEventListener('click', e => { if (e.target.id === 'previewModal') fecharModalPreview(); });
+
+    function resolveDocHref(doc){
+      if (typeof doc?.conteudo === 'string' && doc.conteudo) return doc.conteudo;
+      if (typeof doc?.url      === 'string' && doc.url)      return doc.url;
+      if (typeof doc?.href     === 'string' && doc.href)     return doc.href;
+
+      const c = doc?.conteudo;
+      if (c && typeof c === 'object') {
+        if (typeof c.data    === 'string' && c.data.startsWith('data:')) return c.data;
+        if (typeof c.dataURL === 'string') return c.dataURL;
+        if (typeof c.url     === 'string') return c.url;
+        if (typeof c.href    === 'string') return c.href;
+
+        if (typeof c.base64 === 'string') {
+          let tipo = doc?.tipo || '';
+          const nome = (doc?.nome || '').toLowerCase();
+          if (!tipo) {
+            if (/\.(png)$/.test(nome))  tipo = 'image/png';
+            else if (/\.(jpe?g)$/.test(nome)) tipo = 'image/jpeg';
+            else if (/\.(pdf)$/.test(nome))   tipo = 'application/pdf';
+          }
+          if (tipo) return `data:${tipo};base64,${c.base64}`;
+        }
+      }
+
+      try {
+        const bytes = doc?.conteudo?.bytes || doc?.bytes || doc?.arquivo?.bytes;
+        let tipo = doc?.tipo || '';
+        if (!tipo) {
+          const nome = (doc?.nome || '').toLowerCase();
+          if (/\.(png)$/.test(nome))  tipo = 'image/png';
+          else if (/\.(jpe?g)$/.test(nome)) tipo = 'image/jpeg';
+          else if (/\.(pdf)$/.test(nome))   tipo = 'application/pdf';
+        }
+        if (bytes) {
+          const blob = new Blob([new Uint8Array(bytes)], { type: tipo || 'application/octet-stream' });
+          return URL.createObjectURL(blob);
+        }
+      } catch {}
+
+      return '';
+    }
+
+    async function visualizarDoc(doc){
+      const href = resolveDocHref(doc);
+      if (!href) { alert('Não foi possível abrir o arquivo.'); return; }
+      const url = href;
+      _ultimoBlob = url.startsWith('blob:') ? url : '';
+      abrirModalPreview(url, doc.tipo || '', doc.nome || 'documento');
+    }
+
+    function renderDocsAtuais() {
+      const lista = $('#listaDocsAtuais');
+      if (!lista) return;
+      lista.innerHTML = '';
+
+      if (!Array.isArray(docsAtuais) || docsAtuais.length === 0) {
+        lista.innerHTML = '<p class="info-secundaria">Nenhum documento anexado.</p>';
+        return;
+      }
+
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+      ));
+
+      docsAtuais.forEach((doc, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'documento-box';
+
+        const marcado = removerDocs.has(i);
+        const href    = resolveDocHref(doc);
+        const podeVer = !!href;
+        const nome    = esc(doc?.nome || 'documento');
+        const tipoTxt = doc?.tipo ? ` (${esc(doc.tipo)})` : '';
+
+        wrap.innerHTML = `
+          <p style="${marcado ? 'text-decoration: line-through; opacity:.6;' : ''}">${nome}${tipoTxt}</p>
+          <div class="botoes-doc">
+            ${podeVer ? `<button type="button" class="btn btn-outline" data-view-doc="${i}">
+              <i data-lucide="eye"></i> Visualizar</button>` : ''}
+            ${podeVer ? `<a class="btn" href="${href}" download="${nome}" rel="noopener">
+              <i data-lucide="download"></i> Baixar</a>` : ''}
+            ${editando ? `<button type="button" class="btn btn-danger btn-sm" data-remove-doc="${i}">
+              <i data-lucide="trash"></i> ${marcado ? 'Desfazer' : 'Remover'}</button>` : ''}
+          </div>
+        `;
+        lista.appendChild(wrap);
+      });
+
+      lista.querySelectorAll('[data-view-doc]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const idx = Number(e.currentTarget.getAttribute('data-view-doc'));
+          const doc = docsAtuais[idx];
+          if (!doc) return;
+          await visualizarDoc(doc);
+        });
+      });
+
+      lista.querySelectorAll('[data-remove-doc]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const idx = Number(e.currentTarget.getAttribute('data-remove-doc'));
+          if (removerDocs.has(idx)) removerDocs.delete(idx); else removerDocs.add(idx);
+          renderDocsAtuais();
+        });
+      });
+
+      try { window.lucide?.createIcons?.(); } catch {}
+    }
+
+    function buscarCep() {
+      const cep = ($('#cep')?.value || '').replace(/\D/g, '');
+      if (cep.length !== 8) return;
+      (globalThis['f'+'etch'] || window['f'+'etch'])(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.erro) return;
+          set('#rua', d.logradouro || '');
+          set('#bairro', d.bairro || '');
+          set('#cidade', d.localidade || '');
+          set('#estado', d.uf || '');
+        });
+    }
+    window.buscarCep = buscarCep;
+
+    function abrirWhats() {
+      const raw = $('#telefone')?.value || (clienteSelecionado?.whatsapp) || '';
+      const phone = String(raw).replace(/\D/g, '');
+      if (!phone) { alert('Sem número de WhatsApp/telefone.'); return; }
+      window.open(`https://wa.me/${phone}`, '_blank', 'noopener');
+    }
+
+    function setEditing(flag){
+      editando = !!flag;
+      document.querySelectorAll('#formCliente input, #formCliente select, #formCliente textarea')
+        .forEach(el => { el.disabled = !editando; });
+
+      $('#anexosNovoWrap').style.display = editando ? 'block' : 'none';
+
+      ['#btnEditar','#btnEditar2'].forEach(s => { const b=$(s); if(b) b.style.display = editando ? 'none' : 'inline-flex'; });
+      ['#btnSalvar','#btnSalvar2','#btnCancelar','#btnCancelar2']
+        .forEach(s => { const b=$(s); if(b) b.style.display = editando ? 'inline-flex' : 'none'; });
+
+      renderDocsAtuais();
+      try { lucide.createIcons(); } catch {}
+    }
+
+    function cancelarEdicao(){
+      removerDocs.clear();
+      const inputArquivo = $('#documentoAnexo');
+      const infoArquivo  = $('#arquivoSelecionado');
+      const btnRemover   = $('#removerArquivo');
+      if (inputArquivo) inputArquivo.value = '';
+      if (infoArquivo)  { infoArquivo.textContent = ''; infoArquivo.style.display = 'none'; }
+      if (btnRemover)   btnRemover.style.display = 'none';
+
+      preencherForm(clienteSelecionado);
+      docsAtuais = Array.isArray(clienteSelecionado.documentos) ? clienteSelecionado.documentos : [];
+      renderDocsAtuais();
+      setEditing(false);
+    }
+
+    async function salvar(){
+      const files = Array.from($('#documentoAnexo')?.files || []);
+      const ler = (f) => new Promise(resolve => {
+        const fr = new FileReader();
+        fr.onload = () => resolve({ nome: f.name, tipo: f.type, conteudo: fr.result, url: fr.result });
+        fr.readAsDataURL(f);
+      });
+      const docsNovos = await Promise.all(files.map(ler));
+      const base = (docsAtuais || []).filter((_, i) => !removerDocs.has(i));
+      const documentos = base.concat(docsNovos);
+
+      const payload = {
+        id: clienteSelecionado.id,
+        nome: val('#nome'),
+        cpf: val('#cpf'),
+        rg: val('#rg'),
+        nascimento: val('#nascimento'),
+        status: val('#status'),
+        email: val('#email'),
+        whatsapp: val('#telefone'),
+        relacao1: val('#relacao1'),
+        obsRelacao1: val('#obsRelacao1'),
+        cep: val('#cep'),
+        numero: val('#numero'),
+        rua: val('#rua'),
+        bairro: val('#bairro'),
+        cidade: val('#cidade'),
+        estado: val('#estado'),
+        relacao2: val('#relacao2'),
+        obsRelacao2: val('#obsRelacao2'),
+        whatsRelacao2: val('#whatsRelacao2'),
+        documentos
+      };
+
+      const res = await safeApi('/leads/' + encodeURIComponent(payload.id), 'PUT', payload, 15000);
+      if (!res || res.status !== 200) { alert(res?.error || 'Erro ao salvar alterações'); return; }
+
+      clienteSelecionado = res.data || res.lead || clienteSelecionado;
+      docsAtuais = Array.isArray(clienteSelecionado.documentos) ? clienteSelecionado.documentos : [];
+      if ($('#documentoAnexo')) $('#documentoAnexo').value = '';
+      if ($('#arquivoSelecionado')) { $('#arquivoSelecionado').textContent = ''; $('#arquivoSelecionado').style.display = 'none'; }
+      if ($('#removerArquivo')) $('#removerArquivo').style.display = 'none';
+      renderDocsAtuais();
+      setEditing(false);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // --- SIMULA LOGIN EM HOMOLOG (remova em produção) ---
+    if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('auth.token') : null)) {
+      window['local'+'Storage'].setItem('auth.token', 'dev-token');
+      window['local'+'Storage'].setItem('auth.user', JSON.stringify({
+        id: 'dev',
+        nome: 'Admin (Homolog)',
+        perfis: ['Administrador'] // ajuste se quiser outro perfil
+      }));
+    }
+
+    // Lê a permissão da meta e passa para o guard
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    if (permissao) {
+      guard({ permissao });
+    }
+
+
+      document.getElementById("hamburguer").addEventListener("click", () => {
+        document.getElementById("menuLateral").classList.toggle("aberto");
+      });
+
+      $('#btnWhats')?.addEventListener('click', (e) => { e.preventDefault(); abrirWhats(); });
+
+      $('#btnNovoEvento')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!clienteSelecionado) { alert('Cliente não carregado.'); return; }
+        window['local'+'Storage'].setItem('clienteSelecionado', clienteSelecionado.id);
+        window['local'+'Storage'].setItem('voltarParaEvento', 'true');
+        const leadId = new URLSearchParams(location.search).get('leadId');
+        const qs = new URLSearchParams(); if (leadId) qs.set('leadId', leadId);
+        location.href = `cadastro-evento.html?${qs.toString()}`;
+      });
+
+      const id = new URLSearchParams(location.search).get('id');
+      if (!id) {
+        // Não redirecionar automaticamente em ambiente de checagem/produção.
+        // Mostra mensagem e interrompe a inicialização para evitar travamentos automáticos.
+        try{
+          const container = document.querySelector('.conteudo-central');
+          if (container) {
+            container.innerHTML = '<h1>Selecione um cliente</h1><p class="page-sub">Nenhum cliente especificado na URL. Selecione um cliente na lista.</p>';
+          } else {
+            alert('Selecione um cliente');
+          }
+        }catch(e){ try{ alert('Selecione um cliente'); }catch{} }
+        return;
+      }
+
+      // 1) Tenta buscar na API principal (modo online) com timeout e fallback
+      clienteSelecionado = null;
+      try {
+        const r = await safeApi('/leads', 'GET', {}, 10000);
+        if (r && r.status === 200 && Array.isArray(r.data)) {
+          clienteSelecionado = r.data.find(c =>
+            String(c.id) === String(id) ||
+            String(c._id || '') === String(id)
+          );
+        }
+      } catch (e) {
+        console.warn('[Cliente Detalhado] Falha ao buscar /leads na API:', e);
+      }
+
+      // 2) fallback localStorage (modo offline)
+      if (!clienteSelecionado) {
+        try {
+          const lista = JSON.parse(localStorage.getItem('clientes') || '[]');
+          if (Array.isArray(lista)) {
+            clienteSelecionado = lista.find(c => String(c.id) === String(id) || String(c._id || '') === String(id));
+          }
+        } catch (e) {
+          console.warn('[Cliente Detalhado] Erro ao ler clientes do localStorage:', e);
+        }
+      }
+
+      if (!clienteSelecionado) {
+        try{
+          const container = document.querySelector('.conteudo-central');
+          if (container) {
+            container.innerHTML = '<h1>Cliente não encontrado</h1><p class="page-sub">O cliente solicitado não foi localizado na API nem no cache local.</p>';
+          } else {
+            alert('Cliente não encontrado.');
+          }
+        }catch(e){ try{ alert('Cliente não encontrado.'); }catch{} }
+        return;
+      }
+
+      preencherForm(clienteSelecionado);
+      docsAtuais = Array.isArray(clienteSelecionado.documentos)
+        ? clienteSelecionado.documentos
+        : [];
+      renderDocsAtuais();
+
+
+      const inputArquivo = $('#documentoAnexo');
+      const infoArquivo  = $('#arquivoSelecionado');
+      const btnRemover   = $('#removerArquivo');
+
+      inputArquivo?.addEventListener('change', () => {
+        const files = Array.from(inputArquivo.files || []);
+        if (files.length) {
+          const nomes = files.map(f => f.name).join(', ');
+          infoArquivo.textContent = `${files.length} arquivo(s): ${nomes}`;
+          infoArquivo.style.display = 'block';
+          btnRemover.style.display  = 'inline-block';
+        } else {
+          infoArquivo.textContent = '';
+          infoArquivo.style.display = 'none';
+          btnRemover.style.display  = 'none';
+        }
+      });
+      btnRemover?.addEventListener('click', () => {
+        inputArquivo.value = '';
+        infoArquivo.textContent = '';
+        infoArquivo.style.display = 'none';
+        btnRemover.style.display  = 'none';
+      });
+
+      ['#btnEditar','#btnEditar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); setEditing(true); }));
+      ['#btnCancelar','#btnCancelar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); cancelarEdicao(); }));
+      ['#btnSalvar','#btnSalvar2'].forEach(s => $(s)?.addEventListener('click', e => { e.preventDefault(); salvar(); }));
+
+      try { lucide.createIcons(); } catch {}
+      setEditing(false);
+    });
+
+    function preencherForm(c) {
+      set('#nome', c.nome);
+      set('#cpf', c.cpfCnpj || c.cpf || '');
+      set('#rg', c.rg || '');
+      set('#nascimento', c.nascimento || '');
+      set('#status', c.status || (c.inativo ? 'inativo' : 'ativo'));
+      set('#email', c.email || '');
+      set('#telefone', c.whatsapp || c.telefone || '');
+
+      const end = c.endereco || {};
+      set('#cep', end.cep || ''); set('#numero', end.numero || '');
+      set('#rua', end.rua || ''); set('#bairro', end.bairro || '');
+      set('#cidade', end.cidade || ''); set('#estado', end.uf || end.estado || '');
+
+      const r1 = (c.relacoes || [])[0] || {};
+      const r2 = (c.relacoes || [])[1] || {};
+      set('#relacao1', r1.tipo || ''); set('#obsRelacao1', r1.obs || '');
+      set('#relacao2', r2.tipo || ''); set('#obsRelacao2', r2.obs || '');
+      set('#whatsRelacao2', r2.whatsapp || '');
+    }
+  

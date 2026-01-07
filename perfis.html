@@ -312,19 +312,15 @@ body.no-scroll{
 </script>
 
 <!-- 2) Protege a página (lê a meta) e aplica permissões -->
-<script src="./kgb-common.js"></script>
-<script type="module">
-  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-  // Se o <head> tem: <meta name="page-permission" content="ver-perfis">
-  // o guard() já bloqueia quem não pode
-  guard();
-  // Aplica permissões após o menu ser injetado
-  // (chamamos de novo depois do render da tabela também)
-  aplicarPermissoesNaTela();
+<script type="module" src="./kgb-common.js">
+<script src="./api/proteger-pagina.js"></script>
+<script>
+  try { window.guard && window.guard(); } catch(e){}
+  try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 </script>
 
-<script type="module">
-  import { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+<script>
+  try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 
 // === Menu mobile (hambúrguer) ===
 if (document.getElementById('hamburguer')?.hasAttribute('data-bound')) { /* menu já instalado */ }
@@ -611,7 +607,7 @@ window.addEventListener('resize', () => {
 
 
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

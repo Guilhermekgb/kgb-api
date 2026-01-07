@@ -26,7 +26,9 @@
   function portalWrite(key, value) {
     try {
       if (isPortalMode()) {
-        if (typeof window.portalWrite === 'function') return window.portalWrite(key, value);
+        if (typeof window.portalWrite === 'function') {
+          try { return window.portalWrite(key, value); } catch(e) { /* não propaga erro do host */ }
+        }
         return;
       }
       const ls = window['local' + 'Storage'];
@@ -140,15 +142,22 @@ body.no-scroll{ overflow:hidden; }
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- Guard / RBAC -->
-<script src="js/auth-helper.js"></script>
+<script type="module" src="js/auth-helper.js">
 <script type="module" src="./api/proteger-pagina.js"></script>
 
   <!-- Bridge para a API local (routes.js). 
        Deixe exatamente ACIMA do script principal. -->
  <script type="module">
-  import { handleRequest } from './api/routes.js';
-  window.__apiCall = (endpoint, req = {}) =>
-    new Promise(resolve => handleRequest(endpoint, req, resolve));
+  (async function(){
+    try{
+      const mod = await import('./api/routes.js');
+      const handleRequest = mod && mod.handleRequest ? mod.handleRequest : function(endpoint, req, cb){ cb({ ok:false, error: 'handleRequest-unavailable' }); };
+      window.__apiCall = (endpoint, req = {}) => new Promise(resolve => handleRequest(endpoint, req, resolve));
+    }catch(e){
+      // Fallback seguro quando o módulo não exporta handleRequest ou não existe
+      window.__apiCall = (endpoint, req = {}) => Promise.resolve({ ok:false, error: 'routes-module-missing' });
+    }
+  })();
 </script>
 
 </head>
@@ -282,6 +291,6 @@ document.addEventListener("DOMContentLoaded",()=>{
 </script>
 
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

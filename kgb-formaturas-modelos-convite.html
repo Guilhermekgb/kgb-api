@@ -7,7 +7,7 @@
   <title>KGB FORMATURAS - Modelos de Convite</title>
 
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
 
   <!-- Estilos globais do sistema -->
   <link rel="stylesheet" href="style.css">
@@ -756,29 +756,28 @@ body.modo-pdf .a4-page {
 
   <script type="module" src="menu-lateral.js"></script>
 
-  <script src="./kgb-common.js"></script>
-<script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  <script type="module" src="./kgb-common.js"></script>
+  <script src="./api/proteger-pagina.js"></script>
+    <script>
+      const meta = document.querySelector('meta[name="page-permission"]');
+      const permissao = meta?.content?.trim();
+      try { if (permissao) window.guard({ permissao }); } catch(e){}
 
-    const meta = document.querySelector('meta[name="page-permission"]');
-    const permissao = meta?.content?.trim();
-    if (permissao) guard({ permissao });
+      try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 
-    aplicarPermissoesNaTela();
-
-    try {
-      const alvo = document.getElementById('menuLateral');
-      if (alvo) {
-        const obs = new MutationObserver((muts, o) => {
-          if (alvo.firstElementChild) {
-            aplicarPermissoesNaTela();
-            o.disconnect();
-          }
-        });
-        obs.observe(alvo, { childList: true });
-      }
-    } catch {}
-  </script>
+      try {
+        const alvo = document.getElementById('menuLateral');
+        if (alvo) {
+          const obs = new MutationObserver((muts, o) => {
+            if (alvo.firstElementChild) {
+              try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+              o.disconnect();
+            }
+          });
+          obs.observe(alvo, { childList: true });
+        }
+      } catch(e){}
+    </script>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -921,16 +920,32 @@ function lerDadosConviteURL() {
         try{
           const url = portalRead(LS_KEY_LOGO_FORMATURA, '');
           if (url && modeloUsarLogoPrincipal && modeloUsarLogoPrincipal.checked){
-            previewLogoImg.src = url;
-            previewLogoImg.style.display = 'block';
-            previewLogoTexto.style.display = 'none';
+            // Proteções defensivas: handlers para onload/onerror
+            previewLogoImg.onload = function(){
+              previewLogoImg.style.display = 'block';
+              previewLogoTexto.style.display = 'none';
+            };
+            previewLogoImg.onerror = function(){
+              console.warn('[modelos-convite] logo não carregou:', url);
+              try{ previewLogoImg.removeAttribute('src'); }catch(e){}
+              previewLogoImg.style.display = 'none';
+              previewLogoTexto.style.display = 'block';
+              previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
+            };
+            // Atribuição do src por último para evitar possíveis race conditions
+            try{ previewLogoImg.src = url; }catch(e){
+              console.warn('[modelos-convite] falha atribuindo src da logo', e);
+              previewLogoImg.style.display = 'none';
+              previewLogoTexto.style.display = 'block';
+              previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
+            }
           }else{
             previewLogoImg.style.display = 'none';
             previewLogoTexto.style.display = 'block';
             previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
           }
         }catch(e){
-          console.error('Erro ao carregar logo da formatura', e);
+          console.warn('Erro ao carregar logo da formatura', e);
           previewLogoImg.style.display = 'none';
           previewLogoTexto.style.display = 'block';
           previewLogoTexto.innerHTML = 'KGB<br>FORMATURAS';
@@ -1077,6 +1092,8 @@ const eventoEx    = dadosConvite.evento || 'Evento de formatura';
 const escolaEx    = dadosConvite.escola || 'ESCOLA';
 const anoEx       = dadosConvite.ano || 'AAAA';
 const numeroEx    = dadosConvite.numero || 'LETRA-0001-ANO';
+const horaEx      = dadosConvite.hora   || '00:00';
+const localEx     = dadosConvite.local  || 'Local do evento';
 
 
         if (previewNomeAluno)  previewNomeAluno.textContent  = nomeAlunoEx;
@@ -1311,7 +1328,7 @@ if (dadosConvite.evento) {
     });
   </script>
 
-  <script src="./js/auth-helper.js"></script>
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./js/auth-helper.js">
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

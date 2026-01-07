@@ -95,9 +95,9 @@
 <!-- 1) Helpers globais (module) -->
 <script type="module" src="./kgb-common.js"></script>
 
-<!-- 2) Guard / RBAC (module) -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<!-- 2) Guard / RBAC (global) -->
+<script type="module" src="js/auth-helper.js">
+<script src="./api/proteger-pagina.js"></script>
 
 <!-- 3) Biblioteca de PDF (usada pelo zapsign e pelo contrato.js) -->
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
@@ -315,12 +315,14 @@
 
   <!-- 1) Menu/Permissões -->
   <script type="module" src="menu-lateral.js"></script>
-  <script type="module">
-    import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
+  <script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();
-    if (permissao) guard({ permissao });
-    aplicarPermissoesNaTela();
+    try {
+      if (permissao) { try { (window.guard || guard)({ permissao }); } catch(e) {} }
+      else { try { window.guard && window.guard(); } catch(e) {} }
+    } catch(e) {}
+    try { aplicarPermissoesNaTela(); } catch(e) {}
   </script>
 
 
@@ -435,6 +437,6 @@
     })();
   </script>
 
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js">
 </body>
 </html>

@@ -1,0 +1,822 @@
+{
+  "total": 522,
+  "allow": 15,
+  "review": 58,
+  "forbidden": 449,
+  "by_file": {
+    "agenda-equipe.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 3
+    },
+    "agenda.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "agenda.js": {
+      "total": 6,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 6
+    },
+    "alertas.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "alertas.js": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "api/api-config.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "api/auth-helper.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "area-cliente.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "assinatura.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "auditoria.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "auditoria.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "cadastro-cliente.html": {
+      "total": 8,
+      "allow": 1,
+      "review": 1,
+      "forbidden": 6
+    },
+    "cadastro-evento.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "cadastro-usuario.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 2
+    },
+    "cardapios-e-produtos.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "cardapios-e-produtos.js": {
+      "total": 26,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 25
+    },
+    "categorias-gerais.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "categorias-gerais.js": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "checkin.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "checklist-execucao.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "checklist.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "checklist.js": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "cliente-detalhado.html": {
+      "total": 16,
+      "allow": 10,
+      "review": 1,
+      "forbidden": 5
+    },
+    "clientes-lista.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "clientes-lista.js": {
+      "total": 10,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 10
+    },
+    "colaboradores.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "comissoes.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "comissoes.js": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "configuracoes.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "contrato.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "custos-fixo.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "custos-fixo.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "dashboard.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 1
+    },
+    "dashboard.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "definicoes-evento.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "definicoes-evento.js": {
+      "total": 19,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 19
+    },
+    "degustacoes-disponiveis.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "documentacao-api.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "documentos-evento.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "documentos-evento.js": {
+      "total": 7,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 6
+    },
+    "estoque-insumos.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "estoque-setores.html": {
+      "total": 7,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 6
+    },
+    "etiquetas.js": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "evento-detalhado.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "eventos-arquivados.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 1
+    },
+    "eventos-arquivados.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "eventos.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "feiras.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 1
+    },
+    "feiras.js": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "fichas-tecnicas.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "fichas-tecnicas.js": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "fin-cartao.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "financeiro-analises.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "financeiro-categorias.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "financeiro-categorias.js": {
+      "total": 15,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 15
+    },
+    "financeiro-config.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "financeiro-config.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 2
+    },
+    "financeiro-evento.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 2,
+      "forbidden": 0
+    },
+    "financeiro-lancamentos.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 2,
+      "forbidden": 0
+    },
+    "financeiro-relatorios.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "financeiro-resumo.html": {
+      "total": 11,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 10
+    },
+    "financeiro-widgets.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "formulario-cliente.html": {
+      "total": 5,
+      "allow": 1,
+      "review": 1,
+      "forbidden": 3
+    },
+    "fornecedores.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "funil-leads.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "gerenciar-convites.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "index.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 2
+    },
+    "integracoes.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "itens-evento.html": {
+      "total": 21,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 20
+    },
+    "js/utils-evento-id.js": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "kgb-common.js": {
+      "total": 11,
+      "allow": 3,
+      "review": 2,
+      "forbidden": 6
+    },
+    "kgb-formaturas-aluno-detalhe.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "kgb-formaturas-alunos.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "kgb-formaturas-checkin.html": {
+      "total": 14,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 14
+    },
+    "kgb-formaturas-configuracoes.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "kgb-formaturas-contratos.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "kgb-formaturas-dashboard.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "kgb-formaturas-escolas.html": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "kgb-formaturas-eventos.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "kgb-formaturas-eventos.js": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "kgb-formaturas-financeiro.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "kgb-formaturas-formulario-online.html": {
+      "total": 8,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 8
+    },
+    "kgb-formaturas-formularios-recebidos.html": {
+      "total": 6,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 6
+    },
+    "kgb-formaturas-inadimplentes-arquivo.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "kgb-formaturas-modelos-convite.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "kgb-formaturas-relatorios.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "kgb-formaturas-relatorios.js": {
+      "total": 6,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 6
+    },
+    "kgb-formaturas-tipos-evento.html": {
+      "total": 8,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 8
+    },
+    "layout-editor.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "lista-evento.html": {
+      "total": 18,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 17
+    },
+    "logs-tecnicos.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "logs.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "modelos-checklist.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "modelos.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "montagem-cardapio.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "notificacoes-internas.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 1
+    },
+    "notificacoes-responsavel.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 4
+    },
+    "notificacoes-vendedor.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "notificacoes.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "notificacoes.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "orcamento-detalhado.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "orcamento-detalhado.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "orcamento.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 1
+    },
+    "painel-cobrancas.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "painel-cobrancas.js": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "painel-leads.html": {
+      "total": 4,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 4
+    },
+    "perfis.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 5
+    },
+    "permissoes.html": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "permissoes.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "pos-evento.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "public/js/area-cliente.js": {
+      "total": 13,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 13
+    },
+    "public/js/fotos-shim.js": {
+      "total": 11,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 11
+    },
+    "redefinir-senha.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "relatorio-evento.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 2
+    },
+    "responsavel-eventos.html": {
+      "total": 6,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 6
+    },
+    "scripts/export-browser-storage.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "scripts/filter-manifest.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "scripts/generate-localstorage-manifest.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "scripts/replace-fotos-sync-reads.js": {
+      "total": 7,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 7
+    },
+    "seguranca.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "server.js": {
+      "total": 1,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 1
+    },
+    "set-api.html": {
+      "total": 1,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 0
+    },
+    "sync-shared.js": {
+      "total": 2,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 2
+    },
+    "template-utils.js": {
+      "total": 3,
+      "allow": 0,
+      "review": 0,
+      "forbidden": 3
+    },
+    "teste-api.html": {
+      "total": 2,
+      "allow": 0,
+      "review": 2,
+      "forbidden": 0
+    },
+    "usuarios.html": {
+      "total": 5,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 4
+    },
+    "variaveis-modelos.html": {
+      "total": 3,
+      "allow": 0,
+      "review": 1,
+      "forbidden": 2
+    }
+  },
+  "examples": [
+    {
+      "file": "agenda-equipe.html",
+      "line": "235",
+      "code": "try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; }"
+    },
+    {
+      "file": "agenda-equipe.html",
+      "line": "239",
+      "code": "try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch(e) {}"
+    },
+    {
+      "file": "agenda-equipe.html",
+      "line": "241",
+      "code": "function portalReadSession(key, fallback) { if (isPortalMode()) return fallback; try { const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; } }"
+    },
+    {
+      "file": "agenda.html",
+      "line": "18",
+      "code": "const v = s && s.getItem ? s.getItem(key) : null;"
+    },
+    {
+      "file": "agenda.html",
+      "line": "27",
+      "code": "if (s && s.setItem) s.setItem(key, String(value));"
+    },
+    {
+      "file": "agenda.js",
+      "line": "13",
+      "code": "const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;"
+    },
+    {
+      "file": "agenda.js",
+      "line": "14",
+      "code": "const v = ls && ls.getItem ? ls.getItem(key) : null;"
+    },
+    {
+      "file": "agenda.js",
+      "line": "17",
+      "code": "function portalWrite(key, value){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.setItem) ls.setItem(key, String(value)); }catch{}"
+    },
+    {
+      "file": "agenda.js",
+      "line": "19",
+      "code": "function portalRemove(key){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.removeItem) ls.removeItem(key); }catch{}"
+    },
+    {
+      "file": "agenda.js",
+      "line": "21",
+      "code": "function portalReadSession(key, fallback){ try{ if (isPortalMode()) return typeof fallback==='function'?fallback():fallback; const ss = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; const v = ss && ss.getItem ? ss.getItem(key) : null; return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v; }catch{ return typeof fallback==='function'?fallback"
+    }
+  ]
+}

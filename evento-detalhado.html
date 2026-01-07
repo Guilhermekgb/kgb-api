@@ -38,6 +38,14 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
     console.log("[KGB] __API_BASE__ =", base);
   })();
 </script>
+
+<!-- Fallback leve de memGet/memGetJSON para compatibilidade quando não houver helper global -->
+<script>
+  if (typeof memGet === 'undefined') {
+    function memGet(key, def = null){ try { return (window.memStore && Object.prototype.hasOwnProperty.call(window.memStore.cache || {}, key)) ? window.memStore.cache[key] : def; } catch(e){ return def; } }
+    function memGetJSON(key, def = null){ try { const v = memGet(key, null); return v == null ? def : (typeof v === 'string' ? JSON.parse(v) : v); } catch(e){ return def; } }
+  }
+</script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
 
 
@@ -90,8 +98,13 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 </script>
 
 <!-- 4) Guard / RBAC -->
-<script src="js/auth-helper.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="js/auth-helper.js"></script>
+<script src="./api/proteger-pagina.js"></script>
+<script>
+  const meta = document.querySelector('meta[name="page-permission"]');
+  if (meta?.content) guard({ permissao: meta.content });
+  aplicarPermissoesNaTela();
+</script>
 
 <style>
 
@@ -451,14 +464,7 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
 })();
 </script>
 
-<!-- Proteção/Permissões -->
-<script type="module">
-  import guard, { aplicarPermissoesNaTela } from './api/proteger-pagina.js';
-  const meta = document.querySelector('meta[name="page-permission"]');
-  const permissao = (meta && meta.content || '').trim();
-  if (permissao) guard({ permissao });
-  aplicarPermissoesNaTela();
-</script>
+<!-- Proteção/Permissões (já aplicada acima) -->
 
 <!-- Modal: Comissões -->
 <dialog id="dlg-comissoes" class="modal-soft" hidden>
@@ -698,10 +704,8 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
   }catch(e){}
 </script>
 <!-- storage-adapter centralizado via kgb-common.js loader -->
-<script type="module" src="evento-detalhado.js"></script>
 
-
-  <script src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
 </body>
 </html>
 

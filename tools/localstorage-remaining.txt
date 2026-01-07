@@ -1,0 +1,522 @@
+agenda-equipe.html:23:try { (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem("API_BASE", base) : null; } catch(e) {}
+agenda-equipe.html:235:try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; }
+agenda-equipe.html:239:try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch(e) {}
+agenda-equipe.html:241:function portalReadSession(key, fallback) { if (isPortalMode()) return fallback; try { const s = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; } }
+agenda.html:18:const v = s && s.getItem ? s.getItem(key) : null;
+agenda.html:27:if (s && s.setItem) s.setItem(key, String(value));
+agenda.js:13:const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+agenda.js:14:const v = ls && ls.getItem ? ls.getItem(key) : null;
+agenda.js:17:function portalWrite(key, value){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.setItem) ls.setItem(key, String(value)); }catch{}
+agenda.js:19:function portalRemove(key){ try{ if (isPortalMode()) return; const ls = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (ls && ls.removeItem) ls.removeItem(key); }catch{}
+agenda.js:21:function portalReadSession(key, fallback){ try{ if (isPortalMode()) return typeof fallback==='function'?fallback():fallback; const ss = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; const v = ss && ss.getItem ? ss.getItem(key) : null; return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v; }catch{ return typeof fallback==='function'?fallback():fallback; }}
+agenda.js:22:function portalWriteSession(key, value){ try{ if (isPortalMode()) return; const ss = (typeof window !== 'undefined') ? window['session'+'Storage'] : null; if (ss && ss.setItem) ss.setItem(key, String(value)); }catch{}
+alertas.html:17:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+alertas.js:1:// === alertas.js — Painel de Alertas (localStorage) ===
+alertas.js:65:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+alertas.js:66:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+alertas.js:382:// 1) Mudanças no LocalStorage (mesma ou outra aba)
+api/api-config.js:7:// Não ler/gravar em localStorage neste arquivo de infra.
+api/auth-helper.js:35:// - Não usa localStorage/sessionStorage
+area-cliente.html:21:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+assinatura.html:337:const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+assinatura.html:347:if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+assinatura.html:529:function salvarPdfNoLocalStorage(pdfDataUri, dadosServidor) {
+assinatura.html:572:console.error("[Assinatura] Erro ao salvar PDF no localStorage:", e);
+assinatura.html:943:salvarPdfNoLocalStorage(dataUri, dadosServidor);
+auditoria.html:19:return window['local'+'Storage'].getItem(key);
+auditoria.html:30:window['local'+'Storage'].setItem(key, value);
+auditoria.html:277:<!-- Backend local (rotas sobre LocalStorage) – carrega uma única vez -->
+auditoria.js:55:try { return (typeof window !== 'undefined' && window['local' + 'Storage']) ? window['local' + 'Storage'].getItem(key) : null; } catch { return null; }
+auditoria.js:58:try { if (typeof window !== 'undefined' && window['local' + 'Storage']) window['local' + 'Storage'].setItem(key, val); } catch {}
+cadastro-cliente.html:22:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+cadastro-cliente.html:480:window['local'+'Storage'].setItem('voltarParaEvento', 'true');
+cadastro-cliente.html:481:window['local'+'Storage'].setItem('clienteSelecionado', String(clienteId));
+cadastro-cliente.html:558:const t = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('token') : null) || ((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('token') : null);
+cadastro-cliente.html:798:window['local'+'Storage'].setItem('clienteSelecionado', String(novoCliente.id));
+cadastro-cliente.html:799:window['local'+'Storage'].setItem('clienteRecemCriado', JSON.stringify(novoCliente));
+cadastro-cliente.html:800:window['local'+'Storage'].setItem('voltarParaEvento', 'true');
+cadastro-cliente.html:805:window['local'+'Storage'].setItem('clienteSelecionado', String(novoCliente.id));
+cadastro-evento.html:24:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+cadastro-usuario.html:20:try { window['local'+'Storage']?.setItem("API_BASE", base); } catch(e) {}
+cadastro-usuario.html:273:const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+cadastro-usuario.html:285:if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+cardapios-e-produtos.html:22:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+cardapios-e-produtos.js:15:function carregarDoLocalStorage() {
+cardapios-e-produtos.js:16:try { produtos   = (typeof readLS === 'function' ? (readLS('produtosBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("produtosBuffet") : '[]') || [])); } catch { produtos = []; }
+cardapios-e-produtos.js:17:try { adicionais = (typeof readLS === 'function' ? (readLS('adicionaisBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("adicionaisBuffet") : '[]') || [])); } catch { adicionais = []; }
+cardapios-e-produtos.js:18:try { servicos   = (typeof readLS === 'function' ? (readLS('servicosBuffet',[])||[]) : (JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("servicosBuffet") : '[]') || [])); } catch { servicos = []; }
+cardapios-e-produtos.js:22:function salvarNoLocalStorage() {
+cardapios-e-produtos.js:30:window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
+cardapios-e-produtos.js:32:window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(cardapios));
+cardapios-e-produtos.js:33:window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
+cardapios-e-produtos.js:34:window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
+cardapios-e-produtos.js:64:salvarNoLocalStorage();
+cardapios-e-produtos.js:74:carregarDoLocalStorage();
+cardapios-e-produtos.js:117:(window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem("API_BASE") : '') ||
+cardapios-e-produtos.js:411:window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
+cardapios-e-produtos.js:413:let espelho = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("cardapiosBuffet") : '[]') || [];
+cardapios-e-produtos.js:416:window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(espelho));
+cardapios-e-produtos.js:419:window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
+cardapios-e-produtos.js:493:salvarNoLocalStorage();
+cardapios-e-produtos.js:701:window['local'+'Storage'].setItem("produtosBuffet", JSON.stringify(produtos));
+cardapios-e-produtos.js:703:let cs = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("cardapiosBuffet") : '[]') || [];
+cardapios-e-produtos.js:705:window['local'+'Storage'].setItem("cardapiosBuffet", JSON.stringify(cs));
+cardapios-e-produtos.js:835:window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
+cardapios-e-produtos.js:998:window['local'+'Storage'].setItem("adicionaisBuffet", JSON.stringify(adicionais));
+cardapios-e-produtos.js:1055:const categorias = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("categoriasServicos") : '[]') || [];
+cardapios-e-produtos.js:1067:const fornecedores = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("fornecedoresBuffet") : '[]') || [];
+cardapios-e-produtos.js:1107:window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
+cardapios-e-produtos.js:1171:window['local'+'Storage'].setItem("servicosBuffet", JSON.stringify(servicos));
+categorias-gerais.html:21:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+categorias-gerais.js:88:// Legacy behavior: read from localStorage when not in portal mode
+categorias-gerais.js:89:const __storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+categorias-gerais.js:97:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+categorias-gerais.js:98:return (storage && typeof storage.getItem === 'function') ? storage.getItem(key) : null;
+categorias-gerais.js:115:const __storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+categorias-gerais.js:122:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+categorias-gerais.js:124:storage.setItem(chaveLocal, JSON.stringify(arr));
+checkin.html:29:const raw = window['local'+'Storage'].getItem(k);
+checkin.html:39:window['local'+'Storage'].setItem(k, v);
+checklist-execucao.html:21:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+checklist.html:212:function portalRead(key, fallback){ try{ if (isPortalMode()){ try{ return (window.getJSON ? window.getJSON(key, fallback) : (window.__MEM_CACHE__?window.__MEM_CACHE__[key]:fallback)); }catch{return typeof fallback==='function'?fallback():fallback;} } const s=window['local'+'Storage']; const v = s && s.getItem ? s.getItem(key) : null; return v===null||v===undefined ? (typeof fallback==='function'?fallback():fallback) : v; }catch{return typeof fallback==='function'?fallback():fallback;}}
+checklist.html:213:function portalWrite(key, value){ try{ if (isPortalMode()) return; const s=window['local'+'Storage']; if (s && s.setItem) s.setItem(key, String(value)); }catch{}
+checklist.html:215:function portalRemove(key){ try{ if (isPortalMode()) return; const s=window['local'+'Storage']; if (s && s.removeItem) s.removeItem(key); }catch{}
+checklist.js:54:const raw = (window['local'+'Storage'] && window['local'+'Storage'].getItem(k)) || (window['session'+'Storage'] && window['session'+'Storage'].getItem(k));
+checklist.js:62:try{ window['local'+'Storage']?.setItem(k, str); }catch(e){}
+checklist.js:85:// Carrega um evento do backend (com fallback para o localStorage "eventos")
+checklist.js:167:// Carrega evento pela API, com fallback pro localStorage
+cliente-detalhado.html:22:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+cliente-detalhado.html:42:if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('auth.token') : null)) {
+cliente-detalhado.html:43:window['local'+'Storage'].setItem('auth.token', token);
+cliente-detalhado.html:44:window['local'+'Storage'].setItem('auth.user', JSON.stringify(devUser));
+cliente-detalhado.html:45:window['local'+'Storage'].setItem('auth.exp', String(exp));
+cliente-detalhado.html:47:if (!((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('auth.token') : null)) {
+cliente-detalhado.html:48:window['session'+'Storage'].setItem('auth.token', token);
+cliente-detalhado.html:50:window['session'+'Storage'].setItem('auth.exp', String(exp));
+cliente-detalhado.html:53:if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('usuarioLogado') : null))  window['local'+'Storage'].setItem('usuarioLogado', JSON.stringify(devUser));
+cliente-detalhado.html:54:if (!((window['session'+'Storage'] && window['session'+'Storage'].getItem) ? window['session'+'Storage'].getItem('usuarioLogado') : null)) window['session'+'Storage'].setItem('usuarioLogado', JSON.stringify(devUser));
+cliente-detalhado.html:55:if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('usuarioAtual') : null))   window['local'+'Storage'].setItem('usuarioAtual', JSON.stringify(devUser));
+cliente-detalhado.html:718:if (!((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('auth.token') : null)) {
+cliente-detalhado.html:719:window['local'+'Storage'].setItem('auth.token', 'dev-token');
+cliente-detalhado.html:720:window['local'+'Storage'].setItem('auth.user', JSON.stringify({
+cliente-detalhado.html:744:window['local'+'Storage'].setItem('clienteSelecionado', clienteSelecionado.id);
+cliente-detalhado.html:745:window['local'+'Storage'].setItem('voltarParaEvento', 'true');
+clientes-lista.html:31:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+clientes-lista.js:51:// portal-safe helpers (avoid literal localStorage/sessionStorage access)
+clientes-lista.js:57:const storage = window['local'+'Storage'];
+clientes-lista.js:59:const raw = storage.getItem(key);
+clientes-lista.js:71:const storage = window['local'+'Storage'];
+clientes-lista.js:74:storage.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+clientes-lista.js:137:function scanLocalStoragePorClientes(){
+clientes-lista.js:138:// In portal mode we must not scan localStorage
+clientes-lista.js:142:const storage = window['local'+'Storage'];
+clientes-lista.js:150:const raw = storage.getItem(key);
+clientes-lista.js:291:// 2) Procura no localStorage "eventos"
+colaboradores.html:20:const v = s && s.getItem ? s.getItem(key) : null;
+colaboradores.html:29:if (s && s.setItem) s.setItem(key, String(value));
+colaboradores.html:282:// ===== App: Colaboradores (LocalStorage -> portal-safe) =====
+comissoes.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+comissoes.js:3:Agora lê de: localStorage.financeiroGlobal (lancamentos.isComissao = true)
+comissoes.js:14:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+comissoes.js:15:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+comissoes.js:29:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+comissoes.js:31:storage.setItem(k, JSON.stringify(v));
+comissoes.js:74:// Snapshot atual do financeiro (localStorage)
+comissoes.js:434:// se outro lugar da aplicação atualizar o financeiroGlobal via localStorage,
+configuracoes.html:40:const v = s && s.getItem ? s.getItem(key) : null;
+configuracoes.html:49:if (s && s.setItem) s.setItem(key, String(value));
+contrato.html:21:return window['local'+'Storage'].getItem(key);
+contrato.html:32:window['local'+'Storage'].setItem(key, value);
+custos-fixo.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+custos-fixo.js:3:// Senão, mantém tudo localStorage como fallback (modo atual)
+custos-fixo.js:15:const v = s && s.getItem ? s.getItem(key) : null;
+custos-fixo.js:24:if (s && s.setItem) s.setItem(key, String(value));
+dashboard.html:21:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+dashboard.html:33:<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+dashboard.js:1481:const leads = JSON.parse(sessionStorage.getItem("leads") || "[]");
+definicoes-evento.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+definicoes-evento.js:128:const ult = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(LS_CARD_SELEC) : null) || 'null');
+definicoes-evento.js:153:const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
+definicoes-evento.js:203:const a = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('cardapiosBuffet') : null) || '[]');
+definicoes-evento.js:204:const b = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('produtosBuffet') : null) || '[]').filter(p=>p?.tipo==='cardapio');
+definicoes-evento.js:216:try{ try { window['local'+'Storage'].setItem(LS_CARD_SELEC, JSON.stringify(cardapioAtual)); }catch{} }catch{}
+definicoes-evento.js:222:const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('composicaoCardapio_'+cardapioId) : null) || '[]');
+definicoes-evento.js:252:const mont = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null) || 'null');
+definicoes-evento.js:349:function carregarSessao(){ try{ return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(saveKey()) : null) || 'null'); }catch{ return null; } }
+definicoes-evento.js:351:if (sessaoParcial && typeof sessaoParcial === 'object'){ try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(sessaoParcial)); }catch{} atualizarSaveStatus('Salvo'); return; }
+definicoes-evento.js:391:try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(s)); }catch{}
+definicoes-evento.js:439:try{ window['local'+'Storage'].setItem('def_evento_autosave', JSON.stringify(autosaveLigado)); }catch{}
+definicoes-evento.js:462:function restaurarAutosaveFlag(){ try { autosaveLigado = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('def_evento_autosave') : null) || 'true'); } catch { autosaveLigado = true; } const t = $('#toggleAutosave'); if (t) t.checked = !!autosaveLigado; }
+definicoes-evento.js:555:try{ window['local'+'Storage'].setItem(saveKey(), JSON.stringify(sessao)); }catch{}
+definicoes-evento.js:557:const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
+definicoes-evento.js:566:try{ window['local'+'Storage'].setItem('eventos', JSON.stringify(arr)); }catch{}
+definicoes-evento.js:960:try{ window['local'+'Storage'].setItem(LAYOUT_KEY(), JSON.stringify(payload)); }catch{}
+definicoes-evento.js:963:const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]');
+definicoes-evento.js:972:try{ window['local'+'Storage'].setItem('eventos', JSON.stringify(arr)); }catch{}
+definicoes-evento.js:986:const payload = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(LAYOUT_KEY()) : null) || 'null');
+degustacoes-disponiveis.html:18:return window['local'+'Storage'].getItem(key);
+degustacoes-disponiveis.html:29:window['local'+'Storage'].setItem(key, value);
+documentacao-api.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+documentos-evento.html:24:try { window['local'+'Storage'].setItem("__API_BASE__", base); } catch(e){}
+documentos-evento.js:7:|| (function(){ try { return ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '') || ''; } catch(e){ return ''; } })();
+documentos-evento.js:14:const arr = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : null) || '[]') || [];
+documentos-evento.js:38:const ls = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('API_BASE') : '') || '';
+documentos-evento.js:85:try { window['local'+'Storage'].setItem(key, JSON.stringify(normalizados)); } catch {}
+documentos-evento.js:113:const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null) || '[]';
+documentos-evento.js:275:return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || { lancamentos:[], parcelas:[] };
+documentos-evento.js:286:|| ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '')
+estoque-insumos.html:10:// Helpers portal-aware inseridos para evitar acessos diretos a localStorage
+estoque-insumos.html:25:const ls = window['local'+'Storage'];
+estoque-insumos.html:26:return ls ? ls.getItem(key) : null;
+estoque-insumos.html:38:const ls = window['local'+'Storage'];
+estoque-insumos.html:40:ls.setItem(key, String(value));
+estoque-setores.html:22:try { portalWrite ? portalWrite("API_BASE", base) : (function(){ try{ if (!window.__PORTAL_MODE__) { const s = window['local'+'Storage']; s && s.setItem && s.setItem("API_BASE", base); } }catch{} })(); } catch(e) {}
+estoque-setores.html:49:const v = s && s.getItem ? s.getItem(key) : null;
+estoque-setores.html:62:if (s && s.setItem) s.setItem(key, String(value));
+estoque-setores.html:305://  Versão "híbrida": usa API se existir, e localStorage como cópia
+estoque-setores.html:347:console.warn("Erro lendo localStorage setores", e);
+estoque-setores.html:356:console.warn("Erro salvando setores no localStorage", e);
+estoque-setores.html:438:// 1) começa com o que já tem no localStorage
+etiquetas.js:19:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+etiquetas.js:20:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+etiquetas.js:34:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+etiquetas.js:36:storage.setItem(k, JSON.stringify(v));
+etiquetas.js:110:// guarda os HTMLs grandes só em RAM para não estourar o localStorage
+evento-detalhado.js:1091:try { store.setItem(key, value); return true; } catch(e){ console.warn(e); return false; }
+eventos-arquivados.html:13:<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+eventos-arquivados.html:37:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+eventos-arquivados.js:6:function portalRead(key, fallback) { if (isPortalMode()) return fallback; try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch (e) { return fallback; } }
+eventos-arquivados.js:7:function portalWrite(key, value) { if (isPortalMode()) return; try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch (e) {} }
+eventos-arquivados.js:64:// Carrega base dos arquivados da API (quando disponível) com fallback pro localStorage
+eventos.html:30:// fallback sem usar "localStorage.getItem" literal (para não contar como legado)
+eventos.html:31:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+eventos.html:32:const rawE = storage && typeof storage.getItem === 'function' ? storage.getItem('eventos') : null;
+eventos.html:34:sel = storage && typeof storage.getItem === 'function' ? storage.getItem('eventoSelecionado') : null;
+feiras.html:22:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+feiras.html:35:<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+feiras.js:1:// ===== FEIRAS – Lado cliente (LocalStorage-first) =====
+feiras.js:17:// Portal-aware helpers (avoid direct localStorage access)
+feiras.js:26:const ls = window['local'+'Storage'];
+feiras.js:27:return ls ? ls.getItem(key) : null;
+feiras.js:40:const ls = window['local'+'Storage'];
+feiras.js:42:ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+feiras.js:925:// Lê usuários de chaves comuns do localStorage e deduplica por nome/email minúsculo
+fichas-tecnicas.html:23:const v = s && s.getItem ? s.getItem(key) : null;
+fichas-tecnicas.html:36:if (s && s.setItem) s.setItem(key, String(value));
+fichas-tecnicas.js:11:// Portal-aware helpers (avoid direct localStorage access)
+fichas-tecnicas.js:22:const ls = window['local'+'Storage'];
+fichas-tecnicas.js:23:return ls ? ls.getItem(key) : null;
+fichas-tecnicas.js:35:const ls = window['local'+'Storage']; if (!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+fin-cartao.js:8:const readLS = (k, fb)=>{ try{ return JSON.parse(window['local'+'Storage'].getItem(k)) ?? fb; } catch{ return fb; } };
+fin-cartao.js:9:const writeLS = (k, v)=>{ try{ window['local'+'Storage'].setItem(k, JSON.stringify(v||{})); }catch{} };
+financeiro-analises.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+financeiro-categorias.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+financeiro-categorias.js:4:const getLS = (k, fb) => { try { const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); return JSON.parse(raw) ?? fb; } catch { return fb; } };
+financeiro-categorias.js:5:const setLS = (k, v) => { try { window['local'+'Storage'].setItem(k, JSON.stringify(v)); } catch {} };
+financeiro-categorias.js:66:try { g = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || {}; } catch { g = {}; }
+financeiro-categorias.js:74:const cfg   = typeof ensureConfig === 'function' ? ensureConfig() : (JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('configFinanceiro') : null) || '{}')||{});
+financeiro-categorias.js:124:try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g)); } catch {}
+financeiro-categorias.js:125:try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch {}
+financeiro-categorias.js:185:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-categorias.js:196:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-categorias.js:204:try { g = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("financeiroGlobal") : null) || "{}") || {}; } catch { g = {}; }
+financeiro-categorias.js:323:try { FG = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("financeiroGlobal") : null) || "{}")||{}; } catch { FG = {}; }
+financeiro-categorias.js:468:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-categorias.js:509:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-categorias.js:521:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-categorias.js:546:try { return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}') || {}; }
+financeiro-categorias.js:642:try { window['local'+'Storage'].setItem("configFinanceiro:ping", String(Date.now())); } catch {}
+financeiro-config.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+financeiro-config.js:2:const API_BASE = (window['local'+'Storage'].getItem("API_BASE") || "http://localhost:3001").replace(/\/$/, "");
+financeiro-config.js:12:const getLS = (k, fb) => { try { return JSON.parse(window['local'+'Storage'].getItem(k)) ?? fb; } catch { return fb; } };
+financeiro-config.js:13:const setLS = (k, v) => { try { window['local'+'Storage'].setItem(k, JSON.stringify(v)); } catch(e){ alert("Falha ao salvar preferências."); } };
+financeiro-evento.html:12:try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+financeiro-evento.html:45:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+financeiro-lancamentos.html:13:try { localStorage.setItem('API_BASE', RENDER); } catch(e){}
+financeiro-lancamentos.html:46:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+financeiro-relatorios.js:17:function readLS(k, fb){ try{ const v=JSON.parse(window['local'+'Storage'].getItem(k)||'null'); return v??fb; }catch{ return fb; } }
+financeiro-relatorios.js:39:const cfg = JSON.parse(window['local'+'Storage'].getItem('configFinanceiro') || '{}') || {};
+financeiro-resumo.html:24:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+financeiro-resumo.html:342:const readLS = (k, fb) => { try{ const raw = ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(k) : null); const v = raw ? JSON.parse(raw) : null; return (v ?? fb); }catch{return fb;} };
+financeiro-resumo.html:776:try{ return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(FGKEY) : null) || '{}')||{}; }catch{return {}}
+financeiro-resumo.html:780:try{ window['local'+'Storage'].setItem(FGKEY, JSON.stringify(g)); }catch{}
+financeiro-resumo.html:781:try{ window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); }catch{}
+financeiro-resumo.html:789:try{ window['local'+'Storage'].setItem('backup:financeiroGlobal:' + Date.now(), JSON.stringify(g)); }catch{}
+financeiro-resumo.html:1291:try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g2)); } catch(e) {}
+financeiro-resumo.html:1292:try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch(e) {}
+financeiro-resumo.html:1409:try { window['local'+'Storage'].setItem('financeiroGlobal', JSON.stringify(g)); } catch(e) {}
+financeiro-resumo.html:1410:try { window['local'+'Storage'].setItem('financeiroGlobal:ping', String(Date.now())); } catch(e) {}
+financeiro-resumo.html:1436:function parseG(){ try { return JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(GKEY) : null) || '{}')||{}; } catch { return {}; } }
+financeiro-widgets.js:3:const read = k => { try{return JSON.parse(window['local'+'Storage'].getItem(k)||'null')}catch{return null} };
+formulario-cliente.html:22:try { window['local'+'Storage'] && window['local'+'Storage'].setItem && window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+formulario-cliente.html:227:const storage = window['local'+'Storage'];
+formulario-cliente.html:229:const raw = storage.getItem(key);
+formulario-cliente.html:240:const storage = window['local'+'Storage']; if (storage && typeof storage.setItem === 'function'){ try{ storage.setItem(key, JSON.stringify(value)); }catch{} }
+formulario-cliente.html:386:const token = portalRead('token', null) || (function(){ try{ const s = window['session'+'Storage']; return s && s.getItem && s.getItem('token'); }catch{return null;} })();
+fornecedores.html:342:const v = s && s.getItem ? s.getItem(key) : null;
+fornecedores.html:355:if (s && s.setItem) s.setItem(key, String(value));
+funil-leads.html:26:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+gerenciar-convites.html:22:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+index.html:18:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+index.html:57:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+index.html:58:return (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+integracoes.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+itens-evento.html:25:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+itens-evento.html:202:const rawEvt = (window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoTemp') : '{}';
+itens-evento.html:208:const fromLS = Number(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('quantidadeConvidadosEvento') : '0') || 0);
+itens-evento.html:352:const eventos = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
+itens-evento.html:477:((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventoSelecionado') : '') || ''
+itens-evento.html:524:const glob = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiroGlobal') : null) || '{}');
+itens-evento.html:533:const fx = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(chave) : null) || '{}');
+itens-evento.html:541:const ponte = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('financeiro:return') : null) || '{}');
+itens-evento.html:589:window.produtos   = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("produtosBuffet") : null) || "[]");
+itens-evento.html:590:window.adicionais = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("adicionaisBuffet") : null) || "[]");
+itens-evento.html:591:window.servicos   = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("servicosBuffet") : null) || "[]");
+itens-evento.html:600:const eidDom = params.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
+itens-evento.html:626:const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
+itens-evento.html:673:const eid = params.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
+itens-evento.html:704:try { window['local'+'Storage'].setItem("itensSelecionadosEvento", JSON.stringify(selecionados)); } catch {}
+itens-evento.html:705:try { window['local'+'Storage'].setItem("quantidadeConvidadosEvento", String(qtd)); } catch {}
+itens-evento.html:709:const id  = usp.get("id") || ((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : '') || "";
+itens-evento.html:714:const eventos = JSON.parse(((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : null) || "[]");
+itens-evento.html:723:try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+itens-evento.html:725:try { window['local'+'Storage'].setItem("evt:lastUpdate:" + id, String(Date.now())); } catch {}
+itens-evento.html:731:try { window['local'+'Storage'].removeItem("itensEvento:returnTo"); } catch {}
+js/utils-evento-id.js:12:// Utilitário com fallback legível (apenas leitura) — não escreve no localStorage
+js/utils-evento-id.js:23:} else if (typeof localStorage !== 'undefined') {
+js/utils-evento-id.js:24:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+js/utils-evento-id.js:25:ls = (storage && typeof storage.getItem === 'function') ? storage.getItem('eventoSelecionado') : null;
+kgb-common.js:28:try { return window['local'+'Storage'] && window['local'+'Storage'].getItem ? (window['local'+'Storage'].getItem('KGB_TOKEN') || '') : ''; } catch (e) { return ''; }
+kgb-common.js:31:try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') window['local'+'Storage'].setItem('KGB_TOKEN', String(t || '')); } catch (e) {}
+kgb-common.js:34:try { if (window['local'+'Storage'] && typeof window['local'+'Storage'].removeItem === 'function') window['local'+'Storage'].removeItem('KGB_TOKEN'); } catch (e) {}
+kgb-common.js:37:// wrappers para acesso seguro ao localStorage (centraliza handling de erros)
+kgb-common.js:38:function _lsGet(k, fb = null){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function') return window['local'+'Storage'].getItem(k); return fb; }catch{return fb;} }
+kgb-common.js:39:function _lsSet(k, v){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].setItem === 'function') return window['local'+'Storage'].setItem(k, v); }catch{} }
+kgb-common.js:40:function _lsRemove(k){ try{ if (window['local'+'Storage'] && typeof window['local'+'Storage'].removeItem === 'function') return window['local'+'Storage'].removeItem(k); }catch{} }
+kgb-common.js:95:const nativeLS = (window['local'+'Storage']) || null;
+kgb-common.js:134:try { (window['session'+'Storage'] && window['session'+'Storage'].removeItem) ? window['session'+'Storage'].removeItem(k) : null; } catch(e){}
+kgb-common.js:421:try { override = window['local'+'Storage'] ? window['local'+'Storage'].getItem('API_BASE') || null : null; } catch (e) { override = null; }
+kgb-common.js:427:try { window['local'+'Storage'] && window['local'+'Storage'].removeItem('API_BASE'); } catch (e) {}
+kgb-formaturas-aluno-detalhe.js:17:const native = (window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem(key) : null;
+kgb-formaturas-aluno-detalhe.js:26:const nativeSet = (window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem : null;
+kgb-formaturas-alunos.html:503:// Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+kgb-formaturas-alunos.html:518:return ls ? ls.getItem(key) : null;
+kgb-formaturas-alunos.html:530:if (ls) ls.setItem(key, value);
+kgb-formaturas-checkin.html:468:<!-- preenchido via JS com eventos do localStorage -->
+kgb-formaturas-checkin.html:753:/* ---------- CONSTANTES LOCALSTORAGE ---------- */
+kgb-formaturas-checkin.html:818:: (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+kgb-formaturas-checkin.html:819:? window['local'+'Storage'].getItem(LS_KEY_EVENTOS)
+kgb-formaturas-checkin.html:837:const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_EVENTOS, JSON.stringify(lista));
+kgb-formaturas-checkin.html:852:: (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+kgb-formaturas-checkin.html:853:? window['local'+'Storage'].getItem(LS_KEY_CONVITES)
+kgb-formaturas-checkin.html:871:const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_CONVITES, JSON.stringify(lista));
+kgb-formaturas-checkin.html:886:: (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+kgb-formaturas-checkin.html:887:? window['local'+'Storage'].getItem(LS_KEY_FORMANDOS)
+kgb-formaturas-checkin.html:905:const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_FORMANDOS, JSON.stringify(lista));
+kgb-formaturas-checkin.html:920:: (typeof window !== 'undefined' && window['local'+'Storage'] && typeof window['local'+'Storage'].getItem === 'function')
+kgb-formaturas-checkin.html:921:? window['local'+'Storage'].getItem(LS_KEY_HISTORICO)
+kgb-formaturas-checkin.html:939:const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(LS_KEY_HISTORICO, JSON.stringify(lista));
+kgb-formaturas-configuracoes.html:471:// Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+kgb-formaturas-configuracoes.html:487:return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+kgb-formaturas-configuracoes.html:500:if (ls) ls.setItem(key, value);
+kgb-formaturas-configuracoes.html:716:try { window['local' + 'Storage']?.removeItem(STORAGE_KEY); } catch (e) {}
+kgb-formaturas-contratos.html:535:// Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+kgb-formaturas-contratos.html:551:return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+kgb-formaturas-contratos.html:564:if (ls) ls.setItem(key, value);
+kgb-formaturas-contratos.html:603:/* ---------- LOCALSTORAGE ---------- */
+kgb-formaturas-dashboard.html:1135:function carregarArrayLocalStorage(chave) {
+kgb-formaturas-dashboard.html:1148:financeiroAlunos = carregarArrayLocalStorage(LS_KEY_FINANCEIRO);
+kgb-formaturas-dashboard.html:1150:formularios      = carregarArrayLocalStorage(LS_KEY_FORMULARIOS);
+kgb-formaturas-dashboard.html:1227:const eventosCadastrados = carregarArrayLocalStorage(LS_KEY_EVENTOS);
+kgb-formaturas-dashboard.html:1236:const escolasCadastradas = carregarArrayLocalStorage(LS_KEY_ESCOLAS);
+kgb-formaturas-escolas.html:606:/* ---------- LOCALSTORAGE ---------- */
+kgb-formaturas-escolas.html:611:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-escolas.html:612:const texto = (storage && typeof storage.getItem === 'function') ? storage.getItem(STORAGE_KEY) : null;
+kgb-formaturas-escolas.html:617:console.warn('Erro ao carregar escolas do localStorage:', e);
+kgb-formaturas-escolas.html:624:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-escolas.html:625:if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(lista));
+kgb-formaturas-escolas.html:627:console.warn('Erro ao salvar escolas no localStorage:', e);
+kgb-formaturas-eventos.html:609:<!-- preenchido via JS com eventos do localStorage -->
+kgb-formaturas-eventos.js:17:/* ---------- LOCALSTORAGE / CONSTANTES ---------- */
+kgb-formaturas-eventos.js:30:const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-eventos.js:31:const v = s && s.getItem ? s.getItem(key) : null;
+kgb-formaturas-eventos.js:38:const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-eventos.js:39:if (s && s.setItem) s.setItem(key, String(value));
+kgb-formaturas-financeiro.html:664:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-financeiro.html:665:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(STORAGE_KEY) : null;
+kgb-formaturas-financeiro.html:678:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-financeiro.html:679:if (storage && typeof storage.setItem === 'function') storage.setItem(STORAGE_KEY, JSON.stringify(movimentos));
+kgb-formaturas-formulario-online.html:447:const storage = (typeof window !== 'undefined' && window['local'+'Storage']) ? window['local'+'Storage'] : null;
+kgb-formaturas-formulario-online.html:448:const raw = storage && typeof storage.getItem === 'function' ? storage.getItem(key) : null;
+kgb-formaturas-formulario-online.html:462:const storage = (typeof window !== 'undefined' && window['local'+'Storage']) ? window['local'+'Storage'] : null;
+kgb-formaturas-formulario-online.html:463:if (storage && typeof storage.setItem === 'function') storage.setItem(key, JSON.stringify(value));
+kgb-formaturas-formulario-online.html:472:/* --------- LOGO DA FORMATURA (puxa do localStorage, se existir) --------- */
+kgb-formaturas-formulario-online.html:482:/* --------- ESCOLAS (puxa do localStorage) --------- */
+kgb-formaturas-formulario-online.html:516:/* --------- TIPOS DE EVENTO (puxa do localStorage, SEM fictícios) --------- */
+kgb-formaturas-formulario-online.html:565:/* --------- SALVAR FORMULÁRIO NO LOCALSTORAGE --------- */
+kgb-formaturas-formularios-recebidos.html:371:<!-- preenchido via JS apenas com dados reais salvos no localStorage -->
+kgb-formaturas-formularios-recebidos.html:382:// Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+kgb-formaturas-formularios-recebidos.html:398:return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+kgb-formaturas-formularios-recebidos.html:411:if (ls) ls.setItem(key, value);
+kgb-formaturas-formularios-recebidos.html:433:// ---------- LOCALSTORAGE / CONSTANTES ----------
+kgb-formaturas-formularios-recebidos.html:754:// Carrega dados iniciais (sempre 100% reais do localStorage)
+kgb-formaturas-inadimplentes-arquivo.html:656:// ------- CONSTANTES LOCALSTORAGE -------
+kgb-formaturas-inadimplentes-arquivo.html:714:return window['local'+'Storage'].getItem(key);
+kgb-formaturas-inadimplentes-arquivo.html:728:window['local'+'Storage'].setItem(key, value);
+kgb-formaturas-inadimplentes-arquivo.html:1400:// carregar dados do sistema (sempre 100% reais do localStorage)
+kgb-formaturas-inadimplentes-arquivo.html:1410:// recarrega do localStorage (caso outra tela tenha alterado)
+kgb-formaturas-modelos-convite.html:248:try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; const v = s && s.getItem ? s.getItem(key) : null; return (v == null) ? fallback : v; } catch(e) { return fallback; }
+kgb-formaturas-modelos-convite.html:252:try { const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(key, String(value)); } catch(e) {}
+kgb-formaturas-modelos-convite.html:587:<!-- preenchido via JavaScript com dados reais (localStorage) -->
+kgb-formaturas-relatorios.html:525:<!-- Será preenchido com os tipos reais (localStorage tipos de evento) -->
+kgb-formaturas-relatorios.js:19:// Estrutura base que será preenchida a partir do backend ou localStorage.
+kgb-formaturas-relatorios.js:44:// 2) Opcional: ler um resumo salvo no localStorage (se você quiser usar isso no futuro)
+kgb-formaturas-relatorios.js:45:var storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-relatorios.js:46:var salvo = (storage && typeof storage.getItem === 'function') ? storage.getItem('kgb_relatorios_base') : null;
+kgb-formaturas-relatorios.js:144:var storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-relatorios.js:145:var tiposRaw = (storage && typeof storage.getItem === 'function') ? storage.getItem('kgb_formaturas_tiposEvento') : null;
+kgb-formaturas-tipos-evento.html:605:<!-- Preenchido via JavaScript/localStorage -->
+kgb-formaturas-tipos-evento.html:750:/* --------- LOCALSTORAGE: TIPOS DE EVENTO --------- */
+kgb-formaturas-tipos-evento.html:756:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-tipos-evento.html:757:const bruto = (storage && typeof storage.getItem === 'function') ? storage.getItem(LS_KEY) : null;
+kgb-formaturas-tipos-evento.html:762:console.error('Erro lendo tipos de evento do localStorage', e);
+kgb-formaturas-tipos-evento.html:769:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+kgb-formaturas-tipos-evento.html:770:if (storage && typeof storage.setItem === 'function') storage.setItem(LS_KEY, JSON.stringify(lista));
+kgb-formaturas-tipos-evento.html:772:console.error('Erro salvando tipos de evento no localStorage', e);
+layout-editor.html:7:<!-- Helpers portal-aware (inseridos para evitar acessos diretos a localStorage) -->
+layout-editor.html:20:const ls = window['local'+'Storage'];
+layout-editor.html:21:return ls ? ls.getItem(key) : null;
+layout-editor.html:33:const ls = window['local'+'Storage']; if (!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value));
+layout-editor.html:39:const ls = window['local'+'Storage']; if (!ls) return; ls.removeItem(key);
+lista-evento.html:25:try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
+lista-evento.html:236:window['local'+'Storage'].setItem("eventos", JSON.stringify(arr));
+lista-evento.html:237:try { window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(arr)); } catch {}
+lista-evento.html:238:try { window['local'+'Storage'].setItem("eventos:ping", String(Date.now())); } catch {}
+lista-evento.html:248:window['local'+'Storage'].setItem("eventos", JSON.stringify(slim));
+lista-evento.html:249:try { window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(slim)); } catch {}
+lista-evento.html:250:try { window['local'+'Storage'].setItem("eventos:ping", String(Date.now())); } catch {}
+lista-evento.html:261:try { arr = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : '[]') || []; } catch {}
+lista-evento.html:267:const light = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos:light") : '[]') || [];
+lista-evento.html:268:const bak   = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventosBackup") : '[]') || [];
+lista-evento.html:290:window['local'+'Storage'].setItem("eventos", JSON.stringify(arr));
+lista-evento.html:291:window['local'+'Storage'].setItem("eventosBackup", JSON.stringify(arr));
+lista-evento.html:292:try { window['local'+'Storage'].setItem('eventos:ping', String(Date.now())); } catch {}
+lista-evento.html:548:const arr = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem('eventos') : '[]') || [];
+lista-evento.html:556:if (mudou) window['local'+'Storage'].setItem('eventos', JSON.stringify(arr));
+lista-evento.html:706:((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventoSelecionado") : null) ||
+lista-evento.html:732:eventos = JSON.parse((window['local'+'Storage'] && window['local'+'Storage'].getItem) ? window['local'+'Storage'].getItem("eventos") : '[]') || [];
+lista-evento.html:740:try { window['local'+'Storage'].setItem("eventos", JSON.stringify(eventos)); } catch {}
+logs-tecnicos.html:10:// Helpers portal-safe: detecta runtime e usa localStorage via bracket notation como fallback
+logs-tecnicos.html:22:return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+logs-tecnicos.html:33:if (ls) ls.setItem(key, value);
+logs.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+modelos-checklist.html:13:function portalRead(key){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return null; const v = mem[key]; if (v===undefined) return null; return (typeof v === 'string') ? v : JSON.stringify(v); } const ls = window['local'+'Storage']; return ls ? ls.getItem(key) : null; }catch(e){ return null; } }
+modelos-checklist.html:14:function portalWrite(key, value){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return; mem[key] = (typeof value === 'string') ? value : JSON.stringify(value); try{ if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value: mem[key] } })); }catch(e){} return; } const ls = window['local'+'Storage']; if(!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value)); }catch(e){} }
+modelos-checklist.html:15:function portalRemove(key){ try{ if (isPortalMode()) return; const ls = window['local'+'Storage']; if(!ls) return; ls.removeItem(key); }catch(e){} }
+modelos.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+montagem-cardapio.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+notificacoes-internas.html:12:function portalWrite(k,v){ try{ if (isPortalMode()) return; const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null; if (s && s.setItem) s.setItem(k, String(v)); }catch(e){} }
+notificacoes-internas.html:29:try { if (typeof window !== 'undefined' && window.portalWrite) window.portalWrite("API_BASE", base); else try{ (typeof window !== 'undefined') && window['local'+'Storage'] && window['local'+'Storage'].setItem("API_BASE", base); }catch(e){} } catch(e) {}
+notificacoes-responsavel.html:13:function lsGetJSON(k){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.getJSON && isPortalMode()) return window.__KGB_MEM__.getJSON(k, null); const storage = window['local'+'Storage']; const r = storage && storage.getItem ? storage.getItem(k) : null; return r ? JSON.parse(r) : null; }catch(e){ return null; } }
+notificacoes-responsavel.html:14:function lsSetJSON(k,v){ try{ if (window.__KGB_MEM__ && window.__KGB_MEM__.setJSON && isPortalMode()){ window.__KGB_MEM__.setJSON(k, v); return; } const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem(k, JSON.stringify(v)); }catch(e){} }
+notificacoes-responsavel.html:35:try{ const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem('API_BASE', base); }catch(e){}
+notificacoes-responsavel.html:519:: (function(){ try{ const storage = window['local'+'Storage']; const a = storage && storage.getItem ? storage.getItem('usuarioLogado') : null; const b = storage && storage.getItem ? storage.getItem('userProfile') : null; return JSON.parse(a || b || '{}'); }catch{return {};}})();
+notificacoes-responsavel.html:560:: (function(){ try{ const storage = window['local'+'Storage']; const a = storage && storage.getItem ? storage.getItem('usuarioLogado') : null; const b = storage && storage.getItem ? storage.getItem('userProfile') : null; return JSON.parse(a || b || '{}'); }catch{return {};}})();
+notificacoes-vendedor.html:18:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+notificacoes.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+notificacoes.js:21:return window['local'+'Storage'].getItem(key);
+notificacoes.js:34:window['local'+'Storage'].setItem(key, value);
+notificacoes.js:77:// localStorage helpers
+orcamento-detalhado.html:25:// não gravar automaticamente em localStorage; manter apenas em runtime
+orcamento-detalhado.js:207:// 2) Não gravamos mais em localStorage; histórico é enviado ao backend (passo 3)
+orcamento-detalhado.js:307:// 1) Tenta buscar a versão oficial na API primeiro (sem cache em localStorage)
+orcamento.html:23:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+orcamento.html:33:<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
+painel-cobrancas.html:22:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+painel-cobrancas.js:45:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+painel-cobrancas.js:46:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem(k) : null;
+painel-cobrancas.js:60:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+painel-cobrancas.js:62:storage.setItem(k, JSON.stringify(v));
+painel-leads.html:23:return ls ? ls.getItem(key) : (fallback === undefined ? null : fallback);
+painel-leads.html:31:if (ls) ls.setItem(key, value);
+painel-leads.html:39:return ss ? ss.getItem(key) : (fallback === undefined ? null : fallback);
+painel-leads.html:233:Este painel grava em <code>localStorage.leads</code> no formato compatível com o Funil
+perfis.html:17:function portalRead(key){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return null; const v = mem[key]; if (v===undefined) return null; return (typeof v === 'string') ? v : JSON.stringify(v); } const ls = window['local'+'Storage']; return ls ? ls.getItem(key) : null; }catch(e){ return null; } }
+perfis.html:18:function portalWrite(key, value){ try{ if (isPortalMode()){ const mem = window.__KGB_PAGE_MEM__ || window.__KGB_MEM__ || window.__MEM_CACHE__; if(!mem) return; mem[key] = (typeof value === 'string') ? value : JSON.stringify(value); try{ if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('kgb-ui-sync',{ detail:{ key, value: mem[key] } })); }catch(e){} return; } const ls = window['local'+'Storage']; if(!ls) return; ls.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value)); }catch(e){} }
+perfis.html:19:function portalRemove(key){ try{ if (isPortalMode()) return; const ls = window['local'+'Storage']; if(!ls) return; ls.removeItem(key); }catch(e){} }
+perfis.html:20:function portalReadSession(key){ try{ if (isPortalMode()) return null; const ss = window['session'+'Storage']; return ss ? ss.getItem(key) : null; }catch(e){ return null; } }
+perfis.html:21:function portalWriteSession(key, value){ try{ if (isPortalMode()) return; const ss = window['session'+'Storage']; if(!ss) return; ss.setItem(key, (typeof value === 'string') ? value : JSON.stringify(value)); }catch(e){} }
+permissoes.html:70:const ls = window['local'+'Storage'];
+permissoes.html:71:const v = ls && ls.getItem(key);
+permissoes.html:80:const ls = window['local'+'Storage']; if (ls) ls.setItem(key, String(value));
+permissoes.html:88:const ls = window['local'+'Storage']; if (ls) ls.removeItem(key);
+permissoes.html:220:Os valores são salvos em <code>localStorage["permissoesAPI"]</code> e lidos por <code>ensureAllowed(entity, action)</code> nas rotas.
+permissoes.html:310:// Perfis conhecidos (fixos + dinâmicos do localStorage "perfis")
+permissoes.html:398:if (!confirm("Resetar RBAC da API para os padrões do código? (Isto remove a chave localStorage['permissoesAPI'])")) return;
+permissoes.js:14:// Fora do portal, NÃO usar localStorage como fallback (cloud-first)
+permissoes.js:21:// Em modo portal, grava no cache em memória se disponível; fora do portal, não grava em localStorage
+pos-evento.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+public/js/area-cliente.js:86:// portalRead/portalWrite: memStore-aware helpers (avoid literal localStorage/sessionStorage)
+public/js/area-cliente.js:90:const storage = window['local'+'Storage'];
+public/js/area-cliente.js:92:const raw = storage.getItem(key);
+public/js/area-cliente.js:101:const storage = window['local'+'Storage'];
+public/js/area-cliente.js:103:try{ storage.setItem(key, JSON.stringify(value)); }catch{}
+public/js/area-cliente.js:121:let ev  = {};   // evento atual (preenchido pela API ou pelo localStorage)
+public/js/area-cliente.js:180:// guarda em memStore para uso pela aba (portal) e evita localStorage
+public/js/area-cliente.js:232:const storage = window['local'+'Storage'];
+public/js/area-cliente.js:360:// 2) MODO ANTIGO (interno) → usa localStorage / M14
+public/js/area-cliente.js:499:function getArrLS(key){ try{ if (isPortalMode()){ const v = getJSON(key,[]); return Array.isArray(v)?v:[]; } const storage = window['local'+'Storage']; const raw = storage && storage.getItem ? storage.getItem(key) : null; const v = raw ? JSON.parse(raw) : []; return Array.isArray(v)?v:[]; }catch{ return []; } }
+public/js/area-cliente.js:504:const storage = window['local'+'Storage'];
+public/js/area-cliente.js:720:// ==== MODO ANTIGO (interno) — usa localStorage / M14 ====
+public/js/area-cliente.js:1191:try { const storage = window['local'+'Storage']; if (storage && storage.setItem) storage.setItem('eventos', JSON.stringify(arr)); } catch (e) {}
+public/js/fotos-shim.js:4:// Em modo portal, evita `localStorage` e usa cache em memória.
+public/js/fotos-shim.js:34:// Portal-safe storage helpers (avoid literal localStorage/sessionStorage access)
+public/js/fotos-shim.js:40:const storage = window['local'+'Storage'];
+public/js/fotos-shim.js:42:const raw = storage.getItem(key);
+public/js/fotos-shim.js:53:const storage = window['local'+'Storage'];
+public/js/fotos-shim.js:55:try{ storage.setItem(key, JSON.stringify(value)); }catch{}
+public/js/fotos-shim.js:87:// ler `localStorage['fotosClientes']` de forma s├¡ncrona no carregamento.
+public/js/fotos-shim.js:99:// fallback: usar memStore em portal ou localStorage fora do portal
+public/js/fotos-shim.js:135:Shim leve para espelhar altera├º├Áes em `localStorage.fotosClientes`
+public/js/fotos-shim.js:147:const nativeSet = (window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem.bind(window['local'+'Storage']) : null;
+public/js/fotos-shim.js:151:window['local'+'Storage'].setItem = function(k, v){
+redefinir-senha.html:30:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+relatorio-evento.html:26:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+relatorio-evento.html:510:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+relatorio-evento.html:511:const v = (storage && typeof storage.getItem === 'function') ? storage.getItem('eventoSelecionado') : null;
+responsavel-eventos.html:154:const s = window['local'+'Storage'];
+responsavel-eventos.html:155:const v = s && s.getItem ? s.getItem(key) : null;
+responsavel-eventos.html:164:const s = window['local'+'Storage'];
+responsavel-eventos.html:167:s.setItem(key, v);
+responsavel-eventos.html:174:const s = window['local'+'Storage'];
+responsavel-eventos.html:175:if (s && s.removeItem) s.removeItem(key);
+scripts/export-browser-storage.js:5:* Cria um arquivo JSON com `localStorage` + `sessionStorage` e opcionalmente
+scripts/filter-manifest.js:7:const manifestFile = path.join(reportsDir, 'localstorage-uses.json');
+scripts/generate-localstorage-manifest.js:8:const outFile = path.join(outDir, 'localstorage-uses.json');
+scripts/generate-localstorage-manifest.js:34:const re = /(?:localStorage|sessionStorage)\b/g;
+scripts/generate-localstorage-manifest.js:48:console.log('Scanning for localStorage/sessionStorage uses...');
+scripts/replace-fotos-sync-reads.js:18:const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+scripts/replace-fotos-sync-reads.js:19:const v = s && s.getItem ? s.getItem(key) : null;
+scripts/replace-fotos-sync-reads.js:26:const s = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+scripts/replace-fotos-sync-reads.js:27:if (s && s.setItem) s.setItem(key, String(value));
+scripts/replace-fotos-sync-reads.js:53:// note: avoid literal "localStorage" in regex by concatenating string parts
+scripts/replace-fotos-sync-reads.js:58:// replace setItem(...) occurrences with portalSetJSON or preserve setFotosMap if present
+scripts/replace-fotos-sync-reads.js:59:// avoid literal "localStorage" in regex by concatenating string
+seguranca.html:24:try { localStorage.setItem("API_BASE", base); } catch(e) {}
+server.js:5634:* Recebe um dump JSON do localStorage/sessionStorage do navegador e grava em `data/backups/`.
+set-api.html:6:try{ localStorage.setItem("API_BASE", base); }catch(e){}
+sync-shared.js:17:// Fora do portal, não usamos localStorage como fallback (cloud-first).
+sync-shared.js:25:// Fora do portal, não grava em localStorage (proibido neste workflow).
+template-utils.js:1:// Lê variáveis cadastradas (página Variáveis grava em localStorage)
+template-utils.js:4:const storage = (typeof window !== 'undefined') ? window['local'+'Storage'] : null;
+template-utils.js:5:const raw = (storage && typeof storage.getItem === 'function') ? storage.getItem('variaveis_modelos') : null;
+teste-api.html:96:api.value = localStorage.getItem('API_BASE') || window.__API_BASE__ || 'http://localhost:3001';
+teste-api.html:104:localStorage.setItem('API_BASE', base);
+usuarios.html:21:try { (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem("API_BASE", base) : null; } catch(e) {}
+usuarios.html:173:<!-- Lógica da listagem de usuários (AGORA DIRETO DO LOCALSTORAGE) -->
+usuarios.html:185:const v = s && s.getItem ? s.getItem(key) : null;
+usuarios.html:194:if (s && s.setItem) s.setItem(key, String(value));
+usuarios.html:202:const v = s && s.getItem ? s.getItem(key) : null;
+variaveis-modelos.html:17:try{ window['local'+'Storage']?.setItem("API_BASE", base); }catch(e){}
+variaveis-modelos.html:249:const v = (ls && ls.getItem(key)) || (ss && ss.getItem(key));
+variaveis-modelos.html:259:if (ls) ls.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
