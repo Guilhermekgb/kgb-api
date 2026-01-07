@@ -237,57 +237,41 @@
           return;
         }
 
-        // Normaliza resposta de login e aceita variações de campo
+        // --- [KGB] auth: token opcional (cookie httpOnly ou Bearer) ---
+        const token =
+          (j && (j.token || j.access_token || j.jwt)) ||
+          (data && (data.token || data.access_token || data.jwt)) ||
+          null;
+
         try {
-          const token = (j && (j.token || j.access_token || j.jwt)) || null;
-          const user = (j && (j.user || j.data || null)) || null;
-          if (!token) {
-            console.error('[LOGIN] resposta sem token:', j);
-            try{ let errEl = document.getElementById('login-erro'); if (!errEl) { errEl = document.createElement('div'); errEl.id = 'login-erro'; form.appendChild(errEl);} errEl.style.display='block'; errEl.textContent = 'Login falhou: API respondeu sem token.'; }catch(e){}
-            alert(j?.message || j?.erro || 'Login falhou: API respondeu sem token.');
-            return;
+          // limpar chaves antigas pra não confundir
+          const oldKeys = ['KGB_TOKEN','AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt'];
+          for (const k of oldKeys) {
+            try { localStorage.removeItem(k); } catch(e) {}
+            try { sessionStorage.removeItem(k); } catch(e) {}
           }
+        } catch(e){}
 
-          // --- [KGB] padroniza token ---
+        if (token) {
           try {
-            // remover chaves antigas
-            const oldKeys = ['KGB_TOKEN','AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt','auth.token'];
-            for (const k of oldKeys) {
-              try { localStorage.removeItem(k); } catch (e) {}
-              try { sessionStorage.removeItem(k); } catch (e) {}
-            }
-
-            // chave oficial e cache em memória
-            try { localStorage.setItem('KGB_AUTH_TOKEN', String(token)); } catch (e) {}
-            try { window.KGB_AUTH_TOKEN = String(token); } catch (e) {}
-
-            // manter compatibilidade com helpers existentes
-            try { if (typeof window.setAuthToken === 'function') window.setAuthToken(String(token)); } catch (e) {}
-
-            // salvar usuário em cache padrão
-            if (user) window.__KGB_USER_CACHE = user;
-
-            console.log('[KGB][LOGIN] token salvo em KGB_AUTH_TOKEN', !!token);
-
-            // redirecionar para returnUrl se existir
-            try {
-              const params = new URLSearchParams(location.search);
-              const returnUrl = params.get('returnUrl');
-              if (returnUrl) {
-                location.href = decodeURIComponent(returnUrl);
-              } else {
-                location.href = './dashboard.html';
-              }
-            } catch(e) {
-              location.href = './dashboard.html';
-            }
-
-            return;
+            localStorage.setItem('KGB_AUTH_TOKEN', String(token));
+            window.KGB_AUTH_TOKEN = String(token);
+            console.log('[KGB][login] token salvo em KGB_AUTH_TOKEN');
           } catch (e) {
-            console.warn('[KGB][LOGIN] failed to store token/user', e);
+            console.warn('[KGB][login] falha salvando token', e);
           }
+        } else {
+          // Se não veio token, OK: backend pode usar cookie httpOnly
+          console.log('[KGB][login] sem token no JSON (provável cookie httpOnly). Seguindo...');
+        }
+
+        // garantir redirect com returnUrl
+        try {
+          const params = new URLSearchParams(location.search);
+          const returnUrl = params.get('returnUrl');
+          location.href = returnUrl ? decodeURIComponent(returnUrl) : './dashboard.html';
         } catch (e) {
-          console.error('[LOGIN] erro ao processar resposta', e, j);
+          location.href = './dashboard.html';
         }
 
         // Fallback dev: se o backend não responder, ainda aceitamos credenciais dev
@@ -300,10 +284,8 @@
       const SENHA_FIXA = "123456";
       if (email === EMAIL_FIXO && senha === SENHA_FIXA) {
         try {
-          // Fallback DEV: não persiste nada no storage do navegador — usa memStore apenas
-          const tokenFake = 'dev-token-' + Date.now();
+          // Fallback DEV: não persiste token falso nem grava KGB_TOKEN; apenas cria sessão em memória
           window.__ui_login = window.__ui_login || new Map();
-          window.__ui_login.set('auth.token', tokenFake);
           const perfisLista = ['Administrador'];
           window.__ui_login.set('auth.roles', perfisLista.join(','));
           window.__ui_login.set('perfil', perfisLista[0]);
