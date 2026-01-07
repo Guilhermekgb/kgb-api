@@ -385,15 +385,32 @@ const app = express();
 // Parse JSON bodies early so auth routes receive parsed bodies
 app.use(express.json({ limit: '50mb' }));
 
-app.use(cors({
-  origin(origin, cb) {
-    // Permite ferramentas locais (sem Origin) e as origens na allowlist
+const ALLOWED_ORIGINS = new Set([
+  'http://127.0.0.1:5500',
+  'http://localhost:5500',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'https://kgbprobuffet.netlify.app',
+]);
+
+const corsOptions = {
+  origin: function (origin, cb) {
+    // permite requests sem origin (ex: curl, servidor-para-servidor)
     if (!origin) return cb(null, true);
-    if (ALLOWLIST.length === 0 || ALLOWLIST.includes(origin)) return cb(null, true);
-    return cb(new Error('CORS bloqueado para ' + origin));
+
+    // permite o Netlify principal e qualquer subdomínio netlify.app
+    if (ALLOWED_ORIGINS.has(origin)) return cb(null, true);
+    try { if (origin && origin.endsWith('.netlify.app')) return cb(null, true); } catch(e) {}
+
+    return cb(new Error('Not allowed by CORS: ' + origin));
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Health check endpoint (quick test)
 app.get('/health', (req, res) => {
