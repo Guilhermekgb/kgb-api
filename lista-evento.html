@@ -9,6 +9,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
+  window.addEventListener("error", (e) => {
+    console.error("[KGB][lista-evento] window.error", e.message, e.error);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("[KGB][lista-evento] unhandledrejection", e.reason);
+  });
+</script>
+<script>
   (function(){
     var host = String(location.hostname||"").toLowerCase();
 
@@ -1086,6 +1094,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (IS_REMOTE) {
     try {
       const arr = (typeof window.eventosApiGet === 'function') ? await window.eventosApiGet('eventos') : (await callApi('/eventos', 'GET', {}))?.data || [];
+      console.log('[KGB][lista-evento] eventos payload', { isArray: Array.isArray(arr), len: Array.isArray(arr) ? arr.length : null, sample: Array.isArray(arr) ? arr[0] : arr });
       if (Array.isArray(arr)) {
         try { window.safeSaveEventos(arr); } catch(e){}
       }
@@ -1093,6 +1102,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.warn('[KGB] Falha ao carregar eventos da API; usando apenas dados locais.', e);
     }
   }
+
+  console.log('[KGB][lista-evento] init start', {
+    API_BASE: window.API_BASE,
+    __KGB_API_BASE__: window.__KGB_API_BASE__,
+    readyState: document.readyState
+  });
+
+  const el = document.getElementById("listaEventos") || document.querySelector("#listaEventos");
+  console.log('[KGB][lista-evento] container #listaEventos =', el);
 
   carregarEventos();
   document.getElementById("busca")?.addEventListener("input", debounceCarregar);

@@ -375,6 +375,17 @@ async function carregarCatalogosDaNuvem() {
     cardapiosDisponiveis  = Array.isArray(c1?.data) ? c1.data : (Array.isArray(c1) ? c1 : (c1?.items||[]));
     adicionaisDisponiveis = Array.isArray(c2?.data) ? c2.data : (Array.isArray(c2) ? c2 : (c2?.items||[]));
     servicosDisponiveis   = Array.isArray(c3?.data) ? c3.data : (Array.isArray(c3) ? c3 : (c3?.items||[]));
+    console.log("[KGB][orcamento] data sizes", {
+      cardapios: Array.isArray(cardapiosDisponiveis) ? cardapiosDisponiveis.length : "(not array)",
+      adicionais: Array.isArray(adicionaisDisponiveis) ? adicionaisDisponiveis.length : "(not array)",
+      servicos: Array.isArray(servicosDisponiveis) ? servicosDisponiveis.length : "(not array)"
+    });
+
+    console.log("[KGB][orcamento] sample", {
+      cardapio0: Array.isArray(cardapiosDisponiveis) ? cardapiosDisponiveis[0] : null,
+      adicional0: Array.isArray(adicionaisDisponiveis) ? adicionaisDisponiveis[0] : null,
+      servico0: Array.isArray(servicosDisponiveis) ? servicosDisponiveis[0] : null
+    });
   } catch (e) {
     console.warn('[CATÁLOGO] Falha ao carregar catálogos da nuvem', e);
     cardapiosDisponiveis = cardapiosDisponiveis || [];
@@ -1492,6 +1503,32 @@ function initTabs(){
 // =========================================
 document.addEventListener("DOMContentLoaded", async () => {
   try {
+    console.log("[KGB][orcamento] init start", {
+      API_BASE: window.API_BASE,
+      __KGB_API_BASE__: window.__KGB_API_BASE__,
+      __API_BASE__: (() => { try { return window.__API_BASE__; } catch { return "(read-only)"; } })(),
+      readyState: document.readyState
+    });
+
+    const ids = [
+      "listaPacotes",
+      "pacotesContainer",
+      "gridPacotes",
+      "listaCardapios",
+      "cardapios",
+      "adicionais",
+      "servicos",
+      "resultado",
+      "conteudo",
+      "main",
+      "app"
+    ];
+
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) console.log("[KGB][orcamento] found container:", id, el);
+    }
+
     try { window.lucide?.createIcons?.(); } catch {}
 
     if (typeof mostrarLoading === 'function') {

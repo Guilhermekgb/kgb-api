@@ -661,3 +661,23 @@ try{
     });
   })();
 }catch(e){}
+
+    // =========================
+    // KGB: Render fallback para erros fatais (evita tela branca)
+    // =========================
+    window.kgbRenderFatal = function kgbRenderFatal(message, err) {
+      console.error("[KGB][FATAL]", message, err || "");
+      const html = `
+        <div style="max-width:900px;margin:24px auto;padding:16px;border:1px solid rgba(0,0,0,.12);border-radius:12px;">
+          <h2 style="margin:0 0 8px 0;">Ops! Algo não carregou</h2>
+          <p style="margin:0 0 12px 0;">${message}</p>
+          <pre style="white-space:pre-wrap;background:rgba(0,0,0,.04);padding:12px;border-radius:8px;overflow:auto;">${String(err && (err.stack || err.message || err) || "")}</pre>
+          <p style="margin:12px 0 0 0;opacity:.8;">Veja o console (F12) para detalhes.</p>
+        </div>
+      `;
+      const target =
+        document.querySelector("main") ||
+        document.getElementById("conteudo") ||
+        document.body;
+      try { target.innerHTML = html; } catch(e) { document.body.innerHTML = html; }
+    };
