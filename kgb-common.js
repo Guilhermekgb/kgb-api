@@ -494,20 +494,55 @@ export function fecharSessao(sessaoId){
     const base = (window.API_BASE || kgbResolveApiBase() || '').replace(/\/+$/,'');
     const p = (path || '').startsWith('/') ? path : `/${path}`;
     const url = `${base}${p}`;
-
     const opts = { ...options };
     opts.headers = { ...(options.headers || {}) };
 
-    // Se vocês usam auth token:
+    // helpers para leitura/limpeza centralizada do token (compatível com várias chaves)
+    window.kgbGetAuthToken = window.kgbGetAuthToken || function () {
+      try {
+        if (window.KGB_AUTH_TOKEN) return window.KGB_AUTH_TOKEN;
+        const fromHelper = (typeof window.getAuthToken === 'function') ? window.getAuthToken() : null;
+        const fromUiLogin = (window.__ui_login && typeof window.__ui_login.get === 'function') ? window.__ui_login.get('auth.token') : null;
+        const candidates = [fromHelper, fromUiLogin,
+          (localStorage && localStorage.getItem) ? localStorage.getItem('KGB_AUTH_TOKEN') : null,
+          (localStorage && localStorage.getItem) ? localStorage.getItem('KGB_TOKEN') : null,
+          (sessionStorage && sessionStorage.getItem) ? sessionStorage.getItem('KGB_AUTH_TOKEN') : null,
+          (sessionStorage && sessionStorage.getItem) ? sessionStorage.getItem('KGB_TOKEN') : null,
+          (localStorage && localStorage.getItem) ? localStorage.getItem('auth.token') : null,
+        ];
+        const t = candidates.find(x => x && String(x).trim().length) || null;
+        if (t) try { window.KGB_AUTH_TOKEN = String(t); } catch (e) {}
+        return t;
+      } catch (e) { return null; }
+    };
+
+    window.kgbClearAuthToken = window.kgbClearAuthToken || function () {
+      try { window.KGB_AUTH_TOKEN = null; } catch (e) {}
+      try { localStorage.removeItem('KGB_AUTH_TOKEN'); localStorage.removeItem('KGB_TOKEN'); } catch (e) {}
+      try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch (e) {}
+      try { if (typeof window.clearAuthToken === 'function') window.clearAuthToken(); } catch (e) {}
+    };
+
+    // Injetar credenciais e header Authorization quando disponível
     try {
-      const token = localStorage.getItem('KGB_TOKEN') || sessionStorage.getItem('KGB_TOKEN');
+      if (!opts.credentials) opts.credentials = 'include';
+      const token = (typeof window.kgbGetAuthToken === 'function') ? window.kgbGetAuthToken() : null;
       if (token && !opts.headers.Authorization) {
         opts.headers.Authorization = `Bearer ${token}`;
       }
-    } catch (_) {}
+    } catch (e) {}
 
     try {
       const res = await fetch(url, opts);
+      // Se o backend respondeu 401, limpar token local e redirecionar para login
+      if (res && res.status === 401) {
+        try { window.kgbClearAuthToken && window.kgbClearAuthToken(); } catch (e) {}
+        try {
+          const returnUrl = encodeURIComponent(location.pathname + (location.search || ''));
+          location.href = `/login.html?returnUrl=${returnUrl}`;
+        } catch (e) {}
+        const err = new Error('unauthorized'); err.response = res; throw err;
+      }
       return res;
     } catch (err) {
       console.error('[KGB] apiFetch failed:', { url, err });

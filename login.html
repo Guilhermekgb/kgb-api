@@ -248,20 +248,43 @@
             return;
           }
 
-          // salvar token usando helper do projeto quando existir, senão localStorage
+          // --- [KGB] padroniza token ---
           try {
-            if (typeof window.setAuthToken === 'function') {
-              window.setAuthToken(String(token));
-            } else {
-              try { localStorage.setItem('KGB_TOKEN', String(token)); } catch(e){}
+            // remover chaves antigas
+            const oldKeys = ['KGB_TOKEN','AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt','auth.token'];
+            for (const k of oldKeys) {
+              try { localStorage.removeItem(k); } catch (e) {}
+              try { sessionStorage.removeItem(k); } catch (e) {}
             }
+
+            // chave oficial e cache em memória
+            try { localStorage.setItem('KGB_AUTH_TOKEN', String(token)); } catch (e) {}
+            try { window.KGB_AUTH_TOKEN = String(token); } catch (e) {}
+
+            // manter compatibilidade com helpers existentes
+            try { if (typeof window.setAuthToken === 'function') window.setAuthToken(String(token)); } catch (e) {}
+
             // salvar usuário em cache padrão
             if (user) window.__KGB_USER_CACHE = user;
-            console.log('[LOGIN] success', user || null);
-            window.location.href = 'dashboard.html';
+
+            console.log('[KGB][LOGIN] token salvo em KGB_AUTH_TOKEN', !!token);
+
+            // redirecionar para returnUrl se existir
+            try {
+              const params = new URLSearchParams(location.search);
+              const returnUrl = params.get('returnUrl');
+              if (returnUrl) {
+                location.href = decodeURIComponent(returnUrl);
+              } else {
+                location.href = './dashboard.html';
+              }
+            } catch(e) {
+              location.href = './dashboard.html';
+            }
+
             return;
           } catch (e) {
-            console.warn('[LOGIN] failed to store token/user', e);
+            console.warn('[KGB][LOGIN] failed to store token/user', e);
           }
         } catch (e) {
           console.error('[LOGIN] erro ao processar resposta', e, j);
