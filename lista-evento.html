@@ -450,6 +450,15 @@ function shouldHideFromLista(e) {
 
 /* ===== Carregar eventos (já prontos para tela) ===== */
 function carregarEventos() {
+  console.log("[KGB][lista-evento] init start", {
+    API_BASE: window.API_BASE,
+    __KGB_API_BASE__: window.__KGB_API_BASE__,
+    readyState: document.readyState
+  });
+
+  const containerDiag = document.getElementById("listaEventos") || document.querySelector("#listaEventos");
+  console.log("[KGB][lista-evento] container #listaEventos =", containerDiag);
+
   const termo = (document.getElementById("busca")?.value || "").toLowerCase().trim();
   const lista = document.getElementById("listaEventos");
   const container = document.getElementById("listContainer");
@@ -1128,6 +1137,29 @@ window.addEventListener("storage", (e) => {
 <script src="./api/proteger-pagina.js"></script>
 
 <script>
+// ===== KGB DIAG: lista-evento (INLINE) =====
+window.addEventListener("error", (e) => {
+  console.error("[KGB][lista-evento] window.error", e.message, e.error);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("[KGB][lista-evento] unhandledrejection", e.reason);
+});
+
+console.log("[KGB][lista-evento] inline script loaded", {
+  API_BASE: window.API_BASE,
+  __KGB_API_BASE__: window.__KGB_API_BASE__,
+  readyState: document.readyState
+});
+
+(function () {
+  const container =
+    document.getElementById("listaEventos") ||
+    document.querySelector("#listaEventos");
+
+  console.log("[KGB][lista-evento] container #listaEventos =", container);
+})();
+// ===== /KGB DIAG =====
+
 "use strict";
 
 /* ==== Config da API (igual aos outros módulos) ==== */
@@ -1695,6 +1727,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (IS_REMOTE) {
     try {
       const resp = await callApi('/eventos', 'GET', {});
+      console.log('[KGB][lista-evento] eventos payload (from API)', { isArray: Array.isArray(resp?.data), len: Array.isArray(resp?.data) ? resp.data.length : null, sample: Array.isArray(resp?.data) ? resp.data[0] : resp?.data });
       if ((resp?.status === 200 || resp?.status === 201 || resp?.ok) && Array.isArray(resp.data)) {
         window.safeSaveEventos(resp.data);
       }
