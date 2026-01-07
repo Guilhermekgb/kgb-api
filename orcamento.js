@@ -89,7 +89,13 @@ function persistLeadsArray(leads){
     (async ()=>{ try { const base = window.__API_BASE__; for(const l of Array.isArray(leads)?leads:[leads]){ await window.apiFetch(base + '/leads', { method: 'POST', body: l }); } } catch(e){} })(); } } catch(e){} }
 function persistLead(l){ persistLeadsArray([l]); }
 // === API – salvar lead no backend ===
-const API_BASE = window.__API_BASE__ || (memGet("API_BASE", "") || "") || "";
+// Ensure a global API_BASE exists without redeclaring it (avoids duplicate "Identifier ... already been declared")
+try{
+  if (typeof API_BASE === 'undefined'){
+    window.API_BASE = window.__API_BASE__ || (memGet("API_BASE", "") || "") || "";
+    try { eval('var API_BASE = window.API_BASE;'); } catch(e){}
+  }
+}catch(e){}
 
 // Helper genérico para chamadas ao backend usando window.apiFetch (sem fallback direto para fetch)
 async function postToApi(path, opts = {}){
@@ -1485,36 +1491,62 @@ function initTabs(){
 //                 Boot
 // =========================================
 document.addEventListener("DOMContentLoaded", async () => {
-  window.lucide?.createIcons?.();
+  try {
+    try { window.lucide?.createIcons?.(); } catch {}
 
-  await carregarCatalogosDaNuvem();
+    if (typeof mostrarLoading === 'function') {
+      try { mostrarLoading(); } catch {}
+    }
 
-  preencherSelects();
-  preencherCardapios();
-  preencherAdicionais();
-  preencherServicos();
+    if (typeof carregarCatalogosDaNuvem === 'function') {
+      try { await carregarCatalogosDaNuvem(); } catch (e) { console.warn('[ORÇAMENTO] Falha ao carregar catálogos:', e); }
+    }
 
-  atualizarBadgeAdicionais();
-  atualizarBadgeServicos();
-  calcularValorTotal();
-  initTabs();
+    if (typeof preencherSelects === 'function') preencherSelects();
+    if (typeof preencherCardapios === 'function') preencherCardapios();
+    if (typeof preencherAdicionais === 'function') preencherAdicionais();
+    if (typeof preencherServicos === 'function') preencherServicos();
 
-  // listeners dos botões (além dos onclicks do HTML)
-  $("btnSalvarLead")?.addEventListener("click", salvarLeadFunil);
-  $("btnGerarProposta")?.addEventListener("click", gerarProposta);
+    try {
+      atualizarBadgeAdicionais();
+      atualizarBadgeServicos();
+      calcularValorTotal();
+      initTabs();
+    } catch(e){ console.warn('[ORÇAMENTO] Erro em rotinas de UI:', e); }
 
-  // recalcular quando mudar descontos/quantidade
-  ["desconto_reais","desconto_porcentagem"].forEach(id => {
-    $(id)?.addEventListener("input", () => calcularValorTotal());
-  });
-  $("convidados")?.addEventListener("input", () => calcularValorTotal());
+    // listeners dos botões (além dos onclicks do HTML)
+    $("btnSalvarLead")?.addEventListener("click", salvarLeadFunil);
+    $("btnGerarProposta")?.addEventListener("click", gerarProposta);
 
-  $("desconto_porcentagem")?.addEventListener("input", (e) => {
-    let v = parseFloat(e.target.value) || 0;
-    v = Math.min(100, Math.max(0, v));
-    e.target.value = v;
-    calcularValorTotal();
-  });
+    // recalcular quando mudar descontos/quantidade
+    ["desconto_reais","desconto_porcentagem"].forEach(id => {
+      $(id)?.addEventListener("input", () => calcularValorTotal());
+    });
+    $("convidados")?.addEventListener("input", () => calcularValorTotal());
+
+    $("desconto_porcentagem")?.addEventListener("input", (e) => {
+      let v = parseFloat(e.target.value) || 0;
+      v = Math.min(100, Math.max(0, v));
+      e.target.value = v;
+      calcularValorTotal();
+    });
+
+    // fallback visual se os catálogos vierem vazios
+    const cp = (typeof cardapiosDisponiveis !== 'undefined') ? cardapiosDisponiveis : [];
+    const ad = (typeof adicionaisDisponiveis !== 'undefined') ? adicionaisDisponiveis : [];
+    const sv = (typeof servicosDisponiveis !== 'undefined') ? servicosDisponiveis : [];
+
+    if (cp.length === 0 && ad.length === 0 && sv.length === 0) {
+      const el = document.getElementById("cardapiosLista") || document.querySelector("#cardapiosLista");
+      if (el) el.innerHTML = "<p style='padding:16px'>Nenhum catálogo cadastrado ainda.</p>";
+    }
+  } catch (e) {
+    console.error("Erro no orçamento:", e);
+    const el = document.getElementById("cardapiosLista") || document.querySelector("#cardapiosLista");
+    if (el) el.innerHTML = "<p style='padding:16px'>Falha ao carregar catálogos.</p>";
+  } finally {
+    try { if (typeof esconderLoading === 'function') esconderLoading(); } catch {}
+  }
 
 // ===== Expor funções para onclick no HTML =====
 window.salvarLeadFunil = salvarLeadFunil;
