@@ -1,3 +1,17 @@
+# arquivos temporários / locais
+*.pid
+*.log
+.DS_Store
+Thumbs.db
+
+# relatórios/artefatos locais
+tools/*.txt
+tools/*.md
+tools/*.json
+tools/cliente-script-cleaned.txt
+
+# (opcional) se vc não quiser versionar ferramentas de auditoria
+# tools/*.js
 # NPM
 node_modules/
 
