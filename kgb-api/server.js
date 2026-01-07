@@ -449,6 +449,10 @@ app.use(cors({
     if (origin === 'http://localhost:3333' || origin === 'http://127.0.0.1:3333') return cb(null, true);
     if (origin === 'http://localhost:5500' || origin === 'http://127.0.0.1:5500') return cb(null, true);
 
+    // Netlify (produção + previews)
+    if (origin === 'https://kgbprobuffet.netlify.app') return cb(null, true);
+    if (origin && origin.endsWith('.netlify.app')) return cb(null, true);
+
     // negar sem lançar erro
     console.warn('[CORS] Origin não permitida:', origin);
     return cb(null, false);
@@ -464,6 +468,9 @@ app.options('*', cors({
     if (!origin) return cb(null, true);
     if (origin === 'http://localhost:3333' || origin === 'http://127.0.0.1:3333') return cb(null, true);
     if (origin === 'http://localhost:5500' || origin === 'http://127.0.0.1:5500') return cb(null, true);
+    // Netlify (produção + previews)
+    if (origin === 'https://kgbprobuffet.netlify.app') return cb(null, true);
+    if (origin && origin.endsWith('.netlify.app')) return cb(null, true);
     return cb(null, false);
   },
   credentials: true
