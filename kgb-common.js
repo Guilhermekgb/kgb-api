@@ -458,94 +458,62 @@ export function fecharSessao(sessaoId){
 
 /* === INÍCIO PATCH FASE F — API BASE + apiFetch (fica no final do arquivo) === */
 (function(){
-  // === API BASE (cloud-first) ===
-  (() => {
-    const RENDER_API_FALLBACK = "https://kgb-api.onrender.com";
-    const DEFAULT_PROD_API = RENDER_API_FALLBACK;
+  // =========================
+  // KGB: API BASE (single source of truth)
+  // =========================
+  const KGB_RENDER_API = "https://kgb-api.onrender.com";
 
-    const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-    const isLocal = /localhost|127\.0\.0\.1/i.test(origin) || (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
+  function kgbResolveApiBase() {
+    const host = (location.hostname || "").toLowerCase();
+    const isNetlify =
+      host.endsWith('.netlify.app') ||
+      host === 'kgbprobuffet.netlify.app';
 
-    // lê override (se existir)
-    let override = null;
-    try { override = window['local'+'Storage'] ? window['local'+'Storage'].getItem('API_BASE') || null : null; } catch (e) { override = null; }
+    // 1) Preferir nossa config global (api-config.js)
+    const fromConfig = (window.__KGB_API_BASE__ || '').trim();
+    if (fromConfig) return fromConfig;
 
-    // saneia override (não pode ser o mesmo origin do FRONT)
-    if (override) {
-      const ok = /^https?:\/\//i.test(override) && override !== origin;
-      if (!ok) {
-        try { window['local'+'Storage'] && window['local'+'Storage'].removeItem('API_BASE'); } catch (e) {}
-        override = null;
+    // 2) Se cair aqui, ainda assim: Netlify => Render
+    if (isNetlify) return KGB_RENDER_API;
+
+    // 3) Em local, manter Render como padrão (se vocês usam assim)
+    const isLocal = host === 'localhost' || host === '127.0.0.1';
+    if (isLocal) return KGB_RENDER_API;
+
+    // 4) fallback final
+    return KGB_RENDER_API;
+  }
+
+  // Expor de forma estável
+  window.API_BASE = kgbResolveApiBase();
+  console.log('[KGB] kgb-common: resolved API_BASE =', window.API_BASE);
+
+
+  // Expor window.apiFetch que SEMPRE usa window.API_BASE
+  window.apiFetch = async function apiFetch(path, options = {}) {
+    const base = (window.API_BASE || kgbResolveApiBase() || '').replace(/\/+$/,'');
+    const p = (path || '').startsWith('/') ? path : `/${path}`;
+    const url = `${base}${p}`;
+
+    const opts = { ...options };
+    opts.headers = { ...(options.headers || {}) };
+
+    // Se vocês usam auth token:
+    try {
+      const token = localStorage.getItem('KGB_TOKEN') || sessionStorage.getItem('KGB_TOKEN');
+      if (token && !opts.headers.Authorization) {
+        opts.headers.Authorization = `Bearer ${token}`;
       }
-    }
-
-    // regra final
-    let base = override || RENDER_API_FALLBACK;
-
-    // EM LOCALHOST sempre força cloud
-    if (isLocal) base = RENDER_API_FALLBACK;
+    } catch (_) {}
 
     try {
-      const d = Object.getOwnPropertyDescriptor(window, '__API_BASE__');
-      if (!d || d.writable || typeof d.set === 'function') {
-        window.__API_BASE__ = base;
-        console.log('[KGB] API_BASE =>', window.__API_BASE__);
-      } else {
-        console.warn('[API_BASE] __API_BASE__ é read-only, mantendo valor atual');
-      }
-    } catch (e) {
-      // fallback: tentar atribuir diretamente (ambientes sem descriptors)
-      try { window.__API_BASE__ = base; } catch (e2) { /* ignore */ }
+      const res = await fetch(url, opts);
+      return res;
+    } catch (err) {
+      console.error('[KGB] apiFetch failed:', { url, err });
+      throw err;
     }
-
-    console.log('[KGB] origin =', origin);
-  })();
-
-  // 2) Transport: se não existir `window.apiFetch`, criamos um wrapper padrão.
-  // Este wrapper monta a URL usando `window.__API_BASE__` e trata JSON automaticamente.
-  if (typeof window !== 'undefined' && typeof window.apiFetch !== 'function') {
-    window.apiFetch = async function apiFetch(path, opts = {}) {
-      try {
-        const baseUrl = (typeof window.__API_BASE__ === 'string' && window.__API_BASE__) ? String(window.__API_BASE__).replace(/\/+$/,'') : DEFAULT_PROD_API;
-
-        // Se path é URL absoluta, usa direto
-        const isAbsolute = typeof path === 'string' && /^(https?:)?\/\//i.test(path);
-        const finalUrl = isAbsolute ? path : (String(path).startsWith('/') ? (baseUrl + String(path)) : (baseUrl + '/' + String(path)));
-
-        const method = (opts && opts.method) ? String(opts.method).toUpperCase() : 'GET';
-        const headers = Object.assign({}, (opts && opts.headers) ? opts.headers : {}, window.__kgbAuthHeaders ? window.__kgbAuthHeaders() : {});
-
-        const fetchOpts = { method, headers };
-        if (opts && opts.body !== undefined && opts.body !== null) {
-          // aceita body já serializado ou objetos — padroniza para JSON
-          if (typeof opts.body === 'string' || opts.body instanceof FormData) {
-            fetchOpts.body = opts.body;
-            // se for string presumimos JSON quando não for FormData
-            if (typeof opts.body === 'string' && !fetchOpts.headers['Content-Type']) fetchOpts.headers['Content-Type'] = 'application/json';
-          } else {
-            fetchOpts.body = JSON.stringify(opts.body);
-            fetchOpts.headers['Content-Type'] = 'application/json';
-          }
-        }
-
-        const resp = await fetch(finalUrl, fetchOpts);
-        const contentType = resp.headers.get('content-type') || '';
-        if (!resp.ok) {
-          const text = await resp.text().catch(()=>null);
-          const err = new Error('HTTP ' + resp.status + ' ' + resp.statusText + (text ? (': '+ text) : ''));
-          err.status = resp.status;
-          err.body = text;
-          throw err;
-        }
-        if (contentType.includes('application/json')) return await resp.json();
-        // fallback: texto
-        return await resp.text();
-      } catch (e) {
-        // rethrow para os callers lidarem
-        throw e;
-      }
-    };
-  }
+  };
 
   // pequeno helper para uso interno: chama window.apiFetch e propaga erro api_unavailable
   async function __call_apiFetch(path, opts = {}) {
