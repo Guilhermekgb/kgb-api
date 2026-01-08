@@ -12,6 +12,7 @@ const fs       = require('fs');
 const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
+const bcrypt   = require('bcryptjs');
 
 // Boot log to help identify which server.js is running on the host
 console.log('[BOOT]', 'KGB API SERVER LOADED', new Date().toISOString());
@@ -592,7 +593,7 @@ function requireAuth(req, res, next) {
 }
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[AUTH] POST /auth/login req.headers=', req.headers);
     try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
@@ -608,36 +609,43 @@ app.post('/auth/login', (req, res) => {
         row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(nome) = ?').get(identifier);
       }
 
-      // Se encontrou no DB, valida senha
+      // Se encontrou no DB, valida senha usando bcrypt (await)
       if (row) {
-        if (String(row.senha || '') !== String(senha)) {
+        try {
+          const hash = String(row.senha || '');
+          const senhaOk = await bcrypt.compare(String(senha || ''), hash);
+          if (!senhaOk) {
+            return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+          }
+
+          const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
+          const token = signToken(payload);
+
+          // Em DEV: cookie httpOnly estático e consistente
+          res.cookie('kgb_token', token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+          });
+
+          // Also create an in-memory bearer token for front-end use
+          try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
+          const memToken = createInMemoryTokenFor(payload);
+          // Expor o token também no header para clientes que armazenam KGB_TOKEN
+          try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
+          return res.json({ ok: true, data: payload, token: memToken });
+        } catch (errCompare) {
+          console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           return res.status(401).json({ ok: false, error: 'Invalid credentials' });
         }
-
-        const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
-        const token = signToken(payload);
-
-        // Em DEV: cookie httpOnly estático e consistente
-        res.cookie('kgb_token', token, {
-          httpOnly: true,
-          secure: false,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-
-        // Also create an in-memory bearer token for front-end use
-        try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
-        const memToken = createInMemoryTokenFor(payload);
-        // Expor o token também no header para clientes que armazenam KGB_TOKEN
-        try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-        return res.json({ ok: true, data: payload, token: memToken });
       }
 
       // Fallback: aceitar usuários mock em memória quando não existirem no DB
       if (mockUsers[identifier]) {
-        // aceitar senha padrão '123' ou qualquer senha (preferir 123)
-        if (String(senha) !== '123' && String(senha).length === 0) {
+        // Para usuários mock, exigir senha explícita '123' em ambiente de desenvolvimento
+        if (String(senha) !== '123') {
           return res.status(401).json({ ok: false, error: 'Invalid credentials' });
         }
         const payload = mockUsers[identifier];
