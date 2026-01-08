@@ -12,6 +12,8 @@ const fs       = require('fs');
 const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
+// Build identifier for debug/deploy verification
+const BUILD_ID = `build_${new Date().toISOString()}`;
 const bcrypt   = require('bcryptjs');
 
 // Boot log to help identify which server.js is running on the host
@@ -600,8 +602,10 @@ app.post('/auth/login', async (req, res) => {
   }
   const { email, senha } = req.body || {};
   const password = (senha ?? req.body?.password ?? '').toString();
-  console.log('[AUTH] login attempt', { email, hasPassword: !!password });
-  if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password' });
+  // expose build header to help detect which code is running
+  try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
+  console.log('[AUTH] login attempt', { email, hasPassword: !!password, buildId: BUILD_ID });
+  if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
 
   try {
       const identifier = String(email || '').toLowerCase();
@@ -618,7 +622,7 @@ app.post('/auth/login', async (req, res) => {
           const senhaOk = await bcrypt.compare(String(password || ''), hash);
           if (!senhaOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
-            return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+            return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
           }
 
           const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
@@ -638,11 +642,11 @@ app.post('/auth/login', async (req, res) => {
           const memToken = createInMemoryTokenFor(payload);
           // Expor o token também no header para clientes que armazenam KGB_TOKEN
           try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-          return res.json({ ok: true, data: payload, token: memToken });
+          return res.status(200).json({ ok: true, data: payload, token: memToken, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
-          return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+          return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
         }
       }
 
@@ -653,7 +657,7 @@ app.post('/auth/login', async (req, res) => {
         // Para usuários mock, exigir senha explícita '123' em ambiente de desenvolvimento
         if (String(password) !== '123') {
           console.warn('[AUTH] invalid credentials', { email, branch: 'mock' });
-          return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+          return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
         }
         const payload = mock;
         const token = signToken(payload);
@@ -667,13 +671,12 @@ app.post('/auth/login', async (req, res) => {
         const memToken = createInMemoryTokenFor(payload);
         // Expor o token também no header para clientes que armazenam KGB_TOKEN
         try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-        return res.json({ ok: true, data: payload, token: memToken });
+        return res.status(200).json({ ok: true, data: payload, token: memToken, buildId: BUILD_ID });
       }
-
-      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+      return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
   } catch (err) {
     console.error('[auth] POST /auth/login erro:', err);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
+    return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
   }
 });
 
@@ -745,11 +748,9 @@ app.get('/auth/me', (req, res) => {
 // Simple version endpoint to validate deployed code
 app.get('/version', (req, res) => {
   try {
-    const buildTime = new Date().toISOString();
-    const gitCommit = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.COMMIT_HASH || 'unknown';
-    return res.json({ buildTime, gitCommit });
+    return res.json({ buildId: BUILD_ID, now: new Date().toISOString() });
   } catch (e) {
-    return res.json({ buildTime: new Date().toISOString(), gitCommit: 'unknown' });
+    return res.json({ buildId: BUILD_ID, now: new Date().toISOString() });
   }
 });
 
