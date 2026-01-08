@@ -320,10 +320,11 @@
     <div id="listaClientesModal" style="display:grid; gap:8px;"></div>
   </div>
 </div>
-<!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, script da página -->
+<!-- Ordem obrigatória de scripts (Pacote 1): api-config, kgb-common, proteger-pagina, api-fetch, script da página -->
+<script type="module" src="./api/api-config.js"></script>
 <script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
 <script type="module" src="./api/api-fetch.js" defer></script>
-<script src="./api/proteger-pagina.js" defer></script>
 <script src="cadastro-evento.js"></script>
 
 <!-- Guard / RBAC helpers and auth (executar após scripts carregarem) -->

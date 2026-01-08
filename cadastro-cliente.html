@@ -436,7 +436,9 @@ body.no-scroll{
 
 
   <!-- Guard do modelo base -->
-  <script src="./api/proteger-pagina.js"></script>
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
     const meta = document.querySelector('meta[name="page-permission"]');
     const permissao = meta?.content?.trim();

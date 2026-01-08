@@ -426,7 +426,9 @@
 
   <!-- ==== JS ORIGINAL DA PÁGINA (sem mudanças funcionais) ==== -->
   <!-- Guard / RBAC (garantir que kgb-common.js já foi carregado antes) -->
-  <script src="./api/proteger-pagina.js"></script>
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
 
   <script>
    // using global guard exposed by ./api/proteger-pagina.js
