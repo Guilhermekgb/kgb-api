@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Test Login</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}button{margin:6px}</style>
+</head>
+<body>
+  <h2>Teste /auth/login</h2>
+  <p>Preencha e clique: (credentials: omit)</p>
+  <label>Email: <input id="email" value="admin@kgb.com" style="width:360px"/></label><br/>
+  <label>Senha certa: <input id="senhaCerta" value="senha-certa" style="width:240px"/></label><br/>
+  <label>Senha errada: <input id="senhaErrada" value="senha-errada" style="width:240px"/></label><br/>
+  <button id="btnWrong">Testar senha errada</button>
+  <button id="btnRight">Testar senha certa</button>
+  <pre id="out" style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;margin-top:12px;max-height:400px;overflow:auto"></pre>
+
+  <script>
+    function getBase(){ try { return window.__API_BASE__ || window.API_BASE || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || ''; } catch(e){ return ''; } }
+    async function doTest(email, senha){
+      const out = document.getElementById('out');
+      const base = getBase();
+      const url = (String(base).replace(/\/+$/,'') || window.location.origin) + '/auth/login';
+      out.textContent += `\n---- POST ${url} (email=${email}, senha=${senha}) ----\n`;
+      try {
+        const resp = await fetch(url, {
+          method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'omit',
+          body: JSON.stringify({ email, senha })
+        });
+        out.textContent += `[status] ${resp.status}\n`;
+        const raw = await resp.clone().text().catch(()=>'');
+        out.textContent += `[body] ${raw.slice(0,500)}\n`;
+      } catch (e){ out.textContent += `[error] ${String(e)}\n`; }
+    }
+
+    document.getElementById('btnWrong').addEventListener('click', ()=>{
+      const email = document.getElementById('email').value; const senha = document.getElementById('senhaErrada').value;
+      doTest(email, senha);
+    });
+    document.getElementById('btnRight').addEventListener('click', ()=>{
+      const email = document.getElementById('email').value; const senha = document.getElementById('senhaCerta').value;
+      doTest(email, senha);
+    });
+  </script>
+</body>
+</html>

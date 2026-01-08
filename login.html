@@ -250,6 +250,10 @@
         });
 
         console.log('[LOGIN] status', resp.status);
+        try {
+          const raw = await resp.clone().text().catch(() => '');
+          console.log('[LOGIN][DIAG] raw body', String(raw || '').slice(0, 500));
+        } catch (e) { console.warn('[LOGIN][DIAG] failed reading body', e); }
 
         if (!resp.ok) {
           // NUNCA REDIRECIONAR EM FALHA
