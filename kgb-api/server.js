@@ -647,12 +647,22 @@ app.post('/dev/seed-admin', async (req, res) => {
 
     if (senha.length < 8) return res.status(400).json({ ok: false, error: 'Senha deve ter pelo menos 8 caracteres' });
 
-    const existing = db.prepare('SELECT id, email FROM usuarios WHERE lower(email)=?').get(email);
-    if (existing) {
-      return res.json({ ok: true, created: false, id: existing.id, email: existing.email });
-    }
-
+    const existing = db.prepare('SELECT id, email, nome, perfil FROM usuarios WHERE lower(email)=?').get(email);
     const hash = await bcrypt.hash(senha, 10);
+
+    if (existing) {
+      // update existing user: set new hash, clear legacy senha, force must_change_password
+      try {
+        const newNome = String((req.body && req.body.nome) || existing.nome || 'Administrador');
+        const newPerfil = String((req.body && req.body.perfil) || existing.perfil || 'ADMIN');
+        db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 1, nome = ?, perfil = ? WHERE id = ?')
+          .run(hash, '', newNome, newPerfil, existing.id);
+        return res.json({ ok: true, created: false, updated: true, id: existing.id });
+      } catch (e) {
+        console.error('[SEED] failed to update existing admin user:', e && e.message);
+        return res.status(500).json({ ok: false, error: 'Seed update failed' });
+      }
+    }
 
     try {
         const stmt = db.prepare(`
