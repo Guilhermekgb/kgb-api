@@ -826,8 +826,21 @@ app.post('/auth/recover', async (req, res) => {
     db.prepare('INSERT INTO password_resets(id,user_id,email,token,expires_iso,used,created_at) VALUES(?,?,?,?,?,?,?)')
       .run(id, user.id, user.email, token, expires, 0, new Date().toISOString());
 
-    const frontend = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-    console.log('[AUTH] password reset link (log):', `${frontend}/redefinir-senha.html?token=${token}`);
+    // Determine if request is from DEV/localhost
+    const hostHeader = String(req.get('host') || '').toLowerCase();
+    const isDev = hostHeader.includes('localhost') || hostHeader.includes('127.0.0.1') || ((process.env.NODE_ENV || '') !== 'production');
+
+    // FRONT_URL used for local dev overrides; fallback to local Live Server
+    const devFront = process.env.FRONT_URL || 'http://127.0.0.1:5500';
+    const prodFront = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const frontend = isDev ? devFront : prodFront;
+
+    const resetLink = `${frontend.replace(/\/+$/,'')}/redefinir-senha.html?token=${token}`;
+    console.log('[AUTH] password reset link (log):', resetLink);
+
+    // Always return ok:true to avoid leaking existence of email.
+    // In DEV only, include resetUrl to speed up local testing.
+    if (isDev) return res.json({ ok: true, resetUrl: resetLink });
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/recover erro:', e && e.message);

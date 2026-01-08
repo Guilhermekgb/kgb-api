@@ -6,7 +6,9 @@
   <title>Esqueci Minha Senha | Sistema de Buffet</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
   <script src="https://unpkg.com/lucide@latest"></script>
-    <script type="module" src="./api/remote-adapter.js"></script>
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/remote-adapter.js"></script>
 
   <style>
     /* === Correção principal: evita “vazar” do input (padding conta na largura) === */
@@ -149,22 +151,38 @@
   const form = document.getElementById('form-esqueci');
   const msg  = document.getElementById('mensagem');
 
-  // Helper cloud-only: exige window['apiFetch'] e lança 'api_unavailable' se ausente
+  // Helper: usa `window.apiFetch` quando disponível, ou faz `fetch` usando `__API_BASE__`.
   async function api(endpoint, method = 'GET', body = {}) {
     const m = (method || 'GET').toUpperCase();
     const safeBody = (m === 'GET' || m === 'HEAD') ? undefined : body;
 
-    if (typeof window === 'undefined' || typeof window['apiFetch'] !== 'function') {
-      throw new Error('api_unavailable');
+    // prefer apiFetch if present
+    if (typeof window !== 'undefined' && typeof window['apiFetch'] === 'function') {
+      try {
+        const payload = await window['apiFetch'](String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
+        return { status: 200, data: payload };
+      } catch (err) {
+        console.warn('[esqueci-senha] window[\'apiFetch\'] falhou', err);
+        throw err;
+      }
     }
 
-    try {
-      const payload = await window['apiFetch'](String(endpoint || ''), Object.assign({ method: m }, safeBody !== undefined ? { body: safeBody } : {}));
-      return { status: 200, data: payload };
-    } catch (err) {
-      console.warn('[esqueci-senha] window[\'apiFetch\'] falhou', err);
-      throw err;
+    // fallback para fetch direto quando API_BASE estiver definido
+    const base = (typeof window !== 'undefined') ? (window.__API_BASE__ || window.API_BASE || '') : '';
+    if (base) {
+      const url = String(endpoint || '').startsWith('http') ? String(endpoint || '') : (base.replace(/\/+$/,'') + (String(endpoint || '').startsWith('/') ? '' : '/') + String(endpoint || ''));
+      const opts = { method: m, headers: { 'Content-Type': 'application/json' } };
+      if (safeBody !== undefined) opts.body = JSON.stringify(safeBody);
+      const resp = await fetch(url, opts);
+      let data = null;
+      try {
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')) data = await resp.json(); else data = await resp.text();
+      } catch (e) { data = null; }
+      return { status: resp.status, data };
     }
+
+    throw new Error('api_unavailable');
   }
 
   form.addEventListener('submit', async function (ev) {
@@ -178,9 +196,17 @@
 
     msg.textContent = 'Enviando instruções...';
 
+    console.log('[RECOVER] API_BASE =', window.__API_BASE__);
+
     try {
       const resp = await api('/auth/recover', 'POST', { email });
       if (resp && resp.status >= 200 && resp.status < 300) {
+        const data = resp.data || {};
+        if (data.resetUrl) {
+          // Dev: redirect automatically to the reset page with token
+          window.location.href = data.resetUrl;
+          return;
+        }
         msg.textContent = 'Se o e-mail existir no sistema, você receberá um link para redefinir a senha em instantes.';
       } else {
         msg.textContent = resp?.data?.error || 'Não foi possível iniciar a recuperação. Tente novamente em alguns minutos.';
