@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Test Login</title>
   <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px}button{margin:6px}</style>
+  <script type="module" src="../api/api-config.js"></script>
+  <script type="module" src="../kgb-common.js"></script>
 </head>
 <body>
   <h2>Teste /auth/login</h2>
@@ -17,11 +19,11 @@
   <pre id="out" style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;margin-top:12px;max-height:400px;overflow:auto"></pre>
 
   <script>
-    function getBase(){ try { return window.__API_BASE__ || window.API_BASE || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || ''; } catch(e){ return ''; } }
+    function getBase(){ try { return (window.__API_BASE__ || window.API_BASE || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || '').replace(/\/+$/,''); } catch(e){ return ''; } }
     async function doTest(email, senha){
       const out = document.getElementById('out');
-      const base = getBase();
-      const url = (String(base).replace(/\/+$/,'') || window.location.origin) + '/auth/login';
+      const base = getBase() || 'https://kgb-api.onrender.com';
+      const url = `${base}/auth/login`;
       out.textContent += `\n---- POST ${url} (email=${email}, senha=${senha}) ----\n`;
       try {
         const resp = await fetch(url, {

@@ -735,6 +735,17 @@ app.get('/auth/me', (req, res) => {
   }
 });
 
+// Simple version endpoint to validate deployed code
+app.get('/version', (req, res) => {
+  try {
+    const buildTime = new Date().toISOString();
+    const gitCommit = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.COMMIT_HASH || 'unknown';
+    return res.json({ buildTime, gitCommit });
+  } catch (e) {
+    return res.json({ buildTime: new Date().toISOString(), gitCommit: 'unknown' });
+  }
+});
+
 // ==================== Endpoints /buffet/* (KV-backed) ====================
 // Persistem pequenos blobs JSON por chave no SQLite (kv_store)
 console.log('[BOOT]', 'Registering /buffet routes');
