@@ -599,22 +599,25 @@ app.post('/auth/login', async (req, res) => {
     try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
   }
   const { email, senha } = req.body || {};
-  if (!email || !senha) return res.status(400).json({ ok: false, error: 'Missing email/senha' });
+  const password = (senha ?? req.body?.password ?? '').toString();
+  console.log('[AUTH] login attempt', { email, hasPassword: !!password });
+  if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password' });
 
   try {
       const identifier = String(email || '').toLowerCase();
-      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(email) = ?').get(identifier);
+      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password FROM usuarios WHERE lower(email) = ?').get(identifier);
       if (!row) {
         // tentar buscar por nome (username) caso o usuário tenha digitado seu nome ao invés do e-mail
-        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha FROM usuarios WHERE lower(nome) = ?').get(identifier);
+        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password FROM usuarios WHERE lower(nome) = ?').get(identifier);
       }
-
       // Se encontrou no DB, valida senha usando bcrypt (await)
       if (row) {
+        console.log('[AUTH] branch', 'db');
         try {
-          const hash = String(row.senha || '');
-          const senhaOk = await bcrypt.compare(String(senha || ''), hash);
+          const hash = String(row.senha_hash || row.password_hash || row.senha || row.password || '');
+          const senhaOk = await bcrypt.compare(String(password || ''), hash);
           if (!senhaOk) {
+            console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
             return res.status(401).json({ ok: false, error: 'Invalid credentials' });
           }
 
@@ -638,17 +641,21 @@ app.post('/auth/login', async (req, res) => {
           return res.json({ ok: true, data: payload, token: memToken });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
+          console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
           return res.status(401).json({ ok: false, error: 'Invalid credentials' });
         }
       }
 
       // Fallback: aceitar usuários mock em memória quando não existirem no DB
-      if (mockUsers[identifier]) {
+      const mock = mockUsers[identifier];
+      if (mock) {
+        console.log('[AUTH] branch', 'mock');
         // Para usuários mock, exigir senha explícita '123' em ambiente de desenvolvimento
-        if (String(senha) !== '123') {
+        if (String(password) !== '123') {
+          console.warn('[AUTH] invalid credentials', { email, branch: 'mock' });
           return res.status(401).json({ ok: false, error: 'Invalid credentials' });
         }
-        const payload = mockUsers[identifier];
+        const payload = mock;
         const token = signToken(payload);
         res.cookie('kgb_token', token, {
           httpOnly: true,
