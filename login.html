@@ -178,89 +178,79 @@
 
     if (!form || !emailInput || !senhaInput) return;
 
-    form.addEventListener("submit", async function (e) {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const email = String(emailInput.value || "").trim().toLowerCase();
-      const senha = String(senhaInput.value || "").trim();
+      const email = (document.getElementById('email')?.value || '').trim();
+      const senha = (document.getElementById('senha')?.value || '').trim();
+
+      // limpa token antes de tentar (evita "passar" com token velho)
+      try {
+        localStorage.removeItem('KGB_AUTH_TOKEN');
+        delete window.KGB_AUTH_TOKEN;
+      } catch (e) {}
 
       if (!email || !senha) {
-        alert("Informe e-mail e senha.");
+        alert('Preencha e-mail e senha.');
         return;
       }
 
-      // Tenta autenticar no backend via /auth/login (cookie httpOnly)
       try {
-        const base = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (window.__API_BASE__ || '');
-        const isSameOrigin3333 = String(location.port || '') === '3333' || base === location.origin;
-        const loginUrl = isSameOrigin3333 ? '/auth/login' : (base || '') + '/auth/login';
+        const isSameOrigin3333 = (window.location.origin || '').includes('localhost:3333') || (window.location.origin || '').includes('127.0.0.1:3333');
+        const base = (window.API_BASE || window.__KGB_API_BASE__ || window.__API_BASE__ || '').replace(/\/+$/,'');
+        const loginUrl = isSameOrigin3333 ? '/auth/login' : (base + '/auth/login');
 
-        // --- [KGB] auth login robusto ---
         const resp = await fetch(loginUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, senha }),
           credentials: 'include',
+          body: JSON.stringify({ email, senha })
         });
 
-        let j = null;
-        try { j = await resp.json(); } catch(e) {}
-
+        // ERRO: NÃO PODE REDIRECIONAR
         if (!resp.ok) {
-          console.warn('[KGB][login] falhou', { status: resp.status, body: j });
+          try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
+          delete window.KGB_AUTH_TOKEN;
           alert('E-mail ou senha inválidos.');
-          return; // <<< CRÍTICO: não pode seguir para redirect
+          return;
         }
 
-        // --- [KGB] auth: token opcional (cookie httpOnly ou Bearer) ---
-        const data = j;
-        const token =
-          (j && (j.token || j.access_token || j.jwt)) ||
-          (data && (data.token || data.access_token || data.jwt)) ||
-          null;
+        // OK: parse JSON e pega token
+        let j = null;
+        try { j = await resp.json(); } catch(e) { j = null; }
 
-        try {
-          const oldKeys = ['KGB_TOKEN','AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt'];
-          for (const k of oldKeys) {
-            try { localStorage.removeItem(k); } catch(e) {}
-            try { sessionStorage.removeItem(k); } catch(e) {}
-          }
-        } catch(e){}
+        const token = (j && (j.token || j.access_token || j.jwt)) ? String(j.token || j.access_token || j.jwt) : '';
 
         if (token) {
           try {
-            localStorage.setItem('KGB_AUTH_TOKEN', String(token));
-            window.KGB_AUTH_TOKEN = String(token);
+            localStorage.setItem('KGB_AUTH_TOKEN', token);
+            window.KGB_AUTH_TOKEN = token;
             console.log('[KGB][login] token salvo em KGB_AUTH_TOKEN');
           } catch (e) {
             console.warn('[KGB][login] falha salvando token', e);
           }
         } else {
-          console.log('[KGB][login] sem token no JSON (provável cookie httpOnly). Seguindo...');
+          // backend pode usar cookie, mas no Netlify->Render o cookie pode falhar.
+          console.warn('[KGB][login] login OK mas sem token no JSON');
         }
 
-        // redirect com returnUrl
+        // SUCESSO: redireciona respeitando returnUrl
         try {
           const params = new URLSearchParams(location.search);
           const returnUrl = params.get('returnUrl');
           location.href = returnUrl ? decodeURIComponent(returnUrl) : './dashboard.html';
+          return;
         } catch (e) {
           location.href = './dashboard.html';
+          return;
         }
 
-        // Após redirecionar, interrompe execução para evitar código posterior
-        return;
       } catch (err) {
-        console.warn('Autenticação via API falhou', err);
-        const elErr = document.getElementById('login-erro');
-        const msg = 'Erro ao conectar ao servidor. Tente novamente.';
-        if (elErr) {
-          elErr.textContent = msg;
-          elErr.style.display = 'block';
-        } else {
-          alert(msg);
-        }
-        return; // NÃO redirecionar em caso de exceção
+        console.error('[KGB][login] erro', err);
+        try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
+        delete window.KGB_AUTH_TOKEN;
+        alert('Falha ao conectar no servidor. Tente novamente.');
+        return;
       }
     });
   })();
