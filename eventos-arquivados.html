@@ -35,8 +35,7 @@
              : PROD_API;
 
     try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->

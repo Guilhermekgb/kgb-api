@@ -1,11 +1,31 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta name="page-permission" content="page:orcamento.html">
   <meta charset="UTF-8">
   <title>Orçamento – Sistema Buffet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
 
+    // Produção (Netlify) -> API (usar mesma origem por padrão)
+    var PROD_API = window.location.origin;
+
+    // Desenvolvimento local — usar same-origin (ex.: mesmo host/porta do navegador)
+    var DEV_API  = window.location.origin;
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
 <!-- Helpers globais (moved to end to ensure correct load order) -->
 
 <!-- (Opcional) ativar ENFORCE do guard -->
@@ -350,7 +370,7 @@
 
     <div class="muted" style="margin:6px 0 12px;">
       Não encontrou a data?
-      <a href="degustacoes-disponiveis.html" target="_blank">abrir “Degustações disponíveis”</a>
+      <a href='/degustacoes-disponiveis' target='_blank'>abrir “Degustações disponíveis”</a>
     </div>
 
     <!-- Campos extras: só aparecem após selecionar a data -->
@@ -375,11 +395,11 @@
 
 
 
-  <!-- Ordem obrigatória de scripts (Pacote 1): api-config, kgb-common, proteger-pagina, api-fetch, script da página -->
-  <script type="module" src="./api/api-config.js"></script>
+  <!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, script da página -->
   <script type="module" src="./kgb-common.js"></script>
-  <script type="module" src="./api/proteger-pagina.js"></script>
-  <script type="module" src="./api/api-fetch.js" defer></script>
+  <script type="module" src="./api/api-fetch.js" defer>
+  <script src="./api/proteger-pagina.js" defer></script>
   <script src="orcamento.js"></script>
 </body>
 </html>
+

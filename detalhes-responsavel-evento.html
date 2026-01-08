@@ -21,9 +21,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    // Não persistir API_BASE em storage do navegador — manter em memória apenas
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    // API base now handled centrally (api-config)
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->

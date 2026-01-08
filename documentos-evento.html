@@ -20,8 +20,7 @@
                : (host === "localhost" || host === "127.0.0.1") ? DEV_API
                : PROD_API;
 
-      window.__API_BASE__ = base;
-      try { window['local'+'Storage'].setItem("__API_BASE__", base); } catch(e){}
+      console.log('[KGB] computed API_BASE ->', base);
     })();
   </script>
   <!-- === FIM PATCH __API_BASE__ (auto) === -->

@@ -58,7 +58,7 @@ function nowIso() {
     page.on("request", (req) => {
       const url = req.url();
       if (
-        url.includes("kgb-api.onrender.com") ||
+        url.includes("kgb-api-v2.onrender.com") ||
         url.includes("kgbprobuffet.netlify.app") ||
         url.endsWith(".js") ||
         url.endsWith(".html")
@@ -70,7 +70,7 @@ function nowIso() {
     page.on("response", (res) => {
       const url = res.url();
       if (
-        url.includes("kgb-api.onrender.com") ||
+        url.includes("kgb-api-v2.onrender.com") ||
         url.includes("kgbprobuffet.netlify.app") ||
         url.endsWith(".js") ||
         url.endsWith(".html")
@@ -168,7 +168,7 @@ function nowIso() {
       for (const e of r.errors) md += `- ${e.type}: ${e.message}\n`;
     }
 
-    const apiRes = r.responses.filter(x => x.url.includes("kgb-api.onrender.com"));
+    const apiRes = r.responses.filter(x => x.url.includes("kgb-api-v2.onrender.com"));
     md += `\n### API Responses (${apiRes.length})\n`;
     for (const a of apiRes.slice(-40)) md += `- ${a.status} ${a.url}\n`;
 

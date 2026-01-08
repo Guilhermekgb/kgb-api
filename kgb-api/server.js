@@ -532,6 +532,20 @@ const JWT_SECRET = process.env.JWT_SECRET || WEBHOOK_SECRET || 'troque-isto-jwt'
 
 app.use(cookieParser());
 
+// Compatibilidade: alias simples para versões legadas de rota
+// Permite que POST /login seja tratado por /auth/login e GET /me por /auth/me
+app.use((req, res, next) => {
+  try {
+    if (req.method === 'POST' && req.path === '/login') {
+      req.url = '/auth/login';
+    }
+    if (req.method === 'GET' && req.path === '/me') {
+      req.url = '/auth/me';
+    }
+  } catch (e) { /* ignore */ }
+  return next();
+});
+
 function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }

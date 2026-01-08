@@ -2,27 +2,7 @@
 <html lang="pt-BR">
 <head>
    <meta charset="UTF-8" />
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
-
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    try { window['local'+'Storage']?.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
 
   <title>Cadastro de Usuário</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />

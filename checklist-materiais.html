@@ -13,28 +13,7 @@
 <script src="./api/proteger-pagina.js"></script>
 <!-- === FIM PATCH GUARD === -->
 
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
-
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    // Não persistir API_BASE em armazenamento persistente — usar variável global em memória
-    try { /* não gravar em armazenamento persistente */ } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
 
 <!-- Memória efêmera do módulo (cache em memória do módulo) -->
 <script>

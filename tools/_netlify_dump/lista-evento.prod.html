@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   
@@ -7,7 +7,35 @@
   <meta charset="UTF-8" />
   <title>Lista de Eventos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
+<!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
+<script>
+  window.addEventListener("error", (e) => {
+    console.error("[KGB][lista-evento] window.error", e.message, e.error);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("[KGB][lista-evento] unhandledrejection", e.reason);
+  });
+</script>
+<script>
+  (function(){
+    var host = String(location.hostname||"").toLowerCase();
+
+    // Produção (Netlify) -> API na Render
+    var PROD_API = window.location.origin;
+
+    // Desenvolvimento local
+    var DEV_API  = "http://127.0.0.1:3333";
+
+    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
+             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
+             : PROD_API;
+
+    try { localStorage.setItem("API_BASE", base); } catch(e) {}
+    window.__API_BASE__ = base;
+    console.log("[KGB] __API_BASE__ =", base);
+  })();
+</script>
+<!-- === FIM PATCH __API_BASE__ (auto) === -->
   
   <!-- Favicon inline para evitar 404 -->
   <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%23fff8f0"/><path d="M32 11a9 9 0 1 1 0 18a9 9 0 0 1 0-18Zm0 21c10 0 18 8 18 18H14c0-10 8-18 18-18Z" fill="%23c29a5d"/></svg>' />
@@ -1104,29 +1132,9 @@ window.addEventListener("storage", (e) => {
 </script>
 <!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, script da página -->
 <script type="module" src="./api/api-config.js"></script>
-<script>
-/**
- * [KGB] Fallback definitivo: garante API Render em produção Netlify
- * Mesmo se api-config.js não estiver presente por algum motivo.
- */
-(function () {
-  try {
-    const host = (location && location.hostname) ? String(location.hostname) : '';
-    const isNetlify = host.endsWith('.netlify.app') || host === 'kgbprobuffet.netlify.app';
-    if (isNetlify) {
-      window.__KGB_API_BASE__ = 'https://kgb-api-v2.onrender.com';
-      // tenta também setar __API_BASE__ se estiver liberado (se estiver read-only, ok)
-      try { window.__API_BASE__ = window.__KGB_API_BASE__; } catch (e) {}
-      console.log('[KGB][lista-evento] fallback API set =>', window.__KGB_API_BASE__);
-    }
-  } catch (e) {
-    console.warn('[KGB][lista-evento] fallback failed', e);
-  }
-})();
-</script>
-<script type="module" src="./api/api-config.js"></script>
-<script type="module" src="./kgb-common.js"></script>
-<script type="module" src="./api/proteger-pagina.js"></script>
+<script type="module" src="./kgb-common.js">
+<script type="module" src="./api/api-fetch.js">
+<script src="./api/proteger-pagina.js"></script>
 
 <script>
 // ===== KGB DIAG: lista-evento (INLINE) =====
@@ -1739,5 +1747,6 @@ window.addEventListener("storage", (e) => {
 </script>
 </body>
 </html>
+
 
 

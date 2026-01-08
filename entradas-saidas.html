@@ -19,10 +19,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    // Não persista API_BASE em armazenamento persistente — usar variável global em memória
-    try { /* não gravar em armazenamento persistente */ } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    // Não persista API_BASE em armazenamento persistente — usar api-config
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->

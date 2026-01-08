@@ -11,28 +11,7 @@
 <!-- Guard de permissões (depende do kgb-common) -->
 <!--<script type="module" src="./api/proteger-pagina.js"></script> -->
 
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
-
-   // Desenvolvimento local (vamos usar a mesma API da Render)
-var DEV_API  = window.location.origin;
-
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
 
   <title>Lista de Clientes</title>
 
@@ -239,7 +218,6 @@ var DEV_API  = window.location.origin;
   <script type="module" src="./api/api-config.js"></script>
   <script type="module" src="./kgb-common.js"></script>
   <script type="module" src="./api/proteger-pagina.js"></script>
-  <script src="./api/api-fetch.js" defer></script>
   <script type="module" src="menu-lateral.js"></script>
   <script type="module" src="clientes-lista.js"></script>
 </body>

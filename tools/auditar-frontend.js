@@ -29,7 +29,7 @@ async function audit(){
   let AUTO_TOKEN = null;
   let AUTO_USER = null;
   try {
-    const loginResp = await fetch('https://kgb-api.onrender.com/auth/login', {
+    const loginResp = await fetch('https://kgb-api-v2.onrender.com/auth/login', {
       method: 'POST', headers: { 'content-type':'application/json' },
       body: JSON.stringify({ email: 'admin@kgb.com', senha: '123' })
     });

@@ -22,7 +22,7 @@
     function getBase(){ try { return (window.__API_BASE__ || window.API_BASE || (typeof window.__getApiBase === 'function' ? window.__getApiBase() : '') || '').replace(/\/+$/,''); } catch(e){ return ''; } }
     async function doTest(email, senha){
       const out = document.getElementById('out');
-      const base = getBase() || 'https://kgb-api.onrender.com';
+      const base = getBase() || 'https://kgb-api-v2.onrender.com';
       const url = `${base}/auth/login`;
       out.textContent += `\n---- POST ${url} (email=${email}, senha=${senha}) ----\n`;
       try {

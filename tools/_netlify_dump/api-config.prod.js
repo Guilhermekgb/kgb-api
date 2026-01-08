@@ -1,6 +1,6 @@
-// api/api-config.js
+﻿// api/api-config.js
 (() => {
-  const RENDER_API = "https://kgb-api-v2.onrender.com";
+  const RENDER_API = "https://kgb-api.onrender.com";
 
   // Detecta Netlify (domínio padrão) e também seu domínio custom
   const host = (location.hostname || "").toLowerCase();
@@ -60,3 +60,4 @@
     })(),
   });
 })();
+

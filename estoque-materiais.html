@@ -19,9 +19,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    // Não persiste API_BASE no navegador em modo cloud-only
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    // Não persiste API_BASE no navegador em modo cloud-only — usar api-config
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->

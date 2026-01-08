@@ -4,27 +4,7 @@
   <meta name="page-permission" content="page:configuracoes.html">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
-
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    try { portalWrite("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
 <!-- === INÍCIO PATCH kgb-common (precisa vir cedo no <head>) === -->
 <script type="module" src="./kgb-common.js"></script>
 <script>

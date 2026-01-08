@@ -4,28 +4,7 @@
   <meta charset="UTF-8" />
  <meta name="page-permission" content="page:cliente-detalhado.html">
 
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API na Render
-    var PROD_API = window.location.origin;
-
-    // Desenvolvimento local
-    var DEV_API = (window.__API_BASE__ || window.location.origin);
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    try { window['local'+'Storage'].setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
-
+  
 <!-- HOMOLOG: garante sessão ANTES do guard (remover em produção) -->
 <script>
   (function ensureDevAuth(){
@@ -426,12 +405,12 @@
 
   <!-- ==== JS ORIGINAL DA PÁGINA (sem mudanças funcionais) ==== -->
   <!-- Guard / RBAC (garantir que kgb-common.js já foi carregado antes) -->
-  <script type="module" src="./api/api-config.js"></script>
-  <script type="module" src="./kgb-common.js"></script>
-  <script type="module" src="./api/proteger-pagina.js"></script>
+    <script type="module" src="./api/api-config.js"></script>
+    <script type="module" src="./kgb-common.js"></script>
+    <script type="module" src="./api/proteger-pagina.js"></script>
 
-  <script>
-   // using global guard exposed by ./api/proteger-pagina.js
+    <script>
+     // using global guard exposed by ./api/proteger-pagina.js
 
     // API helper (cloud-first). Use `window.apiFetch` and provide a safe wrapper with timeout.
     const api = async (endpoint, method = 'GET', body = {}) => {

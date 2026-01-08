@@ -33,9 +33,8 @@ var DEV_API = (window.__API_BASE__ || window.location.origin);
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    // Não persista API_BASE no navegador; apenas exponha para o app
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    // Não persista API_BASE no navegador; centralizar em api-config
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 

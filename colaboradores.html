@@ -55,12 +55,9 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    try { portalWrite("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    try { /* API base handled by api-config */ } catch(e) {}
   })();
 </script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
  <!-- Helpers globais -->
 <script type="module" src="./kgb-common.js"></script>
 

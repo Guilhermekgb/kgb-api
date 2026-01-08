@@ -20,8 +20,7 @@
              : PROD_API;
 
     try { portalWrite ? portalWrite("API_BASE", base) : (function(){ try{ if (!window.__PORTAL_MODE__) { const s = window['local'+'Storage']; s && s.setItem && s.setItem("API_BASE", base); } }catch{} })(); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->

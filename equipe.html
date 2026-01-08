@@ -20,9 +20,8 @@
              : (host === "localhost" || host === "127.0.0.1") ? DEV_API
              : PROD_API;
 
-    // não mais gravamos em storage aqui — apenas expomos global
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
+    // não mais gravamos em storage aqui — central API_BASE tratada por api-config
+    console.log("[KGB] computed API_BASE ->", base);
   })();
 </script>
 <!-- === FIM PATCH __API_BASE__ (auto) === -->
