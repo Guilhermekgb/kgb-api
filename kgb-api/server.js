@@ -166,6 +166,23 @@ CREATE TABLE IF NOT EXISTS portal_tokens (
 );
 `);
 
+// Seed de admin compatível com frontend: cria admin@kgb.com se não existir
+try {
+  const ADMIN_EMAIL = 'admin@kgb.com';
+  const existing = db.prepare('SELECT id FROM usuarios WHERE lower(email) = ?').get(String(ADMIN_EMAIL).toLowerCase());
+  if (!existing) {
+    const id = crypto.randomUUID();
+    const senhaHash = bcrypt.hashSync('123', 10);
+    db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?)')
+      .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', new Date().toISOString());
+    console.log('[SEED] admin criado: admin@kgb.com senha: 123');
+  } else {
+    console.log('[SEED] admin already exists:', existing.id || '(id?)');
+  }
+} catch (e) {
+  console.error('[SEED] erro ao garantir admin seed:', e && e.message);
+}
+
 // Migração: garantir que a tabela `parcelas` aceite event_id NULL e não tenha FK rígida
 try {
   const fkList = db.prepare("PRAGMA foreign_key_list('parcelas')").all();
