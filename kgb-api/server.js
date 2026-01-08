@@ -491,7 +491,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type','Authorization','X-KGB-TOKEN','X-SEED-KEY']
 }));
 
 // Preflight OPTIONS com mesma política
@@ -505,8 +505,27 @@ app.options('*', cors({
     if (origin && origin.endsWith('.netlify.app')) return cb(null, true);
     return cb(null, false);
   },
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type','Authorization','X-KGB-TOKEN','X-SEED-KEY']
 }));
+
+// Global CORS / preflight handler to ensure custom headers (X-SEED-KEY) are accepted
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-KGB-TOKEN, X-SEED-KEY');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
 
 // Parser JSON global: deve ser declarado ANTES das rotas que esperam `req.body`.
 // Mantemos rotas webhook que usam `rawJson` especificando `express.raw()` localmente.
