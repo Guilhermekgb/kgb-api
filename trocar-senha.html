@@ -6,7 +6,7 @@
   <title>Trocar Senha - Sistema Buffet</title>
 
   <script type="module" src="./api/api-config.js"></script>
-  <script defer src="./kgb-common.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
 
   <style>
     :root{
@@ -67,6 +67,7 @@
   <script>
     function getToken(){
       return localStorage.getItem("KGB_TOKEN")
+          || localStorage.getItem("KGB_AUTH_TOKEN")
           || localStorage.getItem("token")
           || sessionStorage.getItem("token")
           || "";
@@ -77,36 +78,61 @@
     }
 
     async function apiPost(path, body){
-      if (typeof window.apiFetch === "function") {
-        return window.apiFetch(path, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + getToken()
-          },
-          body: JSON.stringify(body || {})
-        }).then(r => r.json());
+      const token = getToken();
+      const headers = { 'Content-Type':'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+
+      // Prefer window.apiFetch when available (may be wrapper). Handle both Response and JSON returns.
+      if (typeof window.apiFetch === 'function') {
+        try {
+          const resp = await window.apiFetch(path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
+          // If resp looks like a Fetch Response
+          if (resp && typeof resp.status === 'number') {
+            if (resp.status === 401) {
+              localStorage.removeItem('KGB_TOKEN');
+              localStorage.removeItem('KGB_AUTH_TOKEN');
+              localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD');
+              alert('Sessão expirada. Faça login novamente.');
+              location.href = 'login.html';
+              return { ok: false, error: 'UNAUTHENTICATED' };
+            }
+            try { return await resp.json(); } catch (e) { return { ok: true }; }
+          }
+          // Otherwise assume it's already JSON
+          return resp;
+        } catch (e) {
+          throw e;
+        }
       }
 
       const r = await fetch(apiBase() + path, {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":"Bearer " + getToken()
-        },
+        method: 'POST',
+        headers,
         body: JSON.stringify(body || {})
       });
+
+      if (r.status === 401) {
+        localStorage.removeItem('KGB_TOKEN');
+        localStorage.removeItem('KGB_AUTH_TOKEN');
+        localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD');
+        alert('Sessão expirada. Faça login novamente.');
+        location.href = 'login.html';
+        return { ok: false, error: 'UNAUTHENTICATED' };
+      }
+
       return r.json();
     }
 
     const token = getToken();
     if (!token) {
-      location.href = "login.html";
+      status.textContent = 'Sessão expirada. Faça login novamente.';
+      status.className = 'msg err';
+      setTimeout(() => { location.href = 'login.html'; }, 1200);
     }
 
-    const must = localStorage.getItem("KGB_MUST_CHANGE_PASSWORD");
+    const must = localStorage.getItem('KGB_MUST_CHANGE_PASSWORD');
     if (!must) {
-      location.href = "dashboard.html";
+      setTimeout(() => { location.href = 'dashboard.html'; }, 200);
     }
 
     const s1 = document.getElementById("senha1");
@@ -141,14 +167,20 @@
       try {
         const res = await apiPost("/auth/change-password", { novaSenha: s1.value });
         if (res && res.ok) {
-          localStorage.removeItem("KGB_MUST_CHANGE_PASSWORD");
-          status.textContent = "Senha atualizada com sucesso!";
-          status.className = "msg ok";
-          setTimeout(() => location.href = "dashboard.html", 600);
+          localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD');
+          localStorage.removeItem('KGB_TOKEN');
+          localStorage.removeItem('KGB_AUTH_TOKEN');
+          status.textContent = 'Senha atualizada com sucesso! Faça login novamente.';
+          status.className = 'msg ok';
+          setTimeout(() => location.href = 'login.html', 900);
           return;
         }
-        status.textContent = (res && (res.message || res.error)) ? (res.message || res.error) : "Não foi possível trocar a senha.";
-        status.className = "msg err";
+
+        // If apiPost already redirected on 401, just return
+        if (res && res.error === 'UNAUTHENTICATED') return;
+
+        status.textContent = (res && (res.message || res.error)) ? (res.message || res.error) : 'Não foi possível trocar a senha.';
+        status.className = 'msg err';
       } catch (e) {
         console.error(e);
         status.textContent = "Erro ao trocar senha. Veja o console.";
