@@ -238,13 +238,13 @@
         }
 
         // --- [KGB] auth: token opcional (cookie httpOnly ou Bearer) ---
+        const data = j; // garante compatibilidade: evita "data is not defined"
         const token =
           (j && (j.token || j.access_token || j.jwt)) ||
           (data && (data.token || data.access_token || data.jwt)) ||
           null;
 
         try {
-          // limpar chaves antigas pra não confundir
           const oldKeys = ['KGB_TOKEN','AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt'];
           for (const k of oldKeys) {
             try { localStorage.removeItem(k); } catch(e) {}
@@ -274,26 +274,8 @@
           location.href = './dashboard.html';
         }
 
-        // Fallback dev: se o backend não responder, ainda aceitamos credenciais dev
       } catch (err) {
-        console.warn('Autenticação via API falhou, tentando fallback dev', err);
-      }
-
-      // Fallback legacy (apenas para desenvolvimento local)
-      const EMAIL_FIXO = "admin@buffet.com";
-      const SENHA_FIXA = "123456";
-      if (email === EMAIL_FIXO && senha === SENHA_FIXA) {
-        try {
-          // Fallback DEV: não persiste token falso nem grava KGB_TOKEN; apenas cria sessão em memória
-          window.__ui_login = window.__ui_login || new Map();
-          const perfisLista = ['Administrador'];
-          window.__ui_login.set('auth.roles', perfisLista.join(','));
-          window.__ui_login.set('perfil', perfisLista[0]);
-          const sessao = { id: 'dev', nome: 'Admin Buffet', email: EMAIL_FIXO, perfil: perfisLista[0], perfis: perfisLista };
-          window.__ui_login.set('auth:user', JSON.stringify(sessao));
-        } catch (e) { console.error(e); alert('Erro ao salvar sessão no navegador.'); return; }
-        window.location.href = 'dashboard.html';
-        return;
+        console.warn('Autenticação via API falhou', err);
       }
 
       alert('E-mail ou senha inválidos.');
