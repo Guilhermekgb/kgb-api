@@ -177,7 +177,7 @@
       <button type="submit">Entrar</button>
 
       <div class="link-esqueci">
-        <a href="esqueci-senha.html">Esqueci minha senha</a>
+        <span style="font-size:13px; color:#705542;">Esqueceu a senha? Procure o administrador para redefinir.</span>
       </div>
     </form>
     <div id="login-erro" style="color:#a12; margin-top:12px; display:none"></div>
@@ -276,10 +276,23 @@
           return;
         }
 
-        localStorage.setItem('KGB_AUTH_TOKEN', token);
+        // Salva token(s) padronizados para outras páginas lerem
+        try {
+          localStorage.setItem('KGB_AUTH_TOKEN', token);
+          localStorage.setItem('KGB_TOKEN', token);
+        } catch (e) {}
         console.log('[LOGIN] token salvo len=', token.length);
 
-        // valida sessão com Bearer
+        // Se backend indicar troca obrigatória de senha, redireciona para trocar-senha.html
+        if (data && data.mustChangePassword === true) {
+          try { localStorage.setItem('KGB_MUST_CHANGE_PASSWORD', '1'); } catch(e){}
+          window.location.href = 'trocar-senha.html';
+          return;
+        } else {
+          try { localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD'); } catch(e){}
+        }
+
+        // valida sessão com Bearer e segue fluxo normal
         await apiFetch('/auth/me');
         console.log('[LOGIN] /auth/me OK -> redirect');
 

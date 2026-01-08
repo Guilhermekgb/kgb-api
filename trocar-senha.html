@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trocar Senha - Sistema Buffet</title>
+
+  <script type="module" src="./api/api-config.js"></script>
+  <script defer src="./kgb-common.js"></script>
+
+  <style>
+    :root{
+      --bg:#4b322c;
+      --card:#ffffff;
+      --gold:#c89b3c;
+      --text:#1f1f1f;
+      --muted:#6b6b6b;
+      --input:#eef4ff;
+      --radius:18px;
+      --shadow: 0 18px 40px rgba(0,0,0,.20);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    body{margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg);}
+    .wrap{width:min(520px,92vw);} 
+    .card{background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:34px 32px;}
+    h1{margin:0 0 6px; font-family: "Playfair Display", serif; font-size:34px; color:var(--text); text-align:center;}
+    p{margin:0 0 22px; color:var(--muted); text-align:center; line-height:1.35;}
+    .field{display:flex; flex-direction:column; gap:8px; margin:14px 0;}
+    label{font-size:13px; color:var(--muted);}
+    input{
+      height:44px; border-radius:12px; border:1px solid #e6e6e6;
+      background:var(--input); padding:0 14px; font-size:15px; outline:none;
+    }
+    .btn{
+      width:100%; height:44px; border:none; border-radius:12px;
+      background:var(--gold); color:#fff; font-weight:700; cursor:pointer;
+      margin-top:14px;
+    }
+    .btn:disabled{opacity:.6; cursor:not-allowed;}
+    .msg{margin-top:14px; font-size:13px; color:var(--muted); text-align:center;}
+    .err{color:#b42318;}
+    .ok{color:#067647;}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Troque sua senha</h1>
+      <p>Primeiro acesso: você precisa definir uma senha nova para continuar.</p>
+
+      <div class="field">
+        <label>Nova senha</label>
+        <input id="senha1" type="password" placeholder="Digite a nova senha" />
+      </div>
+
+      <div class="field">
+        <label>Confirmar nova senha</label>
+        <input id="senha2" type="password" placeholder="Confirme a nova senha" />
+      </div>
+
+      <button id="btnSalvar" class="btn" disabled>Salvar e continuar</button>
+      <div id="status" class="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    function getToken(){
+      return localStorage.getItem("KGB_TOKEN")
+          || localStorage.getItem("token")
+          || sessionStorage.getItem("token")
+          || "";
+    }
+
+    function apiBase(){
+      return (window.__API_BASE__ || "").replace(/\/+$/,'');
+    }
+
+    async function apiPost(path, body){
+      if (typeof window.apiFetch === "function") {
+        return window.apiFetch(path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + getToken()
+          },
+          body: JSON.stringify(body || {})
+        }).then(r => r.json());
+      }
+
+      const r = await fetch(apiBase() + path, {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"Bearer " + getToken()
+        },
+        body: JSON.stringify(body || {})
+      });
+      return r.json();
+    }
+
+    const token = getToken();
+    if (!token) {
+      location.href = "login.html";
+    }
+
+    const must = localStorage.getItem("KGB_MUST_CHANGE_PASSWORD");
+    if (!must) {
+      location.href = "dashboard.html";
+    }
+
+    const s1 = document.getElementById("senha1");
+    const s2 = document.getElementById("senha2");
+    const btn = document.getElementById("btnSalvar");
+    const status = document.getElementById("status");
+
+    function validate(){
+      const a = (s1.value || "").trim();
+      const b = (s2.value || "").trim();
+      const ok = a.length >= 8 && a === b;
+      btn.disabled = !ok;
+      status.textContent = "";
+      status.className = "msg";
+      if (a && a.length < 8) {
+        status.textContent = "A senha deve ter pelo menos 8 caracteres.";
+        status.className = "msg err";
+      } else if (a && b && a !== b) {
+        status.textContent = "As senhas não conferem.";
+        status.className = "msg err";
+      }
+    }
+
+    s1.addEventListener("input", validate);
+    s2.addEventListener("input", validate);
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      status.textContent = "Salvando...";
+      status.className = "msg";
+
+      try {
+        const res = await apiPost("/auth/change-password", { novaSenha: s1.value });
+        if (res && res.ok) {
+          localStorage.removeItem("KGB_MUST_CHANGE_PASSWORD");
+          status.textContent = "Senha atualizada com sucesso!";
+          status.className = "msg ok";
+          setTimeout(() => location.href = "dashboard.html", 600);
+          return;
+        }
+        status.textContent = (res && (res.message || res.error)) ? (res.message || res.error) : "Não foi possível trocar a senha.";
+        status.className = "msg err";
+      } catch (e) {
+        console.error(e);
+        status.textContent = "Erro ao trocar senha. Veja o console.";
+        status.className = "msg err";
+      } finally {
+        validate();
+      }
+    });
+  </script>
+</body>
+</html>
