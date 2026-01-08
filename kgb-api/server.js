@@ -75,16 +75,30 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
 // Initialize DB schema safely before any seed/migration/login runs
+// Initialize DB schema safely before any seed/migration/login runs
+function safeAddColumn(table, colDef) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`);
+    console.log(`[DB] Added column ${table}.${colDef}`);
+  } catch (e) {
+    const msg = String(e && e.message || e || '');
+    if (!msg.toLowerCase().includes('duplicate') && !msg.toLowerCase().includes('already exists') && !msg.toLowerCase().includes('duplicate column')) {
+      console.warn(`[DB] safeAddColumn warn ${table}.${colDef}:`, msg);
+    }
+  }
+}
+
 function initDb() {
-  // main users table (id as TEXT to preserve existing UUID usage in this project)
+  // create usuarios (keep id as TEXT to preserve existing UUID usage)
   db.exec(`
     CREATE TABLE IF NOT EXISTS usuarios (
       id TEXT PRIMARY KEY,
-      nome TEXT,
       email TEXT UNIQUE,
-      senha TEXT,
+      nome TEXT,
       perfil TEXT,
-      ativo INTEGER DEFAULT 1,
+      whatsapp TEXT,
+      senha TEXT,
+      senha_hash TEXT,
       must_change_password INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -103,15 +117,45 @@ function initDb() {
     );
   `);
 
-  // safe migration: add must_change_password if missing
+  // Safe-add missing columns for older DBs
+  safeAddColumn('usuarios', "nome TEXT");
+  safeAddColumn('usuarios', "perfil TEXT");
+  safeAddColumn('usuarios', "whatsapp TEXT");
+  safeAddColumn('usuarios', "senha TEXT");
+  safeAddColumn('usuarios', "senha_hash TEXT");
+  safeAddColumn('usuarios', "must_change_password INTEGER DEFAULT 0");
+  safeAddColumn('usuarios', "created_at TEXT DEFAULT (datetime('now'))");
+
+  // Try to migrate existing plain senha -> senha_hash (hash if needed)
   try {
     const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
-    if (!cols.includes('must_change_password')) {
-      db.exec("ALTER TABLE usuarios ADD COLUMN must_change_password INTEGER DEFAULT 0;");
-      console.log('[migrate] added usuarios.must_change_password');
+    if (cols.includes('senha') && cols.includes('senha_hash')) {
+      const rows = db.prepare('SELECT id, senha FROM usuarios').all();
+      if (Array.isArray(rows) && rows.length) {
+        const updateStmt = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?');
+        const tx = db.transaction((items) => {
+          for (const r of items) {
+            try {
+              const raw = String(r.senha || '');
+              if (!raw) continue;
+              let hashed;
+              if (raw.startsWith('$2')) {
+                hashed = raw;
+              } else {
+                hashed = bcrypt.hashSync(raw, 10);
+              }
+              updateStmt.run(hashed, '', r.id);
+            } catch (e) {
+              console.warn('[migrate] failed to migrate senha for user', r && r.id, e && e.message);
+            }
+          }
+        });
+        tx(rows);
+        console.log('[migrate] promoted existing usuarios.senha -> usuarios.senha_hash where applicable');
+      }
     }
   } catch (e) {
-    // ignore migration errors
+    console.warn('[migrate] senha -> senha_hash migration failed', e && e.message);
   }
 }
 
@@ -231,8 +275,8 @@ if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED_ADMIN === '1'
     if (!existing) {
       const id = crypto.randomUUID();
       const senhaHash = bcrypt.hashSync('123', 10);
-      db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?)')
-        .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', new Date().toISOString());
+      db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha_hash,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', '', new Date().toISOString());
       console.log('[SEED] admin criado: admin@kgb.com senha: 123');
     } else {
       console.log('[SEED] admin already exists:', existing.id || '(id?)');
@@ -612,15 +656,15 @@ app.post('/dev/seed-admin', async (req, res) => {
 
     try {
         const stmt = db.prepare(`
-          INSERT INTO usuarios (email, senha, nome, perfil, created_at, must_change_password)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO usuarios (email, senha_hash, senha, nome, perfil, created_at, must_change_password)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
-        const info = stmt.run(email, hash, nome, 'ADMIN', new Date().toISOString(), 1);
+        const info = stmt.run(email, hash, '', nome, 'ADMIN', new Date().toISOString(), 1);
       return res.json({ ok: true, created: true, id: info.lastInsertRowid, email });
     } catch (e1) {
-        const stmt2 = db.prepare(`INSERT INTO usuarios (email, senha, must_change_password) VALUES (?, ?, ?)`);
-        const info2 = stmt2.run(email, hash, 1);
-        return res.json({ ok: true, created: true, id: info2.lastInsertRowid, email, note: 'insert minimo (email,senha)' });
+        const stmt2 = db.prepare(`INSERT INTO usuarios (email, senha_hash, senha, must_change_password) VALUES (?, ?, ?, ?)`);
+        const info2 = stmt2.run(email, hash, '', 1);
+        return res.json({ ok: true, created: true, id: info2.lastInsertRowid, email, note: 'insert minimo (email,senha_hash)' });
     }
   } catch (err) {
     console.error('[SEED] error:', err);
@@ -723,7 +767,7 @@ function requireAuth(req, res, next) {
 
     // Load user from DB to ensure fresh data
     try {
-      const user = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?').get(decoded.id);
+      const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(decoded.id);
       if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
       req.user = user;
       return next();
@@ -751,17 +795,30 @@ app.post('/auth/login', async (req, res) => {
 
   try {
       const identifier = String(email || '').toLowerCase();
-      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password, must_change_password FROM usuarios WHERE lower(email) = ?').get(identifier);
+      let row = db.prepare('SELECT * FROM usuarios WHERE lower(email) = ? LIMIT 1').get(identifier);
       if (!row) {
-        // tentar buscar por nome (username) caso o usuário tenha digitado seu nome ao invés do e-mail
-        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password, must_change_password FROM usuarios WHERE lower(nome) = ?').get(identifier);
+        row = db.prepare('SELECT * FROM usuarios WHERE lower(nome) = ? LIMIT 1').get(identifier);
       }
-      // Se encontrou no DB, valida senha usando bcrypt (await)
+
+      // Se encontrou no DB, valida senha usando bcrypt (await) e atualiza legacy plaintext quando necessário
       if (row) {
         console.log('[AUTH] branch', 'db');
         try {
-          const hash = String(row.senha_hash || row.password_hash || row.senha || row.password || '');
-          const senhaOk = await bcrypt.compare(String(password || ''), hash);
+          let senhaOk = false;
+          if (row.senha_hash && String(row.senha_hash).trim()) {
+            senhaOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
+          } else if (row.senha && String(row.senha).trim()) {
+            // legacy plaintext fallback
+            senhaOk = (String(password || '') === String(row.senha));
+            if (senhaOk) {
+              try {
+                const newHash = await bcrypt.hash(String(password || ''), 10);
+                db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?').run(newHash, '', row.id);
+              } catch (e) {
+                console.warn('[AUTH] failed to upgrade legacy senha to hash for user', row.id, e && e.message);
+              }
+            }
+          }
           console.log('[auth] login attempt', { email, userFound: true, passOk: !!senhaOk });
           if (!senhaOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
@@ -881,7 +938,7 @@ app.get('/auth/me', (req, res) => {
   if (!decoded) return res.status(401).json({ ok: false, error: 'Invalid token' });
 
   try {
-    const user = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(decoded.id);
     if (!user) return res.status(401).json({ ok: false, error: 'User not found' });
     return res.json({ ok: true, data: user });
   } catch (err) {
@@ -961,9 +1018,9 @@ app.post('/auth/reset', async (req, res) => {
 
     const hash = await bcrypt.hash(String(novaSenha), 10);
     if (row.user_id) {
-      db.prepare('UPDATE usuarios SET senha = ? WHERE id = ?').run(hash, row.user_id);
+      db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?').run(hash, '', row.user_id);
     } else if (row.email) {
-      db.prepare('UPDATE usuarios SET senha = ? WHERE lower(email) = ?').run(hash, String(row.email).toLowerCase());
+      db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE lower(email) = ?').run(hash, '', String(row.email).toLowerCase());
     }
     db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(row.id);
     return res.json({ ok: true });
@@ -984,7 +1041,7 @@ app.post('/auth/change-password', requireAuth, async (req, res) => {
     if (!userId) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
 
     const hash = await bcrypt.hash(String(novaSenha), 10);
-    db.prepare('UPDATE usuarios SET senha = ?, must_change_password = 0 WHERE id = ?').run(hash, userId);
+    db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE id = ?').run(hash, '', userId);
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/change-password erro:', e && e.message);
@@ -6605,8 +6662,7 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT id, nome, email, whatsapp, perfil, foto, created_at
-      FROM usuarios
+      SELECT * FROM usuarios
       ORDER BY datetime(created_at) DESC
     `).all();
 
@@ -6637,24 +6693,27 @@ app.post('/usuarios', (req, res) => {
 
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
+    const senhaRaw = (typeof senha === 'string' ? senha : String(senha || ''));
+    const senhaHash = senhaRaw ? bcrypt.hashSync(String(senhaRaw), 10) : '';
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
       emailNorm,
       String(whatsapp || ''),
       String(perfil || '').trim(),
-      String(senha || ''),
+      senhaHash,
+      '',
       (typeof foto === 'string' ? foto : null),
       nowIso,
       1
     );
 
     const user = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?')
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
       .get(id);
 
     return res.status(201).json({ status: 201, data: user });
@@ -6696,27 +6755,35 @@ app.put('/usuarios', (req, res) => {
       }
     }
 
+    // If senha provided, hash and store in both senha and senha_hash for compatibility
+    let newSenhaHash = atual.senha_hash || '';
+    if (typeof senha === 'string' && senha.length) {
+      newSenhaHash = bcrypt.hashSync(String(senha), 10);
+    }
+
     db.prepare(`
       UPDATE usuarios
-         SET nome     = ?,
-             email    = ?,
-             whatsapp = ?,
-             perfil   = ?,
-             senha    = ?,
-             foto     = ?
+         SET nome       = ?,
+             email      = ?,
+             whatsapp   = ?,
+             perfil     = ?,
+             senha_hash = ?,
+             senha      = ?,
+             foto       = ?
        WHERE id = ?
     `).run(
       nome ?? atual.nome,
       emailNorm,
       whatsapp ?? atual.whatsapp,
       perfil ?? atual.perfil,
-      (typeof senha === 'string' ? senha : atual.senha),
+      newSenhaHash,
+      '',
       (typeof foto === 'string' ? foto : atual.foto),
       id
     );
 
     const atualizado = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?')
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
       .get(id);
 
     return res.json({ status: 200, data: atualizado });
@@ -6764,7 +6831,7 @@ app.delete('/usuarios', (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso
+      SELECT *
         FROM usuarios
        ORDER BY datetime(created_at_iso) DESC
     `).all();
@@ -6798,22 +6865,23 @@ app.post('/usuarios', (req, res) => {
     const nowIso = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at_iso, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at_iso, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
       emailNorm,
       String(whatsapp || ''),
       String(perfil || '').trim(),
-      senha ? String(senha) : null,
+      (senha ? bcrypt.hashSync(String(senha), 10) : ''),
+      '',
       typeof foto === 'string' ? foto : null,
       nowIso,
       1
     );
 
     const salvo = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso FROM usuarios WHERE id = ?')
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
       .get(id);
 
     return res.status(201).json({ status: 201, data: salvo });
@@ -6837,7 +6905,7 @@ app.post('/admin/users/:id/reset-password', requireAuth, async (req, res) => {
     if (!targetId || !senhaProvisoria || String(senhaProvisoria).length < 8) return res.status(400).json({ ok: false, error: 'Invalid payload' });
 
     const hash = await bcrypt.hash(String(senhaProvisoria), 10);
-    const info = db.prepare('UPDATE usuarios SET senha = ?, must_change_password = 1 WHERE id = ?').run(hash, targetId);
+    const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 1 WHERE id = ?').run(hash, '', targetId);
     if ((info && info.changes) === 0) return res.status(404).json({ ok: false, error: 'User not found' });
     return res.json({ ok: true });
   } catch (e) {
@@ -6898,7 +6966,7 @@ app.put('/usuarios', (req, res) => {
     );
 
     const atualizado = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso FROM usuarios WHERE id = ?')
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
       .get(id);
 
     return res.json({ status: 200, data: atualizado });
