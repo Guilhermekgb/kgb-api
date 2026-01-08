@@ -74,6 +74,50 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// Initialize DB schema safely before any seed/migration/login runs
+function initDb() {
+  // main users table (id as TEXT to preserve existing UUID usage in this project)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id TEXT PRIMARY KEY,
+      nome TEXT,
+      email TEXT UNIQUE,
+      senha TEXT,
+      perfil TEXT,
+      ativo INTEGER DEFAULT 1,
+      must_change_password INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // password_resets table (used by recovery flow)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      email TEXT,
+      token TEXT UNIQUE,
+      expires_iso TEXT,
+      used INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+  `);
+
+  // safe migration: add must_change_password if missing
+  try {
+    const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
+    if (!cols.includes('must_change_password')) {
+      db.exec("ALTER TABLE usuarios ADD COLUMN must_change_password INTEGER DEFAULT 0;");
+      console.log('[migrate] added usuarios.must_change_password');
+    }
+  } catch (e) {
+    // ignore migration errors
+  }
+}
+
+// Call initDb early to ensure core tables exist
+initDb();
+
 // Tabelas
 db.exec(`
 CREATE TABLE IF NOT EXISTS eventos (
@@ -179,20 +223,25 @@ CREATE TABLE IF NOT EXISTS portal_tokens (
 `);
 
 // Seed de admin compatível com frontend: cria admin@kgb.com se não existir
-try {
-  const ADMIN_EMAIL = 'admin@kgb.com';
-  const existing = db.prepare('SELECT id FROM usuarios WHERE lower(email) = ?').get(String(ADMIN_EMAIL).toLowerCase());
-  if (!existing) {
-    const id = crypto.randomUUID();
-    const senhaHash = bcrypt.hashSync('123', 10);
-    db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?)')
-      .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', new Date().toISOString());
-    console.log('[SEED] admin criado: admin@kgb.com senha: 123');
-  } else {
-    console.log('[SEED] admin already exists:', existing.id || '(id?)');
+// NÃO rodar seed automático em produção — só quando NODE_ENV != 'production' e AUTO_SEED_ADMIN=1
+if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED_ADMIN === '1') {
+  try {
+    const ADMIN_EMAIL = 'admin@kgb.com';
+    const existing = db.prepare('SELECT id FROM usuarios WHERE lower(email) = ?').get(String(ADMIN_EMAIL).toLowerCase());
+    if (!existing) {
+      const id = crypto.randomUUID();
+      const senhaHash = bcrypt.hashSync('123', 10);
+      db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?)')
+        .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', new Date().toISOString());
+      console.log('[SEED] admin criado: admin@kgb.com senha: 123');
+    } else {
+      console.log('[SEED] admin already exists:', existing.id || '(id?)');
+    }
+  } catch (e) {
+    console.error('[SEED] erro ao garantir admin seed:', e && e.message);
   }
-} catch (e) {
-  console.error('[SEED] erro ao garantir admin seed:', e && e.message);
+} else {
+  console.log('[SEED] automatic admin seed skipped (production or AUTO_SEED_ADMIN not enabled)');
 }
 
 // Migração: garantir que a tabela `parcelas` aceite event_id NULL e não tenha FK rígida
@@ -233,25 +282,6 @@ CREATE TABLE IF NOT EXISTS portal_eventos_publicos (
   event_id TEXT PRIMARY KEY,
   json     TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS usuarios (
-  id TEXT PRIMARY KEY,
-  nome TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  whatsapp TEXT,
-  perfil TEXT NOT NULL,
-  senha TEXT,
-  foto TEXT,
-  created_at TEXT NOT NULL
-);
-
-// Ensure must_change_password column exists (migration safe: SQLite allows ALTER TABLE ADD COLUMN)
-try {
-  db.exec("ALTER TABLE usuarios ADD COLUMN must_change_password INTEGER DEFAULT 0;");
-  console.log('[migrate] ensured usuarios.must_change_password column');
-} catch (e) {
-  // ignore if already exists or other errors
-}
 `);
 db.exec(`
   CREATE TABLE IF NOT EXISTS clientes (
