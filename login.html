@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="page-permission" content="page:login.html">
@@ -123,6 +124,41 @@
 </head>
 
 <body>
+  <script>
+    // DEBUG + SAFETY: bloquear redirects no login até sucesso explícito
+    window.__ALLOW_REDIRECT__ = false;
+
+    (function(){
+      const _replace = window.location.replace.bind(window.location);
+      const _assign  = window.location.assign.bind(window.location);
+
+      function blocked(target, fnName){
+        const t = String(target || '');
+        const isDash = t.includes('dashboard.html') || t.endsWith('/dashboard') || t.endsWith('/dashboard.html');
+        if (isDash && !window.__ALLOW_REDIRECT__) {
+          console.warn('[LOGIN][BLOCK] Tentativa de redirect bloqueada ->', t, 'via', fnName);
+          console.trace('[LOGIN][BLOCK] stack trace');
+          return; // bloqueia
+        }
+        return fnName === 'replace' ? _replace(target) : _assign(target);
+      }
+
+      window.location.replace = (u) => blocked(u, 'replace');
+      window.location.assign  = (u) => blocked(u, 'assign');
+
+      // também bloqueia navegação via link/button com href dashboard
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        const href = a.getAttribute('href') || '';
+        if ((href.includes('dashboard.html') || href.endsWith('dashboard.html')) && !window.__ALLOW_REDIRECT__) {
+          e.preventDefault();
+          console.warn('[LOGIN][BLOCK] clique em link para dashboard bloqueado:', href);
+          console.trace('[LOGIN][BLOCK] click stack');
+        }
+      }, true);
+    })();
+  </script>
   <div class="login-box">
     <img src="logo.png" alt="Logo KGB" />
     <h2>Entrar no Sistema</h2>
@@ -245,6 +281,8 @@
 
         const params = new URLSearchParams(location.search);
         const returnUrl = params.get('returnUrl') || 'dashboard.html';
+        // permitir redirect somente em sucesso explícito
+        try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
         location.replace(returnUrl);
 
       } catch (err) {
