@@ -181,49 +181,60 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const btn = document.querySelector('button[type="submit"], .btn-entrar, #btnEntrar');
+      const btn = document.querySelector('button[type="submit"], #btnEntrar, .btn-entrar');
       if (btn) btn.disabled = true;
 
-      try {
-        const email = (document.querySelector('#email')?.value || document.querySelector('[name="email"]')?.value || '').trim();
-        const senha = (document.querySelector('#senha')?.value || document.querySelector('[name="senha"]')?.value || '').trim();
+      const email = (document.querySelector('#email')?.value || '').trim();
+      const senha = (document.querySelector('#senha')?.value || '').trim();
 
-        if (!email || !senha) {
-          alert('Preencha e-mail e senha.');
-          return;
+      if (!email || !senha) {
+        alert('Informe e-mail e senha.');
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      // resolve base da API do projeto
+      const base =
+        (window.API_BASE) ||
+        (window.__KGB_API_BASE__) ||
+        (window.__API_BASE__) ||
+        'https://kgb-api.onrender.com';
+
+      const url = String(base).replace(/\/+$/,'') + '/auth/login';
+
+      // limpar chaves antigas pra não confundir
+        try {
+        const oldKeys = ['AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt'];
+        for (const k of oldKeys) {
+          try { localStorage.removeItem(k); } catch(e) {}
+          try { sessionStorage.removeItem(k); } catch(e) {}
         }
+      } catch(e){}
 
-        const isSameOrigin3333 = String(location.port || '') === '3333';
-        const base = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (window.API_BASE || window.__KGB_API_BASE__ || '');
-        const loginUrl = isSameOrigin3333 ? '/auth/login' : `${String(base).replace(/\/+$/,'')}/auth/login`;
-
-        const resp = await fetch(loginUrl, {
+      try {
+        const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ email, senha })
         });
 
+        // >>> ERRO: NÃO PODE REDIRECIONAR <<<
         if (!resp.ok) {
-          alert('E-mail ou senha inválidos.');
+          // tenta ler mensagem do backend
+          let msg = 'E-mail ou senha inválidos.';
+          try {
+            const err = await resp.json();
+            if (err?.error) msg = err.error;
+          } catch(e){}
+          alert(msg);
+          if (btn) btn.disabled = false;
           return;
         }
 
-        let j = null;
-        try { j = await resp.json(); } catch(e) { j = null; }
-
-        // --- [KGB] auth: token opcional (cookie httpOnly ou Bearer) ---
-        const token =
-          (j && (j.token || j.access_token || j.jwt)) ||
-          null;
-
-        try {
-          const oldKeys = ['AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt','__KGB_TOKEN','KGB_AUTH'];
-          for (const k of oldKeys) {
-            try { localStorage.removeItem(k); } catch(e) {}
-            try { sessionStorage.removeItem(k); } catch(e) {}
-          }
-        } catch(e){}
+        // sucesso
+        const j = await resp.json().catch(() => ({}));
+        const token = (j && (j.token || j.access_token || j.jwt)) || null;
 
         if (token) {
           try {
@@ -234,7 +245,7 @@
             console.warn('[KGB][login] falha salvando token', e);
           }
         } else {
-          console.log('[KGB][login] sem token no JSON (provável cookie httpOnly). Seguindo...');
+          console.log('[KGB][login] sem token no JSON (cookie httpOnly possível).');
         }
 
         // redirect com returnUrl
@@ -245,10 +256,10 @@
         } catch (e) {
           location.href = './dashboard.html';
         }
-
       } catch (err) {
-        console.warn('[KGB][login] erro', err);
-        alert('Falha ao entrar. Tente novamente.');
+        console.error('[LOGIN] erro', err);
+        alert('Falha ao conectar no servidor. Tente novamente.');
+        if (btn) btn.disabled = false;
         return;
       } finally {
         if (btn) btn.disabled = false;
