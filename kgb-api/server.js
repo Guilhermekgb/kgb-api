@@ -14,6 +14,8 @@ const csv      = require('fast-csv');
 const multer   = require('multer');
 // Build identifier for debug/deploy verification
 const BUILD_ID = `build_${new Date().toISOString()}`;
+const pkg = (() => { try { return require('./package.json'); } catch (e) { return {}; }})();
+const VERSION = pkg.version || process.env.SERVICE_VERSION || '0.0.0';
 const bcrypt   = require('bcryptjs');
 
 // Boot log to help identify which server.js is running on the host
@@ -99,6 +101,16 @@ CREATE TABLE IF NOT EXISTS recebimentos (
   origem TEXT,
   UNIQUE(id),
   FOREIGN KEY(event_id) REFERENCES eventos(id)
+);
+CREATE TABLE IF NOT EXISTS password_resets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  email TEXT,
+  token TEXT,
+  expires_iso TEXT,
+  used INTEGER DEFAULT 0,
+  created_at TEXT,
+  UNIQUE(token)
 );
 CREATE TABLE IF NOT EXISTS cobrancas_bancarias (
   id TEXT PRIMARY KEY,
@@ -635,7 +647,7 @@ app.post('/auth/login', async (req, res) => {
   const password = (senha ?? req.body?.password ?? '').toString();
   // expose build header to help detect which code is running
   try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
-  console.log('[AUTH] login attempt', { email, hasPassword: !!password, buildId: BUILD_ID });
+  console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
   if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
 
   try {
@@ -651,9 +663,10 @@ app.post('/auth/login', async (req, res) => {
         try {
           const hash = String(row.senha_hash || row.password_hash || row.senha || row.password || '');
           const senhaOk = await bcrypt.compare(String(password || ''), hash);
+          console.log('[auth] login attempt', { email, userFound: true, passOk: !!senhaOk });
           if (!senhaOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
-            return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
+            return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
 
           const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
@@ -677,7 +690,7 @@ app.post('/auth/login', async (req, res) => {
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
-          return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
+          return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
         }
       }
 
@@ -685,10 +698,12 @@ app.post('/auth/login', async (req, res) => {
       const mock = mockUsers[identifier];
       if (mock) {
         console.log('[AUTH] branch', 'mock');
+        const passOk = (String(password) === '123');
+        console.log('[auth] login attempt', { email, userFound: true, passOk });
         // Para usuários mock, exigir senha explícita '123' em ambiente de desenvolvimento
-        if (String(password) !== '123') {
+        if (!passOk) {
           console.warn('[AUTH] invalid credentials', { email, branch: 'mock' });
-          return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
+          return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
         }
         const payload = mock;
         const token = signToken(payload);
@@ -779,9 +794,9 @@ app.get('/auth/me', (req, res) => {
 // Simple version endpoint to validate deployed code
 app.get('/version', (req, res) => {
   try {
-    return res.json({ ok: true, service: 'kgb-api', env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
+    return res.json({ ok: true, service: 'kgb-api', version: VERSION, env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
   } catch (e) {
-    return res.json({ ok: true, service: 'kgb-api', env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
+    return res.json({ ok: true, service: 'kgb-api', version: VERSION, env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
   }
 });
 
@@ -807,6 +822,62 @@ app.post('/auth/reset-password', async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/reset-password erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// POST /auth/recover — inicia fluxo de recuperação (esqueci senha)
+app.post('/auth/recover', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    // Always return 200 to avoid leaking which emails exist
+    if (!email) return res.json({ ok: true });
+
+    const identifier = String(email || '').toLowerCase();
+    const user = db.prepare('SELECT id,email FROM usuarios WHERE lower(email) = ?').get(identifier);
+    if (!user) {
+      console.log('[AUTH] recover requested for', identifier, '-> no user found (silent)');
+      return res.json({ ok: true });
+    }
+
+    // generate token and store in password_resets
+    const token = crypto.randomBytes(32).toString('hex');
+    const id = crypto.randomUUID();
+    const expires = new Date(Date.now() + (30 * 60 * 1000)).toISOString(); // 30 minutes
+    db.prepare('INSERT INTO password_resets(id,user_id,email,token,expires_iso,used,created_at) VALUES(?,?,?,?,?,?,?)')
+      .run(id, user.id, user.email, token, expires, 0, new Date().toISOString());
+
+    const frontend = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    console.log('[AUTH] password reset link (log):', `${frontend}/redefinir-senha.html?token=${token}`);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth] POST /auth/recover erro:', e && e.message);
+    return res.json({ ok: true });
+  }
+});
+
+// POST /auth/reset — finaliza redefinição via token
+app.post('/auth/reset', async (req, res) => {
+  try {
+    const { token, novaSenha } = req.body || {};
+    if (!token || !novaSenha) return res.status(400).json({ ok: false, error: 'Missing token or novaSenha' });
+    if (String(novaSenha).length < 8) return res.status(400).json({ ok: false, error: 'novaSenha must be >= 8 chars' });
+
+    const row = db.prepare('SELECT id,user_id,email,token,expires_iso,used FROM password_resets WHERE token = ?').get(String(token));
+    if (!row) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
+    if (row.used) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
+    if (new Date(row.expires_iso) < new Date()) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
+
+    const hash = await bcrypt.hash(String(novaSenha), 10);
+    if (row.user_id) {
+      db.prepare('UPDATE usuarios SET senha = ? WHERE id = ?').run(hash, row.user_id);
+    } else if (row.email) {
+      db.prepare('UPDATE usuarios SET senha = ? WHERE lower(email) = ?').run(hash, String(row.email).toLowerCase());
+    }
+    db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(row.id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth] POST /auth/reset erro:', e && e.message);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
