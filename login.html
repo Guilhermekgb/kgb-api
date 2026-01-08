@@ -195,50 +195,25 @@
         const isSameOrigin3333 = String(location.port || '') === '3333' || base === location.origin;
         const loginUrl = isSameOrigin3333 ? '/auth/login' : (base || '') + '/auth/login';
 
-        const payload = { email, senha };
-        const method = 'POST';
-        const urlToCall = loginUrl;
-          console.log('[LOGIN] will call', { method, url: '/auth/login', payload: { email, senha: '***' } });
+        // --- [KGB] auth login robusto ---
+        const resp = await fetch(loginUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha }),
+          credentials: 'include',
+        });
 
         let j = null;
-        try {
-          // apiFetch throws on non-OK and returns parsed payload on success
-          j = await window['apiFetch'](urlToCall, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          console.log('[LOGIN] call succeeded', { method, url: urlToCall, response: j });
-        } catch (err) {
-          const status = err && err.status;
-          const payloadErr = err && err.payload;
-          console.error('[LOGIN] failed', { method, url: urlToCall, status, response: payloadErr, message: err && err.message });
-          // mostra resultado na tela para depuração
-          let dbg = document.getElementById('login-debug');
-          if (!dbg) {
-            dbg = document.createElement('pre');
-            dbg.id = 'login-debug';
-            dbg.style.whiteSpace = 'pre-wrap';
-            dbg.style.background = '#111';
-            dbg.style.color = '#fff';
-            dbg.style.padding = '8px';
-            dbg.style.borderRadius = '6px';
-            dbg.style.marginTop = '12px';
-            form.appendChild(dbg);
-          }
-          dbg.textContent = JSON.stringify({ payload, status, response: payloadErr, message: err && err.message }, null, 2);
-          // show friendly error to user
-          try{
-            let errEl = document.getElementById('login-erro');
-            if (!errEl) { errEl = document.createElement('div'); errEl.id = 'login-erro'; form.appendChild(errEl); }
-            errEl.style.display = 'block';
-            errEl.textContent = `Falha no login (status ${status || 'unknown'}). Se estiver em deploy, aguarde o Render atualizar e tente novamente.`;
-          }catch(e){}
-          return;
+        try { j = await resp.json(); } catch(e) {}
+
+        if (!resp.ok) {
+          console.warn('[KGB][login] falhou', { status: resp.status, body: j });
+          alert('E-mail ou senha inválidos.');
+          return; // <<< CRÍTICO: não pode seguir para redirect
         }
 
         // --- [KGB] auth: token opcional (cookie httpOnly ou Bearer) ---
-        const data = j; // garante compatibilidade: evita "data is not defined"
+        const data = j;
         const token =
           (j && (j.token || j.access_token || j.jwt)) ||
           (data && (data.token || data.access_token || data.jwt)) ||
@@ -261,11 +236,10 @@
             console.warn('[KGB][login] falha salvando token', e);
           }
         } else {
-          // Se não veio token, OK: backend pode usar cookie httpOnly
           console.log('[KGB][login] sem token no JSON (provável cookie httpOnly). Seguindo...');
         }
 
-        // garantir redirect com returnUrl
+        // redirect com returnUrl
         try {
           const params = new URLSearchParams(location.search);
           const returnUrl = params.get('returnUrl');
