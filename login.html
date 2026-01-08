@@ -4,29 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="page-permission" content="page:login.html">
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-  <script>
-    (function(){
-      // Produção (Netlify) -> API na Render (usar mesma origem por padrão)
-      var PROD_API = window.location.origin;
-
-      // Em DEV, preferimos usar location.origin quando o backend roda em :3333
-      var DEV_API = (location.port === '3333')
-        ? location.origin
-        : (window.__API_BASE__ || window.location.origin);
-
-      // Exporta helper consistente para o restante do app
-      window.__getApiBase = function () {
-        if (location.port === '3333') return location.origin;
-        return DEV_API;
-      };
-
-      // Mantemos também a variável legada para compatibilidade
-      try { window.__API_BASE__ = window.__getApiBase(); } catch(e){}
-      console.log('[KGB] __getApiBase ->', window.__API_BASE__);
-    })();
-  </script>
-  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
 
   <title>Login - Sistema Buffet</title>
 
@@ -169,108 +147,118 @@
     <div id="login-erro" style="color:#a12; margin-top:12px; display:none"></div>
   </div>
 
-<script>
-  // Login simples SOMENTE PARA USO NA SUA MÁQUINA (desenvolvimento)
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+
+  <script>
+  // LOGIN: hard reset e handler fail-closed
   (function () {
+    // FORCE LOGOUT ON LOGIN PAGE (para evitar token antigo “mascarando” erro)
+    try {
+      localStorage.removeItem('KGB_AUTH_TOKEN');
+      sessionStorage.removeItem('KGB_AUTH_TOKEN');
+    } catch(e){}
+
+    // garantir fallback de API_BASE para uso no snippet abaixo
+    try { window.__API_BASE__ = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,''); } catch(e) { window.__API_BASE__ = (window.__API_BASE__ || ''); }
+
     const form = document.getElementById("formLogin");
     const emailInput = document.getElementById("email");
     const senhaInput = document.getElementById("senha");
+    const erroEl = document.getElementById('login-erro');
+
+    function setError(msg){ try { if(!erroEl) return; erroEl.style.display = msg ? 'block' : 'none'; erroEl.textContent = msg || ''; } catch(e){} }
+    function setLoading(v){ try { const btn = document.querySelector('button[type="submit"], #btnEntrar, .btn-entrar'); if(btn) btn.disabled = !!v; } catch(e){} }
+
+    async function safeReadError(resp) {
+      try {
+        const ct = resp.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const j = await resp.json();
+          return j?.message || j?.error || '';
+        }
+        return (await resp.text())?.slice(0, 200);
+      } catch { return ''; }
+    }
 
     if (!form || !emailInput || !senhaInput) return;
+
+    form.removeAttribute('action');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const btn = document.querySelector('button[type="submit"], #btnEntrar, .btn-entrar');
-      if (btn) btn.disabled = true;
-
-      const email = (document.querySelector('#email')?.value || '').trim();
-      const senha = (document.querySelector('#senha')?.value || '').trim();
-
-      if (!email || !senha) {
-        alert('Informe e-mail e senha.');
-        if (btn) btn.disabled = false;
-        return;
-      }
-
-      // resolve base da API do projeto
-      const base =
-        (window.API_BASE) ||
-        (window.__KGB_API_BASE__) ||
-        (window.__API_BASE__) ||
-        'https://kgb-api.onrender.com';
-
-      const url = String(base).replace(/\/+$/,'') + '/auth/login';
-
-      // limpar chaves antigas pra não confundir
-        try {
-        const oldKeys = ['AUTH_TOKEN','ACCESS_TOKEN','access_token','token','jwt'];
-        for (const k of oldKeys) {
-          try { localStorage.removeItem(k); } catch(e) {}
-          try { sessionStorage.removeItem(k); } catch(e) {}
-        }
+      // HARD RESET sempre
+      try {
+        localStorage.removeItem('KGB_AUTH_TOKEN');
+        sessionStorage.removeItem('KGB_AUTH_TOKEN');
       } catch(e){}
 
+      console.log('[LOGIN] submit start');
+
+      setError('');
+      setLoading(true);
+
       try {
+        const email = emailInput.value.trim();
+        const senha = senhaInput.value;
+
+        const url = `${window.__API_BASE__}/auth/login`;
+        console.log('[LOGIN] POST', url);
+
         const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          credentials: 'omit',
           body: JSON.stringify({ email, senha })
         });
 
-        // >>> ERRO: NÃO PODE REDIRECIONAR <<<
+        console.log('[LOGIN] status', resp.status);
+
         if (!resp.ok) {
-          // tenta ler mensagem do backend
-          let msg = 'E-mail ou senha inválidos.';
+          // NUNCA REDIRECIONAR EM FALHA
+          const msg = await safeReadError(resp);
+          console.warn('[LOGIN] FAIL - no redirect', resp.status, msg);
           try {
-            const err = await resp.json();
-            if (err?.error) msg = err.error;
+            localStorage.removeItem('KGB_AUTH_TOKEN');
+            sessionStorage.removeItem('KGB_AUTH_TOKEN');
           } catch(e){}
-          alert(msg);
-          if (btn) btn.disabled = false;
+          setError(msg || 'E-mail ou senha inválidos.');
+          return; // HARD STOP
+        }
+
+        const data = await resp.json().catch(() => ({}));
+        const token = data?.token;
+
+        if (!token) {
+          console.warn('[LOGIN] OK sem token - bloqueando');
+          setError('Login não retornou token. Verifique /auth/login.');
           return;
         }
 
-        // sucesso
-        const j = await resp.json().catch(() => ({}));
-        const token = (j && (j.token || j.access_token || j.jwt)) || null;
+        localStorage.setItem('KGB_AUTH_TOKEN', token);
+        console.log('[LOGIN] token salvo len=', token.length);
 
-        if (token) {
-          try {
-            localStorage.setItem('KGB_AUTH_TOKEN', String(token));
-            window.KGB_AUTH_TOKEN = String(token);
-            console.log('[KGB][login] token salvo em KGB_AUTH_TOKEN');
-          } catch (e) {
-            console.warn('[KGB][login] falha salvando token', e);
-          }
-        } else {
-          console.log('[KGB][login] sem token no JSON (cookie httpOnly possível).');
-        }
+        // valida sessão com Bearer
+        await apiFetch('/auth/me');
+        console.log('[LOGIN] /auth/me OK -> redirect');
 
-        // redirect com returnUrl
-        try {
-          const params = new URLSearchParams(location.search);
-          const returnUrl = params.get('returnUrl');
-          location.href = returnUrl ? decodeURIComponent(returnUrl) : './dashboard.html';
-        } catch (e) {
-          location.href = './dashboard.html';
-        }
+        const params = new URLSearchParams(location.search);
+        const returnUrl = params.get('returnUrl') || 'dashboard.html';
+        location.replace(returnUrl);
+
       } catch (err) {
-        console.error('[LOGIN] erro', err);
-        alert('Falha ao conectar no servidor. Tente novamente.');
-        if (btn) btn.disabled = false;
-        return;
+        console.error('[LOGIN] exception', err);
+        try {
+          localStorage.removeItem('KGB_AUTH_TOKEN');
+          sessionStorage.removeItem('KGB_AUTH_TOKEN');
+        } catch(e){}
+        setError('Falha ao conectar. Tente novamente.');
       } finally {
-        if (btn) btn.disabled = false;
+        setLoading(false);
       }
     });
   })();
-</script>
-
-
-  <script type="module" src="./api/api-config.js"></script>
-  <script type="module" src="./kgb-common.js"></script>
-  <script type="module" src="./api/api-fetch.js" defer></script>
+  </script>
 </body>
 </html>

@@ -1,18 +1,4 @@
 (function () {
-  function getBase() {
-    return (window.API_BASE || window.__KGB_API_BASE__ || window.__API_BASE__ || 'https://kgb-api.onrender.com')
-      .toString()
-      .replace(/\/+$, '');
-  }
-
-  function getToken() {
-    try {
-      return localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || null;
-    } catch (e) {
-      return window.KGB_AUTH_TOKEN || null;
-    }
-  }
-
   function clearToken() {
     try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
     try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
@@ -29,27 +15,34 @@
     }
   }
 
-  async function callMe() {
-    const token = getToken();
-    const url = getBase() + '/auth/me';
-
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: token ? { Authorization: 'Bearer ' + token } : {},
-      credentials: 'include'
-    });
-
-    return resp;
-  }
-
   // API pública: guard({ permissao })
   window.guard = async function guard(opts = {}) {
+    console.log('[GUARD] start', location.pathname);
+    console.log('[GUARD] token?', !!localStorage.getItem('KGB_AUTH_TOKEN'));
+    // token must exist
+    const token = (function(){ try { return localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || null; } catch(e){ return window.KGB_AUTH_TOKEN || null; } })();
+    if (!token) {
+      clearToken();
+      goLogin();
+      throw new Error('no-token');
+    }
+
     try {
-      const resp = await callMe();
-      if (!resp.ok) {
+      // prefer centralized apiFetch
+      let resp;
+      if (typeof window.apiFetch === 'function') {
+        resp = await window.apiFetch('/auth/me');
+      } else {
+        // fallback to fetch using known base if available
+        const base = (window.API_BASE || window.__KGB_API_BASE__ || window.__API_BASE__ || '').toString().replace(/\/+$/,'');
+        const url = (base ? (base + '/auth/me') : '/auth/me');
+        resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' });
+      }
+
+      if (!resp || !resp.ok) {
         clearToken();
         goLogin();
-        return false;
+        throw new Error('unauthorized');
       }
 
       const j = await resp.json().catch(() => ({}));
@@ -70,7 +63,7 @@
     } catch (e) {
       clearToken();
       goLogin();
-      return false;
+      throw e;
     }
   };
 })();
