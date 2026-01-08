@@ -576,9 +576,10 @@
 <!-- <script type="module" src="fin-cobranca-integ.js"></script> -->
 <script>window.__USE_API_KPIS = true;</script>
 
-<!-- Ordem obrigatória de scripts (Pacote 1): kgb-common, api-fetch, proteger-pagina, menu-lateral, script da página -->
+<!-- Ordem obrigatória de scripts (Pacote 1): api-config, kgb-common, api-fetch, proteger-pagina, menu-lateral, script da página -->
+<script type="module" src="./api/api-config.js"></script>
 <script type="module" src="./kgb-common.js"></script>
-<script type="module" src="./api/api-fetch.js" defer>
+<script type="module" src="./api/api-fetch.js" defer></script>
 <script src="./api/proteger-pagina.js" defer></script>
 <script type="module" src="menu-lateral.js"></script>
 <script src="dashboard.js"></script>

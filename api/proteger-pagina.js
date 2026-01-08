@@ -49,8 +49,16 @@ async function fetchMe() {
     const baseFromHelper = (typeof window.__getApiBase === 'function') ? window.__getApiBase() : (API_BASE || '');
     const meUrl = isSameOrigin3333 ? '/auth/me' : `${baseFromHelper}/auth/me`;
 
-    // Não enviar Authorization Bearer quando same-origin; usar cookie httpOnly
-    const headers = (!isSameOrigin3333 && window.__KGB_TOKEN) ? { Authorization: `Bearer ${window.__KGB_TOKEN}` } : {};
+    // Detectar token unificado: primeiro kgbGetAuthToken, depois localStorage KGB_AUTH_TOKEN, depois window.KGB_AUTH_TOKEN
+    const token = (
+      (typeof window.kgbGetAuthToken === 'function' ? window.kgbGetAuthToken() : null) ||
+      (() => { try { return localStorage.getItem('KGB_AUTH_TOKEN'); } catch(e){ return null; } })() ||
+      window.KGB_AUTH_TOKEN ||
+      null
+    );
+
+    // Não enviar Authorization Bearer quando same-origin em :3333; usar cookie httpOnly
+    const headers = (!isSameOrigin3333 && token) ? { Authorization: `Bearer ${token}` } : {};
 
     try {
       const resp = await window.apiFetch(meUrl, { method: 'GET', credentials: 'include', headers });
@@ -66,8 +74,13 @@ async function fetchMe() {
       // window.apiFetch throws an Error with .status for non-OK responses
       try { if (__AUTH_DEBUG__) console.warn('[AUTH] fetchMe error:', err); } catch(e){}
       if (err && err.status === 401) {
-        // Unauthenticated -> go to login
-        try { window.location.href = 'login.html'; } catch(e){}
+        // Unauthenticated -> limpar token e redirecionar para login preservando returnUrl
+        try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
+        try { delete window.KGB_AUTH_TOKEN; } catch(e){}
+        try {
+          const url = 'login.html?returnUrl=' + encodeURIComponent(location.pathname + location.search + location.hash);
+          window.location.href = url;
+        } catch(e){}
         return null;
       }
       return null;
