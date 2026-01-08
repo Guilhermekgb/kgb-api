@@ -248,11 +248,20 @@
           location.href = './dashboard.html';
         }
 
+        // Após redirecionar, interrompe execução para evitar código posterior
+        return;
       } catch (err) {
         console.warn('Autenticação via API falhou', err);
+        const elErr = document.getElementById('login-erro');
+        const msg = 'Erro ao conectar ao servidor. Tente novamente.';
+        if (elErr) {
+          elErr.textContent = msg;
+          elErr.style.display = 'block';
+        } else {
+          alert(msg);
+        }
+        return; // NÃO redirecionar em caso de exceção
       }
-
-      alert('E-mail ou senha inválidos.');
     });
   })();
 </script>
