@@ -779,9 +779,35 @@ app.get('/auth/me', (req, res) => {
 // Simple version endpoint to validate deployed code
 app.get('/version', (req, res) => {
   try {
-    return res.json({ buildId: BUILD_ID, now: new Date().toISOString() });
+    return res.json({ ok: true, service: 'kgb-api', env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
   } catch (e) {
-    return res.json({ buildId: BUILD_ID, now: new Date().toISOString() });
+    return res.json({ ok: true, service: 'kgb-api', env: process.env.NODE_ENV || 'production', ts: Date.now(), buildId: BUILD_ID });
+  }
+});
+
+// Reset password endpoint: receives { email, novaSenha }
+app.post('/auth/reset-password', async (req, res) => {
+  try {
+    const { email, novaSenha, token } = req.body || {};
+    if (!novaSenha) return res.status(400).json({ ok: false, error: 'Missing novaSenha' });
+    let row = null;
+    if (token && tokenStore.has(String(token))) {
+      const user = tokenStore.get(String(token));
+      if (user && user.email) {
+        row = db.prepare('SELECT id FROM usuarios WHERE lower(email) = ?').get(String(user.email).toLowerCase());
+      }
+    }
+    if (!row && email) {
+      const identifier = String(email || '').toLowerCase();
+      row = db.prepare('SELECT id FROM usuarios WHERE lower(email) = ?').get(identifier);
+    }
+    if (!row) return res.status(404).json({ ok: false, error: 'User not found' });
+    const hash = await bcrypt.hash(String(novaSenha || ''), 10);
+    db.prepare('UPDATE usuarios SET senha = ? WHERE id = ?').run(hash, row.id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth] POST /auth/reset-password erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
 

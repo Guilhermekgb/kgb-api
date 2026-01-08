@@ -5,7 +5,7 @@
 
 	// Se estiver no Netlify, usa a API do Render
 	if (host.endsWith('netlify.app')) {
-		window.__API_BASE__ = 'https://kgb-api.onrender.com';
+		window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
 		console.log('[api-config] Netlify detectado -> __API_BASE__ =', window.__API_BASE__);
 		return;
 	}

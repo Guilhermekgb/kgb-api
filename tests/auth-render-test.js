@@ -1,6 +1,6 @@
 (async function(){
   try{
-    const base = 'https://kgb-api.onrender.com';
+    const base = 'https://kgb-api-v2.onrender.com';
     console.log('GET /health ->', base + '/health');
     let r = await fetch(base + '/health');
     console.log('status=', r.status);

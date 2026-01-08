@@ -205,7 +205,7 @@
       if (btn) btn.disabled = true;
 
       try {
-        const resp = await api('/auth/reset', 'POST', { token: resetToken, novaSenha: a.value.trim() });
+        const resp = await api('/auth/reset-password', 'POST', { email: null, novaSenha: a.value.trim(), token: resetToken });
         if (btn) btn.disabled = false;
 
         if (!resp || resp.status !== 200 || !resp.data || !resp.data.ok) {
