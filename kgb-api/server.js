@@ -244,6 +244,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
   foto TEXT,
   created_at TEXT NOT NULL
 );
+
+// Ensure must_change_password column exists (migration safe: SQLite allows ALTER TABLE ADD COLUMN)
+try {
+  db.exec("ALTER TABLE usuarios ADD COLUMN must_change_password INTEGER DEFAULT 0;");
+  console.log('[migrate] ensured usuarios.must_change_password column');
+} catch (e) {
+  // ignore if already exists or other errors
+}
 `);
 db.exec(`
   CREATE TABLE IF NOT EXISTS clientes (
@@ -573,16 +581,16 @@ app.post('/dev/seed-admin', async (req, res) => {
     const hash = await bcrypt.hash(senha, 10);
 
     try {
-      const stmt = db.prepare(`
-        INSERT INTO usuarios (email, senha, nome, perfil, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      const info = stmt.run(email, hash, nome, 'ADMIN', new Date().toISOString());
+        const stmt = db.prepare(`
+          INSERT INTO usuarios (email, senha, nome, perfil, created_at, must_change_password)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        const info = stmt.run(email, hash, nome, 'ADMIN', new Date().toISOString(), 1);
       return res.json({ ok: true, created: true, id: info.lastInsertRowid, email });
     } catch (e1) {
-      const stmt2 = db.prepare(`INSERT INTO usuarios (email, senha) VALUES (?, ?)`);
-      const info2 = stmt2.run(email, hash);
-      return res.json({ ok: true, created: true, id: info2.lastInsertRowid, email, note: 'insert minimo (email,senha)' });
+        const stmt2 = db.prepare(`INSERT INTO usuarios (email, senha, must_change_password) VALUES (?, ?, ?)`);
+        const info2 = stmt2.run(email, hash, 1);
+        return res.json({ ok: true, created: true, id: info2.lastInsertRowid, email, note: 'insert minimo (email,senha)' });
     }
   } catch (err) {
     console.error('[SEED] error:', err);
@@ -713,10 +721,10 @@ app.post('/auth/login', async (req, res) => {
 
   try {
       const identifier = String(email || '').toLowerCase();
-      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password FROM usuarios WHERE lower(email) = ?').get(identifier);
+      let row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password, must_change_password FROM usuarios WHERE lower(email) = ?').get(identifier);
       if (!row) {
         // tentar buscar por nome (username) caso o usuário tenha digitado seu nome ao invés do e-mail
-        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password FROM usuarios WHERE lower(nome) = ?').get(identifier);
+        row = db.prepare('SELECT id, nome, email, whatsapp, perfil, foto, senha, senha_hash, password_hash, password, must_change_password FROM usuarios WHERE lower(nome) = ?').get(identifier);
       }
       // Se encontrou no DB, valida senha usando bcrypt (await)
       if (row) {
@@ -747,7 +755,7 @@ app.post('/auth/login', async (req, res) => {
           const memToken = createInMemoryTokenFor(payload);
           // Expor o token também no header para clientes que armazenam KGB_TOKEN
           try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-          return res.status(200).json({ ok: true, data: payload, token: memToken, buildId: BUILD_ID });
+          return res.status(200).json({ ok: true, data: payload, token: memToken, mustChangePassword: !!row.must_change_password, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
@@ -931,6 +939,25 @@ app.post('/auth/reset', async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/reset erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
+// POST /auth/change-password — usuário autenticado troca sua senha obrigatória
+app.post('/auth/change-password', requireAuth, async (req, res) => {
+  try {
+    const { novaSenha } = req.body || {};
+    if (!novaSenha || String(novaSenha).length < 8) return res.status(400).json({ ok: false, error: 'novaSenha must be >= 8 chars' });
+
+    // Garantir que temos id do usuário
+    const userId = req.user && req.user.id;
+    if (!userId) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
+
+    const hash = await bcrypt.hash(String(novaSenha), 10);
+    db.prepare('UPDATE usuarios SET senha = ?, must_change_password = 0 WHERE id = ?').run(hash, userId);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[auth] POST /auth/change-password erro:', e && e.message);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
@@ -6582,8 +6609,8 @@ app.post('/usuarios', (req, res) => {
     const nowIso = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
@@ -6592,7 +6619,8 @@ app.post('/usuarios', (req, res) => {
       String(perfil || '').trim(),
       String(senha || ''),
       (typeof foto === 'string' ? foto : null),
-      nowIso
+      nowIso,
+      1
     );
 
     const user = db
@@ -6740,8 +6768,8 @@ app.post('/usuarios', (req, res) => {
     const nowIso = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at_iso)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at_iso, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
@@ -6750,7 +6778,8 @@ app.post('/usuarios', (req, res) => {
       String(perfil || '').trim(),
       senha ? String(senha) : null,
       typeof foto === 'string' ? foto : null,
-      nowIso
+      nowIso,
+      1
     );
 
     const salvo = db
@@ -6761,6 +6790,29 @@ app.post('/usuarios', (req, res) => {
   } catch (err) {
     console.error('[usuarios] POST /usuarios erro:', err);
     return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
+  }
+});
+
+// ADMIN: reset password for a user and force must_change_password=1
+app.post('/admin/users/:id/reset-password', requireAuth, async (req, res) => {
+  try {
+    // Verify admin
+    const actor = req.user;
+    if (!actor || !(String(actor.perfil || '').toLowerCase().includes('admin') || String(actor.perfil || '') === 'ADMIN')) {
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    const targetId = req.params.id;
+    const { senhaProvisoria } = req.body || {};
+    if (!targetId || !senhaProvisoria || String(senhaProvisoria).length < 8) return res.status(400).json({ ok: false, error: 'Invalid payload' });
+
+    const hash = await bcrypt.hash(String(senhaProvisoria), 10);
+    const info = db.prepare('UPDATE usuarios SET senha = ?, must_change_password = 1 WHERE id = ?').run(hash, targetId);
+    if ((info && info.changes) === 0) return res.status(404).json({ ok: false, error: 'User not found' });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[ADMIN] reset-password erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
 
