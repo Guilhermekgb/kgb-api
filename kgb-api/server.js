@@ -529,6 +529,48 @@ app.get('/__debug/boot', (req, res) => {
   });
 });
 
+// ===== DEV/OPS: seed admin (PROTEGIDO) =====
+// Uso: POST /dev/seed-admin com header X-SEED-KEY = process.env.SEED_KEY
+// Body opcional: { email, senha, nome }
+app.post('/dev/seed-admin', async (req, res) => {
+  try {
+    const SEED_KEY = process.env.SEED_KEY;
+    if (!SEED_KEY) return res.status(404).json({ ok: false, error: 'Not found' });
+
+    const provided = String(req.header('X-SEED-KEY') || '');
+    if (provided !== String(SEED_KEY)) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+
+    const email = String((req.body && req.body.email) || 'admin@kgb.com').toLowerCase().trim();
+    const senha = String((req.body && req.body.senha) || 'Admin@12345').trim();
+    const nome  = String((req.body && req.body.nome)  || 'Administrador').trim();
+
+    if (senha.length < 8) return res.status(400).json({ ok: false, error: 'Senha deve ter pelo menos 8 caracteres' });
+
+    const existing = db.prepare('SELECT id, email FROM usuarios WHERE lower(email)=?').get(email);
+    if (existing) {
+      return res.json({ ok: true, created: false, id: existing.id, email: existing.email });
+    }
+
+    const hash = await bcrypt.hash(senha, 10);
+
+    try {
+      const stmt = db.prepare(`
+        INSERT INTO usuarios (email, senha, nome, perfil, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      const info = stmt.run(email, hash, nome, 'ADMIN', new Date().toISOString());
+      return res.json({ ok: true, created: true, id: info.lastInsertRowid, email });
+    } catch (e1) {
+      const stmt2 = db.prepare(`INSERT INTO usuarios (email, senha) VALUES (?, ?)`);
+      const info2 = stmt2.run(email, hash);
+      return res.json({ ok: true, created: true, id: info2.lastInsertRowid, email, note: 'insert minimo (email,senha)' });
+    }
+  } catch (err) {
+    console.error('[SEED] error:', err);
+    return res.status(500).json({ ok: false, error: 'Seed failed' });
+  }
+});
+
 // List registered routes (methods + path) for debugging deployments
 app.get('/__debug/routes', (req, res) => {
   try {
