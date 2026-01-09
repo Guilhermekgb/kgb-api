@@ -800,10 +800,33 @@ app.post('/auth/login', async (req, res) => {
         dlog('login email=', emailNorm, 'dupCount=', dup && dup.c);
       } catch (e) { dlog('login dupCount failed', e && e.message); }
 
-      let row = db.prepare('SELECT * FROM usuarios WHERE lower(trim(email)) = ? LIMIT 1').get(emailNorm);
+      let row = db.prepare(`
+        SELECT
+          COALESCE(id, usuario_id, user_id, ID, rowid) as id,
+          *
+        FROM usuarios
+        WHERE lower(trim(email)) = lower(trim(?))
+        LIMIT 1
+      `).get(emailNorm);
       if (!row) {
-        row = db.prepare('SELECT * FROM usuarios WHERE lower(nome) = ? LIMIT 1').get(emailNorm);
+        row = db.prepare(`
+          SELECT
+            COALESCE(id, usuario_id, user_id, ID, rowid) as id,
+            *
+          FROM usuarios
+          WHERE lower(trim(nome)) = lower(trim(?))
+          LIMIT 1
+        `).get(emailNorm);
       }
+
+      // Normalize user id to ensure signToken always receives a valid id
+      const userId = row?.id ?? row?.usuario_id ?? row?.user_id ?? row?.ID ?? row?.Id ?? row?.rowid;
+      if (!userId) {
+        dlog('login: user keys =', Object.keys(row || {}));
+        return res.status(500).json({ ok: false, error: 'Invalid user record (missing id)' });
+      }
+      // ensure user.id exists for signToken
+      row.id = userId;
 
       // If user not found, fail immediately (no fallback to mock)
       if (!row) {
