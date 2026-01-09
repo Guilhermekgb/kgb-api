@@ -826,6 +826,12 @@ app.post('/auth/login', async (req, res) => {
         row = db.prepare('SELECT * FROM usuarios WHERE lower(nome) = ? LIMIT 1').get(emailNorm);
       }
 
+      // If user not found, fail immediately (no fallback to mock)
+      if (!row) {
+        dlog('login: user not found', emailNorm);
+        return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
+      }
+
       // Se encontrou no DB, valida senha usando bcrypt (await) e atualiza legacy plaintext quando necessário
       if (row) {
         console.log('[AUTH] branch', 'db');
@@ -882,31 +888,6 @@ app.post('/auth/login', async (req, res) => {
         }
       }
 
-      // Fallback: aceitar usuários mock em memória quando não existirem no DB
-      const mock = mockUsers[identifier];
-      if (mock) {
-        console.log('[AUTH] branch', 'mock');
-        const passOk = (String(password) === '123');
-        console.log('[auth] login attempt', { email, userFound: true, passOk });
-        // Para usuários mock, exigir senha explícita '123' em ambiente de desenvolvimento
-        if (!passOk) {
-          console.warn('[AUTH] invalid credentials', { email, branch: 'mock' });
-          return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
-        }
-        const payload = mock;
-        const token = signToken(payload);
-        res.cookie('kgb_token', token, {
-          httpOnly: true,
-          secure: false,
-          sameSite: 'lax',
-          path: '/',
-          maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-        const memToken = createInMemoryTokenFor(payload);
-        // Expor o token também no header para clientes que armazenam KGB_TOKEN
-        try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-        return res.status(200).json({ ok: true, data: payload, token: memToken, buildId: BUILD_ID });
-      }
       return res.status(401).json({ ok: false, error: 'Invalid credentials', buildId: BUILD_ID });
   } catch (err) {
     console.error('[auth] POST /auth/login erro:', err);
