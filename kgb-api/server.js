@@ -737,8 +737,19 @@ app.use((req, res, next) => {
   return next();
 });
 
-function signToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+function signToken(user) {
+  const userId = user && (user.id ?? user.usuario_id ?? user.user_id ?? user.ID ?? user.Id);
+  if (!userId) {
+    dlog('signToken: missing user id, userKeys=', Object.keys(user || {}));
+    throw new Error('Invalid user record (missing id)');
+  }
+  const tokenPayload = {
+    id: userId,
+    nome: user.nome,
+    email: user.email,
+    perfil: user.perfil
+  };
+  return jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
 }
 
 function verifyToken(token) {
@@ -831,7 +842,12 @@ app.post('/auth/login', async (req, res) => {
             return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
 
-          const payload = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
+          const userId = row.id ?? row.usuario_id ?? row.user_id ?? row.ID ?? row.Id;
+          if (!userId) {
+            dlog('login: invalid user record missing id, rowKeys=', Object.keys(row || {}));
+            return res.status(500).json({ ok: false, error: 'Invalid user record (missing id)' });
+          }
+          const payload = { id: userId, nome: row.nome, email: row.email, perfil: row.perfil };
           const token = signToken(payload);
 
           // Em DEV: cookie httpOnly estático e consistente
@@ -846,7 +862,7 @@ app.post('/auth/login', async (req, res) => {
           try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
           // Expor o token JWT também no header para clientes que armazenam KGB_TOKEN
           try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
-          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: row.id, email: row.email, nome: row.nome, perfil: row.perfil }, buildId: BUILD_ID });
+          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: userId, email: row.email, nome: row.nome, perfil: row.perfil }, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
