@@ -845,18 +845,24 @@ app.post('/auth/login', async (req, res) => {
         `).get(emailNorm);
       }
 
-      // Normalize user id to ensure signToken always receives a valid id
-      const userId = row?.id ?? row?.rowid;
-      if (!userId) {
-        dlog('login: user keys =', Object.keys(row || {}));
-        return res.status(500).json({ ok: false, error: 'Invalid user record (missing id)' });
-      }
-      // ensure user.id exists for signToken
-      row.id = userId;
-
       // If user not found, fail immediately (no fallback to mock)
       if (!row) {
         dlog('login: user not found', emailNorm);
+        return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
+      }
+
+      // Ensure id exists; try extra fallback to rowid if necessary
+      if (!row.id) {
+        try {
+          const r2 = db.prepare(`SELECT rowid as id FROM usuarios WHERE lower(trim(email)) = ? LIMIT 1`).get(emailNorm);
+          if (r2 && r2.id) row.id = r2.id;
+        } catch (e) {
+          dlog('login: fallback rowid failed', e && e.message);
+        }
+      }
+
+      if (!row.id) {
+        dlog('login: invalid user record missing id, rowKeys=', Object.keys(row || {}));
         return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
       }
 
