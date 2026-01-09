@@ -23,7 +23,9 @@
       if (dbg) {
         console.warn('[GUARD] redirectToLogin DEBUG - reason:', reason);
         console.warn('[GUARD] redirect url:', url);
-        setTimeout(() => { location.href = url; }, 1200);
+        alert("[GUARD DEBUG] Vou redirecionar para login.\n\nMotivo: " + reason + "\n\nDestino: " + url);
+        // atraso maior para capturar Network/Console
+        setTimeout(() => { location.href = url; }, 10000);
         return;
       }
 
