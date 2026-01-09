@@ -9,7 +9,7 @@
       var host = String(location.hostname||"").toLowerCase();
 
       // Produção: use o API base resolvido pelo sistema (definido acima ou por injeção)
-      const PROD_API = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || "").toString().trim();
+      const PROD_API = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE || "").toString().trim();
 
       // Desenvolvimento local (quando você rodar na sua máquina)
       var DEV_API = (window.__API_BASE__ || window.location.origin);
