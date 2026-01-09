@@ -7,15 +7,34 @@
     try { delete window.KGB_TOKEN; } catch(e){}
   }
 
-  function goLogin() {
+  function redirectToLogin(reason) {
     try {
-      const here = location.pathname.split('/').pop() || 'dashboard.html';
-      const q = encodeURIComponent(here + location.search + location.hash);
-      location.href = './login.html?returnUrl=' + q;
+      const returnUrl =
+        new URLSearchParams(location.search).get('returnUrl') ||
+        (location.pathname.split('/').pop() || '') + location.search + location.hash ||
+        'dashboard.html';
+
+      const url = './login.html?returnUrl=' + encodeURIComponent(returnUrl);
+
+      const dbg = (function(){
+        try { return window.AUTH_DEBUG === '1' || localStorage.getItem('AUTH_DEBUG') === '1' || location.search.indexOf('debug=1') !== -1; } catch(e){ return false; }
+      })();
+
+      if (dbg) {
+        console.warn('[GUARD] redirectToLogin DEBUG - reason:', reason);
+        console.warn('[GUARD] redirect url:', url);
+        setTimeout(() => { location.href = url; }, 1200);
+        return;
+      }
+
+      location.href = url;
     } catch (e) {
-      location.href = './login.html';
+      try { location.href = './login.html'; } catch (err) { /* ignore */ }
     }
   }
+
+  // Backwards-compatible alias used in older code
+  function goLogin() { redirectToLogin('legacy'); }
 
   // API pública: guard({ permissao })
   window.guard = async function guard(opts = {}) {
@@ -46,7 +65,7 @@
       }
       guardWarn('no token found -> redirect to login');
       clearToken();
-      goLogin();
+      redirectToLogin('no-token');
       throw new Error('no-token');
     }
 
@@ -54,13 +73,13 @@
       // prefer centralized apiFetch (resolves __API_BASE__); never call relative /auth/me
       guardLog('__API_BASE__ =', window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE);
       let resp = null;
-      if (typeof window.apiFetch === 'function') {
+        if (typeof window.apiFetch === 'function') {
         try { resp = await window.apiFetch('/auth/me'); } catch (e) { guardWarn('/auth/me via apiFetch failed', e && e.message); resp = null; }
       } else {
         const base = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE || null);
         if (!base) {
           guardWarn('No API base configured (window.__API_BASE__ missing) — avoiding relative /auth/me call');
-          clearToken(); goLogin(); throw new Error('no-api-base');
+          clearToken(); redirectToLogin('no-api-base'); throw new Error('no-api-base');
         }
         const url = String(base).replace(/\/+$/,'') + '/auth/me';
         try { resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' }); } catch (e) { guardWarn('/auth/me fetch failed', e && e.message); resp = null; }
@@ -77,7 +96,7 @@
         status = (resp && resp.ok === false) ? (resp.status || 500) : 200;
       } else { j = {}; status = 500; }
 
-      if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); goLogin(); throw new Error('unauthorized'); }
+      if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
       if (status === 403) { guardWarn('user has no permission (403) -> not redirecting to login'); try { alert('Sem permissão para acessar esta página.'); } catch (e){} location.href = './dashboard.html'; return false; }
 
       window.__KGB_USER__ = j?.data || j || null;
