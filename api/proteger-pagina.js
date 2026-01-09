@@ -38,6 +38,30 @@
   // Backwards-compatible alias used in older code
   function goLogin() { redirectToLogin('legacy'); }
 
+  function getStoredToken() {
+    const keys = ["KGB_TOKEN", "token", "jwt", "KGB_AUTH_TOKEN"];
+    try {
+      for (const k of keys) {
+        const v = localStorage.getItem(k);
+        if (v && typeof v === 'string' && v.trim()) return v.trim();
+      }
+    } catch(e) {}
+
+    try {
+      for (const k of keys) {
+        const v = sessionStorage.getItem(k);
+        if (v && typeof v === 'string' && v.trim()) return v.trim();
+      }
+    } catch(e) {}
+
+    try {
+      const v = (window.KGB_TOKEN || window.token || window.jwt || window.KGB_AUTH_TOKEN);
+      if (v && typeof v === 'string' && v.trim()) return v.trim();
+    } catch(e) {}
+
+    return '';
+  }
+
   // API pública: guard({ permissao })
   window.guard = async function guard(opts = {}) {
     const DBG = (function(){
@@ -46,7 +70,6 @@
     const guardLog = (...a) => { if (DBG) console.log('[GUARD]', ...a); };
     const guardWarn = (...a) => { if (DBG) console.warn('[GUARD]', ...a); };
     guardLog('start', location.pathname);
-    guardLog('token?', !!localStorage.getItem('KGB_AUTH_TOKEN'));
 
     // Normalize required permission from multiple possible keys (pt/en)
     const required = (opts && (opts.permissao || opts.permission || opts.requiredPermission || opts.pagePermission))
@@ -54,19 +77,28 @@
       || '';
 
     // token must exist only if a permission is required
-    const token = (function(){
-      try {
-        return localStorage.getItem('KGB_TOKEN') || localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null;
-      } catch(e) { return window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null; }
-    })();
-    guardLog('token present?', !!token, 'required=', required);
+    const token = getStoredToken();
+
+    // debug snapshot of storages (do not print token)
+    const dbg = (new URLSearchParams(location.search).get('debug') === '1') || (localStorage.getItem('AUTH_DEBUG') === '1');
+    if (dbg) {
+      const snap = {};
+      for (const k of ["KGB_TOKEN","token","jwt","KGB_AUTH_TOKEN"]) {
+        try { snap['ls.'+k] = !!localStorage.getItem(k); } catch(e){ snap['ls.'+k] = 'err'; }
+        try { snap['ss.'+k] = !!sessionStorage.getItem(k); } catch(e){ snap['ss.'+k] = 'err'; }
+      }
+      console.log('[GUARD] token present?', !!token, 'required=', required, 'storage snapshot:', snap);
+    } else {
+      guardLog('token present?', !!token, 'required=', required);
+    }
+
     if (!token) {
       if (!required) {
         guardLog('no token but no required permission -> allowing access');
         return true;
       }
       guardWarn('no token found -> redirect to login');
-      clearToken();
+      // do not clear stored token here; just redirect so developer can inspect storage
       redirectToLogin('no-token');
       throw new Error('no-token');
     }
