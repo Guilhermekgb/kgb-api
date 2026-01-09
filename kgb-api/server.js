@@ -747,9 +747,25 @@ function signToken(user) {
     id: userId,
     nome: user.nome,
     email: user.email,
-    perfil: user.perfil
+    perfil: normalizePerfil(user.perfil)
   };
   return jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+}
+
+// Normalize perfil strings to a small set of canonical display values
+function normalizePerfil(raw) {
+  try {
+    const s = String(raw || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!s) return '';
+    if (s.includes('admin')) return 'Administrador';
+    if (s.includes('venda')) return 'Vendedor';
+    if (s.includes('maitre') || s.includes('maitre')) return 'Maitre';
+    if (s.includes('respons')) return 'Responsavel';
+    // fallback: capitalize first letter
+    return String(raw || '').charAt(0).toUpperCase() + String(raw || '').slice(1);
+  } catch (e) {
+    return String(raw || '');
+  }
 }
 
 function verifyToken(token) {
@@ -895,7 +911,7 @@ app.post('/auth/login', async (req, res) => {
           try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
           // Expor o token JWT também no header para clientes que armazenam KGB_TOKEN
           try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
-          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: userId, email: row.email, nome: row.nome, perfil: row.perfil }, buildId: BUILD_ID });
+          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: userId, email: row.email, nome: row.nome, perfil: normalizePerfil(row.perfil) }, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
@@ -955,7 +971,7 @@ app.get('/auth/me', (req, res) => {
             LIMIT 1
           `).get(payload.id);
           if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
-          return res.json({ ok: true, data: u });
+          return res.json({ ok: true, data: { id: u.id, email: u.email, nome: u.nome, perfil: normalizePerfil(u.perfil) } });
         } catch (e) {
           // invalid/expired bearer, fallthrough to cookie
         }
@@ -978,7 +994,7 @@ app.get('/auth/me', (req, res) => {
       LIMIT 1
     `).get(decoded.id);
     if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
-    return res.json({ ok: true, data: u });
+    return res.json({ ok: true, data: { id: u.id, email: u.email, nome: u.nome, perfil: normalizePerfil(u.perfil) } });
   } catch (err) {
     console.error('[auth] GET /auth/me erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
