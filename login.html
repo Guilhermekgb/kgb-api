@@ -268,10 +268,10 @@
         }
 
         const data = await resp.json().catch(() => ({}));
-        const token = data?.token;
+        const token = data?.token || data?.accessToken || data?.access_token;
 
         if (!token) {
-          console.warn('[LOGIN] OK sem token - bloqueando');
+          console.error('[LOGIN] OK sem token - resposta:', data);
           setError('Login não retornou token. Verifique /auth/login.');
           return;
         }
