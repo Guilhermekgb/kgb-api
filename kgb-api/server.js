@@ -745,57 +745,25 @@ function verifyToken(token) {
   try { return jwt.verify(token, JWT_SECRET); } catch (e) { return null; }
 }
 
-// In-memory token store for simple Bearer token support (mock for Render)
-const tokenStore = new Map();
-
+// NOTE: switched to JWT-only tokens (no in-memory "kgb_" tokens)
 const mockUsers = {
   'admin@kgb.com': { id: 'kgb-admin', nome: 'Administrador', email: 'admin@kgb.com', perfil: 'Administrador', permissoes: ['*'] },
   'vendas@kgb.com': { id: 'kgb-vendas', nome: 'Vendas', email: 'vendas@kgb.com', perfil: 'Vendedor', permissoes: ['vendas'] }
 };
 
-function createInMemoryTokenFor(user) {
-  const token = 'kgb_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
-  tokenStore.set(token, user);
-  return token;
-}
-
 function requireAuth(req, res, next) {
+  const h = req.headers.authorization || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (!m) return res.status(401).json({ ok:false, error:'Unauthorized' });
+  const token = m[1];
   try {
-    // 1) Authorization: Bearer <token> -> check in-memory tokenStore
-    const authH = String(req.headers.authorization || '');
-    if (authH.toLowerCase().startsWith('bearer ')) {
-      const bearer = authH.split(' ')[1];
-      if (bearer && tokenStore.has(bearer)) {
-        req.user = tokenStore.get(bearer);
-        return next();
-      }
-    }
-
-    // 2) alternative headers: kgb_token | x-kgb-token | kgb-token
-    const alt = req.headers['kgb_token'] || req.headers['x-kgb-token'] || req.headers['kgb-token'];
-    if (alt && tokenStore.has(String(alt))) {
-      req.user = tokenStore.get(String(alt));
-      return next();
-    }
-
-    // 3) cookie JWT fallback
-    const token = req.cookies && req.cookies.kgb_token;
-    if (!token) return res.status(401).json({ error: 'UNAUTHENTICATED' });
-    const decoded = verifyToken(token);
-    if (!decoded) return res.status(401).json({ error: 'UNAUTHENTICATED' });
-
-    // Load user from DB to ensure fresh data
-    try {
-      const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(decoded.id);
-      if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
-      req.user = user;
-      return next();
-    } catch (e) {
-      console.error('[requireAuth] erro ao buscar usuario no DB', e && e.message);
-      return res.status(500).json({ error: 'Erro interno' });
-    }
+    if (!JWT_SECRET) return res.status(500).json({ ok:false, error:'Server misconfigured (JWT_SECRET)' });
+    const payload = jwt.verify(token, JWT_SECRET);
+    // Attach basic payload (id,email,perfil) — handlers may load full user if needed
+    req.user = payload;
+    return next();
   } catch (e) {
-    return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    return res.status(401).json({ ok:false, error:'Unauthorized' });
   }
 }
 
@@ -875,12 +843,10 @@ app.post('/auth/login', async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
           });
 
-          // Also create an in-memory bearer token for front-end use
           try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
-          const memToken = createInMemoryTokenFor(payload);
-          // Expor o token também no header para clientes que armazenam KGB_TOKEN
-          try { res.setHeader('KGB_TOKEN', memToken); } catch (e) {}
-          return res.status(200).json({ ok: true, data: payload, token: memToken, mustChangePassword: !!row.must_change_password, buildId: BUILD_ID });
+          // Expor o token JWT também no header para clientes que armazenam KGB_TOKEN
+          try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
+          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: row.id, email: row.email, nome: row.nome, perfil: row.perfil }, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
@@ -924,22 +890,22 @@ app.get('/auth/me', (req, res) => {
     }
   } catch(e){}
 
-  // Primeiro: Authorization header (Bearer token) -> verificar tokenStore
+  // Primeiro: Authorization header (Bearer JWT) -> verify and load user
   try {
     const authH = String(req.headers.authorization || '');
     if (authH.toLowerCase().startsWith('bearer ')) {
       const bearer = authH.split(' ')[1];
-      if (bearer && tokenStore.has(bearer)) {
-        const user = tokenStore.get(bearer);
-        return res.json({ ok: true, data: user });
+      if (bearer) {
+        try {
+          if (!JWT_SECRET) return res.status(500).json({ ok:false, error:'Server misconfigured (JWT_SECRET)' });
+          const payload = jwt.verify(bearer, JWT_SECRET);
+          const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(payload.id);
+          if (!user) return res.status(401).json({ ok: false, error: 'User not found' });
+          return res.json({ ok: true, data: user });
+        } catch (e) {
+          // invalid/expired bearer, fallthrough to cookie
+        }
       }
-    }
-
-    // Alternativas: header `kgb_token` ou `x-kgb-token` (front pode enviar KGB_TOKEN)
-    const alt = req.headers['kgb_token'] || req.headers['x-kgb-token'] || req.headers['kgb-token'];
-    if (alt && tokenStore.has(String(alt))) {
-      const user = tokenStore.get(String(alt));
-      return res.json({ ok: true, data: user });
     }
   } catch (e) { /* continuar para cookie fallback */ }
 
