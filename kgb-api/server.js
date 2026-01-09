@@ -6876,11 +6876,10 @@ app.get('/usuarios', (req, res) => {
         email,
         nome,
         perfil,
-        perfis,
         whatsapp,
         telefone,
         must_change_password,
-        COALESCE(created_at, created_at_iso) AS created_at
+        COALESCE(created_at, created_at_iso) AS created_at_iso
       FROM usuarios
       ORDER BY COALESCE(id,rowid) ASC
     `).all();
@@ -6888,38 +6887,56 @@ app.get('/usuarios', (req, res) => {
     const users = rows.map(u => {
       let perfisArr = [];
       try {
+        // prefer explicit perfis column when present, otherwise fallback to perfil
         if (Array.isArray(u.perfis)) perfisArr = u.perfis;
         else if (typeof u.perfis === 'string' && u.perfis.trim()) perfisArr = JSON.parse(u.perfis);
       } catch (e) { perfisArr = []; }
-
-      const perfilFinal = u.perfil || (perfisArr[0] || '');
+      if (!perfisArr.length && u.perfil) perfisArr = [String(u.perfil)];
 
       return {
         id: u.id,
-        email: u.email || '',
         nome: u.nome || '',
+        email: u.email || '',
         whatsapp: u.whatsapp || u.telefone || '',
-        perfil: perfilFinal,
         perfis: perfisArr,
-        must_change_password: u.must_change_password ? 1 : 0,
-        created_at: u.created_at || null
+        created_at_iso: u.created_at_iso || null
       };
     });
 
-    return res.json({ status: 200, data: users });
+    return res.json({ ok: true, users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
+  }
+});
+
+// GET /perfis -> lista perfis simples para frontend
+app.get('/perfis', (req, res) => {
+  try {
+    const perfis = [
+      'Administrador',
+      'Vendedor',
+      'Financeiro',
+      'Maitre'
+    ];
+    return res.json({ ok: true, perfis });
+  } catch (e) {
+    console.error('[perfis] erro', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar perfis.' });
   }
 });
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+  const { nome, email, whatsapp, perfil, perfis, senha, password, foto } = req.body || {};
   const emailNorm = String(email || '').toLowerCase().trim();
 
-  if (!nome || !emailNorm || !perfil) {
-    return res.status(400).json({ status: 400, error: 'Campos obrigatórios.' });
+  // validar campos obrigatórios: nome, email, perfis (array) ou perfil (string), e senha/password
+  const perfisArr = Array.isArray(perfis) ? perfis : (perfil ? [perfil] : []);
+  const pass = (typeof password === 'string' && password.trim()) ? password : (typeof senha === 'string' && senha.trim() ? senha : null);
+
+  if (!nome || !emailNorm || !perfisArr.length || !pass) {
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfil(s) e senha' });
   }
 
   try {
@@ -6933,8 +6950,8 @@ app.post('/usuarios', (req, res) => {
 
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
-    const senhaRaw = (typeof senha === 'string' ? senha : String(senha || ''));
-    const senhaHash = senhaRaw ? bcrypt.hashSync(String(senhaRaw), 10) : '';
+    const senhaHash = bcrypt.hashSync(String(pass), 10);
+    const perfilSalvar = String(perfisArr[0] || perfil || '').trim();
 
     db.prepare(`
       INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at, must_change_password)
@@ -6944,22 +6961,19 @@ app.post('/usuarios', (req, res) => {
       String(nome || '').trim(),
       emailNorm,
       String(whatsapp || ''),
-      String(perfil || '').trim(),
+      perfilSalvar,
       senhaHash,
-      '',
+      null,
       (typeof foto === 'string' ? foto : null),
       nowIso,
-      1
+      0
     );
 
-    const user = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.status(201).json({ status: 201, data: user });
+    const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    return res.status(201).json({ ok: true, user });
   } catch (err) {
     console.error('[usuarios] POST /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
   }
 });
 
@@ -6991,10 +7005,10 @@ app.get('/usuarios/:id', (req, res) => {
       created_at: row.created_at || row.created_at_iso || null
     };
 
-    return res.json({ status: 200, data: user });
+    return res.json({ ok: true, user });
   } catch (err) {
     console.error('[usuarios] GET /usuarios/:id erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao buscar usuário.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao buscar usuário.' });
   }
 });
 
@@ -7054,14 +7068,11 @@ app.put('/usuarios/:id', (req, res) => {
 
     db.prepare(sql).run(...params);
 
-    const atualizado = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.json({ status: 200, data: atualizado });
+    const atualizado = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    return res.json({ ok: true, user: atualizado });
   } catch (err) {
     console.error('[usuarios] PUT /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao atualizar usuário.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar usuário.' });
   }
 });
 
