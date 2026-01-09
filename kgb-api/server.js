@@ -74,6 +74,15 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// Auth debug helper
+const AUTH_DEBUG = process.env.AUTH_DEBUG === '1';
+const dlog = (...args) => { if (AUTH_DEBUG) console.log('[AUTH_DEBUG]', ...args); };
+
+// Runtime DB info (log once)
+dlog('cwd=', process.cwd());
+dlog('DB_PATH raw=', DB_PATH);
+dlog('DB_PATH resolved=', path.resolve(DB_PATH));
+
 // Initialize DB schema safely before any seed/migration/login runs
 // Initialize DB schema safely before any seed/migration/login runs
 function safeAddColumn(table, colDef) {
@@ -655,8 +664,8 @@ app.post('/dev/seed-admin', async (req, res) => {
       try {
         const newNome = String((req.body && req.body.nome) || existing.nome || 'Administrador');
         const newPerfil = String((req.body && req.body.perfil) || existing.perfil || 'ADMIN');
-        db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 1, nome = ?, perfil = ? WHERE id = ?')
-          .run(hash, '', newNome, newPerfil, existing.id);
+        db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 1, nome = ?, perfil = ?, email = ? WHERE id = ?')
+          .run(hash, '', newNome, newPerfil, email, existing.id);
         return res.json({ ok: true, created: false, updated: true, id: existing.id });
       } catch (e) {
         console.error('[SEED] failed to update existing admin user:', e && e.message);
@@ -804,10 +813,17 @@ app.post('/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
 
   try {
-      const identifier = String(email || '').toLowerCase();
-      let row = db.prepare('SELECT * FROM usuarios WHERE lower(email) = ? LIMIT 1').get(identifier);
+      const emailRaw = String(email || '');
+      const emailNorm = emailRaw.trim().toLowerCase();
+      // dup count for diagnostics
+      try {
+        const dup = db.prepare("SELECT COUNT(*) as c FROM usuarios WHERE lower(trim(email)) = ?").get(emailNorm);
+        dlog('login email=', emailNorm, 'dupCount=', dup && dup.c);
+      } catch (e) { dlog('login dupCount failed', e && e.message); }
+
+      let row = db.prepare('SELECT * FROM usuarios WHERE lower(trim(email)) = ? LIMIT 1').get(emailNorm);
       if (!row) {
-        row = db.prepare('SELECT * FROM usuarios WHERE lower(nome) = ? LIMIT 1').get(identifier);
+        row = db.prepare('SELECT * FROM usuarios WHERE lower(nome) = ? LIMIT 1').get(emailNorm);
       }
 
       // Se encontrou no DB, valida senha usando bcrypt (await) e atualiza legacy plaintext quando necessário
@@ -815,12 +831,17 @@ app.post('/auth/login', async (req, res) => {
         console.log('[AUTH] branch', 'db');
         try {
           let senhaOk = false;
-          if (row.senha_hash && String(row.senha_hash).trim()) {
-            senhaOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
-          } else if (row.senha && String(row.senha).trim()) {
-            // legacy plaintext fallback
-            senhaOk = (String(password || '') === String(row.senha));
-            if (senhaOk) {
+          let bcryptOk = false;
+          let legacyOk = false;
+          const hasHash = !!(row.senha_hash && String(row.senha_hash).trim());
+          const hasLegacy = !!(row.senha && String(row.senha).trim());
+          if (hasHash) {
+            bcryptOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
+            senhaOk = bcryptOk;
+          } else if (hasLegacy) {
+            legacyOk = (String(password || '') === String(row.senha));
+            senhaOk = legacyOk;
+            if (legacyOk) {
               try {
                 const newHash = await bcrypt.hash(String(password || ''), 10);
                 db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?').run(newHash, '', row.id);
@@ -829,7 +850,8 @@ app.post('/auth/login', async (req, res) => {
               }
             }
           }
-          console.log('[auth] login attempt', { email, userFound: true, passOk: !!senhaOk });
+          dlog('login check', { id: row.id, hasHash, hasLegacy, must_change_password: !!row.must_change_password, bcryptOk, legacyOk });
+          console.log('[auth] login attempt', { email: emailNorm, userFound: true, passOk: !!senhaOk });
           if (!senhaOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
             return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
@@ -1050,11 +1072,33 @@ app.post('/auth/change-password', requireAuth, async (req, res) => {
     const uid = (req.user && (req.user.id || req.user.userId || req.user.uid)) || (req.user?.id ?? req.user?.userId ?? req.user?.uid);
     if (!uid) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
 
+    // email normalization and dup count for diagnostics (if available)
+    try {
+      const userEmail = req.user && req.user.email ? String(req.user.email) : '';
+      const emailNorm = userEmail ? userEmail.trim().toLowerCase() : '';
+      if (emailNorm) {
+        const dup = db.prepare("SELECT COUNT(*) as c FROM usuarios WHERE lower(trim(email)) = ?").get(emailNorm);
+        dlog('change-password uid=', uid, 'email=', emailNorm, 'dupCount=', dup && dup.c);
+      }
+    } catch (e) { dlog('change-password dupCount failed', e && e.message); }
+
     const hash = await bcrypt.hash(String(novaSenha), 10);
     const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE id = ?').run(hash, '', uid);
     if (!info || Number(info.changes || 0) === 0) {
       return res.status(400).json({ ok: false, error: 'Senha não aplicada (user não encontrado)' });
     }
+
+    // Post-update diagnostics
+    try {
+      const after = db.prepare('SELECT id, email, must_change_password, senha_hash, senha FROM usuarios WHERE id = ?').get(uid);
+      if (after) {
+        const hasHash = !!(after.senha_hash && String(after.senha_hash).trim());
+        const hasLegacy = !!(after.senha && String(after.senha).trim());
+        const hashPrefix = hasHash ? String(after.senha_hash).slice(0,7) : '';
+        dlog('change-password result', { id: after.id, email: after.email, must_change_password: !!after.must_change_password, hasHash, hasLegacy, hashPrefix });
+      }
+    } catch (e) { dlog('change-password post-select failed', e && e.message); }
+
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/change-password erro:', e && e.message);
