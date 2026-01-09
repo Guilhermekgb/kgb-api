@@ -718,7 +718,7 @@ app.get('/__debug/routes', (req, res) => {
 
 // ADMIN RESET (produção) - protegido por segredo em ENV
 // Uso: GET /admin/reset?secret=xxx
-app.get('/admin/reset', (req, res) => {
+app.get('/admin/reset', async (req, res) => {
   try {
     const secret = process.env.ADMIN_RESET_SECRET;
     if (!secret) {
@@ -738,14 +738,23 @@ app.get('/admin/reset', (req, res) => {
     // senha temporária
     const tempPassword = 'Admin@12345';
 
-    // gerar hash (usa bcrypt já presente no projeto)
-    const senha_hash = bcrypt.hashSync(String(tempPassword), 10);
+    // gerar hash (usa bcrypt já presente no projeto) - async
+    let senha_hash;
+    try {
+      senha_hash = await new Promise((resolve, reject) => {
+        bcrypt.hash(String(tempPassword), 10, (err, hash) => err ? reject(err) : resolve(hash));
+      });
+    } catch (e) {
+      console.error('[admin/reset] bcrypt.hash failed', e && e.message);
+      return res.status(500).json({ ok: false, error: 'Internal error' });
+    }
 
     try {
       // inspect schema for optional columns
       const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
       const hasPerfis = cols.includes('perfis');
       const hasPerms = cols.includes('permissoes');
+      const hasSenha = cols.includes('senha');
 
       const existing = db
         .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
@@ -759,11 +768,13 @@ app.get('/admin/reset', (req, res) => {
         const params = [nome, perfil, senha_hash];
         if (hasPerfis) { parts.push('perfis = ?'); params.push(perfisValue); }
         if (hasPerms) { parts.push('permissoes = ?'); params.push(permsValue); }
+        if (hasSenha) { parts.push('senha = NULL'); }
         params.push(existing.id);
 
         const sql = `UPDATE usuarios SET ${parts.join(', ')} WHERE COALESCE(id,rowid) = ?`;
         db.prepare(sql).run(...params);
 
+        console.log('[ADMIN_RESET] updated admin, has senha_hash=', !!senha_hash, 'email=', email);
         return res.json({ ok: true, action: 'updated', email, must_change_password: 1, tempPassword });
       }
 
@@ -773,6 +784,7 @@ app.get('/admin/reset', (req, res) => {
       const insertParams = [email, nome, perfil, senha_hash];
       if (hasPerfis) { insertCols.push('perfis'); placeholders.push('?'); insertParams.push(perfisValue); }
       if (hasPerms) { insertCols.push('permissoes'); placeholders.push('?'); insertParams.push(permsValue); }
+      if (hasSenha) { insertCols.push('senha'); placeholders.push('NULL'); }
 
       const insertSql = `INSERT INTO usuarios (${insertCols.join(', ')}) VALUES (${placeholders.join(', ')})`;
       db.prepare(insertSql).run(...insertParams);
@@ -781,6 +793,7 @@ app.get('/admin/reset', (req, res) => {
         .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
         .get(email);
 
+      console.log('[ADMIN_RESET] created admin, has senha_hash=', !!senha_hash, 'email=', email);
       return res.json({ ok: true, action: 'created', email, id: created?.id || null, must_change_password: 1, tempPassword });
     } catch (e) {
       console.error('[admin/reset] error inner', e && e.message);
