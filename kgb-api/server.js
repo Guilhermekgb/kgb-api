@@ -929,13 +929,12 @@ function requireAuth(req, res, next) {
 }
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
-app.post('/auth/login', async (req, res) => {
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[AUTH] POST /auth/login req.headers=', req.headers);
     try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
   }
-  const { email, senha } = req.body || {};
-  const password = (senha ?? req.body?.password ?? '').toString();
+  const { email } = req.body || {};
+  const password = (req.body?.password ?? req.body?.senha ?? '').toString();
   // expose build header to help detect which code is running
   try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
   console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
@@ -1000,33 +999,18 @@ app.post('/auth/login', async (req, res) => {
         return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
       }
 
-      // Se encontrou no DB, valida senha usando bcrypt (await) e atualiza legacy plaintext quando necessário
+      // Se encontrou no DB, valida SENHA usando apenas senha_hash (bcrypt)
       if (row) {
         console.log('[AUTH] branch', 'db');
         try {
-          let senhaOk = false;
-          let bcryptOk = false;
-          let legacyOk = false;
           const hasHash = !!(row.senha_hash && String(row.senha_hash).trim());
-          const hasLegacy = !!(row.senha && String(row.senha).trim());
-          if (hasHash) {
-            bcryptOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
-            senhaOk = bcryptOk;
-          } else if (hasLegacy) {
-            legacyOk = (String(password || '') === String(row.senha));
-            senhaOk = legacyOk;
-            if (legacyOk) {
-              try {
-                const newHash = await bcrypt.hash(String(password || ''), 10);
-                db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?').run(newHash, '', row.id);
-              } catch (e) {
-                console.warn('[AUTH] failed to upgrade legacy senha to hash for user', row.id, e && e.message);
-              }
-            }
+          if (!hasHash) {
+            dlog('login: user has no senha_hash, failing auth', { id: row.id });
+            return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
-          dlog('login check', { id: row.id, hasHash, hasLegacy, must_change_password: !!row.must_change_password, bcryptOk, legacyOk });
-          console.log('[auth] login attempt', { email: emailNorm, userFound: true, passOk: !!senhaOk });
-          if (!senhaOk) {
+          const bcryptOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
+          dlog('login check', { id: row.id, hasHash, bcryptOk });
+          if (!bcryptOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
             return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
@@ -1051,7 +1035,7 @@ app.post('/auth/login', async (req, res) => {
           try { console.log('[AUTH] POST /auth/login -> Set-Cookie kgb_token (httpOnly) for user id=', payload.id, 'email=', payload.email); } catch(e){}
           // Expor o token JWT também no header para clientes que armazenam KGB_TOKEN
           try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
-          return res.status(200).json({ ok: true, token: token, mustChangePassword: !!row.must_change_password, user: { id: userId, email: row.email, nome: row.nome, perfil: normalizePerfil(row.perfil) }, buildId: BUILD_ID });
+          return res.status(200).json({ ok: true, token: token, user: { id: userId, email: row.email, nome: row.nome, perfil: normalizePerfil(row.perfil) }, buildId: BUILD_ID });
         } catch (errCompare) {
           console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
           console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
@@ -1145,73 +1129,14 @@ app.post('/auth/reset-password', (_req, res) => {
   return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
-// POST /auth/recover — inicia fluxo de recuperação (esqueci senha)
-app.post('/auth/recover', async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    // Always return 200 to avoid leaking which emails exist
-    if (!email) return res.json({ ok: true });
-
-    const identifier = String(email || '').toLowerCase();
-    const user = db.prepare('SELECT id,email FROM usuarios WHERE lower(email) = ?').get(identifier);
-    if (!user) {
-      console.log('[AUTH] recover requested for', identifier, '-> no user found (silent)');
-      return res.json({ ok: true });
-    }
-
-    // generate token and store in password_resets
-    const token = crypto.randomBytes(32).toString('hex');
-    const id = crypto.randomUUID();
-    const expires = new Date(Date.now() + (30 * 60 * 1000)).toISOString(); // 30 minutes
-    db.prepare('INSERT INTO password_resets(id,user_id,email,token,expires_iso,used,created_at) VALUES(?,?,?,?,?,?,?)')
-      .run(id, user.id, user.email, token, expires, 0, new Date().toISOString());
-
-    // Determine if request is from DEV/localhost
-    const hostHeader = String(req.get('host') || '').toLowerCase();
-    const isDev = hostHeader.includes('localhost') || hostHeader.includes('127.0.0.1') || ((process.env.NODE_ENV || '') !== 'production');
-
-    // FRONT_URL used for local dev overrides; fallback to local Live Server
-    const devFront = process.env.FRONT_URL || 'http://127.0.0.1:5500';
-    const prodFront = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-    const frontend = isDev ? devFront : prodFront;
-
-    const resetLink = `${frontend.replace(/\/+$/,'')}/redefinir-senha.html?token=${token}`;
-    console.log('[AUTH] password reset link (log):', resetLink);
-
-    // Always return ok:true to avoid leaking existence of email.
-    // In DEV only, include resetUrl to speed up local testing.
-    if (isDev) return res.json({ ok: true, resetUrl: resetLink });
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[auth] POST /auth/recover erro:', e && e.message);
-    return res.json({ ok: true });
-  }
+// Password recovery flow disabled: respond 404 to avoid password-reset flows
+app.post('/auth/recover', (_req, res) => {
+  return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
-// POST /auth/reset — finaliza redefinição via token
-app.post('/auth/reset', async (req, res) => {
-  try {
-    const { token, novaSenha } = req.body || {};
-    if (!token || !novaSenha) return res.status(400).json({ ok: false, error: 'Missing token or novaSenha' });
-    if (String(novaSenha).length < 8) return res.status(400).json({ ok: false, error: 'novaSenha must be >= 8 chars' });
-
-    const row = db.prepare('SELECT id,user_id,email,token,expires_iso,used FROM password_resets WHERE token = ?').get(String(token));
-    if (!row) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
-    if (row.used) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
-    if (new Date(row.expires_iso) < new Date()) return res.status(400).json({ ok: false, error: 'Token inválido ou expirado' });
-
-    const hash = await bcrypt.hash(String(novaSenha), 10);
-    if (row.user_id) {
-      db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE id = ?').run(hash, '', row.user_id);
-    } else if (row.email) {
-      db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ? WHERE lower(email) = ?').run(hash, '', String(row.email).toLowerCase());
-    }
-    db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(row.id);
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[auth] POST /auth/reset erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
+// Password reset endpoint disabled
+app.post('/auth/reset', (_req, res) => {
+  return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
 // POST /auth/change-password — usuário autenticado troca sua senha obrigatória
@@ -1331,68 +1256,10 @@ console.log('[BOOT]', 'Registering /eventos routes');
 if (!BOOT_ROUTES.includes('eventos')) BOOT_ROUTES.push('eventos');
 
 // GET /eventos -> retorna array de eventos (chave KV: 'eventos')
-app.get('/eventos', requireAuth, (req, res) => {
-  try {
-    const data = kvGet('eventos', '[]');
-    return res.json({ ok: true, data });
-  } catch (e) {
-    console.error('[GET /eventos] erro', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
+// Deprecated admin reset endpoint — respond 404
+app.get('/admin/reset', (_req, res) => {
+  return res.status(404).json({ ok: false, error: 'Not found' });
 });
-
-// PUT /eventos -> substitui lista completa de eventos
-app.put('/eventos', requireAuth, (req, res) => {
-  try {
-    const data = (req.body && (req.body.data !== undefined ? req.body.data : req.body)) || [];
-    kvPut('eventos', data);
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[PUT /eventos] erro', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
-});
-
-// GET /eventos/:id -> retorna 1 evento por id (404 se não existir)
-app.get('/eventos/:id', requireAuth, (req, res) => {
-  try {
-    const id = String(req.params.id || '').trim();
-    if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
-    const all = kvGet('eventos', '[]');
-    const ev = Array.isArray(all) ? all.find(e => String(e.id) === id) : null;
-    if (!ev) return res.status(404).json({ ok: false, error: 'Evento não encontrado' });
-    return res.json({ ok: true, data: ev });
-  } catch (e) {
-    console.error('[GET /eventos/:id] erro', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
-});
-
-// PUT /eventos/:id -> atualiza um evento específico (upsert na lista)
-app.put('/eventos/:id', requireAuth, (req, res) => {
-  try {
-    const id = String(req.params.id || '').trim();
-    if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
-    const body = req.body || {};
-    const all = kvGet('eventos', '[]');
-    const arr = Array.isArray(all) ? all.slice() : [];
-    const idx = arr.findIndex(e => String(e.id) === id);
-    const now = new Date().toISOString();
-
-    const updated = { ...(idx >= 0 ? arr[idx] : {}), ...body, id, updatedAt: now };
-    if (idx >= 0) arr[idx] = updated; else arr.push(updated);
-    kvPut('eventos', arr);
-    return res.json({ ok: true, data: updated });
-  } catch (e) {
-    console.error('[PUT /eventos/:id] erro', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
-});
-
-// Rota de debug para inspecionar headers e cookies (apenas em desenvolvimento)
-// Removed /auth/debug (dev-only debug endpoint) as part of debug cleanup
-
-// ========================= PATCH F.0 — bases, storage utils, journal =========================
 const DATA_DIR = path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 
@@ -7205,26 +7072,9 @@ app.post('/usuarios', (req, res) => {
 });
 
 // ADMIN: reset password for a user and force must_change_password=1
-app.post('/admin/users/:id/reset-password', requireAuth, async (req, res) => {
-  try {
-    // Verify admin
-    const actor = req.user;
-    if (!actor || !(String(actor.perfil || '').toLowerCase().includes('admin') || String(actor.perfil || '') === 'ADMIN')) {
-      return res.status(403).json({ ok: false, error: 'Forbidden' });
-    }
-
-    const targetId = req.params.id;
-    const { senhaProvisoria } = req.body || {};
-    if (!targetId || !senhaProvisoria || String(senhaProvisoria).length < 8) return res.status(400).json({ ok: false, error: 'Invalid payload' });
-
-    const hash = await bcrypt.hash(String(senhaProvisoria), 10);
-    const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 1 WHERE id = ?').run(hash, '', targetId);
-    if ((info && info.changes) === 0) return res.status(404).json({ ok: false, error: 'User not found' });
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[ADMIN] reset-password erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
+// Deprecated admin reset-password endpoint — respond 404
+app.post('/admin/users/:id/reset-password', (_req, res) => {
+  return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
 // PUT /usuarios -> atualiza usuário (por id)
