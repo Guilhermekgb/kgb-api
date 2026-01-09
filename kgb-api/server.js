@@ -1046,12 +1046,15 @@ app.post('/auth/change-password', requireAuth, async (req, res) => {
     const { novaSenha } = req.body || {};
     if (!novaSenha || String(novaSenha).length < 8) return res.status(400).json({ ok: false, error: 'novaSenha must be >= 8 chars' });
 
-    // Garantir que temos id do usuário
-    const userId = req.user && req.user.id;
-    if (!userId) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
+    // Garantir que temos id do usuário (compatibilidade com diferentes formas de req.user)
+    const uid = (req.user && (req.user.id || req.user.userId || req.user.uid)) || (req.user?.id ?? req.user?.userId ?? req.user?.uid);
+    if (!uid) return res.status(401).json({ ok: false, error: 'UNAUTHENTICATED' });
 
     const hash = await bcrypt.hash(String(novaSenha), 10);
-    db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE id = ?').run(hash, '', userId);
+    const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE id = ?').run(hash, '', uid);
+    if (!info || Number(info.changes || 0) === 0) {
+      return res.status(400).json({ ok: false, error: 'Senha não aplicada (user não encontrado)' });
+    }
     return res.json({ ok: true });
   } catch (e) {
     console.error('[auth] POST /auth/change-password erro:', e && e.message);
