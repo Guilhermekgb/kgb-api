@@ -716,6 +716,67 @@ app.get('/__debug/routes', (req, res) => {
   }
 });
 
+// ADMIN RESET (produção) - protegido por segredo em ENV
+// Uso: GET /admin/reset?secret=xxx
+app.get('/admin/reset', (req, res) => {
+  try {
+    const secret = process.env.ADMIN_RESET_SECRET;
+    if (!secret) {
+      return res.status(500).json({ ok: false, error: 'ADMIN_RESET_SECRET not configured' });
+    }
+
+    const provided = req.query.secret;
+
+    if (String(provided || '') !== String(secret)) {
+      return res.status(403).json({ ok: false, error: 'Forbidden' });
+    }
+
+    const email = 'admin@kgb.com';
+    const nome = 'Administrador';
+    const perfil = 'Administrador';
+
+    // senha temporária
+    const tempPassword = 'Admin@12345';
+
+    // gerar hash (usa bcrypt já presente no projeto)
+    const senha_hash = bcrypt.hashSync(String(tempPassword), 10);
+
+    try {
+      const existing = db
+        .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
+        .get(email);
+
+      if (existing?.id) {
+        db.prepare(`
+          UPDATE usuarios
+          SET nome = ?, perfil = ?, senha_hash = ?, must_change_password = 1
+          WHERE COALESCE(id,rowid) = ?
+        `).run(nome, perfil, senha_hash, existing.id);
+
+        return res.json({ ok: true, action: 'updated', email, must_change_password: 1, tempPassword });
+      }
+
+      // Insert mínimo — se a tabela tiver coluna id TEXT PK isso ainda funciona
+      db.prepare(`
+        INSERT INTO usuarios (email, nome, perfil, senha_hash, must_change_password)
+        VALUES (?, ?, ?, ?, 1)
+      `).run(email, nome, perfil, senha_hash);
+
+      const created = db
+        .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
+        .get(email);
+
+      return res.json({ ok: true, action: 'created', email, id: created?.id || null, must_change_password: 1, tempPassword });
+    } catch (e) {
+      console.error('[admin/reset] error inner', e && e.message);
+      return res.status(500).json({ ok: false, error: 'Internal error' });
+    }
+  } catch (e) {
+    console.error('[admin/reset] error', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Internal error' });
+  }
+});
+
 // Cookies e JWT (autenticação por sessão via cookie httpOnly)
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
