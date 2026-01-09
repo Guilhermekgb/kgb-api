@@ -112,6 +112,35 @@
     return [];
   }
 
+  async function getUser(id) {
+    const t = getToken();
+    if (!t) throw new Error('no_token');
+    const data = await api(`/usuarios/${encodeURIComponent(id)}`, { headers: { Authorization: 'Bearer ' + t } });
+    return data;
+  }
+
+  async function createUser(payload) {
+    const t = getToken();
+    if (!t) throw new Error('no_token');
+    const data = await api('/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify(payload)
+    });
+    return data;
+  }
+
+  async function updateUser(id, payload) {
+    const t = getToken();
+    if (!t) throw new Error('no_token');
+    const data = await api(`/usuarios/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify(payload)
+    });
+    return data;
+  }
+
   async function changePassword(newPassword) {
     const t = getToken();
     if (!t) throw new Error('no_token');

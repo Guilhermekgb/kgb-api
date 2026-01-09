@@ -6963,9 +6963,45 @@ app.post('/usuarios', (req, res) => {
   }
 });
 
-// PUT /usuarios -> atualiza usuário (por id)
-app.put('/usuarios', (req, res) => {
-  const { id, nome, email, whatsapp, perfil, senha, password, novaSenha, foto } = req.body || {};
+// GET /usuarios/:id -> retorna usuário por id
+app.get('/usuarios/:id', (req, res) => {
+  const id = req.params?.id;
+  if (!id) return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
+  try {
+    const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+
+    let perfisArr = [];
+    try {
+      if (Array.isArray(row.perfis)) perfisArr = row.perfis;
+      else if (typeof row.perfis === 'string' && row.perfis.trim()) perfisArr = JSON.parse(row.perfis);
+    } catch (e) { perfisArr = []; }
+
+    const perfilFinal = row.perfil || (perfisArr[0] || '');
+
+    const user = {
+      id: row.id,
+      email: row.email || '',
+      nome: row.nome || '',
+      whatsapp: row.whatsapp || row.telefone || '',
+      perfil: perfilFinal,
+      perfis: perfisArr,
+      must_change_password: row.must_change_password ? 1 : 0,
+      foto: row.foto || null,
+      created_at: row.created_at || row.created_at_iso || null
+    };
+
+    return res.json({ status: 200, data: user });
+  } catch (err) {
+    console.error('[usuarios] GET /usuarios/:id erro:', err);
+    return res.status(500).json({ status: 500, error: 'Erro ao buscar usuário.' });
+  }
+});
+
+// PUT /usuarios/:id -> atualiza usuário (por id)
+app.put('/usuarios/:id', (req, res) => {
+  const id = req.params?.id;
+  const { nome, email, whatsapp, perfil, senha, password, novaSenha, foto } = req.body || {};
 
   if (!id) {
     return res.status(400).json({ status: 400, error: 'ID obrigatório.' });

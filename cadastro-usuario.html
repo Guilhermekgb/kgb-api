@@ -375,7 +375,7 @@
     // Busca usuário para edição (se aplicável)
     let u;
     if (userId) {
-      const r = await api(`/admin/users/${encodeURIComponent(userId)}`, { method: 'GET' });
+      const r = await api(`/usuarios/${encodeURIComponent(userId)}`, { method: 'GET' });
 
       // fallback: algumas APIs retornam envelope {status,data} ou o próprio objeto
       if (r && r.status === 200 && r.data) {
@@ -453,13 +453,10 @@
         body.password = senha;
       }
 
-      const endpoint = userId ? `/admin/users/${encodeURIComponent(userId)}` : '/admin/users';
+      const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
       const method = userId ? 'PUT' : 'POST';
 
-      const r = await api(endpoint, {
-        method,
-        body
-      });
+      const r = await api(endpoint, { method, body });
 
       // ✅ Caso de sucesso real (quando a API existir)
       if (r?.status >= 200 && r?.status < 300) {
