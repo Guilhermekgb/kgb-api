@@ -367,16 +367,22 @@
 
     // Edição (?id=...)
     const params = new URLSearchParams(location.search);
-    const id     = params.get('id');
+    const userId = params.get('id');
 
     // Primeiro monta checkbox vazio (sem seleção) para já aparecer UI
     popularPerfisCheckboxes([]);
 
-    // Busca usuário para edição
+    // Busca usuário para edição (se aplicável)
     let u;
-    if (id) {
-      const r = await api('/usuarios', { method: 'GET' });
-      u = (r?.data || []).find(x => String(x.id) === String(id));
+    if (userId) {
+      const r = await api(`/admin/users/${encodeURIComponent(userId)}`, { method: 'GET' });
+
+      // fallback: algumas APIs retornam envelope {status,data} ou o próprio objeto
+      if (r && r.status === 200 && r.data) {
+        u = r.data;
+      } else if (r && r.status === 200 && Array.isArray(r)) {
+        u = (r || []).find(x => String(x.id) === String(userId));
+      }
 
       if (u) {
         // Campos básicos
@@ -420,7 +426,13 @@
       if (!nome)                return alert('Informe o nome.');
       if (!isValidEmail(email)) return alert('E-mail inválido.');
       if (!selecionados.length) return alert('Selecione ao menos um perfil.');
-      if (senha || conf) {
+
+      // Regras: criação exige senha; edição permite senha opcional
+      if (!userId) {
+        if (!senha) return alert('Senha obrigatória para novo usuário.');
+        if (senha.length < 4)   return alert('Senha muito curta.');
+        if (senha !== conf)     return alert('As senhas não coincidem.');
+      } else if (senha || conf) {
         if (senha.length < 4)   return alert('Senha muito curta.');
         if (senha !== conf)     return alert('As senhas não coincidem.');
       }
@@ -431,12 +443,21 @@
 
       // Compatibilidade: envia perfis[] e também perfil = primeiro
       const body = { nome, email, whatsapp, perfis: selecionados, perfil: selecionados[0] || '' };
-      if (id)    body.id = id;
-      if (senha) body.senha = senha;
+      if (userId) body.id = userId;
       if (fotoParaSalvar) body.foto = fotoParaSalvar;
 
-      const r = await api('/usuarios', {
-        method: id ? 'PUT' : 'POST',
+      // password payload rules: include only when creating or when provided on edit
+      if (!userId) {
+        body.password = senha;
+      } else if (senha) {
+        body.password = senha;
+      }
+
+      const endpoint = userId ? `/admin/users/${encodeURIComponent(userId)}` : '/admin/users';
+      const method = userId ? 'PUT' : 'POST';
+
+      const r = await api(endpoint, {
+        method,
         body
       });
 
