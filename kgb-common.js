@@ -536,12 +536,25 @@ export function fecharSessao(sessaoId){
       const res = await fetch(url, opts);
       // Se o backend respondeu 401, limpar token local e redirecionar para login
       if (res && res.status === 401) {
+        const isDebug =
+          (typeof window !== 'undefined' && window.location && /[?&]debug=1\b/.test(window.location.search)) ||
+          (typeof window !== 'undefined' && window.AUTH_DEBUG == 1) ||
+          (typeof window !== 'undefined' && window.__AUTH_DEBUG__ == 1);
+
+        // Em DEBUG: não redirecionar (permite inspecionar a resposta)
+        if (isDebug) {
+          console.warn('[KGB] 401 recebido em DEBUG — não redirecionando automaticamente.');
+          return res;
+        }
+
         try { window.kgbClearAuthToken && window.kgbClearAuthToken(); } catch (e) {}
         try {
-          const returnUrl = encodeURIComponent(location.pathname + (location.search || ''));
-          location.href = `/login.html?returnUrl=${returnUrl}`;
-        } catch (e) {}
-        const err = new Error('unauthorized'); err.response = res; throw err;
+          const ret = encodeURIComponent(window.location.pathname.replace(/^\//,''));
+          window.location.replace('login.html?returnUrl=' + ret);
+        } catch (e) {
+          window.location.replace('login.html');
+        }
+        return res;
       }
       return res;
     } catch (err) {

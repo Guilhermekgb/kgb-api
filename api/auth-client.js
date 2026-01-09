@@ -9,25 +9,30 @@
   function getToken() {
     try {
       return (
-        localStorage.getItem('KGB_AUTH_TOKEN') ||
-        localStorage.getItem('KGB_TOKEN') ||
-        localStorage.getItem('token') ||
-        localStorage.getItem('jwt') ||
-        ''
+        (typeof window !== 'undefined' && window.KGB_AUTH_TOKEN) ||
+        (localStorage && localStorage.getItem ? localStorage.getItem('KGB_AUTH_TOKEN') : null) ||
+        (localStorage && localStorage.getItem ? localStorage.getItem('KGB_TOKEN') : null) ||
+        (sessionStorage && sessionStorage.getItem ? sessionStorage.getItem('KGB_AUTH_TOKEN') : null) ||
+        (sessionStorage && sessionStorage.getItem ? sessionStorage.getItem('KGB_TOKEN') : null) ||
+        null
       );
-    } catch (e) { return ''; }
+    } catch (e) { return (typeof window !== 'undefined' && window.KGB_AUTH_TOKEN) || null; }
   }
 
   function setToken(token) {
     if (!token) return;
-    try {
-      localStorage.setItem('KGB_AUTH_TOKEN', token);
-      localStorage.setItem('KGB_TOKEN', token);
-    } catch (e) {}
+    const t = String(token);
+    try { localStorage.setItem('KGB_AUTH_TOKEN', t); } catch (e) {}
+    try { localStorage.setItem('KGB_TOKEN', t); } catch (e) {}
+    try { sessionStorage.setItem('KGB_AUTH_TOKEN', t); } catch (e) {}
+    try { sessionStorage.setItem('KGB_TOKEN', t); } catch (e) {}
+    try { window.KGB_AUTH_TOKEN = t; } catch (e) {}
   }
 
   function clearToken() {
-    try { ['KGB_AUTH_TOKEN','KGB_TOKEN','token','jwt'].forEach(k => localStorage.removeItem(k)); } catch(e){}
+    try { window.KGB_AUTH_TOKEN = null; } catch (e) {}
+    try { localStorage.removeItem('KGB_AUTH_TOKEN'); localStorage.removeItem('KGB_TOKEN'); } catch(e){}
+    try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch(e){}
   }
 
   async function api(path, opts = {}) {
