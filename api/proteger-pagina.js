@@ -77,6 +77,18 @@
       } catch (e) { j = {}; }
       window.__KGB_USER__ = j?.data || j || null;
 
+      // === RBAC: ADMINISTRADOR TEM ACESSO TOTAL ===
+      try {
+        const user = window.__KGB_USER__;
+        if (user && typeof user.perfil === 'string') {
+          const perfil = String(user.perfil || '').toLowerCase().trim();
+          if (perfil === 'administrador' || perfil === 'admin') {
+            guardLog('[RBAC] Administrador detectado - acesso total liberado');
+            return true;
+          }
+        }
+      } catch (e) { /* ignore */ }
+
       // permissões (simples)
       const perm = opts.permissao;
       if (perm && perm !== '*' && window.__KGB_USER__) {
