@@ -41,40 +41,35 @@
     }
 
     try {
-      // prefer centralized apiFetch
-      let resp;
+      // prefer centralized apiFetch (resolves __API_BASE__); never call relative /auth/me
+      guardLog('__API_BASE__ =', window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE);
+      let resp = null;
       if (typeof window.apiFetch === 'function') {
-        resp = await window.apiFetch('/auth/me');
+        try { resp = await window.apiFetch('/auth/me'); } catch (e) { guardWarn('/auth/me via apiFetch failed', e && e.message); resp = null; }
       } else {
-        // fallback to fetch using known base if available
-        const base = (window.API_BASE || window.__KGB_API_BASE__ || window.__API_BASE__ || '').toString().replace(/\/+$/,'');
-        const url = (base ? (base + '/auth/me') : '/auth/me');
-        resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' });
+        const base = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE || null);
+        if (!base) {
+          guardWarn('No API base configured (window.__API_BASE__ missing) — avoiding relative /auth/me call');
+          clearToken(); goLogin(); throw new Error('no-api-base');
+        }
+        const url = String(base).replace(/\/+$/,'') + '/auth/me';
+        try { resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' }); } catch (e) { guardWarn('/auth/me fetch failed', e && e.message); resp = null; }
       }
 
-      if (!resp) {
-        guardWarn('/auth/me no response (network?)');
-        throw new Error('no-response');
-      }
+      if (!resp) { guardWarn('/auth/me no response (network?)'); throw new Error('no-response'); }
 
-      const status = resp.status || (resp.ok ? 200 : 500);
-      if (status === 401) {
-        guardWarn('token invalid (401) -> clearing token and redirect to login');
-        clearToken();
-        goLogin();
-        throw new Error('unauthorized');
-      }
-      if (status === 403) {
-        guardWarn('user has no permission (403) -> not redirecting to login');
-        try { alert('Sem permissão para acessar esta página.'); } catch (e){}
-        location.href = './dashboard.html';
-        return false;
-      }
+      let status = null; let j = {};
+      if (resp && typeof resp.status === 'number') {
+        status = resp.status;
+        try { j = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp; } catch (e) { j = {}; }
+      } else if (resp && typeof resp === 'object') {
+        j = resp;
+        status = (resp && resp.ok === false) ? (resp.status || 500) : 200;
+      } else { j = {}; status = 500; }
 
-      let j;
-      try {
-        j = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp;
-      } catch (e) { j = {}; }
+      if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); goLogin(); throw new Error('unauthorized'); }
+      if (status === 403) { guardWarn('user has no permission (403) -> not redirecting to login'); try { alert('Sem permissão para acessar esta página.'); } catch (e){} location.href = './dashboard.html'; return false; }
+
       window.__KGB_USER__ = j?.data || j || null;
 
       // === RBAC: ADMINISTRADOR TEM ACESSO TOTAL ===
