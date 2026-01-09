@@ -3,27 +3,7 @@
 <head>
   <meta name="page-permission" content="page:usuarios.html">
   <meta charset="UTF-8" />
-   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-  <script>
-    (function(){
-      var host = String(location.hostname||"").toLowerCase();
-
-      // Produção: use o API base resolvido pelo sistema (definido acima ou por injeção)
-      const PROD_API = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE || "").toString().trim();
-
-      // Desenvolvimento local (quando você rodar na sua máquina)
-      var DEV_API = (window.__API_BASE__ || window.location.origin);
-
-      var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-               : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-               : PROD_API;
-
-      try { (typeof window !== 'undefined' && window['local'+'Storage'] && window['local'+'Storage'].setItem) ? window['local'+'Storage'].setItem("API_BASE", base) : null; } catch(e) {}
-      window.__API_BASE__ = base;
-      console.log("[KGB] __API_BASE__ =", base);
-    })();
-  </script>
-  <!-- === FIM PATCH __API_BASE__ (auto) === -->
+  
   <title>Usuários | Sistema Buffet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
