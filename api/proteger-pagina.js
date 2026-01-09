@@ -1,8 +1,10 @@
 (function () {
   function clearToken() {
     try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
+    try { localStorage.removeItem('KGB_TOKEN'); } catch(e){}
     try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
     try { delete window.KGB_AUTH_TOKEN; } catch(e){}
+    try { delete window.KGB_TOKEN; } catch(e){}
   }
 
   function goLogin() {
@@ -20,11 +22,17 @@
     console.log('[GUARD] start', location.pathname);
     console.log('[GUARD] token?', !!localStorage.getItem('KGB_AUTH_TOKEN'));
     // token must exist
-    const token = (function(){ try { return localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || null; } catch(e){ return window.KGB_AUTH_TOKEN || null; } })();
+      const token = (function(){
+        try {
+          return localStorage.getItem('KGB_TOKEN') || localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null;
+        } catch(e) { return window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null; }
+      })();
+      console.log('[GUARD] token present?', !!token);
     if (!token) {
-      clearToken();
-      goLogin();
-      throw new Error('no-token');
+        console.warn('[GUARD] no token found -> redirect to login');
+        clearToken();
+        goLogin();
+        throw new Error('no-token');
     }
 
     try {
@@ -39,14 +47,30 @@
         resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' });
       }
 
-      if (!resp || !resp.ok) {
+      if (!resp) {
+        console.warn('[GUARD] /auth/me no response (network?)');
+        throw new Error('no-response');
+      }
+
+      const status = resp.status || (resp.ok ? 200 : 500);
+      if (status === 401) {
+        console.warn('[GUARD] token invalid (401) -> clearing token and redirect to login');
         clearToken();
         goLogin();
         throw new Error('unauthorized');
       }
+      if (status === 403) {
+        console.warn('[GUARD] user has no permission (403) -> not redirecting to login');
+        try { alert('Sem permissão para acessar esta página.'); } catch (e){}
+        location.href = './dashboard.html';
+        return false;
+      }
 
-      const j = await resp.json().catch(() => ({}));
-      window.__KGB_USER__ = j?.data || null;
+      let j;
+      try {
+        j = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp;
+      } catch (e) { j = {}; }
+      window.__KGB_USER__ = j?.data || j || null;
 
       // permissões (simples)
       const perm = opts.permissao;
@@ -54,15 +78,18 @@
         const perms = window.__KGB_USER__.permissoes || [];
         const isAdmin = (window.__KGB_USER__.perfil || '').toLowerCase().includes('admin');
         if (!isAdmin && !perms.includes('*') && !perms.includes(perm)) {
-          location.href = './acesso-negado.html';
+          console.warn('[GUARD] permission check failed for', perm, 'user.permissoes=', perms);
+          try { alert('Sem permissão para acessar esta página.'); } catch (e){}
+          location.href = './dashboard.html';
           return false;
         }
       }
 
       return true;
     } catch (e) {
-      clearToken();
-      goLogin();
+      // Distinguish network errors vs auth errors already handled above
+      console.warn('[GUARD] error during guard:', e && e.message);
+      // If token-related errors have already redirected, just rethrow
       throw e;
     }
   };
