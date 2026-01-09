@@ -62,6 +62,20 @@
     return '';
   }
 
+  function getApiBaseNow() {
+    try { return (window.__API_BASE__ || window.API_BASE || '').toString().trim(); } catch(e) { return ''; }
+  }
+
+  async function waitForApiBase(timeoutMs = 1500) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const base = getApiBaseNow();
+      if (base) return base;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return '';
+  }
+
   // API pública: guard({ permissao })
   window.guard = async function guard(opts = {}) {
     const DBG = (function(){
@@ -105,19 +119,24 @@
 
     try {
       // prefer centralized apiFetch (resolves __API_BASE__); never call relative /auth/me
-      guardLog('__API_BASE__ =', window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE);
-      let resp = null;
+        const base = await waitForApiBase(1500);
+        guardLog('__API_BASE__ =', base || (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE));
+        let resp = null;
         if (typeof window.apiFetch === 'function') {
-        try { resp = await window.apiFetch('/auth/me'); } catch (e) { guardWarn('/auth/me via apiFetch failed', e && e.message); resp = null; }
-      } else {
-        const base = (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE || null);
-        if (!base) {
-          guardWarn('No API base configured (window.__API_BASE__ missing) — avoiding relative /auth/me call');
-          clearToken(); redirectToLogin('no-api-base'); throw new Error('no-api-base');
+          try { resp = await window.apiFetch('/auth/me'); } catch (e) { guardWarn('/auth/me via apiFetch failed', e && e.message); resp = null; }
+        } else {
+          if (!base) {
+            // debug snapshot of window API base values
+            const dbg = (new URLSearchParams(location.search).get('debug') === '1') || (localStorage.getItem('AUTH_DEBUG') === '1');
+            if (dbg) {
+              try { console.warn('[GUARD] waitForApiBase timed out; window.__API_BASE__ snapshot:', { __API_BASE__: window.__API_BASE__, API_BASE: window.API_BASE, __KGB_API_BASE__: window.__KGB_API_BASE__, KGB_API_BASE: window.KGB_API_BASE }); } catch(e){}
+            }
+            guardWarn('No API base configured (window.__API_BASE__ missing) after wait — avoiding relative /auth/me call');
+            redirectToLogin('no-api-base'); throw new Error('no-api-base');
+          }
+          const url = String(base).replace(/\/+$/,'') + '/auth/me';
+          try { resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' }); } catch (e) { guardWarn('/auth/me fetch failed', e && e.message); resp = null; }
         }
-        const url = String(base).replace(/\/+$/,'') + '/auth/me';
-        try { resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' }); } catch (e) { guardWarn('/auth/me fetch failed', e && e.message); resp = null; }
-      }
 
       if (!resp) { guardWarn('/auth/me no response (network?)'); throw new Error('no-response'); }
 
