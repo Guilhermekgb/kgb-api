@@ -441,10 +441,8 @@
       if (fotoBase64) fotoParaSalvar = fotoBase64;
       else if (usuarioAtualEdicao?.foto) fotoParaSalvar = usuarioAtualEdicao.foto;
 
-      // Compatibilidade: envia perfis[] e também perfil = primeiro
-      const body = { nome, email, whatsapp, perfis: selecionados, perfil: selecionados[0] || '' };
-      if (userId) body.id = userId;
-      if (fotoParaSalvar) body.foto = fotoParaSalvar;
+      // Envia apenas os campos exigidos: nome, email, whatsapp (opcional), perfis (array) e password
+      const body = { nome, email, whatsapp, perfis: selecionados };
 
       // password payload rules: include only when creating or when provided on edit
       if (!userId) {

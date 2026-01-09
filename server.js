@@ -12,6 +12,7 @@ const fs       = require('fs');
 const path     = require('path');
 const csv      = require('fast-csv');
 const multer   = require('multer');
+const bcrypt   = require('bcryptjs');
 
 // Optional AWS S3 presign support (enabled when AWS env vars are provided)
 let s3Client = null;
@@ -173,8 +174,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
   whatsapp TEXT,
   perfil TEXT NOT NULL,
   senha TEXT,
+  senha_hash TEXT,
   foto TEXT,
-  created_at TEXT NOT NULL
+  created_at_iso TEXT NOT NULL
 );
 `);
 db.exec(`
@@ -5026,15 +5028,34 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT id, nome, email, whatsapp, perfil, foto, created_at
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        whatsapp,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at_iso
       FROM usuarios
-      ORDER BY datetime(created_at) DESC
+      ORDER BY COALESCE(id,rowid) ASC
     `).all();
 
-    return res.json({ status: 200, data: rows });
+    const users = rows.map(u => {
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
+      return {
+        id: u.id,
+        nome: u.nome || '',
+        email: u.email || '',
+        whatsapp: u.whatsapp || '',
+        perfis: perfisArr,
+        created_at_iso: u.created_at_iso || null
+      };
+    });
+
+    return res.json({ ok: true, users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
 
@@ -5184,15 +5205,34 @@ app.delete('/usuarios', (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso
-        FROM usuarios
-       ORDER BY datetime(created_at_iso) DESC
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        whatsapp,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at_iso
+      FROM usuarios
+      ORDER BY COALESCE(id,rowid) ASC
     `).all();
 
-    return res.json({ status: 200, data: rows });
+    const users = rows.map(u => {
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
+      return {
+        id: u.id,
+        nome: u.nome || '',
+        email: u.email || '',
+        whatsapp: u.whatsapp || '',
+        perfis: perfisArr,
+        created_at_iso: u.created_at_iso || null
+      };
+    });
+
+    return res.json({ ok: true, users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
 
@@ -5216,17 +5256,19 @@ app.post('/usuarios', (req, res) => {
 
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
+    const senhaHash = senha ? bcrypt.hashSync(String(senha), 10) : null;
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at_iso)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at_iso)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
       emailNorm,
       String(whatsapp || ''),
       String(perfil || '').trim(),
-      senha ? String(senha) : null,
+      senhaHash,
+      null,
       typeof foto === 'string' ? foto : null,
       nowIso
     );
@@ -5274,21 +5316,31 @@ app.put('/usuarios', (req, res) => {
       }
     }
 
+    let newSenhaHash = atual.senha_hash || null;
+    let newLegacySenha = atual.senha;
+
+    if (typeof senha === 'string') {
+      newSenhaHash = bcrypt.hashSync(String(senha), 10);
+      newLegacySenha = null; // clear legacy plaintext
+    }
+
     db.prepare(`
       UPDATE usuarios
-         SET nome     = ?,
-             email    = ?,
-             whatsapp = ?,
-             perfil   = ?,
-             senha    = ?,
-             foto     = ?
+         SET nome       = ?,
+             email      = ?,
+             whatsapp   = ?,
+             perfil     = ?,
+             senha_hash = ?,
+             senha      = ?,
+             foto       = ?
        WHERE id = ?
     `).run(
       nome ?? atual.nome,
       emailNorm,
       whatsapp ?? atual.whatsapp,
       perfil ?? atual.perfil,
-      typeof senha === 'string' ? senha : atual.senha,
+      newSenhaHash,
+      newLegacySenha,
       typeof foto === 'string' ? foto : atual.foto,
       id
     );

@@ -929,6 +929,9 @@ function requireAuth(req, res, next) {
 }
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
+app.post('/auth/login', express.json(), async (req, res) => {
+  // handler for login
+  
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[AUTH] POST /auth/login req.headers=', req.headers);
     try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
@@ -6744,7 +6747,6 @@ app.get('/usuarios', (req, res) => {
         nome,
         perfil,
         whatsapp,
-        telefone,
         must_change_password,
         COALESCE(created_at, created_at_iso) AS created_at_iso
       FROM usuarios
@@ -6752,19 +6754,12 @@ app.get('/usuarios', (req, res) => {
     `).all();
 
     const users = rows.map(u => {
-      let perfisArr = [];
-      try {
-        // prefer explicit perfis column when present, otherwise fallback to perfil
-        if (Array.isArray(u.perfis)) perfisArr = u.perfis;
-        else if (typeof u.perfis === 'string' && u.perfis.trim()) perfisArr = JSON.parse(u.perfis);
-      } catch (e) { perfisArr = []; }
-      if (!perfisArr.length && u.perfil) perfisArr = [String(u.perfil)];
-
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
       return {
         id: u.id,
         nome: u.nome || '',
         email: u.email || '',
-        whatsapp: u.whatsapp || u.telefone || '',
+        whatsapp: u.whatsapp || '',
         perfis: perfisArr,
         created_at_iso: u.created_at_iso || null
       };
@@ -6795,15 +6790,15 @@ app.get('/perfis', (req, res) => {
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfil, perfis, senha, password, foto } = req.body || {};
+  const { nome, email, whatsapp, perfis, password } = req.body || {};
   const emailNorm = String(email || '').toLowerCase().trim();
 
-  // validar campos obrigatórios: nome, email, perfis (array) ou perfil (string), e senha/password
-  const perfisArr = Array.isArray(perfis) ? perfis : (perfil ? [perfil] : []);
-  const pass = (typeof password === 'string' && password.trim()) ? password : (typeof senha === 'string' && senha.trim() ? senha : null);
+  // validar campos obrigatórios: nome, email, perfis (array) e password
+  const perfisArr = Array.isArray(perfis) ? perfis : [];
+  const pass = (typeof password === 'string' && password.trim()) ? password : null;
 
   if (!nome || !emailNorm || !perfisArr.length || !pass) {
-    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfil(s) e senha' });
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
   }
 
   try {
@@ -6818,11 +6813,11 @@ app.post('/usuarios', (req, res) => {
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const senhaHash = bcrypt.hashSync(String(pass), 10);
-    const perfilSalvar = String(perfisArr[0] || perfil || '').trim();
+    const perfilSalvar = String(perfisArr[0] || '').trim();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
@@ -6831,12 +6826,19 @@ app.post('/usuarios', (req, res) => {
       perfilSalvar,
       senhaHash,
       null,
-      (typeof foto === 'string' ? foto : null),
       nowIso,
       0
     );
 
-    const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    const user = {
+      id,
+      nome: String(nome || '').trim(),
+      email: emailNorm,
+      whatsapp: String(whatsapp || ''),
+      perfis: perfisArr,
+      perfil: perfilSalvar,
+      created_at_iso: nowIso
+    };
     return res.status(201).json({ ok: true, user });
   } catch (err) {
     console.error('[usuarios] POST /usuarios erro:', err);
@@ -6852,19 +6854,14 @@ app.get('/usuarios/:id', (req, res) => {
     const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
     if (!row) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
 
-    let perfisArr = [];
-    try {
-      if (Array.isArray(row.perfis)) perfisArr = row.perfis;
-      else if (typeof row.perfis === 'string' && row.perfis.trim()) perfisArr = JSON.parse(row.perfis);
-    } catch (e) { perfisArr = []; }
-
+    const perfisArr = row && row.perfil ? [String(row.perfil)] : [];
     const perfilFinal = row.perfil || (perfisArr[0] || '');
 
     const user = {
       id: row.id,
       email: row.email || '',
       nome: row.nome || '',
-      whatsapp: row.whatsapp || row.telefone || '',
+      whatsapp: row.whatsapp || '',
       perfil: perfilFinal,
       perfis: perfisArr,
       must_change_password: row.must_change_password ? 1 : 0,
@@ -6882,7 +6879,7 @@ app.get('/usuarios/:id', (req, res) => {
 // PUT /usuarios/:id -> atualiza usuário (por id)
 app.put('/usuarios/:id', (req, res) => {
   const id = req.params?.id;
-  const { nome, email, whatsapp, perfil, senha, password, novaSenha, foto } = req.body || {};
+  const { nome, email, whatsapp, perfis, password, foto } = req.body || {};
 
   if (!id) {
     return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
@@ -6912,19 +6909,18 @@ app.put('/usuarios/:id', (req, res) => {
       }
     }
 
-    // Allow password fields from different frontends: prefer `password`, then `senha`, then `novaSenha`
-    const rawPass = (typeof password === 'string' && password.trim()) ? password
-      : (typeof senha === 'string' && senha.trim()) ? senha
-      : (typeof novaSenha === 'string' && novaSenha.trim()) ? novaSenha
-      : null;
+
+    const rawPass = (typeof password === 'string' && password.trim()) ? password : null;
+
+    const perfilSalvar = Array.isArray(perfis) && perfis.length ? String(perfis[0]) : atual.perfil;
 
     const updates = [ 'nome = ?', 'email = ?', 'whatsapp = ?', 'perfil = ?' ];
-    const params = [ nome ?? atual.nome, emailNorm, whatsapp ?? atual.whatsapp, perfil ?? atual.perfil ];
+    const params = [ nome ?? atual.nome, emailNorm, whatsapp ?? atual.whatsapp, perfilSalvar ];
 
     if (rawPass) {
       const hashed = bcrypt.hashSync(String(rawPass), 10);
       updates.push('senha_hash = ?', 'senha = ?');
-      params.push(hashed, null); // clear legacy plaintext
+      params.push(hashed, null);
     }
 
     updates.push('foto = ?');
@@ -6986,9 +6982,7 @@ app.get('/usuarios', (req, res) => {
         email,
         nome,
         perfil,
-        perfis,
         whatsapp,
-        telefone,
         must_change_password,
         COALESCE(created_at, created_at_iso) AS created_at
       FROM usuarios
@@ -6996,19 +6990,14 @@ app.get('/usuarios', (req, res) => {
     `).all();
 
     const users = rows.map(u => {
-      let perfisArr = [];
-      try {
-        if (Array.isArray(u.perfis)) perfisArr = u.perfis;
-        else if (typeof u.perfis === 'string' && u.perfis.trim()) perfisArr = JSON.parse(u.perfis);
-      } catch (e) { perfisArr = []; }
-
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
       const perfilFinal = u.perfil || (perfisArr[0] || '');
 
       return {
         id: u.id,
         email: u.email || '',
         nome: u.nome || '',
-        whatsapp: u.whatsapp || u.telefone || '',
+        whatsapp: u.whatsapp || '',
         perfil: perfilFinal,
         perfis: perfisArr,
         must_change_password: u.must_change_password ? 1 : 0,
@@ -7025,11 +7014,15 @@ app.get('/usuarios', (req, res) => {
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+  const { nome, email, whatsapp, perfis, password } = req.body || {};
   const emailNorm = String(email || '').toLowerCase().trim();
 
-  if (!nome || !emailNorm || !perfil) {
-    return res.status(400).json({ ok: false, error: 'Campos obrigatórios.' });
+  // validar campos obrigatórios: nome, email, perfis (array) e password
+  const perfisArr = Array.isArray(perfis) ? perfis : [];
+  const pass = (typeof password === 'string' && password.trim()) ? password : null;
+
+  if (!nome || !emailNorm || !perfisArr.length || !pass) {
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
   }
 
   try {
@@ -7043,28 +7036,35 @@ app.post('/usuarios', (req, res) => {
 
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
+    const senhaHash = bcrypt.hashSync(String(pass), 10);
+    const perfilSalvar = String(perfisArr[0] || '').trim();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at_iso, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       String(nome || '').trim(),
       emailNorm,
       String(whatsapp || ''),
-      String(perfil || '').trim(),
-      (senha ? bcrypt.hashSync(String(senha), 10) : ''),
-      '',
-      typeof foto === 'string' ? foto : null,
+      perfilSalvar,
+      senhaHash,
+      null,
       nowIso,
-      1
+      0
     );
 
-    const salvo = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
+    const user = {
+      id,
+      nome: String(nome || '').trim(),
+      email: emailNorm,
+      whatsapp: String(whatsapp || ''),
+      perfis: perfisArr,
+      perfil: perfilSalvar,
+      created_at: nowIso
+    };
 
-    return res.status(201).json({ ok: true, user: salvo });
+    return res.status(201).json({ ok: true, user });
   } catch (err) {
     console.error('[usuarios] POST /usuarios erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
