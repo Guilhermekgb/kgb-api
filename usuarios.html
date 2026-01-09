@@ -304,10 +304,10 @@
       const vazio = document.querySelector('#vazio');
       if (!tbody) return;
 
-      try {
+        try {
         const resp = await apiRequest('/usuarios', { method: 'GET' });
 
-        if (!resp || resp.status !== 200 || !Array.isArray(resp.data)) {
+        if (!resp || resp.status !== 200) {
           console.error('Erro ao carregar usuários:', resp);
           tbody.innerHTML = `
             <tr>
@@ -320,9 +320,19 @@
           return;
         }
 
-        const lista = resp.data;
+        // Normaliza payload para aceitar várias formas:
+        // 1) array direto
+        // 2) { ok:true, data:[...] }
+        // 3) { users:[...] }
+        const payload = resp.data;
+        const usuarios =
+          Array.isArray(payload) ? payload :
+          Array.isArray(payload?.data) ? payload.data :
+          Array.isArray(payload?.users) ? payload.users :
+          [];
 
-        if (!lista.length) {
+        if (!Array.isArray(usuarios) || usuarios.length === 0) {
+          console.warn('Nenhum usuário retornado ou formato inesperado:', resp);
           tbody.innerHTML = `
             <tr>
               <td colspan="5" style="text-align:center; padding:16px;">
