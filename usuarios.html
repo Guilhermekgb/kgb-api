@@ -306,7 +306,7 @@
         alert('Não foi possível identificar o usuário.');
         return;
       }
-      location.href = `cadastro-usuario.html?id=${encodeURIComponent(id)}`;
+      window.location.href = `cadastro-usuario.html?id=${encodeURIComponent(id)}`;
     }
 
     // Buscar usuários na API e montar a tabela
