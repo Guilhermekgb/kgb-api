@@ -206,18 +206,18 @@
       try {
         const payload = await window.apiFetch(path, o);
 
-        // If payload already uses envelope { status, data }, return it
+        // Se apiFetch já retorna envelope {status,data}, respeita.
         if (payload && typeof payload === 'object' && ('status' in payload) && ('data' in payload)) {
           return payload;
         }
 
-        // Normalize to { status, data }
+        // Caso apiFetch retorne diretamente o array/obj, normaliza
         return { status: 200, data: payload };
       } catch (err) {
-        return {
-          status: err?.status || 500,
-          error: err?.payload || err?.message || String(err)
-        };
+        // Normaliza erro vindo do apiFetch
+        const status = err?.status || err?.payload?.status || 500;
+        const error = err?.payload?.error || err?.payload || err?.message || String(err);
+        return { status, error };
       }
     }
     // Menu mobile (padrão agenda/configurações)
@@ -419,7 +419,6 @@
   </script>
 
 
-  <script type="module" src="./js/auth-helper.js"></script>
-  <script type="module" src="./api/api-fetch.js"></script>
+  <!-- legacy auth/api-fetch includes removed; api-config.js + kgb-common.js already loaded in head -->
 </body>
 </html>
