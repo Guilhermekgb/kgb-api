@@ -204,10 +204,20 @@
       }
 
       try {
-        const payload = await window['apiFetch'](path, o);
+        const payload = await window.apiFetch(path, o);
+
+        // If payload already uses envelope { status, data }, return it
+        if (payload && typeof payload === 'object' && ('status' in payload) && ('data' in payload)) {
+          return payload;
+        }
+
+        // Normalize to { status, data }
         return { status: 200, data: payload };
       } catch (err) {
-        return { status: err?.status || 500, error: err?.payload || err?.message || String(err) };
+        return {
+          status: err?.status || 500,
+          error: err?.payload || err?.message || String(err)
+        };
       }
     }
     // Menu mobile (padrão agenda/configurações)

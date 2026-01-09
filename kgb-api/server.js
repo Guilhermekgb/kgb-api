@@ -6858,11 +6858,42 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT * FROM usuarios
-      ORDER BY datetime(created_at) DESC
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        perfis,
+        whatsapp,
+        telefone,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at
+      FROM usuarios
+      ORDER BY COALESCE(id,rowid) ASC
     `).all();
 
-    return res.json({ status: 200, data: rows });
+    const users = rows.map(u => {
+      let perfisArr = [];
+      try {
+        if (Array.isArray(u.perfis)) perfisArr = u.perfis;
+        else if (typeof u.perfis === 'string' && u.perfis.trim()) perfisArr = JSON.parse(u.perfis);
+      } catch (e) { perfisArr = []; }
+
+      const perfilFinal = u.perfil || (perfisArr[0] || '');
+
+      return {
+        id: u.id,
+        email: u.email || '',
+        nome: u.nome || '',
+        whatsapp: u.whatsapp || u.telefone || '',
+        perfil: perfilFinal,
+        perfis: perfisArr,
+        must_change_password: u.must_change_password ? 1 : 0,
+        created_at: u.created_at || null
+      };
+    });
+
+    return res.json({ status: 200, data: users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
     return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
@@ -7027,12 +7058,42 @@ app.delete('/usuarios', (req, res) => {
 app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT *
-        FROM usuarios
-       ORDER BY datetime(created_at_iso) DESC
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        perfis,
+        whatsapp,
+        telefone,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at
+      FROM usuarios
+      ORDER BY COALESCE(id,rowid) ASC
     `).all();
 
-    return res.json({ status: 200, data: rows });
+    const users = rows.map(u => {
+      let perfisArr = [];
+      try {
+        if (Array.isArray(u.perfis)) perfisArr = u.perfis;
+        else if (typeof u.perfis === 'string' && u.perfis.trim()) perfisArr = JSON.parse(u.perfis);
+      } catch (e) { perfisArr = []; }
+
+      const perfilFinal = u.perfil || (perfisArr[0] || '');
+
+      return {
+        id: u.id,
+        email: u.email || '',
+        nome: u.nome || '',
+        whatsapp: u.whatsapp || u.telefone || '',
+        perfil: perfilFinal,
+        perfis: perfisArr,
+        must_change_password: u.must_change_password ? 1 : 0,
+        created_at: u.created_at || null
+      };
+    });
+
+    return res.json({ status: 200, data: users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
     return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
