@@ -6965,7 +6965,7 @@ app.post('/usuarios', (req, res) => {
 
 // PUT /usuarios -> atualiza usuário (por id)
 app.put('/usuarios', (req, res) => {
-  const { id, nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+  const { id, nome, email, whatsapp, perfil, senha, password, novaSenha, foto } = req.body || {};
 
   if (!id) {
     return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
@@ -6995,32 +6995,28 @@ app.put('/usuarios', (req, res) => {
       }
     }
 
-    // If senha provided, hash and store in both senha and senha_hash for compatibility
-    let newSenhaHash = atual.senha_hash || '';
-    if (typeof senha === 'string' && senha.length) {
-      newSenhaHash = bcrypt.hashSync(String(senha), 10);
+    // Allow password fields from different frontends: prefer `password`, then `senha`, then `novaSenha`
+    const rawPass = (typeof password === 'string' && password.trim()) ? password
+      : (typeof senha === 'string' && senha.trim()) ? senha
+      : (typeof novaSenha === 'string' && novaSenha.trim()) ? novaSenha
+      : null;
+
+    const updates = [ 'nome = ?', 'email = ?', 'whatsapp = ?', 'perfil = ?' ];
+    const params = [ nome ?? atual.nome, emailNorm, whatsapp ?? atual.whatsapp, perfil ?? atual.perfil ];
+
+    if (rawPass) {
+      const hashed = bcrypt.hashSync(String(rawPass), 10);
+      updates.push('senha_hash = ?', 'senha = ?');
+      params.push(hashed, null); // clear legacy plaintext
     }
 
-    db.prepare(`
-      UPDATE usuarios
-         SET nome       = ?,
-             email      = ?,
-             whatsapp   = ?,
-             perfil     = ?,
-             senha_hash = ?,
-             senha      = ?,
-             foto       = ?
-       WHERE id = ?
-    `).run(
-      nome ?? atual.nome,
-      emailNorm,
-      whatsapp ?? atual.whatsapp,
-      perfil ?? atual.perfil,
-      newSenhaHash,
-      '',
-      (typeof foto === 'string' ? foto : atual.foto),
-      id
-    );
+    updates.push('foto = ?');
+    params.push(typeof foto === 'string' ? foto : atual.foto);
+
+    const sql = `UPDATE usuarios SET ${updates.join(',\n')} WHERE id = ?`;
+    params.push(id);
+
+    db.prepare(sql).run(...params);
 
     const atualizado = db
       .prepare('SELECT * FROM usuarios WHERE id = ?')
