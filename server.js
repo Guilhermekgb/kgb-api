@@ -67,6 +67,46 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// Ensure minimal `usuarios` table and common columns (non-destructive)
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY,
+      nome TEXT,
+      email TEXT,
+      whatsapp TEXT,
+      perfil TEXT,
+      senha_hash TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Add commonly used legacy columns if absent (safe ALTER)
+  const cols = db.prepare("PRAGMA table_info('usuarios')").all().map(r => r.name);
+  const safeAdd = (colDef) => {
+    const colName = String(colDef).split(' ')[0];
+    if (!cols.includes(colName)) {
+      try { db.prepare(`ALTER TABLE usuarios ADD COLUMN ${colDef}`).run(); } catch(e) { /* ignore */ }
+    }
+  };
+  safeAdd("email TEXT");
+  safeAdd("whatsapp TEXT");
+  safeAdd("perfil TEXT");
+  safeAdd("senha_hash TEXT");
+  safeAdd("created_at TEXT");
+  safeAdd("created_at_iso TEXT");
+  safeAdd("senha TEXT");
+  safeAdd("must_change_password INTEGER DEFAULT 0");
+
+  try {
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email_unique ON usuarios(email)').run();
+  } catch(e) {
+    // ignore if duplicates exist
+  }
+} catch(e) {
+  console.warn('[DB] failed to ensure usuarios table/cols:', e && e.message);
+}
+
 // Tabelas
 db.exec(`
 CREATE TABLE IF NOT EXISTS eventos (
@@ -441,35 +481,36 @@ app.get('/auth/me', (req, res) => {
   }
 });
 
-// Mock login endpoint (development): POST /auth/login { email, senha }
-app.post('/auth/login', (req, res) => {
+// POST /auth/login -> Real login usando bcrypt e senha_hash
+app.post('/auth/login', express.json(), (req, res) => {
   try {
     const body = req.body || {};
     const email = String(body.email || '').trim().toLowerCase();
-    const senha  = String(body.senha || '');
+    const password = String(body.password || body.senha || '');
 
-    if (!email || !senha) return res.status(400).json({ error: 'missing_fields' });
+    if (!email || !password) return res.status(400).json({ ok: false, error: 'missing_fields' });
 
-    let perfil = null;
-    let user = null;
-    if (email === 'admin@kgb.com' && senha === '1234') {
-      perfil = 'ADMIN';
-      user = { id: 'u-admin', nome: 'Administrador', email, perfil };
-    } else if (email === 'vendas@kgb.com' && senha === '1234') {
-      perfil = 'VENDAS';
-      user = { id: 'u-vendas', nome: 'Usuário Vendas', email, perfil };
-    } else {
-      return res.status(401).json({ error: 'invalid_credentials' });
-    }
+    const row = db.prepare(`SELECT COALESCE(id,rowid) AS id, nome, email, perfil, senha_hash FROM usuarios WHERE lower(email)=lower(?) LIMIT 1`).get(email);
+    if (!row) return res.status(401).json({ ok: false, error: 'invalid_credentials' });
 
-    const token = `mock-${String(perfil).toLowerCase()}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    tokenStore.set(token, user);
+    const hash = String(row.senha_hash || '');
+    const ok = bcrypt.compareSync(String(password), hash);
+    if (!ok) return res.status(401).json({ ok: false, error: 'invalid_credentials' });
 
-    return res.json({ token, user });
+    const token = `kgb-${crypto.randomUUID()}`;
+    const publicUser = { id: row.id, nome: row.nome, email: row.email, perfil: row.perfil };
+    tokenStore.set(token, publicUser);
+
+    return res.json({ ok: true, token, user: publicUser });
   } catch (err) {
-    console.error('[auth] POST /auth/login erro:', err);
-    return res.status(500).json({ error: 'server_error' });
+    console.error('[auth] POST /auth/login erro:', err && err.message || err);
+    return res.status(500).json({ ok: false, error: 'server_error' });
   }
+});
+
+// Desativar endpoints de reset/recover (retornar 404)
+['/auth/recover','/auth/reset','/admin/reset','/reset-password','/auth/reset-password','/auth/recover','/admin/reset-password'].forEach(p => {
+  app.all(p, (_req, res) => res.status(404).json({ ok: false, error: 'not_found' }));
 });
 
 // ========================= PATCH F.0 — bases, storage utils, journal =========================
@@ -5029,141 +5070,111 @@ app.get('/usuarios', (req, res) => {
   try {
     const rows = db.prepare(`
       SELECT
-        COALESCE(id, rowid) AS id,
-        email,
+        COALESCE(id,rowid) AS id,
         nome,
-        perfil,
+        email,
         whatsapp,
-        must_change_password,
-        COALESCE(created_at, created_at_iso) AS created_at_iso
+        perfil,
+        COALESCE(created_at, created_at_iso, '') AS created_at
       FROM usuarios
-      ORDER BY COALESCE(id,rowid) ASC
+      ORDER BY id DESC
     `).all();
 
-    const users = rows.map(u => {
-      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
-      return {
-        id: u.id,
-        nome: u.nome || '',
-        email: u.email || '',
-        whatsapp: u.whatsapp || '',
-        perfis: perfisArr,
-        created_at_iso: u.created_at_iso || null
-      };
-    });
+    const users = rows.map(r => ({
+      id: r.id,
+      nome: r.nome || '',
+      email: r.email || '',
+      whatsapp: r.whatsapp || '',
+      perfil: r.perfil || '',
+      created_at: r.created_at || ''
+    }));
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err);
+    console.error('[usuarios] GET /usuarios erro:', err && err.message || err);
     return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
 
-// POST /usuarios -> cria novo usuário
-app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfil, senha, foto } = req.body || {};
-  const emailNorm = String(email || '').toLowerCase().trim();
-
-  if (!nome || !emailNorm || !perfil) {
-    return res.status(400).json({ status: 400, error: 'Campos obrigatórios.' });
-  }
-
+// GET /usuarios/:id -> retorna usuário público ou 404
+app.get('/usuarios/:id', (req, res) => {
   try {
-    const exists = db
-      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
-      .get(emailNorm);
-
-    if (exists) {
-      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
-    }
-
-    const id = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-
-    db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha, foto, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      String(nome || '').trim(),
-      emailNorm,
-      String(whatsapp || ''),
-      String(perfil || '').trim(),
-      String(senha || ''),
-      (typeof foto === 'string' ? foto : null),
-      nowIso
-    );
-
-    const user = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.status(201).json({ status: 201, data: user });
+    const id = req.params.id;
+    const row = db.prepare('SELECT COALESCE(id,rowid) AS id, nome, email, whatsapp, perfil, COALESCE(created_at, created_at_iso, "") AS created_at FROM usuarios WHERE COALESCE(id,rowid) = ? LIMIT 1').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
+    return res.json({ ok: true, user: row });
   } catch (err) {
-    console.error('[usuarios] POST /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
+    console.error('[usuarios] GET /usuarios/:id erro:', err && err.message || err);
+    return res.status(500).json({ ok: false, error: 'Erro ao buscar usuário.' });
+  }
+});
+
+// POST /usuarios -> cria novo usuário
+app.post('/usuarios', express.json(), (req, res) => {
+  try {
+    const { nome, email, whatsapp, perfil, password, senha, foto } = req.body || {};
+    const pass = String(password || senha || '').trim();
+    const emailNorm = String(email || '').toLowerCase().trim();
+
+    if (!nome || !emailNorm || !perfil || !pass) return res.status(400).json({ ok: false, error: 'Campos obrigatórios.' });
+
+    const exists = db.prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?').get(emailNorm);
+    if (exists) return res.status(409).json({ ok: false, error: 'Já existe um usuário com esse e-mail.' });
+
+    const info = db.prepare('INSERT INTO usuarios (nome, email, whatsapp, perfil, senha_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(String(nome).trim(), emailNorm, String(whatsapp || ''), String(perfil || '').trim(), bcrypt.hashSync(String(pass), 10), new Date().toISOString());
+
+    const id = info.lastInsertRowid || info.lastInsertRowId || info.lastInsertRowId;
+    const saved = db.prepare('SELECT COALESCE(id,rowid) AS id, nome, email, whatsapp, perfil, COALESCE(created_at, created_at_iso, "") AS created_at FROM usuarios WHERE COALESCE(id,rowid) = ?').get(id);
+
+    return res.status(201).json({ ok: true, user: saved });
+  } catch (err) {
+    console.error('[usuarios] POST /usuarios erro:', err && err.message || err);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
   }
 });
 
 // PUT /usuarios -> atualiza usuário (por id)
-app.put('/usuarios', (req, res) => {
-  const { id, nome, email, whatsapp, perfil, senha, foto } = req.body || {};
+app.put('/usuarios', express.json(), (req, res) => {
+  // Backwards-compatible: accepts body with id
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
+  return app._router.handle(req, res, () => {}, 'put', `/usuarios/${encodeURIComponent(id)}`);
+});
 
-  if (!id) {
-    return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
-  }
-
+// PUT /usuarios/:id -> atualiza usuário (senha opcional)
+app.put('/usuarios/:id', express.json(), (req, res) => {
+  const id = req.params.id;
+  const { nome, email, whatsapp, perfil, password, senha, foto } = req.body || {};
   try {
-    const atual = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
+    const atual = db.prepare('SELECT COALESCE(id,rowid) AS id, * FROM usuarios WHERE COALESCE(id,rowid) = ?').get(id);
+    if (!atual) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
 
-    if (!atual) {
-      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
-    }
-
-    const emailNorm = email
-      ? String(email).toLowerCase().trim()
-      : atual.email;
-
-    // Se trocou e-mail, verifica se já existe outro com esse e-mail
+    const emailNorm = email ? String(email).toLowerCase().trim() : atual.email;
     if (emailNorm !== atual.email) {
-      const outro = db
-        .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?')
-        .get(emailNorm, id);
-
-      if (outro) {
-        return res.status(409).json({ status: 409, error: 'Já existe usuário com esse e-mail.' });
-      }
+      const outro = db.prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND COALESCE(id,rowid) <> ?').get(emailNorm, id);
+      if (outro) return res.status(409).json({ ok: false, error: 'Já existe usuário com esse e-mail.' });
     }
 
-    db.prepare(`
-      UPDATE usuarios
-         SET nome     = ?,
-             email    = ?,
-             whatsapp = ?,
-             perfil   = ?,
-             senha    = ?,
-             foto     = ?
-       WHERE id = ?
-    `).run(
+    let newHash = atual.senha_hash || null;
+    if (typeof password === 'string' && String(password).trim()) newHash = bcrypt.hashSync(String(password), 10);
+    if (typeof senha === 'string' && String(senha).trim()) newHash = bcrypt.hashSync(String(senha), 10);
+
+    db.prepare(`UPDATE usuarios SET nome = ?, email = ?, whatsapp = ?, perfil = ?, senha_hash = ?, foto = ? WHERE COALESCE(id,rowid) = ?`).run(
       nome ?? atual.nome,
       emailNorm,
       whatsapp ?? atual.whatsapp,
       perfil ?? atual.perfil,
-      (typeof senha === 'string' ? senha : atual.senha),
-      (typeof foto === 'string' ? foto : atual.foto),
+      newHash,
+      typeof foto === 'string' ? foto : atual.foto,
       id
     );
 
-    const atualizado = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.json({ status: 200, data: atualizado });
+    const updated = db.prepare('SELECT COALESCE(id,rowid) AS id, nome, email, whatsapp, perfil, COALESCE(created_at, created_at_iso, "") AS created_at FROM usuarios WHERE COALESCE(id,rowid) = ?').get(id);
+    return res.json({ ok: true, user: updated });
   } catch (err) {
-    console.error('[usuarios] PUT /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao atualizar usuário.' });
+    console.error('[usuarios] PUT /usuarios/:id erro:', err && err.message || err);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar usuário.' });
   }
 });
 
@@ -5199,90 +5210,7 @@ app.delete('/usuarios', (req, res) => {
     return res.status(500).json({ status: 500, error: 'Erro ao remover usuário.' });
   }
 });
-// ===== Usuários (CRUD básico para o sistema) =====
-
-// GET /usuarios -> lista todos (sem campo senha)
-app.get('/usuarios', (req, res) => {
-  try {
-    const rows = db.prepare(`
-      SELECT
-        COALESCE(id, rowid) AS id,
-        email,
-        nome,
-        perfil,
-        whatsapp,
-        must_change_password,
-        COALESCE(created_at, created_at_iso) AS created_at_iso
-      FROM usuarios
-      ORDER BY COALESCE(id,rowid) ASC
-    `).all();
-
-    const users = rows.map(u => {
-      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
-      return {
-        id: u.id,
-        nome: u.nome || '',
-        email: u.email || '',
-        whatsapp: u.whatsapp || '',
-        perfis: perfisArr,
-        created_at_iso: u.created_at_iso || null
-      };
-    });
-
-    return res.json({ ok: true, users });
-  } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err);
-    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
-  }
-});
-
-// POST /usuarios -> cria novo usuário
-app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfil, senha, foto } = req.body || {};
-  const emailNorm = String(email || '').toLowerCase().trim();
-
-  if (!nome || !emailNorm || !perfil) {
-    return res.status(400).json({ status: 400, error: 'Campos obrigatórios.' });
-  }
-
-  try {
-    const exists = db
-      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
-      .get(emailNorm);
-
-    if (exists) {
-      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
-    }
-
-    const id = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-    const senhaHash = senha ? bcrypt.hashSync(String(senha), 10) : null;
-
-    db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, foto, created_at_iso)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      String(nome || '').trim(),
-      emailNorm,
-      String(whatsapp || ''),
-      String(perfil || '').trim(),
-      senhaHash,
-      null,
-      typeof foto === 'string' ? foto : null,
-      nowIso
-    );
-
-    const salvo = db
-      .prepare('SELECT id, nome, email, whatsapp, perfil, foto, created_at_iso FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.status(201).json({ status: 201, data: salvo });
-  } catch (err) {
-    console.error('[usuarios] POST /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
-  }
-});
+// Duplicate user handlers removed (consolidated above)
 
 // PUT /usuarios -> atualiza usuário (por id)
 app.put('/usuarios', (req, res) => {
