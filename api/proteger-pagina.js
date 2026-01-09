@@ -26,18 +26,28 @@
     const guardWarn = (...a) => { if (DBG) console.warn('[GUARD]', ...a); };
     guardLog('start', location.pathname);
     guardLog('token?', !!localStorage.getItem('KGB_AUTH_TOKEN'));
-    // token must exist
-      const token = (function(){
-        try {
-          return localStorage.getItem('KGB_TOKEN') || localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null;
-        } catch(e) { return window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null; }
-      })();
-      guardLog('token present?', !!token);
+
+    // Normalize required permission from multiple possible keys (pt/en)
+    const required = (opts && (opts.permissao || opts.permission || opts.requiredPermission || opts.pagePermission))
+      || document.querySelector('meta[name="page-permission"]')?.content?.trim()
+      || '';
+
+    // token must exist only if a permission is required
+    const token = (function(){
+      try {
+        return localStorage.getItem('KGB_TOKEN') || localStorage.getItem('KGB_AUTH_TOKEN') || window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null;
+      } catch(e) { return window.KGB_AUTH_TOKEN || window.KGB_TOKEN || null; }
+    })();
+    guardLog('token present?', !!token, 'required=', required);
     if (!token) {
-        guardWarn('no token found -> redirect to login');
-        clearToken();
-        goLogin();
-        throw new Error('no-token');
+      if (!required) {
+        guardLog('no token but no required permission -> allowing access');
+        return true;
+      }
+      guardWarn('no token found -> redirect to login');
+      clearToken();
+      goLogin();
+      throw new Error('no-token');
     }
 
     try {
@@ -84,13 +94,12 @@
         }
       } catch (e) { /* ignore */ }
 
-      // permissões (simples)
-      const perm = opts.permissao;
-      if (perm && perm !== '*' && window.__KGB_USER__) {
+      // permissões (simples) — use a variável `required` normalizada
+      if (required && required !== '*' && window.__KGB_USER__) {
         const perms = window.__KGB_USER__.permissoes || [];
         const isAdmin = (window.__KGB_USER__.perfil || '').toLowerCase().includes('admin');
-        if (!isAdmin && !perms.includes('*') && !perms.includes(perm)) {
-          guardWarn('permission check failed for', perm, 'user.permissoes=', perms);
+        if (!isAdmin && !perms.includes('*') && !perms.includes(required)) {
+          guardWarn('permission check failed for', required, 'user.permissoes=', perms);
           try { alert('Sem permissão para acessar esta página.'); } catch (e){}
           location.href = './dashboard.html';
           return false;
