@@ -181,97 +181,111 @@
   <script type="module" src="./kgb-common.js"></script>
   <script type="module" src="./api/auth-client.js"></script>
 
-  <script>
-  // LOGIN: hard reset e handler fail-closed
+  <script type="module">
+  // LOGIN (module): diagnóstico visível + fail-safe
   (function () {
-    // FORCE LOGOUT ON LOGIN PAGE (para evitar token antigo “mascarando” erro)
-    try {
-      localStorage.removeItem('KGB_AUTH_TOKEN');
-      sessionStorage.removeItem('KGB_AUTH_TOKEN');
-    } catch(e){}
-
-    // garantir fallback de API_BASE para uso no snippet abaixo
-    try { window.__API_BASE__ = (window.__API_BASE__ || window.API_BASE || '').replace(/\/+$/,''); } catch(e) { window.__API_BASE__ = (window.__API_BASE__ || ''); }
-
     const form = document.getElementById("formLogin");
     const emailInput = document.getElementById("email");
     const senhaInput = document.getElementById("senha");
-    const erroEl = document.getElementById('login-erro');
+    const erroEl = document.getElementById("login-erro");
+    const btn = form ? form.querySelector('button[type="submit"]') : null;
 
-    function setError(msg){ try { if(!erroEl) return; erroEl.style.display = msg ? 'block' : 'none'; erroEl.textContent = msg || ''; } catch(e){} }
-    function setLoading(v){ try { const btn = document.querySelector('button[type="submit"], #btnEntrar, .btn-entrar'); if(btn) btn.disabled = !!v; } catch(e){} }
-
-    async function safeReadError(resp) {
-      try {
-        const ct = resp.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          const j = await resp.json();
-          return j?.message || j?.error || '';
+    function setError(msg){
+      try{
+        if (erroEl){
+          erroEl.style.display = msg ? 'block' : 'none';
+          erroEl.textContent = msg || '';
+        } else {
+          alert(msg);
         }
-        return (await resp.text())?.slice(0, 200);
-      } catch { return ''; }
+      }catch(e){
+        console.warn('[LOGIN] setError failed', e);
+        alert(msg);
+      }
     }
 
-    if (!form || !emailInput || !senhaInput) return;
+    function setLoading(on){
+      try{
+        if (btn){
+          btn.disabled = !!on;
+          btn.textContent = on ? 'Entrando...' : 'Entrar';
+        }
+      }catch(e){}
+    }
 
-    form.removeAttribute('action');
+    // Diagnóstico básico já ao carregar
+    try {
+      const apiBase = window.__API_BASE__ || window.__KGB_API_BASE__ || '';
+      console.log('[LOGIN][DIAG] __API_BASE__ =', apiBase);
+      console.log('[LOGIN][DIAG] typeof window.apiFetch =', typeof window.apiFetch);
+      console.log('[LOGIN][DIAG] typeof window.kgbAuth =', typeof window.kgbAuth);
 
-    form.addEventListener('submit', async (e) => {
+      if (!form) setError('ERRO: formLogin não encontrado (DOM).');
+      if (typeof window.kgbAuth !== 'object') setError('ERRO: kgbAuth não carregou. Verifique include do ./api/auth-client.js');
+      if (typeof window.apiFetch !== 'function') setError('ERRO: apiFetch não carregou. Verifique includes api-config.js + kgb-common.js (ordem).');
+      if (!apiBase) console.warn('[LOGIN][DIAG] API base vazia — api-config/kgb-common podem não ter resolvido ainda.');
+    } catch(e) {
+      console.warn('[LOGIN][DIAG] exception', e);
+    }
+
+    if (!form) return;
+
+    // Hard reset de token antigo
+    try { localStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
+    try { localStorage.removeItem('KGB_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch(e){}
+
+    form.addEventListener('submit', async function (e) {
       e.preventDefault();
-
-      // HARD RESET sempre
-      try {
-        localStorage.removeItem('KGB_AUTH_TOKEN');
-        sessionStorage.removeItem('KGB_AUTH_TOKEN');
-      } catch(e){}
-
-      console.log('[LOGIN] submit start');
+      console.log('[LOGIN] submit fired');
 
       setError('');
       setLoading(true);
 
       try {
-        const email = emailInput.value.trim();
-        const senha = senhaInput.value;
+        const email = (emailInput?.value || '').trim();
+        const senha = (senhaInput?.value || '');
 
-        // Use kgbAuth.login to normalize envelopes and token handling
+        if (!email || !senha){
+          setError('Preencha e-mail e senha.');
+          return;
+        }
+
+        // Guard rails
+        if (typeof window.kgbAuth !== 'object') {
+          setError('ERRO: kgbAuth não está disponível no clique. Veja Console.');
+          return;
+        }
+        if (typeof window.apiFetch !== 'function') {
+          setError('ERRO: apiFetch não está disponível no clique. Veja Console.');
+          return;
+        }
+
+        // Login via cliente padronizado
+        let data;
         try {
-          const data = await window.kgbAuth.login(email, senha);
-
-          const mustChange =
-            data?.must_change_password === 1 || data?.must_change_password === '1' ||
-            data?.mustChangePassword === 1 || data?.mustChangePassword === true;
-
-          if (mustChange) {
-            try { localStorage.setItem('KGB_MUST_CHANGE_PASSWORD', '1'); } catch(e){}
-            location.href = 'trocar-senha.html';
-            return;
-          } else {
-            try { localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD'); } catch(e){}
-          }
-
-          // valida sessão
-          await window.kgbAuth.me();
-
-          const params = new URLSearchParams(location.search);
-          const returnUrl = params.get('returnUrl') || 'dashboard.html';
-          try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
-          location.replace(returnUrl);
-        } catch (e) {
-          try { window.kgbAuth.clearToken(); } catch(e){}
-          const msg = e && e.message ? e.message : 'E-mail ou senha inválidos.';
-          console.warn('[LOGIN] fail', msg);
+          data = await window.kgbAuth.login(email, senha);
+        } catch (err) {
+          console.warn('[LOGIN] kgbAuth.login failed', err);
+          const msg = (err && err.message) ? err.message : 'E-mail ou senha inválidos.';
           setError(msg);
           return;
         }
 
+        console.log('[LOGIN] login ok, data=', data);
+
+        const mustChange =
+          data?.must_change_password === 1 || data?.must_change_password === '1' ||
+          data?.mustChangePassword === 1 || data?.mustChangePassword === '1';
+
+        const params = new URLSearchParams(location.search);
+        const returnUrl = params.get('returnUrl') || (mustChange ? 'trocar-senha.html' : 'dashboard.html');
+
+        try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
+        location.replace(returnUrl);
+
       } catch (err) {
         console.error('[LOGIN] exception', err);
-        try {
-          localStorage.removeItem('KGB_AUTH_TOKEN');
-          sessionStorage.removeItem('KGB_AUTH_TOKEN');
-        } catch(e){}
-        setError('Falha ao conectar. Tente novamente.');
+        setError('Falha ao conectar. Abra o Console e veja o erro.');
       } finally {
         setLoading(false);
       }
