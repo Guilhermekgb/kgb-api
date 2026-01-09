@@ -10,8 +10,7 @@
 
   <!-- Ícones -->
   <script src="https://unpkg.com/lucide@latest"></script>
-<!-- 1) Helpers globais -->
-<script type="module" src="./kgb-common.js"></script>
+<!-- 1) Helpers globais (loaded later together with api-config) -->
 
   <!-- Estilos globais -->
   <link rel="stylesheet" href="style.css" />
@@ -508,7 +507,7 @@
       document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
   </script>
 
-  <script type="module" src="./js/auth-helper.js">
-  <script type="module" src="./api/api-fetch.js">
+  <script type="module" src="./js/auth-helper.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
 </body>
 </html>
