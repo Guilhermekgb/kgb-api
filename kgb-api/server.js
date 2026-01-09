@@ -6847,10 +6847,10 @@ app.post('/usuarios', (req, res) => {
 // GET /usuarios/:id -> retorna usuário por id
 app.get('/usuarios/:id', (req, res) => {
   const id = req.params?.id;
-  if (!id) return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
+  if (!id) return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
   try {
     const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
-    if (!row) return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+    if (!row) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
 
     let perfisArr = [];
     try {
@@ -6885,7 +6885,7 @@ app.put('/usuarios/:id', (req, res) => {
   const { nome, email, whatsapp, perfil, senha, password, novaSenha, foto } = req.body || {};
 
   if (!id) {
-    return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
+    return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
   }
 
   try {
@@ -6894,7 +6894,7 @@ app.put('/usuarios/:id', (req, res) => {
       .get(id);
 
     if (!atual) {
-      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+      return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
     }
 
     const emailNorm = email
@@ -6949,7 +6949,7 @@ app.delete('/usuarios', (req, res) => {
   const emailNorm = email ? String(email).toLowerCase().trim() : null;
 
   if (!id && !emailNorm) {
-    return res.status(400).json({ status: 400, error: 'ID ou e-mail obrigatório.' });
+    return res.status(400).json({ ok: false, error: 'ID ou e-mail obrigatório.' });
   }
 
   try {
@@ -6966,13 +6966,13 @@ app.delete('/usuarios', (req, res) => {
     }
 
     if (!changes) {
-      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
+      return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
     }
 
-    return res.json({ status: 200, data: { removed: changes } });
+    return res.json({ ok: true, removed: changes });
   } catch (err) {
     console.error('[usuarios] DELETE /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao remover usuário.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao remover usuário.' });
   }
 });
 // ===== Usuários (CRUD básico para o sistema) =====
@@ -7016,10 +7016,10 @@ app.get('/usuarios', (req, res) => {
       };
     });
 
-    return res.json({ status: 200, data: users });
+    return res.json({ ok: true, users });
   } catch (err) {
     console.error('[usuarios] GET /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao listar usuários.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
 
@@ -7029,7 +7029,7 @@ app.post('/usuarios', (req, res) => {
   const emailNorm = String(email || '').toLowerCase().trim();
 
   if (!nome || !emailNorm || !perfil) {
-    return res.status(400).json({ status: 400, error: 'Campos obrigatórios.' });
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios.' });
   }
 
   try {
@@ -7038,7 +7038,7 @@ app.post('/usuarios', (req, res) => {
       .get(emailNorm);
 
     if (exists) {
-      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
+      return res.status(409).json({ ok: false, error: 'Já existe um usuário com esse e-mail.' });
     }
 
     const id = crypto.randomUUID();
@@ -7064,10 +7064,10 @@ app.post('/usuarios', (req, res) => {
       .prepare('SELECT * FROM usuarios WHERE id = ?')
       .get(id);
 
-    return res.status(201).json({ status: 201, data: salvo });
+    return res.status(201).json({ ok: true, user: salvo });
   } catch (err) {
     console.error('[usuarios] POST /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao criar usuário.' });
+    return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
   }
 });
 
@@ -7077,66 +7077,9 @@ app.post('/admin/users/:id/reset-password', (_req, res) => {
   return res.status(404).json({ ok: false, error: 'Not found' });
 });
 
-// PUT /usuarios -> atualiza usuário (por id)
-app.put('/usuarios', (req, res) => {
-  const { id, nome, email, whatsapp, perfil, senha, foto } = req.body || {};
-
-  if (!id) {
-    return res.status(400).json({ status: 400, error: 'ID obrigatório.' });
-  }
-
-  try {
-    const atual = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
-
-    if (!atual) {
-      return res.status(404).json({ status: 404, error: 'Usuário não encontrado.' });
-    }
-
-    const emailNorm = email
-      ? String(email).toLowerCase().trim()
-      : atual.email;
-
-    // Se trocou e-mail, verifica se já existe outro com esse e-mail
-    if (emailNorm !== atual.email) {
-      const outro = db
-        .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?')
-        .get(emailNorm, id);
-
-      if (outro) {
-        return res.status(409).json({ status: 409, error: 'Já existe usuário com esse e-mail.' });
-      }
-    }
-
-    db.prepare(`
-      UPDATE usuarios
-         SET nome     = ?,
-             email    = ?,
-             whatsapp = ?,
-             perfil   = ?,
-             senha    = ?,
-             foto     = ?
-       WHERE id = ?
-    `).run(
-      nome ?? atual.nome,
-      emailNorm,
-      whatsapp ?? atual.whatsapp,
-      perfil ?? atual.perfil,
-      typeof senha === 'string' ? senha : atual.senha,
-      typeof foto === 'string' ? foto : atual.foto,
-      id
-    );
-
-    const atualizado = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
-
-    return res.json({ status: 200, data: atualizado });
-  } catch (err) {
-    console.error('[usuarios] PUT /usuarios erro:', err);
-    return res.status(500).json({ status: 500, error: 'Erro ao atualizar usuário.' });
-  }
+// Deprecated: prefer PUT /usuarios/:id for updates. Keep this route disabled.
+app.put('/usuarios', (_req, res) => {
+  return res.status(404).json({ ok: false, error: 'Use PUT /usuarios/:id' });
 });
 
 // DELETE /usuarios -> remove por id OU por email

@@ -245,9 +245,9 @@
 
       try {
         const email = (emailInput?.value || '').trim();
-        const senha = (senhaInput?.value || '').trim(); // TRIM NA SENHA TAMBÉM
+        const password = (senhaInput?.value || '').trim(); // TRIM NA SENHA TAMBÉM
 
-        if (!email || !senha){
+        if (!email || !password){
           setError('Preencha e-mail e senha.');
           return;
         }
@@ -265,14 +265,14 @@
         // Debug payload log quando em debug
         try {
           if (/[?&]debug=1\b/.test(location.search)) {
-            console.log('[LOGIN][PAYLOAD]', { email, senhaLen: senha.length, senhaPreview: (senha.slice(0,3) || '') + '***' + (senha.slice(-2) || '') });
+            console.log('[LOGIN][PAYLOAD]', { email, passwordLen: password.length, passwordPreview: (password.slice(0,3) || '') + '***' + (password.slice(-2) || '') });
           }
         } catch(e){}
 
         // Login via cliente padronizado
         let data;
         try {
-          data = await window.kgbAuth.login(email, senha);
+          data = await window.kgbAuth.login(email, password);
         } catch (err) {
           console.warn('[LOGIN] kgbAuth.login failed', err);
           const msg = (err && err.message) ? err.message : 'E-mail ou senha inválidos.';

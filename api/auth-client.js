@@ -70,11 +70,11 @@
     return unwrap(payload);
   }
 
-  async function login(email, senha) {
+  async function login(email, password) {
     const data = await api('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, senha })
+      body: JSON.stringify({ email, password })
     });
 
     const ok = data?.ok;
