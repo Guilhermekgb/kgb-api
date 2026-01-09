@@ -10,12 +10,6 @@
   <title>Login - Sistema Buffet</title>
 
   <script>
-    // Import helper para padronizar API_BASE (exposto em window.__getApiBase)
-    (function(){
-      try {
-        var s=document.createElement('script'); s.src='js/auth-helper.js'; document.head.appendChild(s);
-      } catch(e){}
-    })();
     /* Impede bloqueio no login */
     window.__KGB_GUARD_BYPASS__ = true;
   </script>
@@ -185,6 +179,7 @@
 
   <script type="module" src="./api/api-config.js"></script>
   <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/auth-client.js"></script>
 
   <script>
   // LOGIN: hard reset e handler fail-closed
@@ -239,68 +234,36 @@
         const email = emailInput.value.trim();
         const senha = senhaInput.value;
 
-        const url = `${window.__API_BASE__}/auth/login`;
-        console.log('[LOGIN] POST', url);
-
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'omit',
-          body: JSON.stringify({ email, senha })
-        });
-
-        console.log('[LOGIN] status', resp.status);
+        // Use kgbAuth.login to normalize envelopes and token handling
         try {
-          const raw = await resp.clone().text().catch(() => '');
-          console.log('[LOGIN][DIAG] raw body', String(raw || '').slice(0, 500));
-        } catch (e) { console.warn('[LOGIN][DIAG] failed reading body', e); }
+          const data = await window.kgbAuth.login(email, senha);
 
-        if (!resp.ok) {
-          // NUNCA REDIRECIONAR EM FALHA
-          const msg = await safeReadError(resp);
-          console.warn('[LOGIN] FAIL - no redirect', resp.status, msg);
-          try {
-            localStorage.removeItem('KGB_AUTH_TOKEN');
-            sessionStorage.removeItem('KGB_AUTH_TOKEN');
-          } catch(e){}
-          setError(msg || 'E-mail ou senha inválidos.');
-          return; // HARD STOP
-        }
+          const mustChange =
+            data?.must_change_password === 1 || data?.must_change_password === '1' ||
+            data?.mustChangePassword === 1 || data?.mustChangePassword === true;
 
-        const data = await resp.json().catch(() => ({}));
-        const token = data?.token || data?.accessToken || data?.access_token;
+          if (mustChange) {
+            try { localStorage.setItem('KGB_MUST_CHANGE_PASSWORD', '1'); } catch(e){}
+            location.href = 'trocar-senha.html';
+            return;
+          } else {
+            try { localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD'); } catch(e){}
+          }
 
-        if (!token) {
-          console.error('[LOGIN] OK sem token - resposta:', data);
-          setError('Login não retornou token. Verifique /auth/login.');
+          // valida sessão
+          await window.kgbAuth.me();
+
+          const params = new URLSearchParams(location.search);
+          const returnUrl = params.get('returnUrl') || 'dashboard.html';
+          try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
+          location.replace(returnUrl);
+        } catch (e) {
+          try { window.kgbAuth.clearToken(); } catch(e){}
+          const msg = e && e.message ? e.message : 'E-mail ou senha inválidos.';
+          console.warn('[LOGIN] fail', msg);
+          setError(msg);
           return;
         }
-
-        // Salva token(s) padronizados para outras páginas lerem
-        try {
-          localStorage.setItem('KGB_AUTH_TOKEN', token);
-          localStorage.setItem('KGB_TOKEN', token);
-        } catch (e) {}
-        console.log('[LOGIN] token salvo len=', token.length);
-
-        // Se backend indicar troca obrigatória de senha, redireciona para trocar-senha.html
-        if (data && data.mustChangePassword === true) {
-          try { localStorage.setItem('KGB_MUST_CHANGE_PASSWORD', '1'); } catch(e){}
-          window.location.href = 'trocar-senha.html';
-          return;
-        } else {
-          try { localStorage.removeItem('KGB_MUST_CHANGE_PASSWORD'); } catch(e){}
-        }
-
-        // valida sessão com Bearer e segue fluxo normal
-        await apiFetch('/auth/me');
-        console.log('[LOGIN] /auth/me OK -> redirect');
-
-        const params = new URLSearchParams(location.search);
-        const returnUrl = params.get('returnUrl') || 'dashboard.html';
-        // permitir redirect somente em sucesso explícito
-        try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
-        location.replace(returnUrl);
 
       } catch (err) {
         console.error('[LOGIN] exception', err);
