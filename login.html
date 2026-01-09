@@ -236,6 +236,8 @@
 
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      if (form.dataset.submitting === '1') return;
+      form.dataset.submitting = '1';
       console.log('[LOGIN] submit fired');
 
       setError('');
@@ -243,7 +245,7 @@
 
       try {
         const email = (emailInput?.value || '').trim();
-        const senha = (senhaInput?.value || '');
+        const senha = (senhaInput?.value || '').trim(); // TRIM NA SENHA TAMBÉM
 
         if (!email || !senha){
           setError('Preencha e-mail e senha.');
@@ -259,6 +261,13 @@
           setError('ERRO: apiFetch não está disponível no clique. Veja Console.');
           return;
         }
+
+        // Debug payload log quando em debug
+        try {
+          if (/[?&]debug=1\b/.test(location.search)) {
+            console.log('[LOGIN][PAYLOAD]', { email, senhaLen: senha.length, senhaPreview: (senha.slice(0,3) || '') + '***' + (senha.slice(-2) || '') });
+          }
+        } catch(e){}
 
         // Login via cliente padronizado
         let data;
@@ -288,6 +297,7 @@
         setError('Falha ao conectar. Abra o Console e veja o erro.');
       } finally {
         setLoading(false);
+        try { form.dataset.submitting = '0'; } catch(e){}
       }
     });
   })();
