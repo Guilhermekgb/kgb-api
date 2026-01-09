@@ -282,12 +282,8 @@
 
         console.log('[LOGIN] login ok, data=', data);
 
-        const mustChange =
-          data?.must_change_password === 1 || data?.must_change_password === '1' ||
-          data?.mustChangePassword === 1 || data?.mustChangePassword === '1';
-
         const params = new URLSearchParams(location.search);
-        const returnUrl = params.get('returnUrl') || (mustChange ? 'trocar-senha.html' : 'dashboard.html');
+        const returnUrl = params.get('returnUrl') || 'dashboard.html';
 
         try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
         location.replace(returnUrl);
