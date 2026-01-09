@@ -742,25 +742,40 @@ app.get('/admin/reset', (req, res) => {
     const senha_hash = bcrypt.hashSync(String(tempPassword), 10);
 
     try {
+      // inspect schema for optional columns
+      const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
+      const hasPerfis = cols.includes('perfis');
+      const hasPerms = cols.includes('permissoes');
+
       const existing = db
         .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
         .get(email);
 
+      const permsValue = hasPerms ? JSON.stringify(['*']) : null;
+      const perfisValue = hasPerfis ? JSON.stringify(['Administrador']) : null;
+
       if (existing?.id) {
-        db.prepare(`
-          UPDATE usuarios
-          SET nome = ?, perfil = ?, senha_hash = ?, must_change_password = 1
-          WHERE COALESCE(id,rowid) = ?
-        `).run(nome, perfil, senha_hash, existing.id);
+        const parts = ['nome = ?', 'perfil = ?', 'senha_hash = ?', 'must_change_password = 1'];
+        const params = [nome, perfil, senha_hash];
+        if (hasPerfis) { parts.push('perfis = ?'); params.push(perfisValue); }
+        if (hasPerms) { parts.push('permissoes = ?'); params.push(permsValue); }
+        params.push(existing.id);
+
+        const sql = `UPDATE usuarios SET ${parts.join(', ')} WHERE COALESCE(id,rowid) = ?`;
+        db.prepare(sql).run(...params);
 
         return res.json({ ok: true, action: 'updated', email, must_change_password: 1, tempPassword });
       }
 
-      // Insert mínimo — se a tabela tiver coluna id TEXT PK isso ainda funciona
-      db.prepare(`
-        INSERT INTO usuarios (email, nome, perfil, senha_hash, must_change_password)
-        VALUES (?, ?, ?, ?, 1)
-      `).run(email, nome, perfil, senha_hash);
+      // Build insert with optional columns
+      const insertCols = ['email', 'nome', 'perfil', 'senha_hash', 'must_change_password'];
+      const placeholders = ['?', '?', '?', '?', '1'];
+      const insertParams = [email, nome, perfil, senha_hash];
+      if (hasPerfis) { insertCols.push('perfis'); placeholders.push('?'); insertParams.push(perfisValue); }
+      if (hasPerms) { insertCols.push('permissoes'); placeholders.push('?'); insertParams.push(permsValue); }
+
+      const insertSql = `INSERT INTO usuarios (${insertCols.join(', ')}) VALUES (${placeholders.join(', ')})`;
+      db.prepare(insertSql).run(...insertParams);
 
       const created = db
         .prepare('SELECT COALESCE(id,rowid) AS id FROM usuarios WHERE lower(email)=lower(?) LIMIT 1')
@@ -811,6 +826,51 @@ function signToken(user) {
     perfil: normalizePerfil(user.perfil)
   };
   return jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+}
+
+// Load user from DB with RBAC-safe fields (perfil, perfis, permissoes)
+function fetchUserForApi(id) {
+  try {
+    const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
+    const wantPerfis = cols.includes('perfis');
+    const wantPerms = cols.includes('permissoes');
+
+    const selectCols = ['COALESCE(id,rowid) as id', 'email', 'nome', 'perfil'];
+    if (wantPerfis) selectCols.push('perfis');
+    if (wantPerms) selectCols.push('permissoes');
+
+    const row = db.prepare(`SELECT ${selectCols.join(', ')} FROM usuarios WHERE COALESCE(id,rowid) = ? LIMIT 1`).get(id);
+    if (!row) return null;
+
+    const perfil = normalizePerfil(row.perfil);
+    let perfis = [];
+    let permissoes = [];
+    try {
+      if (wantPerfis && row.perfis) {
+        perfis = typeof row.perfis === 'string' ? JSON.parse(row.perfis) : row.perfis;
+      }
+    } catch (e) { perfis = [] }
+    try {
+      if (wantPerms && row.permissoes) {
+        permissoes = typeof row.permissoes === 'string' ? JSON.parse(row.permissoes) : row.permissoes;
+      }
+    } catch (e) { permissoes = [] }
+
+    // Ensure arrays
+    if (!Array.isArray(perfis)) perfis = [];
+    if (!Array.isArray(permissoes)) permissoes = [];
+
+    // If admin by perfil or perfis, ensure permissões full
+    const isAdmin = String(perfil || '').toLowerCase() === 'administrador' || perfis.map(p => String(p).toLowerCase()).includes('administrador');
+    if (isAdmin && (!Array.isArray(permissoes) || permissoes.length === 0)) {
+      permissoes = ['*'];
+    }
+
+    return { id: row.id, email: row.email, nome: row.nome, perfil, perfis, permissoes };
+  } catch (e) {
+    console.warn('[fetchUserForApi] failed', e && e.message);
+    return null;
+  }
 }
 
 // Normalize perfil strings to a small set of canonical display values
@@ -1031,14 +1091,9 @@ app.get('/auth/me', (req, res) => {
         try {
           if (!JWT_SECRET) return res.status(500).json({ ok:false, error:'Server misconfigured (JWT_SECRET)' });
           const payload = jwt.verify(bearer, JWT_SECRET);
-          const u = db.prepare(`
-            SELECT COALESCE(id, rowid) as id, email, nome, perfil
-            FROM usuarios
-            WHERE COALESCE(id, rowid) = ?
-            LIMIT 1
-          `).get(payload.id);
+          const u = fetchUserForApi(payload.id);
           if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
-          return res.json({ ok: true, data: { id: u.id, email: u.email, nome: u.nome, perfil: normalizePerfil(u.perfil) } });
+          return res.json({ ok: true, data: u });
         } catch (e) {
           // invalid/expired bearer, fallthrough to cookie
         }
@@ -1054,14 +1109,9 @@ app.get('/auth/me', (req, res) => {
   if (!decoded) return res.status(401).json({ ok: false, error: 'Invalid token' });
 
   try {
-    const u = db.prepare(`
-      SELECT COALESCE(id, rowid) as id, email, nome, perfil
-      FROM usuarios
-      WHERE COALESCE(id, rowid) = ?
-      LIMIT 1
-    `).get(decoded.id);
+    const u = fetchUserForApi(decoded.id);
     if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
-    return res.json({ ok: true, data: { id: u.id, email: u.email, nome: u.nome, perfil: normalizePerfil(u.perfil) } });
+    return res.json({ ok: true, data: u });
   } catch (err) {
     console.error('[auth] GET /auth/me erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
