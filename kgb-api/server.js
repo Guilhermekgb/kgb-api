@@ -284,9 +284,9 @@ if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED_ADMIN === '1'
     if (!existing) {
       const id = crypto.randomUUID();
       const senhaHash = bcrypt.hashSync('123', 10);
-      db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha_hash,senha,foto,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', '', new Date().toISOString());
-      console.log('[SEED] admin criado: admin@kgb.com senha: 123');
+      db.prepare('INSERT INTO usuarios(id,nome,email,whatsapp,perfil,senha_hash,senha,foto,created_at,must_change_password) VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .run(id, 'Administrador', ADMIN_EMAIL, '', 'Administrador', senhaHash, '', '', new Date().toISOString(), 1);
+      console.log('[SEED] admin criado: admin@kgb.com senha: 123 (must_change_password=1)');
     } else {
       console.log('[SEED] admin already exists:', existing.id || '(id?)');
     }
@@ -738,7 +738,7 @@ app.use((req, res, next) => {
 });
 
 function signToken(user) {
-  const userId = user && (user.id ?? user.usuario_id ?? user.user_id ?? user.ID ?? user.Id);
+  const userId = user && (user.id ?? user.ID ?? user.Id);
   if (!userId) {
     dlog('signToken: missing user id, userKeys=', Object.keys(user || {}));
     throw new Error('Invalid user record (missing id)');
@@ -802,25 +802,35 @@ app.post('/auth/login', async (req, res) => {
 
       let row = db.prepare(`
         SELECT
-          COALESCE(id, usuario_id, user_id, ID, rowid) as id,
-          *
-        FROM usuarios
-        WHERE lower(trim(email)) = lower(trim(?))
+          COALESCE(u.id, u.rowid) as id,
+          lower(trim(u.email)) as email,
+          u.nome,
+          u.perfil,
+          u.senha_hash,
+          u.senha,
+          COALESCE(u.must_change_password, 0) as must_change_password
+        FROM usuarios u
+        WHERE lower(trim(u.email)) = ?
         LIMIT 1
       `).get(emailNorm);
       if (!row) {
         row = db.prepare(`
           SELECT
-            COALESCE(id, usuario_id, user_id, ID, rowid) as id,
-            *
-          FROM usuarios
-          WHERE lower(trim(nome)) = lower(trim(?))
+            COALESCE(u.id, u.rowid) as id,
+            lower(trim(u.email)) as email,
+            u.nome,
+            u.perfil,
+            u.senha_hash,
+            u.senha,
+            COALESCE(u.must_change_password, 0) as must_change_password
+          FROM usuarios u
+          WHERE lower(trim(u.nome)) = ?
           LIMIT 1
         `).get(emailNorm);
       }
 
       // Normalize user id to ensure signToken always receives a valid id
-      const userId = row?.id ?? row?.usuario_id ?? row?.user_id ?? row?.ID ?? row?.Id ?? row?.rowid;
+      const userId = row?.id ?? row?.rowid;
       if (!userId) {
         dlog('login: user keys =', Object.keys(row || {}));
         return res.status(500).json({ ok: false, error: 'Invalid user record (missing id)' });
@@ -865,7 +875,7 @@ app.post('/auth/login', async (req, res) => {
             return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
 
-          const userId = row.id ?? row.usuario_id ?? row.user_id ?? row.ID ?? row.Id;
+          const userId = row.id ?? row.rowid;
           if (!userId) {
             dlog('login: invalid user record missing id, rowKeys=', Object.keys(row || {}));
             return res.status(500).json({ ok: false, error: 'Invalid user record (missing id)' });
@@ -938,9 +948,14 @@ app.get('/auth/me', (req, res) => {
         try {
           if (!JWT_SECRET) return res.status(500).json({ ok:false, error:'Server misconfigured (JWT_SECRET)' });
           const payload = jwt.verify(bearer, JWT_SECRET);
-          const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(payload.id);
-          if (!user) return res.status(401).json({ ok: false, error: 'User not found' });
-          return res.json({ ok: true, data: user });
+          const u = db.prepare(`
+            SELECT COALESCE(id, rowid) as id, email, nome, perfil
+            FROM usuarios
+            WHERE COALESCE(id, rowid) = ?
+            LIMIT 1
+          `).get(payload.id);
+          if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
+          return res.json({ ok: true, data: u });
         } catch (e) {
           // invalid/expired bearer, fallthrough to cookie
         }
@@ -956,9 +971,14 @@ app.get('/auth/me', (req, res) => {
   if (!decoded) return res.status(401).json({ ok: false, error: 'Invalid token' });
 
   try {
-    const user = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(decoded.id);
-    if (!user) return res.status(401).json({ ok: false, error: 'User not found' });
-    return res.json({ ok: true, data: user });
+    const u = db.prepare(`
+      SELECT COALESCE(id, rowid) as id, email, nome, perfil
+      FROM usuarios
+      WHERE COALESCE(id, rowid) = ?
+      LIMIT 1
+    `).get(decoded.id);
+    if (!u) return res.status(401).json({ ok: false, error: 'User not found' });
+    return res.json({ ok: true, data: u });
   } catch (err) {
     console.error('[auth] GET /auth/me erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro interno' });
@@ -1069,7 +1089,7 @@ app.post('/auth/change-password', requireAuth, async (req, res) => {
     } catch (e) { dlog('change-password dupCount failed', e && e.message); }
 
     const hash = await bcrypt.hash(String(novaSenha), 10);
-    const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE id = ?').run(hash, '', uid);
+    const info = db.prepare('UPDATE usuarios SET senha_hash = ?, senha = ?, must_change_password = 0 WHERE COALESCE(id,rowid) = ?').run(hash, '', uid);
     if (!info || Number(info.changes || 0) === 0) {
       return res.status(400).json({ ok: false, error: 'Senha não aplicada (user não encontrado)' });
     }
