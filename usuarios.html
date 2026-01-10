@@ -144,15 +144,6 @@
   <!-- Menu (módulo) -->
   <script type="module" src="menu-lateral.js"></script>
 
-  <!-- Guard / proteção de página (kgb-common already loaded in head) -->
-  <script type="module" src="./api/proteger-pagina.js"></script>
-  <script>
-    const meta = document.querySelector('meta[name="page-permission"]');
-    const permissao = meta?.content?.trim();
-    try { if (permissao) window.guard({ permissao }); } catch(e){}
-    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
-  </script>
-
   <!-- Lógica da listagem de usuários (AGORA DIRETO DO LOCALSTORAGE) -->
   <!-- Lógica da listagem de usuários (AGORA VIA API /usuarios) - apiFetch-only -->
   <script type="module">
@@ -311,9 +302,17 @@
 
     // Buscar usuários na API e montar a tabela
     async function carregarUsuarios() {
-      const tbody = document.querySelector('#tbodyUsuarios');
+      console.log('[KGB][usuarios] carregando via API...');
+      const tbody =
+        document.querySelector('#tbodyUsuarios') ||
+        document.querySelector('#usuariosBody') ||
+        document.querySelector('#lista-usuarios') ||
+        document.querySelector('tbody');
       const vazio = document.querySelector('#vazio');
-      if (!tbody) return;
+      if (!tbody) {
+        console.error('[KGB][usuarios] Não encontrei tbody/container para render');
+        return;
+      }
       // show created toast if redirected after creating user
       try {
         const p = new URLSearchParams(location.search || '');
@@ -334,7 +333,7 @@
 
       try {
         const resp = await window.kgbAuth.api('/usuarios', { method: 'GET' });
-        console.log('[KGB][usuarios] resposta bruta:', resp);
+        console.log('[KGB][usuarios] resp=', resp);
 
         const lista = Array.isArray(resp)
           ? resp
@@ -443,6 +442,30 @@
     }
 
     document.addEventListener('DOMContentLoaded', carregarUsuarios);
+  </script>
+
+  <!-- proteger-pagina deve ser carregado antes do listener de load (módulo) -->
+  <script type="module" src="./api/proteger-pagina.js"></script>
+  <script>
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+    try { if (permissao) window.guard({ permissao }); } catch(e){}
+    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+  </script>
+
+  <script>
+    window.addEventListener('load', () => {
+      try {
+        console.log('[KGB][usuarios] window.load fired');
+        if (typeof carregarUsuarios !== 'function') {
+          console.error('[KGB][usuarios] carregarUsuarios() não existe no escopo global');
+          return;
+        }
+        carregarUsuarios();
+      } catch (e) {
+        console.error('[KGB][usuarios] erro no load', e);
+      }
+    });
   </script>
 
 
