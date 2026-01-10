@@ -6928,10 +6928,10 @@ app.post('/usuarios', (req, res) => {
     const id = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const senhaHash = bcrypt.hashSync(String(pass), 10);
-    const perfilSalvar = String(perfisArr[0] || '').trim();
+    const perfilSalvar = String(perfis[0] || '').trim();
 
     db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at, must_change_password)
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
@@ -6950,7 +6950,7 @@ app.post('/usuarios', (req, res) => {
       nome: String(nome || '').trim(),
       email: emailNorm,
       whatsapp: String(whatsapp || ''),
-      perfis: perfisArr,
+      perfis: perfis,
       perfil: perfilSalvar,
       created_at_iso: nowIso
     };
@@ -7090,64 +7090,7 @@ app.delete('/usuarios', (req, res) => {
 
 // Duplicate GET /usuarios removed — consolidated into a single schema-agnostic handler above.
 
-// POST /usuarios -> cria novo usuário
-app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfis, password } = req.body || {};
-  const emailNorm = String(email || '').toLowerCase().trim();
-
-  // validar campos obrigatórios: nome, email, perfis (array) e password
-  const perfisArr = Array.isArray(perfis) ? perfis : [];
-  const pass = (typeof password === 'string' && password.trim()) ? password : null;
-
-  if (!nome || !emailNorm || !perfisArr.length || !pass) {
-    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
-  }
-
-  try {
-    const exists = db
-      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
-      .get(emailNorm);
-
-    if (exists) {
-      return res.status(409).json({ ok: false, error: 'Já existe um usuário com esse e-mail.' });
-    }
-
-    const id = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-    const senhaHash = bcrypt.hashSync(String(pass), 10);
-    const perfilSalvar = String(perfisArr[0] || '').trim();
-
-    db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      String(nome || '').trim(),
-      emailNorm,
-      String(whatsapp || ''),
-      perfilSalvar,
-      senhaHash,
-      null,
-      nowIso,
-      0
-    );
-
-    const user = {
-      id,
-      nome: String(nome || '').trim(),
-      email: emailNorm,
-      whatsapp: String(whatsapp || ''),
-      perfis: perfisArr,
-      perfil: perfilSalvar,
-      created_at: nowIso
-    };
-
-    return res.status(201).json({ ok: true, user });
-  } catch (err) {
-    console.error('[usuarios] POST /usuarios erro:', err);
-    return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
-  }
-});
+// Duplicate POST /usuarios removed — consolidated handler is defined earlier in this file.
 
 // ADMIN: reset password for a user and force must_change_password=1
 // Deprecated admin reset-password endpoint — respond 404
