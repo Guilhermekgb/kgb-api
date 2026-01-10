@@ -6788,6 +6788,23 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 // GET /usuarios -> lista todos (sem campo senha)
 app.get('/usuarios', (req, res) => {
   try {
+    console.log('[KGB] GET /usuarios auth=', req.headers && req.headers.authorization);
+    // Verify token and RBAC: only admins can list users
+    try {
+      const authH = String(req.headers.authorization || '');
+      const m = authH.match(/^Bearer\s+(.+)$/i);
+      if (!m) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      const payload = verifyToken(m[1]);
+      if (!payload) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      // load full user to check perfis/permissoes
+      const caller = fetchUserForApi(payload.id);
+      console.log('[KGB] GET /usuarios caller=', caller && { id: caller.id, perfil: caller.perfil });
+      const isAdmin = (String(caller?.perfil || '').toLowerCase() === 'administrador') || (Array.isArray(caller?.perfis) && caller.perfis.map(p => String(p).toLowerCase()).includes('administrador')) || (Array.isArray(caller?.permissoes) && caller.permissoes.includes('*'));
+      if (!isAdmin) return res.status(403).json({ ok: false, error: 'Forbidden' });
+    } catch (e) {
+      console.warn('[KGB] GET /usuarios auth check failed', e && (e.stack || e));
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
     // Discover columns present in the usuarios table
     const cols = db.prepare("PRAGMA table_info('usuarios')").all() || [];
     const names = new Set((cols || []).map(c => String(c.name).toLowerCase()));
@@ -6868,7 +6885,7 @@ app.get('/usuarios', (req, res) => {
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[GET /usuarios] SQL error:', err);
+    console.error('[GET /usuarios] SQL error:', err && (err.stack || err));
     if (process.env.AUTH_DEBUG === '1') {
       return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.', detail: err && err.message });
     }
@@ -6894,86 +6911,78 @@ app.get('/perfis', (req, res) => {
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
-  // Normalização de payload (tolerante a variações do frontend)
-  const b = req.body || {};
-
-  const nome = (b.nome ?? b.name ?? b.Nome ?? '').toString().trim();
-  const emailRaw = (b.email ?? b.Email ?? '').toString().trim();
-  const emailNorm = emailRaw.toLowerCase();
-  const whatsapp = (b.whatsapp ?? b.telefone ?? b.phone ?? '').toString().trim();
-
-  // perfis: aceitar perfis[] (array), perfil (string), perfis como JSON string, ou CSV
-  let perfisRaw = b.perfis ?? b.perfil ?? b.roles ?? [];
-  let perfis = [];
-
-  if (Array.isArray(perfisRaw)) {
-    perfis = perfisRaw;
-  } else if (typeof perfisRaw === 'string') {
-    const s = perfisRaw.trim();
-    if (!s) perfis = [];
-    else {
-      try {
-        const parsed = JSON.parse(s);
-        perfis = Array.isArray(parsed) ? parsed : [String(parsed)];
-      } catch {
-        perfis = s.split(',').map(x => x.trim()).filter(Boolean);
-      }
-    }
-  } else if (perfisRaw != null) {
-    perfis = [String(perfisRaw)];
-  }
-
-  perfis = perfis.map(p => String(p).trim()).filter(Boolean);
-
-  // password: aceitar password, senha, novaSenha
-  const pass = (b.password ?? b.senha ?? b.novaSenha ?? '').toString();
-
-  // validação
-  if (!nome || !emailNorm || !perfis.length || !pass) {
-    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
-  }
-
   try {
-    const exists = db
-      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
-      .get(emailNorm);
+    console.log('[KGB] POST /usuarios auth=', req.headers && req.headers.authorization);
+    try { console.log('[KGB] POST /usuarios bodyKeys=', Object.keys(req.body || {}).filter(k => k !== 'password' && k !== 'senha')); } catch(e){}
 
-    if (exists) {
-      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
+    // Auth + RBAC: only admin can create users
+    try {
+      const authH = String(req.headers.authorization || '');
+      const m = authH.match(/^Bearer\s+(.+)$/i);
+      if (!m) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      const payload = verifyToken(m[1]);
+      if (!payload) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      const caller = fetchUserForApi(payload.id);
+      const isAdmin = (String(caller?.perfil || '').toLowerCase() === 'administrador') || (Array.isArray(caller?.perfis) && caller.perfis.map(p => String(p).toLowerCase()).includes('administrador')) || (Array.isArray(caller?.permissoes) && caller.permissoes.includes('*'));
+      if (!isAdmin) return res.status(403).json({ ok: false, error: 'Forbidden' });
+    } catch (e) {
+      console.warn('[KGB] POST /usuarios auth check failed', e && (e.stack || e));
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
 
-    const id = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-    const senhaHash = bcrypt.hashSync(String(pass), 10);
-    const perfilSalvar = String(perfis[0] || '').trim();
+    // Normalização de payload (tolerante a variações do frontend)
+    const b = req.body || {};
+    const nome = (b.nome ?? b.name ?? b.Nome ?? '').toString().trim();
+    const emailRaw = (b.email ?? b.Email ?? '').toString().trim();
+    const emailNorm = String(emailRaw || '').toLowerCase();
+    const whatsapp = (b.whatsapp ?? b.telefone ?? b.phone ?? '').toString().trim();
 
-    db.prepare(`
-      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      String(nome || '').trim(),
-      emailNorm,
-      String(whatsapp || ''),
-      perfilSalvar,
-      senhaHash,
-      null,
-      nowIso,
-      0
-    );
+    // perfis: aceitar perfis[] (array), perfil (string), perfis como JSON string, ou CSV
+    let perfisRaw = b.perfis ?? b.perfil ?? b.roles ?? [];
+    let perfis = [];
+    if (Array.isArray(perfisRaw)) {
+      perfis = perfisRaw;
+    } else if (typeof perfisRaw === 'string') {
+      const s = perfisRaw.trim();
+      if (!s) perfis = [];
+      else {
+        try { const parsed = JSON.parse(s); perfis = Array.isArray(parsed) ? parsed : [String(parsed)]; } catch { perfis = s.split(',').map(x => x.trim()).filter(Boolean); }
+      }
+    } else if (perfisRaw != null) {
+      perfis = [String(perfisRaw)];
+    }
+    perfis = perfis.map(p => String(p).trim()).filter(Boolean);
 
-    const user = {
-      id,
-      nome: String(nome || '').trim(),
-      email: emailNorm,
-      whatsapp: String(whatsapp || ''),
-      perfis: perfis,
-      perfil: perfilSalvar,
-      created_at_iso: nowIso
-    };
-    return res.status(201).json({ ok: true, user });
-  } catch (err) {
-    console.error('[usuarios] POST /usuarios erro:', err);
+    // password: aceitar password, senha, novaSenha
+    const pass = (b.password ?? b.senha ?? b.novaSenha ?? '').toString();
+
+    // validação: 400 para entradas inválidas
+    if (!nome || !emailNorm || !perfis.length || !pass) {
+      return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
+    }
+
+    try {
+      const exists = db.prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?').get(emailNorm);
+      if (exists) return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
+
+      const id = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const senhaHash = bcrypt.hashSync(String(pass), 10);
+      const perfilSalvar = String(perfis[0] || '').trim();
+
+      db.prepare(`
+        INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, String(nome || '').trim(), emailNorm, String(whatsapp || ''), perfilSalvar, senhaHash, null, nowIso, 0);
+
+      const user = { id, nome: String(nome || '').trim(), email: emailNorm, whatsapp: String(whatsapp || ''), perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
+      return res.status(201).json({ ok: true, user });
+    } catch (err) {
+      console.error('[usuarios] POST /usuarios erro:', err && (err.stack || err));
+      return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
+    }
+  } catch (outerErr) {
+    console.error('[usuarios] POST outer error:', outerErr && (outerErr.stack || outerErr));
     return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
   }
 });
