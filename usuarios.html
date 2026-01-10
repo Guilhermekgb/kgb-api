@@ -333,54 +333,37 @@
 
       try {
         const resp = await window.kgbAuth.api('/usuarios', { method: 'GET' });
+        const unwrap = (r) => {
+          if (Array.isArray(r)) return r;
+          const d = (r && typeof r === 'object' && 'data' in r) ? r.data : r;
+          if (Array.isArray(d)) return d;
+          if (Array.isArray(d?.usuarios)) return d.usuarios;
+          if (Array.isArray(d?.users)) return d.users;
+          if (Array.isArray(d?.data)) return d.data;
+          if (Array.isArray(d?.result)) return d.result;
+          if (r?.ok === false) throw new Error(r.error || 'Erro ao carregar usuários');
+          if (d?.ok === false) throw new Error(d.error || 'Erro ao carregar usuários');
+          return null;
+        };
+
         console.log('[KGB][usuarios] resp=', resp);
-        console.log('[KGB][usuarios] resp keys=', resp && typeof resp === 'object' ? Object.keys(resp) : resp);
+        console.log('[KGB][usuarios] resp.data=', resp?.data);
 
-        let lista = [];
-        if (Array.isArray(resp)) {
-          lista = resp;
-        } else if (Array.isArray(resp?.data)) {
-          lista = resp.data;
-        } else if (Array.isArray(resp?.usuarios)) {
-          lista = resp.usuarios;
-        } else if (Array.isArray(resp?.users)) {
-          lista = resp.users;
-        } else if (resp?.ok === false) {
-          console.error('[KGB][usuarios] erro API:', resp);
-          alert(resp.error || 'Erro ao carregar usuários');
-          renderUsuarios([]);
-          return;
-        } else if (resp?.data?.ok === false) {
-          console.error('[KGB][usuarios] erro API:', resp.data);
-          alert(resp.data.error || 'Erro ao carregar usuários');
-          renderUsuarios([]);
-          return;
-        } else {
-          console.warn('[KGB][usuarios] formato inesperado:', resp);
+        let usuarios = null;
+        try {
+          usuarios = unwrap(resp);
+        } catch (e) {
+          console.error('[KGB][usuarios] erro unwrap:', e, resp);
+          alert(e?.message || 'Erro ao carregar usuários');
           renderUsuarios([]);
           return;
         }
 
-        if (!Array.isArray(lista) || lista.length === 0) {
-          console.warn('[KGB][usuarios] lista vazia após normalização');
+        if (!usuarios) {
+          console.warn('[KGB][usuarios] formato inesperado (sem lista):', resp);
           renderUsuarios([]);
           return;
         }
-
-        const usuarios = lista.map(u => ({
-          id: u.id,
-          nome: u.nome || u.name || '',
-          email: u.email || '',
-          telefone: u.whatsapp || u.telefone || '',
-          perfis: (function(){
-            if (Array.isArray(u.perfis)) return u.perfis;
-            if (typeof u.perfis === 'string') {
-              try { return JSON.parse(u.perfis); } catch { return []; }
-            }
-            if (u.perfil) return [u.perfil];
-            return [];
-          })()
-        }));
 
         renderUsuarios(usuarios);
       } catch (e) {
