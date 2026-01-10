@@ -293,7 +293,7 @@
         }
 
         alert('Usuário excluído com sucesso!');
-        renderizarUsuarios();
+        carregarUsuarios();
       } catch (e) {
         console.error(e);
         alert('Erro ao excluir usuário. Tente novamente em alguns instantes.');
@@ -310,94 +310,93 @@
     }
 
     // Buscar usuários na API e montar a tabela
-    async function renderizarUsuarios() {
+    async function carregarUsuarios() {
       const tbody = document.querySelector('#tbodyUsuarios');
       const vazio = document.querySelector('#vazio');
       if (!tbody) return;
 
-        try {
-        const resp = await apiRequest('/usuarios', { method: 'GET' });
+      try {
+        const resp = await window.kgbAuth.api('/usuarios', { method: 'GET' });
+        console.log('[KGB][usuarios] resposta bruta:', resp);
 
-        if (!resp || resp.status !== 200) {
-          console.error('Erro ao carregar usuários:', resp);
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="5" style="text-align:center; padding:16px;">
-                Não foi possível carregar a lista de usuários.
-              </td>
-            </tr>
-          `;
-          if (vazio) vazio.style.display = 'none';
+        const lista = Array.isArray(resp)
+          ? resp
+          : Array.isArray(resp?.data)
+            ? resp.data
+            : Array.isArray(resp?.users)
+              ? resp.users
+              : [];
+
+        if (!Array.isArray(lista) || lista.length === 0) {
+          console.warn('Nenhum usuário retornado');
+          renderUsuarios([]);
           return;
         }
 
-        // Normaliza payload para aceitar várias formas:
-        // 1) array direto
-        // 2) { ok:true, data:[...] }
-        // 3) { users:[...] }
-        // Use unified kgbAuth client to load users
-        let usuarios = [];
-        try {
-          usuarios = await window.kgbAuth.listUsers();
-        } catch (e) {
-          console.error('Erro ao carregar usuários via kgbAuth:', e);
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="5" style="text-align:center; padding:16px;">
-                Não foi possível carregar a lista de usuários.
-              </td>
-            </tr>
-          `;
-          if (vazio) vazio.style.display = 'none';
-          return;
-        }
+        const usuarios = lista.map(u => ({
+          id: u.id,
+          nome: u.nome || u.name || '',
+          email: u.email || '',
+          telefone: u.whatsapp || u.telefone || '',
+          perfis: (function(){
+            if (Array.isArray(u.perfis)) return u.perfis;
+            if (typeof u.perfis === 'string') {
+              try { return JSON.parse(u.perfis); } catch { return []; }
+            }
+            if (u.perfil) return [u.perfil];
+            return [];
+          })()
+        }));
 
-        if (!Array.isArray(usuarios) || usuarios.length === 0) {
-          console.warn('Nenhum usuário retornado ou formato inesperado');
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="5" style="text-align:center; padding:16px;">
-                Nenhum usuário encontrado.
-              </td>
-            </tr>
-          `;
-          if (vazio) vazio.style.display = 'none';
-          return;
-        }
+        renderUsuarios(usuarios);
+      } catch (e) {
+        console.error('Erro ao carregar usuários', e);
+        alert('Erro ao carregar usuários');
+      }
+    }
 
-        tbody.innerHTML = '';
-        if (vazio) vazio.style.display = 'none';
+    function renderUsuarios(usuarios) {
+      const tbody = document.querySelector('#tbodyUsuarios');
+      const vazio = document.querySelector('#vazio');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      if (!Array.isArray(usuarios) || usuarios.length === 0) {
+        if (vazio) vazio.style.display = 'block';
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align:center; padding:16px;">Nenhum usuário encontrado.</td>
+          </tr>
+        `;
+        return;
+      }
+      if (vazio) vazio.style.display = 'none';
 
-        usuarios.forEach((u) => {
-          const tr = document.createElement('tr');
+      usuarios.forEach((u) => {
+        const tr = document.createElement('tr');
 
-          const tdNome = document.createElement('td');
-          tdNome.textContent = u.nome || '';
+        const tdNome = document.createElement('td');
+        tdNome.textContent = u.nome || '';
 
-          const tdEmail = document.createElement('td');
-          tdEmail.textContent = u.email || '';
+        const tdEmail = document.createElement('td');
+        tdEmail.textContent = u.email || '';
 
-          const tdWhats = document.createElement('td');
-          tdWhats.textContent = safePhone(u.whatsapp || u.telefone || '');
+        const tdWhats = document.createElement('td');
+        tdWhats.textContent = safePhone(u.telefone || '');
 
-          const tdPerfil = document.createElement('td');
-          tdPerfil.textContent =
-            u.perfil || (Array.isArray(u.perfis) ? u.perfis.join(', ') : '');
+        const tdPerfil = document.createElement('td');
+        tdPerfil.textContent = u.perfis && u.perfis.length ? u.perfis.join(', ') : (u.perfil || '');
 
-          const tdAcoes = document.createElement('td');
-          tdAcoes.className = 'acoes';
+        const tdAcoes = document.createElement('td');
+        tdAcoes.className = 'acoes';
 
-          const bZap = document.createElement('button');
-          bZap.className = 'btn btn-zap';
-          bZap.innerHTML = '<i data-lucide="message-circle"></i> Zap';
-          bZap.addEventListener(
-            'click',
-            () => abrirWhatsApp(u.whatsapp || u.telefone || '')
-          );
+        const bZap = document.createElement('button');
+        bZap.className = 'btn btn-zap';
+        bZap.innerHTML = '<i data-lucide="message-circle"></i> Zap';
+        bZap.addEventListener('click', () => abrirWhatsApp(u.telefone || ''));
 
-          const bEdit = document.createElement('button');
-          bEdit.className = 'btn btn-editar';
-          bEdit.innerHTML = '<i data-lucide="pencil"></i> Editar';
+        const bEdit = document.createElement('button');
+        bEdit.className = 'btn btn-editar';
+        bEdit.innerHTML = '<i data-lucide="pencil"></i> Editar';
           bEdit.addEventListener('click', () => editarUsuario(u.id));
 
           const bDel = document.createElement('button');
@@ -426,7 +425,7 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', renderizarUsuarios);
+    document.addEventListener('DOMContentLoaded', carregarUsuarios);
   </script>
 
 
