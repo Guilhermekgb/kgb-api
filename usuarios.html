@@ -372,6 +372,7 @@
     }
 
     function renderUsuarios(usuarios) {
+      try {
       const tbody = document.querySelector('#tbodyUsuarios');
       const vazio = document.querySelector('#vazio');
       if (!tbody) return;
