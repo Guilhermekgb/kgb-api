@@ -463,7 +463,12 @@
       // ✅ Caso de sucesso real (quando a API existir)
       if (r?.status >= 200 && r?.status < 300) {
         alert('Usuário salvo com sucesso!');
-        location.replace('usuarios.html');
+        // If this was a creation (no userId), redirect with created flag
+        if (!userId) {
+          location.replace('usuarios.html?created=1');
+        } else {
+          location.replace('usuarios.html');
+        }
 
       // ⚠️ E-mail duplicado na API real
       } else if (r?.status === 409) {
@@ -490,7 +495,7 @@
           portalWrite(chave, JSON.stringify(lista));
 
           alert('Usuário salvo apenas neste navegador (modo teste - backend sem /usuarios).');
-          location.replace('usuarios.html');
+          location.replace('usuarios.html?created=1');
         } catch (e2) {
           console.error(e2);
           alert('Backend respondeu 404 e não consegui salvar localmente.');

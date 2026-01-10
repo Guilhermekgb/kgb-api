@@ -314,6 +314,23 @@
       const tbody = document.querySelector('#tbodyUsuarios');
       const vazio = document.querySelector('#vazio');
       if (!tbody) return;
+      // show created toast if redirected after creating user
+      try {
+        const p = new URLSearchParams(location.search || '');
+        if (p.get('created') === '1') {
+          const banner = document.createElement('div');
+          banner.style.background = '#dff0d8';
+          banner.style.border = '1px solid #d0e9c6';
+          banner.style.padding = '10px 14px';
+          banner.style.borderRadius = '8px';
+          banner.style.marginBottom = '12px';
+          banner.style.color = '#3c763d';
+          banner.textContent = 'Usuário criado com sucesso.';
+          const container = document.querySelector('.conteudo-central');
+          if (container) container.insertBefore(banner, container.firstChild);
+          setTimeout(() => { try { banner.remove(); history.replaceState(null, '', window.location.pathname); } catch(e){} }, 4000);
+        }
+      } catch(e){}
 
       try {
         const resp = await window.kgbAuth.api('/usuarios', { method: 'GET' });
