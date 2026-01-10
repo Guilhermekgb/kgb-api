@@ -38,36 +38,43 @@
   async function api(path, opts = {}) {
     if (typeof window.apiFetch !== 'function') throw new Error('apiFetch_missing');
 
-    const raw = await window.apiFetch(path, opts);
+    // Ensure headers and token forwarding
+    const headers = new Headers(opts.headers || {});
+    const token = getToken();
+    if (token) {
+      if (!headers.has('Authorization')) headers.set('Authorization', 'Bearer ' + token);
+      if (!headers.has('X-KGB-TOKEN')) headers.set('X-KGB-TOKEN', token);
+    }
 
-    let status = 200;
-    let payload = raw;
-
-    // Se veio Response do fetch, parsear JSON
-    if (raw && typeof raw.status === 'number' && typeof raw.json === 'function') {
-      status = raw.status;
+    // Serialize plain object bodies to JSON (skip FormData)
+    let body = opts.body;
+    if (body && typeof body === 'object' && !(body instanceof FormData)) {
+      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
       try {
-        payload = await raw.json();
+        body = JSON.stringify(body);
       } catch (e) {
-        payload = {};
+        // fallback: leave as-is
       }
     }
 
-    // Se status de erro, levantar exception com msg útil
-    if (status >= 400) {
-      const msg =
-        payload?.error ||
-        payload?.message ||
-        payload?.detail ||
-        (status === 401 ? 'Credenciais inválidas' : `Erro HTTP ${status}`);
+    const raw = await window.apiFetch(path, { ...opts, headers, body });
 
-      const err = new Error(msg);
-      err.status = status;
-      err.payload = payload;
-      throw err;
+    // Normalize response parsing: try JSON, fallback to text
+    if (raw && typeof raw.status === 'number') {
+      let data = null;
+      try {
+        data = await raw.json();
+      } catch (e) {
+        try { data = await raw.text(); } catch (e2) { data = null; }
+      }
+      return { status: raw.status, data, ok: raw.ok };
     }
 
-    return unwrap(payload);
+    // If window.apiFetch returned a plain object
+    const status = (raw && raw.status) ? raw.status : 200;
+    const data = raw && raw.data ? raw.data : raw;
+    const ok = raw && typeof raw.ok === 'boolean' ? raw.ok : true;
+    return { status, data, ok };
   }
 
   async function login(email, password) {

@@ -458,11 +458,7 @@
       const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
       const method = userId ? 'PUT' : 'POST';
 
-      const r = await api(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const r = await api(endpoint, { method, body });
 
       // ✅ Caso de sucesso real (quando a API existir)
       if (r?.status >= 200 && r?.status < 300) {
@@ -502,7 +498,13 @@
 
       // Demais erros
       } else {
-        alert('Erro ao salvar: ' + (r?.error || r?.status || 'desconhecido'));
+        const detail = r?.data?.detail || r?.data?.error || null;
+        if (detail) {
+          console.error('Erro ao salvar usuario', r);
+          alert('Erro ao salvar: ' + detail);
+        } else {
+          alert('Erro ao salvar: ' + (r?.status || 'desconhecido'));
+        }
       }
 
     });
