@@ -6978,8 +6978,13 @@ app.post('/usuarios', (req, res) => {
       const user = { id, nome: String(nome || '').trim(), email: emailNorm, whatsapp: String(whatsapp || ''), perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
       return res.status(201).json({ ok: true, user });
     } catch (err) {
+      const debug = process.env.AUTH_DEBUG === '1';
       console.error('[usuarios] POST /usuarios erro:', err && (err.stack || err));
-      return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
+      return res.status(500).json({
+        ok: false,
+        error: 'Erro interno ao criar usuário',
+        ...(debug ? { detail: String(err && (err.stack || err)) } : {})
+      });
     }
   } catch (outerErr) {
     console.error('[usuarios] POST outer error:', outerErr && (outerErr.stack || outerErr));
@@ -7626,8 +7631,16 @@ app.listen(PORT, () => {
 
 // Global error handler to ensure stacks are logged in Render
 app.use((err, req, res, next) => {
+  const debug = process.env.AUTH_DEBUG === '1';
   try {
     console.error('[KGB] Unhandled error:', err && (err.stack || err));
   } catch (e) { console.error('[KGB] Unhandled error (logging failed)', e); }
-  try { res.status(500).json({ ok:false, error:'Erro interno', buildId: BUILD_ID }); } catch (e) { /* nothing */ }
+  try {
+    return res.status(500).json({
+      ok: false,
+      error: 'Erro interno',
+      ...(debug ? { detail: String(err && (err.stack || err)) } : {}),
+      buildId: BUILD_ID
+    });
+  } catch (e) { /* nothing */ }
 });
