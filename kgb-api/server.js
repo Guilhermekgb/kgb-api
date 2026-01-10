@@ -6877,14 +6877,42 @@ app.get('/perfis', (req, res) => {
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
-  const { nome, email, whatsapp, perfis, password } = req.body || {};
-  const emailNorm = String(email || '').toLowerCase().trim();
+  // Normalização de payload (tolerante a variações do frontend)
+  const b = req.body || {};
 
-  // validar campos obrigatórios: nome, email, perfis (array) e password
-  const perfisArr = Array.isArray(perfis) ? perfis : [];
-  const pass = (typeof password === 'string' && password.trim()) ? password : null;
+  const nome = (b.nome ?? b.name ?? b.Nome ?? '').toString().trim();
+  const emailRaw = (b.email ?? b.Email ?? '').toString().trim();
+  const emailNorm = emailRaw.toLowerCase();
+  const whatsapp = (b.whatsapp ?? b.telefone ?? b.phone ?? '').toString().trim();
 
-  if (!nome || !emailNorm || !perfisArr.length || !pass) {
+  // perfis: aceitar perfis[] (array), perfil (string), perfis como JSON string, ou CSV
+  let perfisRaw = b.perfis ?? b.perfil ?? b.roles ?? [];
+  let perfis = [];
+
+  if (Array.isArray(perfisRaw)) {
+    perfis = perfisRaw;
+  } else if (typeof perfisRaw === 'string') {
+    const s = perfisRaw.trim();
+    if (!s) perfis = [];
+    else {
+      try {
+        const parsed = JSON.parse(s);
+        perfis = Array.isArray(parsed) ? parsed : [String(parsed)];
+      } catch {
+        perfis = s.split(',').map(x => x.trim()).filter(Boolean);
+      }
+    }
+  } else if (perfisRaw != null) {
+    perfis = [String(perfisRaw)];
+  }
+
+  perfis = perfis.map(p => String(p).trim()).filter(Boolean);
+
+  // password: aceitar password, senha, novaSenha
+  const pass = (b.password ?? b.senha ?? b.novaSenha ?? '').toString();
+
+  // validação
+  if (!nome || !emailNorm || !perfis.length || !pass) {
     return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
   }
 

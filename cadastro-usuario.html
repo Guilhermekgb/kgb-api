@@ -420,8 +420,12 @@
       const conf     = (confirmaI.value || '').trim();
 
       // Coleta múltiplos perfis
-      const selecionados = Array.from(perfisGroup?.querySelectorAll('input[type="checkbox"]:checked') || [])
-        .map(chk => chk.value);
+      function getPerfisSelecionados() {
+        return Array.from(document.querySelectorAll('input[name="perfis"]:checked'))
+          .map(el => el.value)
+          .filter(Boolean);
+      }
+      const selecionados = getPerfisSelecionados();
 
       if (!nome)                return alert('Informe o nome.');
       if (!isValidEmail(email)) return alert('E-mail inválido.');
