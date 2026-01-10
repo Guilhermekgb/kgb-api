@@ -135,6 +135,21 @@ function initDb() {
   safeAddColumn('usuarios', "must_change_password INTEGER DEFAULT 0");
   safeAddColumn('usuarios', "created_at TEXT DEFAULT (datetime('now'))");
 
+  // Defensive migration: ensure perfis and perfil exist (some deployments miss perfis)
+  try {
+    const colNames = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
+    if (!colNames.includes('perfis')) {
+      db.exec("ALTER TABLE usuarios ADD COLUMN perfis TEXT");
+      console.log('[DB] Added missing column usuarios.perfis');
+    }
+    if (!colNames.includes('perfil')) {
+      db.exec("ALTER TABLE usuarios ADD COLUMN perfil TEXT");
+      console.log('[DB] Added missing column usuarios.perfil');
+    }
+  } catch (e) {
+    console.error('[KGB][DB] migration error', e && (e.stack || e));
+  }
+
   // Try to migrate existing plain senha -> senha_hash (hash if needed)
   try {
     const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
@@ -6985,20 +7000,49 @@ app.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
     }
 
     try {
+      // Log real schema before attempting INSERT to help debug Render sqlite differences
+      try {
+        const cols = db.prepare("PRAGMA table_info(usuarios)").all();
+        console.log('[KGB][DB] usuarios schema:', cols);
+      } catch (e) { console.error('[KGB][DB] pragma error', e && (e.stack || e)); }
+
       const exists = db.prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?').get(emailNorm);
       if (exists) return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
 
       const id = crypto.randomUUID();
       const nowIso = new Date().toISOString();
       const senhaHash = bcrypt.hashSync(String(pass), 10);
-      const perfilSalvar = String(perfis[0] || '').trim();
+      const perfilSalvar = String(perfis[0] || '').trim() || null;
 
-      db.prepare(`
-        INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, String(nome || '').trim(), emailNorm, String(whatsapp || ''), perfilSalvar, senhaHash, null, nowIso, 0);
+      // Use a blind, safe INSERT that only references columns we ensure exist in migrations
+      const stmt = db.prepare(`
+        INSERT INTO usuarios (
+          id,
+          nome,
+          email,
+          senha_hash,
+          perfil,
+          perfis
+        ) VALUES (
+          @id,
+          @nome,
+          @email,
+          @senha_hash,
+          @perfil,
+          @perfis
+        )
+      `);
 
-      const user = { id, nome: String(nome || '').trim(), email: emailNorm, whatsapp: String(whatsapp || ''), perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
+      stmt.run({
+        id,
+        nome: String(nome || '').trim(),
+        email: emailNorm,
+        senha_hash: senhaHash,
+        perfil: perfilSalvar,
+        perfis: JSON.stringify(perfis)
+      });
+
+      const user = { id, nome: String(nome || '').trim(), email: emailNorm, perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
       return res.status(201).json({ ok: true, user });
     } catch (err) {
       const debug = process.env.AUTH_DEBUG === '1';
