@@ -963,23 +963,26 @@ function requireAuth(req, res, next) {
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
 app.post('/auth/login', async (req, res) => {
+  // Ensure email/password variables are in function scope
+  let email = '';
+  let password = '';
   try {
     // DEBUG TEMP
     console.log('[POST /auth/login] content-type:', req.headers['content-type']);
-    console.log('[POST /auth/login] body:', req.body);
+    try { console.log('[POST /auth/login] body keys:', Object.keys(req.body || {})); } catch(e) { console.log('[POST /auth/login] body (unreadable)'); }
 
     const b = req.body || {};
-    const email = (b.email || b.Email || '').toString().trim();
-    const password = (b.password || b.senha || b.Senha || b.novaSenha || '').toString();
+    email = (b.email || b.Email || b.nome || '').toString().trim();
+    password = (b.password || b.senha || b.Senha || b.novaSenha || '').toString();
 
     // expose build header to help detect which code is running
     try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
-    console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
+    console.log('[AUTH] login attempt (start)', { email: String(email).toLowerCase(), hasPassword: !!password, buildId: BUILD_ID });
 
     if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
   } catch (e) {
-    console.error('[POST /auth/login] pre-check error:', e && e.stack ? e.stack : e);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
+    console.error('[POST /auth/login] pre-check error:', e && (e.stack || e));
+    return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
   }
 
   try {
@@ -1045,12 +1048,19 @@ app.post('/auth/login', async (req, res) => {
       if (row) {
         console.log('[AUTH] branch', 'db');
         try {
-          const hasHash = !!(row.senha_hash && String(row.senha_hash).trim());
+          const hash = (row.senha_hash || row.password_hash || row.senha || '').toString();
+          const hasHash = !!(hash && String(hash).trim());
           if (!hasHash) {
-            dlog('login: user has no senha_hash, failing auth', { id: row.id });
-            return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
+            console.error('[KGB] user without password hash', { id: row.id, email: row.email });
+            return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
           }
-          const bcryptOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
+          let bcryptOk = false;
+          try {
+            bcryptOk = await bcrypt.compare(String(password || ''), String(hash));
+          } catch (e) {
+            console.error('[KGB] bcrypt compare failed', e && (e.stack || e));
+            return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
+          }
           dlog('login check', { id: row.id, hasHash, bcryptOk });
           if (!bcryptOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
@@ -1079,9 +1089,8 @@ app.post('/auth/login', async (req, res) => {
           try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
           return res.status(200).json({ ok: true, token: token, user: { id: userId, email: row.email, nome: row.nome, perfil: normalizePerfil(row.perfil) }, buildId: BUILD_ID });
         } catch (errCompare) {
-          console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
-          console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
-          return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
+          console.error('[KGB] /auth/login bcrypt branch error', errCompare && (errCompare.stack || errCompare));
+          return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
         }
       }
 
@@ -7604,4 +7613,12 @@ app.listen(PORT, () => {
   } else {
     console.log('CORS allowlist vazia (aceita qualquer origem sem Origin em ambiente local).');
   }
+});
+
+// Global error handler to ensure stacks are logged in Render
+app.use((err, req, res, next) => {
+  try {
+    console.error('[KGB] Unhandled error:', err && (err.stack || err));
+  } catch (e) { console.error('[KGB] Unhandled error (logging failed)', e); }
+  try { res.status(500).json({ ok:false, error:'Erro interno', buildId: BUILD_ID }); } catch (e) { /* nothing */ }
 });

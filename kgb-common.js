@@ -532,7 +532,29 @@ export function fecharSessao(sessaoId){
       }
     } catch (e) {}
 
+    // Auto-stringify plain-object bodies to JSON and set Content-Type when missing
     try {
+      const b = opts.body;
+      const isForm = (typeof FormData !== 'undefined' && b instanceof FormData);
+      const isBlob = (typeof Blob !== 'undefined' && b instanceof Blob);
+      const isStr = typeof b === 'string' || b instanceof String;
+      const isArrayBuffer = b instanceof ArrayBuffer || (ArrayBuffer.isView && ArrayBuffer.isView(b));
+      if (b != null && typeof b === 'object' && !isForm && !isBlob && !isArrayBuffer && !isStr) {
+        // Only set header if not already present (case-insensitive)
+        const hasCT = Object.keys(opts.headers || {}).some(h => String(h).toLowerCase() === 'content-type');
+        if (!hasCT) opts.headers['Content-Type'] = 'application/json';
+        try { opts.body = JSON.stringify(b); } catch (e) { /* keep body as-is on failure */ }
+      }
+    } catch (e) {}
+
+      try {
+      // DEBUG: show method/url/content-type/body type during stabilization
+      try {
+        const method = String(opts.method || 'GET').toUpperCase();
+        const hdrs = opts.headers || {};
+        const ct = (typeof hdrs.get === 'function') ? (hdrs.get('Content-Type') || hdrs.get('content-type')) : (hdrs['Content-Type'] || hdrs['content-type']);
+        console.debug('[KGB apiFetch]', method, url, 'CT=', ct, 'bodyType=', typeof opts.body);
+      } catch(e){}
       const res = await fetch(url, opts);
       // Se o backend respondeu 401, limpar token local e redirecionar para login
       if (res && res.status === 401) {

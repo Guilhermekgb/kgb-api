@@ -21,12 +21,9 @@
       sessionStorage.getItem("KGB_API_BASE_OVERRIDE");
   } catch (_) {}
 
-  // Regra final:
-  // - Em Netlify: SEMPRE Render
-  // - Em Local: override se existir, senão Render (você já vinha usando Render no localhost)
-  // - Outros hosts: mantém Render por segurança (pode ajustar depois se quiser)
-  const resolved =
-    isNetlify ? RENDER_API : (isLocal ? (localOverride || RENDER_API) : RENDER_API);
+  // Regra final: Forçar uso do Render API para testes locais e produção.
+  // Ignora qualquer override local para garantir testes contra https://kgb-api-v2.onrender.com
+  const resolved = RENDER_API;
 
   // Fonte única (nossa) — sempre editável
   window.__KGB_API_BASE__ = resolved;

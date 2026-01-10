@@ -38,26 +38,19 @@
   async function api(path, opts = {}) {
     if (typeof window.apiFetch !== 'function') throw new Error('apiFetch_missing');
 
-    // Ensure headers and token forwarding
-    const headers = new Headers(opts.headers || {});
+    // DEBUG: show api call from kgbAuth
+    try { console.debug('[KGB kgbAuth.api]', path, (opts && opts.method) ? opts.method : 'GET'); } catch(e){}
+
+    // Ensure headers and token forwarding (plain object headers)
+    const headers = Object.assign({}, opts.headers || {});
     const token = getToken();
     if (token) {
-      if (!headers.has('Authorization')) headers.set('Authorization', 'Bearer ' + token);
-      if (!headers.has('X-KGB-TOKEN')) headers.set('X-KGB-TOKEN', token);
+      if (!headers.Authorization && !headers.authorization) headers.Authorization = 'Bearer ' + token;
+      if (!headers['X-KGB-TOKEN']) headers['X-KGB-TOKEN'] = token;
     }
 
-    // Serialize plain object bodies to JSON (skip FormData)
-    let body = opts.body;
-    if (body && typeof body === 'object' && !(body instanceof FormData)) {
-      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-      try {
-        body = JSON.stringify(body);
-      } catch (e) {
-        // fallback: leave as-is
-      }
-    }
-
-    const raw = await window.apiFetch(path, { ...opts, headers, body });
+    // Delegate body serialization to window.apiFetch (it will stringify objects)
+    const raw = await window.apiFetch(path, { ...opts, headers, body: opts.body });
 
     // Normalize response parsing: try JSON, fallback to text
     if (raw && typeof raw.status === 'number') {
@@ -78,11 +71,7 @@
   }
 
   async function login(email, password) {
-    const data = await api('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+    const data = await api('/auth/login', { method: 'POST', body: { email, password } });
 
     const ok = data?.ok;
     if (ok === false) throw new Error(data?.error || 'Credenciais inválidas');
@@ -129,33 +118,21 @@
   async function createUser(payload) {
     const t = getToken();
     if (!t) throw new Error('no_token');
-    const data = await api('/usuarios', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-      body: JSON.stringify(payload)
-    });
+    const data = await api('/usuarios', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: payload });
     return data;
   }
 
   async function updateUser(id, payload) {
     const t = getToken();
     if (!t) throw new Error('no_token');
-    const data = await api(`/usuarios/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-      body: JSON.stringify(payload)
-    });
+    const data = await api(`/usuarios/${encodeURIComponent(id)}`, { method: 'PUT', headers: { Authorization: 'Bearer ' + t }, body: payload });
     return data;
   }
 
   async function changePassword(newPassword) {
     const t = getToken();
     if (!t) throw new Error('no_token');
-    const data = await api('/auth/change-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-      body: JSON.stringify({ newPassword })
-    });
+    const data = await api('/auth/change-password', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: { newPassword } });
     return data;
   }
 
