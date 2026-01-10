@@ -164,8 +164,8 @@
       </div>
 
       <div class="campo">
-        <label for="senha">Senha</label>
-        <input id="senha" type="password" placeholder="Sua senha" required />
+        <label for="password">Senha</label>
+        <input id="password" type="password" placeholder="Sua senha" required />
       </div>
 
       <button type="submit">Entrar</button>
@@ -186,7 +186,7 @@
   (function () {
     const form = document.getElementById("formLogin");
     const emailInput = document.getElementById("email");
-    const senhaInput = document.getElementById("senha");
+    const passwordInput = document.getElementById("password");
     const erroEl = document.getElementById("login-erro");
     const btn = form ? form.querySelector('button[type="submit"]') : null;
 
@@ -248,7 +248,9 @@
 
       try {
         const email = (emailInput?.value || '').trim();
-        const password = (senhaInput?.value || '').trim();
+        const password = (passwordInput?.value || '');
+
+        console.log('LOGIN PAYLOAD', { email, password });
 
         if (!email || !password){
           setError('Preencha e-mail e senha.');
