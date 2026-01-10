@@ -6771,34 +6771,90 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 // GET /usuarios -> lista todos (sem campo senha)
 app.get('/usuarios', (req, res) => {
   try {
-    const rows = db.prepare(`
-      SELECT
-        COALESCE(id, rowid) AS id,
-        email,
-        nome,
-        perfil,
-        whatsapp,
-        must_change_password,
-        COALESCE(created_at, created_at_iso, '') AS created_at_iso
-      FROM usuarios
-      ORDER BY COALESCE(id,rowid) ASC
-    `).all();
+    // Discover columns present in the usuarios table
+    const cols = db.prepare("PRAGMA table_info('usuarios')").all() || [];
+    const names = new Set((cols || []).map(c => String(c.name).toLowerCase()));
 
-    const users = rows.map(u => {
-      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
+    // Build SELECT dynamically with safe aliases and COALESCE fallbacks
+    const select = [];
+
+    // id (prefer id, fallback to rowid)
+    select.push("COALESCE(id, rowid) AS id");
+
+    // Basic text fields
+    select.push(names.has('email') ? 'email' : "'' AS email");
+    select.push(names.has('nome') ? 'nome' : "'' AS nome");
+    select.push(names.has('whatsapp') ? 'whatsapp' : "'' AS whatsapp");
+
+    // perfis (json/text) and perfil (legacy string)
+    if (names.has('perfis')) {
+      select.push('perfis');
+    } else {
+      select.push("NULL AS perfis");
+    }
+    if (names.has('perfil')) {
+      select.push('perfil');
+    } else {
+      select.push("NULL AS perfil");
+    }
+
+    // created_at_iso fallback to created_at or null
+    if (names.has('created_at_iso')) {
+      select.push('created_at_iso');
+    } else if (names.has('created_at')) {
+      select.push('created_at AS created_at_iso');
+    } else {
+      select.push('NULL AS created_at_iso');
+    }
+
+    const sql = `SELECT ${select.join(',\n  ')} FROM usuarios ORDER BY COALESCE(id,rowid) ASC`;
+    const rows = db.prepare(sql).all();
+
+    const users = (rows || []).map(r => {
+      // Normalize perfis
+      let perfis = [];
+      try {
+        if (r.perfis) {
+          if (Array.isArray(r.perfis)) {
+            perfis = r.perfis;
+          } else if (typeof r.perfis === 'string') {
+            try {
+              const parsed = JSON.parse(r.perfis);
+              if (Array.isArray(parsed)) perfis = parsed;
+            } catch (e) {
+              // not JSON — try comma separated
+              perfis = r.perfis.split(',').map(s => s.trim()).filter(Boolean);
+            }
+          }
+        }
+      } catch (e) {
+        perfis = [];
+      }
+
+      // If no perfis parsed, try legacy perfil string
+      if (!perfis.length && r.perfil) {
+        perfis = [String(r.perfil)];
+      }
+
+      // Final safe fallback: empty array
+      if (!perfis.length) perfis = [];
+
       return {
-        id: u.id,
-        nome: u.nome || '',
-        email: u.email || '',
-        whatsapp: u.whatsapp || '',
-        perfis: perfisArr,
-        created_at_iso: u.created_at_iso || null
+        id: r.id,
+        nome: r.nome || '',
+        email: r.email || '',
+        whatsapp: r.whatsapp || '',
+        perfis: perfis,
+        created_at_iso: (r.created_at_iso && String(r.created_at_iso).trim()) ? r.created_at_iso : null
       };
     });
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err && err.stack ? err.stack : err);
+    console.error('[GET /usuarios] SQL error:', err);
+    if (process.env.AUTH_DEBUG === '1') {
+      return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.', detail: err && err.message });
+    }
     return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
@@ -7004,44 +7060,7 @@ app.delete('/usuarios', (req, res) => {
 });
 // ===== Usuários (CRUD básico para o sistema) =====
 
-// GET /usuarios -> lista todos (sem campo senha)
-app.get('/usuarios', (req, res) => {
-  try {
-    const rows = db.prepare(`
-      SELECT
-        COALESCE(id, rowid) AS id,
-        email,
-        nome,
-        perfil,
-        whatsapp,
-        must_change_password,
-        COALESCE(created_at, created_at_iso, '') AS created_at_iso
-      FROM usuarios
-      ORDER BY COALESCE(id,rowid) ASC
-    `).all();
-
-    const users = rows.map(u => {
-      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
-      const perfilFinal = u.perfil || (perfisArr[0] || '');
-
-      return {
-        id: u.id,
-        email: u.email || '',
-        nome: u.nome || '',
-        whatsapp: u.whatsapp || '',
-        perfil: perfilFinal,
-        perfis: perfisArr,
-        must_change_password: u.must_change_password ? 1 : 0,
-        created_at_iso: u.created_at_iso || null
-      };
-    });
-
-    return res.json({ ok: true, users });
-  } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err && err.stack ? err.stack : err);
-    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
-  }
-});
+// Duplicate GET /usuarios removed — consolidated into a single schema-agnostic handler above.
 
 // POST /usuarios -> cria novo usuário
 app.post('/usuarios', (req, res) => {
