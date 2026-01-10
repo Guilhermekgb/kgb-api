@@ -377,18 +377,20 @@
     if (userId) {
       const r = await api(`/usuarios/${encodeURIComponent(userId)}`, { method: 'GET' });
 
-      // fallback: algumas APIs retornam envelope {status,data} ou o próprio objeto
-      if (r && r.status === 200 && r.data) {
-        u = r.data;
-      } else if (r && r.status === 200 && Array.isArray(r)) {
-        u = (r || []).find(x => String(x.id) === String(userId));
+      // unwrap common envelopes: r.user | r.data.user | r.data.data.user | r.data.usuario | r.usuario
+      u = r?.user || r?.data?.user || r?.data?.data?.user || r?.data?.usuario || r?.usuario || null;
+
+      // fallback legacy: sometimes API returns user directly in data or as the object
+      if (!u) {
+        if (r && r.status === 200 && r.data) u = r.data;
+        else if (r && r.status === 200 && Array.isArray(r)) u = (r || []).find(x => String(x.id) === String(userId));
       }
 
       if (u) {
         // Campos básicos
         nomeI.value  = u.nome     || '';
         emailI.value = u.email    || '';
-        whatsI.value = u.whatsapp || '';
+        whatsI.value = u.whatsapp || u.telefone || '';
 
         // Perfis selecionados (array ou legado)
         const selecionados = Array.isArray(u?.perfis) ? u.perfis : (u?.perfil ? [u.perfil] : []);

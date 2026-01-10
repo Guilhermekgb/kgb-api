@@ -7059,96 +7059,93 @@ app.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
-// GET /usuarios/:id -> retorna usuário por id
-app.get('/usuarios/:id', (req, res) => {
-  const id = req.params?.id;
-  if (!id) return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
+// GET /usuarios/:id (admin)
+app.get('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
   try {
-    const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
-    if (!row) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ ok:false, error:'ID inválido' });
 
-    const perfisArr = row && row.perfil ? [String(row.perfil)] : [];
-    const perfilFinal = row.perfil || (perfisArr[0] || '');
+    const u = db.prepare(`
+      SELECT id, nome, email, whatsapp, perfil, perfis, created_at
+      FROM usuarios
+      WHERE id = ?
+    `).get(id);
 
-    const user = {
-      id: row.id,
-      email: row.email || '',
-      nome: row.nome || '',
-      whatsapp: row.whatsapp || '',
-      perfil: perfilFinal,
-      perfis: perfisArr,
-      must_change_password: row.must_change_password ? 1 : 0,
-      foto: row.foto || null,
-      created_at: row.created_at || row.created_at_iso || null
-    };
+    if (!u) return res.status(404).json({ ok:false, error:'Usuário não encontrado' });
 
-    return res.json({ ok: true, user });
-  } catch (err) {
-    console.error('[usuarios] GET /usuarios/:id erro:', err);
-    return res.status(500).json({ ok: false, error: 'Erro ao buscar usuário.' });
+    // normaliza perfis
+    let perfisArr = [];
+    if (u.perfis) {
+      try { perfisArr = Array.isArray(u.perfis) ? u.perfis : JSON.parse(u.perfis); } catch { perfisArr = []; }
+    } else if (u.perfil) {
+      perfisArr = [u.perfil];
+    }
+
+    return res.json({ ok:true, user: { ...u, perfis: perfisArr } });
+  } catch (e) {
+    console.error('[usuarios/:id] error', e);
+    return res.status(500).json({ ok:false, error:'Erro interno', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
   }
 });
 
-// PUT /usuarios/:id -> atualiza usuário (por id)
-app.put('/usuarios/:id', (req, res) => {
-  const id = req.params?.id;
-  const { nome, email, whatsapp, perfis, password, foto } = req.body || {};
-
-  if (!id) {
-    return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
-  }
-
+// PUT /usuarios/:id (admin)
+app.put('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
   try {
-    const atual = db
-      .prepare('SELECT * FROM usuarios WHERE id = ?')
-      .get(id);
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ ok:false, error:'ID inválido' });
 
-    if (!atual) {
-      return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
+    // body
+    const nome = (req.body?.nome ?? '').toString().trim();
+    const email = (req.body?.email ?? '').toString().trim().toLowerCase();
+    const whatsapp = (req.body?.whatsapp ?? req.body?.telefone ?? '').toString().trim();
+
+    // perfis pode vir como perfis[] ou perfil string
+    let perfis = req.body?.perfis ?? req.body?.perfil ?? req.body?.roles ?? [];
+    if (typeof perfis === 'string') {
+      try { perfis = JSON.parse(perfis); } catch { perfis = [perfis]; }
+    }
+    if (!Array.isArray(perfis)) perfis = [String(perfis)];
+    perfis = perfis.map(s => String(s).trim()).filter(Boolean);
+
+    const perfilPrincipal = perfis[0] || 'Vendedor';
+
+    // senha opcional
+    const senha = (req.body?.senha ?? req.body?.password ?? '').toString();
+    let senha_hash = null;
+    if (senha) {
+      const bcrypt = require('bcryptjs');
+      senha_hash = bcrypt.hashSync(senha, 10);
     }
 
-    const emailNorm = email
-      ? String(email).toLowerCase().trim()
-      : atual.email;
-
-    // Se trocou e-mail, verifica se já existe outro com esse e-mail
-    if (emailNorm !== atual.email) {
-      const outro = db
-        .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?')
-        .get(emailNorm, id);
-
-      if (outro) {
-        return res.status(409).json({ status: 409, error: 'Já existe usuário com esse e-mail.' });
-      }
+    // bloquear editar admin email (opcional mas recomendado)
+    const current = db.prepare(`SELECT id,email FROM usuarios WHERE id=?`).get(id);
+    if (!current) return res.status(404).json({ ok:false, error:'Usuário não encontrado' });
+    if (current.email === 'admin@kgb.com' && email && email !== current.email) {
+      return res.status(403).json({ ok:false, error:'Não é permitido alterar o e-mail do admin.' });
     }
 
+    // montar update dinâmico
+    const sets = [];
+    const params = {};
 
-    const rawPass = (typeof password === 'string' && password.trim()) ? password : null;
+    if (nome) { sets.push('nome=@nome'); params.nome = nome; }
+    if (email) { sets.push('email=@email'); params.email = email; }
+    sets.push('whatsapp=@whatsapp'); params.whatsapp = whatsapp;
+    sets.push('perfil=@perfil'); params.perfil = perfilPrincipal;
+    sets.push('perfis=@perfis'); params.perfis = JSON.stringify(perfis);
+    if (senha_hash) { sets.push('senha_hash=@senha_hash'); params.senha_hash = senha_hash; }
 
-    const perfilSalvar = Array.isArray(perfis) && perfis.length ? String(perfis[0]) : atual.perfil;
+    if (sets.length === 0) return res.status(400).json({ ok:false, error:'Nada para atualizar' });
 
-    const updates = [ 'nome = ?', 'email = ?', 'whatsapp = ?', 'perfil = ?' ];
-    const params = [ nome ?? atual.nome, emailNorm, whatsapp ?? atual.whatsapp, perfilSalvar ];
+    params.id = id;
 
-    if (rawPass) {
-      const hashed = bcrypt.hashSync(String(rawPass), 10);
-      updates.push('senha_hash = ?', 'senha = ?');
-      params.push(hashed, null);
-    }
+    const sql = `UPDATE usuarios SET ${sets.join(', ')} WHERE id=@id`;
+    const info = db.prepare(sql).run(params);
 
-    updates.push('foto = ?');
-    params.push(typeof foto === 'string' ? foto : atual.foto);
-
-    const sql = `UPDATE usuarios SET ${updates.join(',\n')} WHERE id = ?`;
-    params.push(id);
-
-    db.prepare(sql).run(...params);
-
-    const atualizado = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
-    return res.json({ ok: true, user: atualizado });
-  } catch (err) {
-    console.error('[usuarios] PUT /usuarios erro:', err);
-    return res.status(500).json({ ok: false, error: 'Erro ao atualizar usuário.' });
+    return res.json({ ok:true, updated: info.changes > 0 });
+  } catch (e) {
+    console.error('[usuarios PUT] error', e);
+    return res.status(500).json({ ok:false, error:'Erro interno', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
   }
 });
 
