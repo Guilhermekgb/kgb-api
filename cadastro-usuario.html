@@ -458,7 +458,11 @@
       const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
       const method = userId ? 'PUT' : 'POST';
 
-      const r = await api(endpoint, { method, body });
+      const r = await api(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
 
       // ✅ Caso de sucesso real (quando a API existir)
       if (r?.status >= 200 && r?.status < 300) {
