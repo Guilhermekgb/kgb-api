@@ -961,6 +961,44 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  try {
+    const tokenUser = req.user || {};
+
+    // Try to enrich from DB when possible
+    let user = tokenUser;
+    try {
+      if (tokenUser && tokenUser.id) {
+        const full = fetchUserForApi(tokenUser.id);
+        if (full) user = Object.assign({}, tokenUser, full);
+      }
+    } catch (e) { /* ignore enrichment errors */ }
+
+    const perfil = user.perfil || user.role || null;
+
+    const perfis = Array.isArray(user.perfis) ? user.perfis : Array.isArray(user.roles) ? user.roles : perfil ? [perfil] : [];
+
+    console.log('[KGB][RBAC] user=', { id: user.id, email: user.email, perfil, perfis });
+
+    const isAdmin = perfil === 'Administrador' || perfil === 'admin' || perfis.includes('Administrador') || perfis.includes('admin');
+
+    if (!isAdmin) {
+      return res.status(403).json({ ok: false, error: 'Acesso negado: apenas administrador' });
+    }
+
+    // attach the enriched user for downstream handlers
+    req.user = user;
+    return next();
+  } catch (e) {
+    console.error('[KGB][RBAC] requireAdmin error:', e.stack || e);
+    return res.status(500).json({
+      ok: false,
+      error: 'Erro interno no controle de acesso',
+      ...(process.env.AUTH_DEBUG === '1' ? { detail: String(e.stack || e) } : {})
+    });
+  }
+}
+
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
 app.post('/auth/login', async (req, res) => {
   // Ensure email/password variables are in function scope
@@ -6910,25 +6948,10 @@ app.get('/perfis', (req, res) => {
 });
 
 // POST /usuarios -> cria novo usuário
-app.post('/usuarios', (req, res) => {
+app.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
   try {
     console.log('[KGB] POST /usuarios auth=', req.headers && req.headers.authorization);
     try { console.log('[KGB] POST /usuarios bodyKeys=', Object.keys(req.body || {}).filter(k => k !== 'password' && k !== 'senha')); } catch(e){}
-
-    // Auth + RBAC: only admin can create users
-    try {
-      const authH = String(req.headers.authorization || '');
-      const m = authH.match(/^Bearer\s+(.+)$/i);
-      if (!m) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      const payload = verifyToken(m[1]);
-      if (!payload) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      const caller = fetchUserForApi(payload.id);
-      const isAdmin = (String(caller?.perfil || '').toLowerCase() === 'administrador') || (Array.isArray(caller?.perfis) && caller.perfis.map(p => String(p).toLowerCase()).includes('administrador')) || (Array.isArray(caller?.permissoes) && caller.permissoes.includes('*'));
-      if (!isAdmin) return res.status(403).json({ ok: false, error: 'Forbidden' });
-    } catch (e) {
-      console.warn('[KGB] POST /usuarios auth check failed', e && (e.stack || e));
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
 
     // Normalização de payload (tolerante a variações do frontend)
     const b = req.body || {};
