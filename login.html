@@ -234,6 +234,9 @@
     try { localStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
     try { localStorage.removeItem('KGB_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch(e){}
 
+    // helper alias expected by caller code
+    function mostrarErro(msg){ setError(msg); }
+
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       if (form.dataset.submitting === '1') return;
@@ -245,42 +248,45 @@
 
       try {
         const email = (emailInput?.value || '').trim();
-        const password = (senhaInput?.value || '').trim(); // TRIM NA SENHA TAMBÉM
+        const password = (senhaInput?.value || '').trim();
 
         if (!email || !password){
           setError('Preencha e-mail e senha.');
           return;
         }
 
-        // Guard rails
-        if (typeof window.kgbAuth !== 'object') {
-          setError('ERRO: kgbAuth não está disponível no clique. Veja Console.');
-          return;
-        }
-        if (typeof window.apiFetch !== 'function') {
-          setError('ERRO: apiFetch não está disponível no clique. Veja Console.');
+        if (typeof window.kgbAuth !== 'object' || typeof window.kgbAuth.api !== 'function') {
+          setError('ERRO: kgbAuth não está disponível.');
           return;
         }
 
-        // Debug payload log quando em debug
+        // Send JSON body via central client; client will stringify and attach token when needed
+        let r;
         try {
-          if (/[?&]debug=1\b/.test(location.search)) {
-            console.log('[LOGIN][PAYLOAD]', { email, passwordLen: password.length, passwordPreview: (password.slice(0,3) || '') + '***' + (password.slice(-2) || '') });
-          }
-        } catch(e){}
-
-        // Login via cliente padronizado
-        let data;
-        try {
-          data = await window.kgbAuth.login(email, password);
+          r = await window.kgbAuth.api('/auth/login', { method: 'POST', body: { email, password } });
         } catch (err) {
-          console.warn('[LOGIN] kgbAuth.login failed', err);
-          const msg = (err && err.message) ? err.message : 'E-mail ou senha inválidos.';
-          setError(msg);
+          console.error('[LOGIN] api call failed', err);
+          setError((err && err.message) ? err.message : 'Falha ao autenticar');
           return;
         }
 
-        console.log('[LOGIN] login ok, data=', data);
+        // api() returns { ok, status, data }
+        if (!r?.ok || !r?.data || !r.data.ok) {
+          const msg = r?.data?.error || r?.data?.message || 'Credenciais inválidas';
+          setError(msg);
+          console.error('[login] fail', r);
+          return;
+        }
+
+        // Save token if present
+        const token = r.data.token || r.data.jwt || r.data.access_token || r.data.accessToken || (r.data.data && (r.data.data.token || r.data.data.jwt));
+        try {
+          if (token && window.kgbAuth && typeof window.kgbAuth.setToken === 'function') {
+            window.kgbAuth.setToken(token);
+          } else if (token) {
+            try{ localStorage.setItem('KGB_AUTH_TOKEN', token); }catch(e){}
+          }
+        } catch (e) {}
 
         const params = new URLSearchParams(location.search);
         const returnUrl = params.get('returnUrl') || 'dashboard.html';
