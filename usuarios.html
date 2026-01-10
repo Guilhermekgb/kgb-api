@@ -334,17 +334,35 @@
       try {
         const resp = await window.kgbAuth.api('/usuarios', { method: 'GET' });
         console.log('[KGB][usuarios] resp=', resp);
+        console.log('[KGB][usuarios] resp keys=', resp && typeof resp === 'object' ? Object.keys(resp) : resp);
 
-        const lista = Array.isArray(resp)
-          ? resp
-          : Array.isArray(resp?.data)
-            ? resp.data
-            : Array.isArray(resp?.users)
-              ? resp.users
-              : [];
+        let lista = [];
+        if (Array.isArray(resp)) {
+          lista = resp;
+        } else if (Array.isArray(resp?.data)) {
+          lista = resp.data;
+        } else if (Array.isArray(resp?.usuarios)) {
+          lista = resp.usuarios;
+        } else if (Array.isArray(resp?.users)) {
+          lista = resp.users;
+        } else if (resp?.ok === false) {
+          console.error('[KGB][usuarios] erro API:', resp);
+          alert(resp.error || 'Erro ao carregar usuários');
+          renderUsuarios([]);
+          return;
+        } else if (resp?.data?.ok === false) {
+          console.error('[KGB][usuarios] erro API:', resp.data);
+          alert(resp.data.error || 'Erro ao carregar usuários');
+          renderUsuarios([]);
+          return;
+        } else {
+          console.warn('[KGB][usuarios] formato inesperado:', resp);
+          renderUsuarios([]);
+          return;
+        }
 
         if (!Array.isArray(lista) || lista.length === 0) {
-          console.warn('Nenhum usuário retornado');
+          console.warn('[KGB][usuarios] lista vazia após normalização');
           renderUsuarios([]);
           return;
         }
@@ -443,6 +461,12 @@
     }
 
     document.addEventListener('DOMContentLoaded', carregarUsuarios);
+
+    // Expor no escopo global para chamadas externas/tests
+    try {
+      window.carregarUsuarios = carregarUsuarios;
+      window.renderUsuarios = renderUsuarios;
+    } catch (e) {}
   </script>
 
   <!-- proteger-pagina deve ser carregado antes do listener de load (módulo) -->
@@ -458,11 +482,11 @@
     window.addEventListener('load', () => {
       try {
         console.log('[KGB][usuarios] window.load fired');
-        if (typeof carregarUsuarios !== 'function') {
-          console.error('[KGB][usuarios] carregarUsuarios() não existe no escopo global');
+        if (typeof window.carregarUsuarios !== 'function') {
+          console.error('[KGB][usuarios] window.carregarUsuarios() não existe');
           return;
         }
-        carregarUsuarios();
+        window.carregarUsuarios();
       } catch (e) {
         console.error('[KGB][usuarios] erro no load', e);
       }
