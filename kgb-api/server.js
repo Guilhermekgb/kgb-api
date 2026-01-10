@@ -582,6 +582,9 @@ function savePortalTokens(tokens) {
 
 // ========================= App / CORS =========================
 const app = express();
+// Ensure body parsers are registered early (before any routes)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 // Em DEV: não confiar em proxy — usar host direto (evita comportamento de x-forwarded-proto alterando secure)
 app.set('trust proxy', false);
 const isDev = process.env.NODE_ENV !== 'production';
@@ -649,9 +652,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Parser JSON global: deve ser declarado ANTES das rotas que esperam `req.body`.
-// Mantemos rotas webhook que usam `rawJson` especificando `express.raw()` localmente.
-app.use(express.json({ limit: '50mb' }));
+// Parser JSON global moved earlier near app creation to ensure parsers run before routes.
+// app.use(express.json({ limit: '50mb' }));
 
 // Diagnostic endpoint and boot log should be available early (before static/catch-all)
 console.log('[BOOT]', 'express.json configured', new Date().toISOString());
@@ -960,19 +962,25 @@ function requireAuth(req, res, next) {
 }
 
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
-app.post('/auth/login', express.json(), async (req, res) => {
-  // handler for login
-  
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug('[AUTH] POST /auth/login req.headers=', req.headers);
-    try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
+app.post('/auth/login', async (req, res) => {
+  try {
+    // DEBUG TEMP
+    console.log('[POST /auth/login] content-type:', req.headers['content-type']);
+    console.log('[POST /auth/login] body:', req.body);
+
+    const b = req.body || {};
+    const email = (b.email || b.Email || '').toString().trim();
+    const password = (b.password || b.senha || b.Senha || b.novaSenha || '').toString();
+
+    // expose build header to help detect which code is running
+    try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
+    console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
+
+    if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
+  } catch (e) {
+    console.error('[POST /auth/login] pre-check error:', e && e.stack ? e.stack : e);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
-  const { email } = req.body || {};
-  const password = (req.body?.password ?? req.body?.senha ?? '').toString();
-  // expose build header to help detect which code is running
-  try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
-  console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
-  if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
 
   try {
       const emailRaw = String(email || '');
