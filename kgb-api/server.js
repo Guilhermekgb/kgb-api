@@ -170,6 +170,37 @@ function initDb() {
 
 // Call initDb early to ensure core tables exist
 initDb();
+// Ensure a default admin user exists when DB is empty and env vars provided
+function ensureDefaultAdmin() {
+  try {
+    const cnt = db.prepare('SELECT COUNT(*) as c FROM usuarios').get();
+    const total = (cnt && cnt.c) ? Number(cnt.c) : 0;
+    if (total === 0) {
+      const adminEmail = process.env.ADMIN_EMAIL;
+      const adminPass = process.env.ADMIN_PASSWORD;
+      if (adminEmail && adminPass) {
+        const id = crypto.randomUUID();
+        const emailNorm = String(adminEmail).toLowerCase().trim();
+        const nowIso = new Date().toISOString();
+        const senhaHash = bcrypt.hashSync(String(adminPass), 10);
+        try {
+          db.prepare(`INSERT INTO usuarios (id, email, nome, perfil, senha_hash, senha, created_at, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(id, emailNorm, 'Administrador', 'Administrador', senhaHash, null, nowIso, 0);
+          console.log('[BOOTSTRAP] admin criado:', emailNorm);
+        } catch (e) {
+          console.warn('[BOOTSTRAP] falha ao criar admin:', e && e.message);
+        }
+      } else {
+        console.log('[BOOTSTRAP] ADMIN_* não configurado; nenhum admin criado');
+      }
+    }
+  } catch (e) {
+    console.warn('[BOOTSTRAP] erro ao verificar/ins criar admin:', e && e.message);
+  }
+}
+
+// Attempt bootstrap (idempotent)
+ensureDefaultAdmin();
 
 // Tabelas
 db.exec(`
@@ -6748,7 +6779,7 @@ app.get('/usuarios', (req, res) => {
         perfil,
         whatsapp,
         must_change_password,
-        COALESCE(created_at, created_at_iso) AS created_at_iso
+        COALESCE(created_at, created_at_iso, '') AS created_at_iso
       FROM usuarios
       ORDER BY COALESCE(id,rowid) ASC
     `).all();
@@ -6767,7 +6798,7 @@ app.get('/usuarios', (req, res) => {
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err);
+    console.error('[usuarios] GET /usuarios erro:', err && err.stack ? err.stack : err);
     return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
@@ -6984,7 +7015,7 @@ app.get('/usuarios', (req, res) => {
         perfil,
         whatsapp,
         must_change_password,
-        COALESCE(created_at, created_at_iso) AS created_at
+        COALESCE(created_at, created_at_iso, '') AS created_at_iso
       FROM usuarios
       ORDER BY COALESCE(id,rowid) ASC
     `).all();
@@ -7001,13 +7032,13 @@ app.get('/usuarios', (req, res) => {
         perfil: perfilFinal,
         perfis: perfisArr,
         must_change_password: u.must_change_password ? 1 : 0,
-        created_at: u.created_at || null
+        created_at_iso: u.created_at_iso || null
       };
     });
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[usuarios] GET /usuarios erro:', err);
+    console.error('[usuarios] GET /usuarios erro:', err && err.stack ? err.stack : err);
     return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
