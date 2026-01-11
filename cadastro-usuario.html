@@ -527,59 +527,65 @@
       const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
       const method = userId ? 'PUT' : 'POST';
 
-      const r = await api(endpoint, { method, body });
+      // Garante que perfis sejam um array
+      const perfisSelecionados = Array.from(document.querySelectorAll('input[name="perfis"]:checked'))
+        .map(el => el.value)
+        .filter(Boolean);
 
-      // ✅ Caso de sucesso real (quando a API existir)
-      if (r?.status >= 200 && r?.status < 300) {
-        alert('Usuário salvo com sucesso!');
-        // If this was a creation (no userId), redirect with created flag
-        if (!userId) {
-          location.replace('usuarios.html?created=1');
-        } else {
-          location.replace('usuarios.html');
-        }
+      const payload = {
+        nome,
+        email,
+        whatsapp,
+        perfis: perfisSelecionados,
+      };
 
-      // ⚠️ E-mail duplicado na API real
-      } else if (r?.status === 409) {
-        alert('Já existe um usuário com esse e-mail.');
-
-      // 🟡 PLANO B: backend não tem /usuarios (404) -> salvar só no navegador
-      } else if (r?.status === 404) {
-        try {
-          const chave = 'usuarios_dev_local';
-
-          // carrega lista atual do navegador (portal-aware)
-          const lista = JSON.parse(portalRead(chave, '[]') || '[]');
-
-          // gera um id fake se não tiver
-          const novoId = body.id || Date.now();
-
-          const novoUsuario = {
-            ...body,
-            id: novoId,
-            _devLocal: true    // só pra você saber que é "local"
-          };
-
-          lista.push(novoUsuario);
-          portalWrite(chave, JSON.stringify(lista));
-
-          alert('Usuário salvo apenas neste navegador (modo teste - backend sem /usuarios).');
-          location.replace('usuarios.html?created=1');
-        } catch (e2) {
-          console.error(e2);
-          alert('Backend respondeu 404 e não consegui salvar localmente.');
-        }
-
-      // Demais erros
-      } else {
-        const detail = r?.data?.detail || r?.data?.error || null;
-        if (detail) {
-          console.error('Erro ao salvar usuario', r);
-          alert('Erro ao salvar: ' + detail);
-        } else {
-          alert('Erro ao salvar: ' + (r?.status || 'desconhecido'));
-        }
+      if (!userId) {
+        payload.senha = senha;
+      } else if (senha) {
+        payload.senha = senha;
       }
+
+      console.log('[KGB][cadastro-usuario] payload ->', payload);
+
+      let resp;
+      try {
+        resp = await api(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        console.error('[KGB][cadastro-usuario] erro chamando ' + method + ' ' + endpoint + ':', e);
+        alert('Falha ao salvar usuário (erro de rede). Veja o console.');
+        return;
+      }
+
+      console.log('[KGB][cadastro-usuario] ' + method + ' ' + endpoint + ' resp =', resp);
+
+      const status = resp?.status ?? resp?.statusCode ?? null;
+      const data = resp?.data ?? resp ?? null;
+
+      console.log('[KGB][cadastro-usuario] POST /usuarios status =', status);
+      console.log('[KGB][cadastro-usuario] POST /usuarios data =', data);
+
+      const httpOk = (status === 200 || status === 201 || resp?.ok === true);
+      const appOk = (data && data.ok !== false);
+
+      if (!httpOk || !appOk) {
+        const msg =
+          data?.message ||
+          data?.error ||
+          data?.mensagem ||
+          (typeof data === 'string' ? data : null) ||
+          'A API não confirmou o salvamento. Veja o console.';
+        alert('Não foi possível salvar o usuário: ' + msg);
+        return;
+      }
+
+      alert('✅ Usuário salvo com sucesso!');
+      setTimeout(() => {
+        window.location.href = './usuarios.html';
+      }, 150);
 
     });
 
