@@ -369,34 +369,55 @@ function atualizaResumo() {
 
 async function salvarPermissoes() {
   try {
-    const perfis = Array.from(document.querySelectorAll("th[data-perfil]")).map(th => th.dataset.perfil);
+    const btn = document.getElementById('btnSalvarPermissoes') || document.querySelector('button[onclick*="salvarPermissoes"]') || document.querySelector('button');
+    if (btn) btn.disabled = true;
 
-    const payload = perfis.map(perfil => {
-      if (perfil === "Administrador" || perfil === "Admin") return { perfil, permissoes: ["*"] };
+    const checks = Array.from(document.querySelectorAll('input[type="checkbox"][data-perfil][data-page]'));
 
-      const marcadas = Array.from(document.querySelectorAll(`input[type='checkbox'][data-perfil="${perfil}"][data-page]`))
-        .filter(cb => cb.checked)
-        .map(cb => 'page:' + cb.dataset.page);
+    // monta mapa perfil -> Set(permissoes)
+    const byPerfil = new Map();
+    for (const ck of checks) {
+      const perfil = String(ck.dataset.perfil || '').trim();
+      const pageFile = String(ck.dataset.page || '').trim(); // ex: usuarios.html
+      if (!perfil || !pageFile) continue;
 
-      return { perfil, permissoes: marcadas };
-    });
+      if (!byPerfil.has(perfil)) byPerfil.set(perfil, new Set());
+      if (ck.checked) byPerfil.get(perfil).add(`page:${pageFile}`);
+    }
+
+    // Administrador sempre "*"
+    byPerfil.set('Administrador', new Set(['*']));
+
+    // transforma em array de { perfil, permissoes }
+    const payload = Array.from(byPerfil.entries()).map(([perfil, setPerms]) => ({
+      perfil,
+      permissoes: Array.from(setPerms)
+    }));
 
     console.log('[RBAC] PUT /permissoesUi payload =>', payload);
 
-    await window.apiFetch('/permissoesUi', {
+    const res = await window.apiFetch('/permissoesUi', {
       method: 'PUT',
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
+    if (!res || res.ok !== true) {
+      throw new Error(res?.error || 'Falha ao salvar /permissoesUi');
+    }
+
     alert('Permissões salvas!');
-    await carregarPermissoes();
-  } catch (err) {
-    console.error('[RBAC] erro ao salvar:', err);
-    alert('Não foi possível salvar as permissões: ' + (err.message || 'erro'));
+    await carregarPermissoes(); // recarrega do backend e reaplica
+  } catch (e) {
+    console.error('[RBAC] erro ao salvar:', e);
+    alert('Não foi possível salvar as permissões: ' + (e?.message || e));
+  } finally {
+    const btn = document.getElementById('btnSalvarPermissoes') || document.querySelector('button[onclick*="salvarPermissoes"]') || document.querySelector('button');
+    if (btn) btn.disabled = false;
   }
 }
 
-// Disponibiliza para o botão onclick="salvarPermissoes()"
+// Disponibiliza para compatibilidade
 window.salvarPermissoes = salvarPermissoes;
 
 async function carregarPermissoes() {
@@ -404,43 +425,65 @@ async function carregarPermissoes() {
     const json = await window.apiFetch('/permissoesUi');
     console.log('[RBAC] /permissoesUi json =>', json);
 
-    if (!json || !Array.isArray(json.items)) {
-      console.warn('[RBAC] Resposta inválida de /permissoesUi:', json);
-      return; // NÃO limpa os checks se veio inválido
+    if (!json || json.ok !== true || !Array.isArray(json.items)) {
+      console.warn('[RBAC] Resposta inválida /permissoesUi:', json);
+      return; // NÃO limpa checkboxes se resposta inválida
     }
 
-    // limpa
-    document.querySelectorAll("input[type='checkbox'][data-perfil][data-page]").forEach(cb => { cb.checked = false; });
-
-    // aplica
+    // mapa perfil -> Set(perms)
+    const permsByPerfil = new Map();
     for (const item of json.items) {
-      const perfil = item.perfil;
-      const perms = Array.isArray(item.permissoes) ? item.permissoes : [];
+      const perfil = String(item?.perfil || '').trim();
+      const perms = item?.permissoes;
+      if (!perfil) continue;
 
-      if (perms.includes("*")) {
-        document.querySelectorAll(`input[type='checkbox'][data-perfil="${perfil}"]`).forEach(cb => { cb.checked = true; });
-        continue;
-      }
-
-      for (const p of perms) {
-        const pageKey = p.startsWith("page:") ? p.slice(5) : p;
-        const cb = document.querySelector(`input[type='checkbox'][data-perfil="${perfil}"][data-page="${pageKey}"]`);
-        if (cb) cb.checked = true;
-      }
+      let set = new Set();
+      if (perms === '*' ) set = new Set(['*']);
+      else if (Array.isArray(perms)) set = new Set(perms.map(x => String(x).trim()).filter(Boolean));
+      else if (typeof perms === 'string') set = new Set([perms.trim()]);
+      permsByPerfil.set(perfil, set);
     }
-  } catch (err) {
-    console.error('[RBAC] Falha ao carregar /permissoesUi:', err);
+
+    const checks = Array.from(document.querySelectorAll('input[type="checkbox"][data-perfil][data-page]'));
+
+    // só agora (com resposta válida) vamos aplicar o estado
+    for (const ck of checks) {
+      const perfil = String(ck.dataset.perfil || '').trim();
+      const pageFile = String(ck.dataset.page || '').trim();
+      if (!perfil || !pageFile) continue;
+
+      const set = permsByPerfil.get(perfil) || new Set();
+      const permKey = `page:${pageFile}`;
+
+      ck.checked = set.has('*') || set.has(permKey);
+    }
+  } catch (e) {
+    console.warn('[RBAC] Não foi possível carregar permissões da API:', e);
+    // NÃO limpa nada
   }
 }
 
+// Inicialização: rodar guard primeiro, depois renderizar e carregar permissões
 (async () => {
   try {
-    await renderizarTabela();
-    try { window.lucide?.createIcons?.(); } catch {}
+    if (typeof renderizarTabela === 'function') renderizarTabela();
     if (typeof window.guard === 'function') await window.guard();
     await carregarPermissoes();
+
+    // Prefer addEventListener para o botão Salvar
+    try {
+      const btn = document.getElementById('btnSalvarPermissoes');
+      if (btn) {
+        // remove handlers duplicados
+        btn.replaceWith(btn.cloneNode(true));
+      }
+      const btn2 = document.getElementById('btnSalvarPermissoes') || document.querySelector('button');
+      if (btn2) btn2.addEventListener('click', salvarPermissoes);
+    } catch (e) {
+      // ignore
+    }
   } catch (e) {
-    console.warn('[permissoes] inicializacao falhou', e);
+    console.error('init permissoes falhou:', e);
   }
 })();
 
