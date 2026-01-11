@@ -94,6 +94,16 @@
       if(status === 403){ location.href = './acesso-negado.html'; return; }
 
       const userObj = (payload && payload.data) ? payload.data : payload;
+      // Normalize and protect permissoes to avoid code doing JSON.parse('*') elsewhere
+      try {
+        if (userObj && typeof userObj === 'object') {
+          try {
+            userObj.permissoes = normalizePerms(userObj.permissoes || userObj.perms || userObj.permissao || []);
+          } catch (e) {
+            userObj.permissoes = [];
+          }
+        }
+      } catch(e) {}
       window.__KGB_USER__ = userObj || null;
 
       // If user has global '*' permission, allow immediately without checking meta
