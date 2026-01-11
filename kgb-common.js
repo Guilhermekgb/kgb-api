@@ -504,54 +504,86 @@ export function fecharSessao(sessaoId){
     if (saved && /:5500\b/.test(saved)) localStorage.removeItem('API_BASE');
   } catch {}
 
-  // Definir `window.apiFetch` apenas se ainda não existir, usando o snippet robusto padrão.
-  window.apiFetch = window.apiFetch || (async function apiFetch(path, options = {}) {
-    const base = (window.__API_BASE__ || '').replace(/\/+$/, '');
-    const url = path.startsWith('http')
-      ? path
-      : base + (path.startsWith('/') ? path : `/${path}`);
+  // === KGB apiFetch (padronizado) ===
+  (function () {
+    const RENDER_API_FALLBACK = "https://kgb-api-v2.onrender.com";
 
-    const headers = new Headers(options.headers || {});
-    headers.set('Accept', 'application/json');
+    function resolveApiBase() {
+      // Se já tem __API_BASE__ válido, use.
+      let base = (window.__API_BASE__ || "").toString().trim();
 
-    const token =
-      localStorage.getItem('token') ||
-      localStorage.getItem('authToken') ||
-      localStorage.getItem('KGB_AUTH_TOKEN') ||
-      localStorage.getItem('kgb_token') ||
-      sessionStorage.getItem('token') ||
-      sessionStorage.getItem('authToken') ||
-      sessionStorage.getItem('KGB_AUTH_TOKEN') ||
-      sessionStorage.getItem('kgb_token');
+      // Corrigir bug clássico: alguém setou API_BASE para o host do Live Server (:5500)
+      // Se detectar :5500 ou 127.0.0.1:5500, força fallback.
+      const isLiveServer = /(:5500)\b/.test(base) || /127\.0\.0\.1:5500/.test(base);
 
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
+      // localhost dev: se estiver no Live Server, normalmente a API local é 3333
+      const onLocalhost = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+
+      if (!base || isLiveServer) {
+        if (onLocalhost) base = "http://127.0.0.1:3333";
+        else base = RENDER_API_FALLBACK;
+      }
+
+      // normaliza sem barra final
+      base = base.replace(/\/+$/, "");
+      window.__API_BASE__ = base;
+      return base;
     }
 
-    const res = await fetch(url, { ...options, headers });
-
-    const raw = await res.text();
-    const contentType = (res.headers.get('content-type') || '').toLowerCase();
-    const isJson = contentType.includes('application/json');
-
-    let data = null;
-    if (isJson && raw) {
-      try { data = JSON.parse(raw); } catch { data = null; }
+    function getToken() {
+      // tenta chaves comuns que já apareceram no projeto
+      return (
+        localStorage.getItem("token") ||
+        localStorage.getItem("KGB_AUTH_TOKEN") ||
+        localStorage.getItem("accessToken") ||
+        sessionStorage.getItem("token") ||
+        ""
+      );
     }
 
-    if (!res.ok) {
-      const msg = (data && (data.error || data.message))
-        ? (data.error || data.message)
-        : (raw || `HTTP ${res.status}`);
-      const err = new Error(msg);
-      err.status = res.status;
-      err.url = url;
-      err.body = raw;
-      throw err;
+    async function apiFetch(path, options = {}) {
+      const base = resolveApiBase();
+      const url = path.startsWith("http") ? path : base + (path.startsWith("/") ? path : "/" + path);
+
+      const headers = new Headers(options.headers || {});
+      if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
+
+      const token = getToken();
+      if (token && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + token);
+
+      const res = await fetch(url, { ...options, headers });
+
+      const contentType = (res.headers.get("content-type") || "").toLowerCase();
+      const isJson = contentType.includes("application/json");
+
+      const text = await res.text();
+      let data = text;
+
+      if (isJson) {
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (e) {
+          // JSON inválido vindo do backend (não quebra tudo)
+          data = { ok: false, error: "Invalid JSON from server", raw: text };
+        }
+      }
+
+      if (!res.ok) {
+        // padroniza erro (para telas tratarem)
+        const msg =
+          (data && (data.error || data.message)) ||
+          `HTTP ${res.status} ${res.statusText}`;
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+
+      return data;
     }
 
-    return isJson ? (data ?? { ok: true }) : (raw || { ok: true });
-  });
+    window.apiFetch = window.apiFetch || apiFetch;
+  })();
 
   // pequeno helper para uso interno: chama window.apiFetch e propaga erro api_unavailable
   async function __call_apiFetch(path, opts = {}) {

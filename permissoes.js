@@ -368,39 +368,31 @@ function atualizaResumo() {
 }
 
 async function salvarPermissoes() {
-  const perfis = [...new Set(
-    [...document.querySelectorAll('input[type="checkbox"][data-perfil]')].map(x => x.dataset.perfil)
-  )];
-
-  const payload = perfis.map(perfil => {
-    if (perfil === 'Administrador') return { perfil, permissoes: ['*'] };
-
-    const pages = [...document.querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"][data-page]`)]
-      .filter(ch => ch.checked)
-      .map(ch => 'page:' + ch.dataset.page);
-
-    return { perfil, permissoes: pages };
-  });
-
   try {
-    const res = await window.apiFetch('/permissoesUi', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    const perfis = Array.from(document.querySelectorAll("th[data-perfil]")).map(th => th.dataset.perfil);
+
+    const payload = perfis.map(perfil => {
+      if (perfil === "Administrador" || perfil === "Admin") return { perfil, permissoes: ["*"] };
+
+      const marcadas = Array.from(document.querySelectorAll(`input[type='checkbox'][data-perfil="${perfil}"][data-page]`))
+        .filter(cb => cb.checked)
+        .map(cb => 'page:' + cb.dataset.page);
+
+      return { perfil, permissoes: marcadas };
     });
 
-    if (!res || res.ok !== true) {
-      console.error('[RBAC] PUT /permissoesUi retornou erro:', res);
-      alert('Não foi possível salvar as permissões (PUT retornou erro). Veja o Console.');
-      return; // não recarrega
-    }
+    console.log('[RBAC] PUT /permissoesUi payload =>', payload);
 
-    // recarrega (seguro agora)
+    await window.apiFetch('/permissoesUi', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+
+    alert('Permissões salvas!');
     await carregarPermissoes();
-    alert('Permissões salvas com sucesso!');
-  } catch (e) {
-    console.error('[RBAC] Falha no PUT /permissoesUi', e);
-    alert('Não foi possível salvar as permissões (erro de rede/autorização). Veja o Console.');
+  } catch (err) {
+    console.error('[RBAC] erro ao salvar:', err);
+    alert('Não foi possível salvar as permissões: ' + (err.message || 'erro'));
   }
 }
 
@@ -408,47 +400,36 @@ async function salvarPermissoes() {
 window.salvarPermissoes = salvarPermissoes;
 
 async function carregarPermissoes() {
-  let json;
   try {
-    json = await window.apiFetch('/permissoesUi');
-    console.log('[RBAC] /permissoesUi json =>', json, typeof json);
-  } catch (e) {
-    console.error('[RBAC] Falha ao carregar /permissoesUi', e);
-    // NÃO limpa checkbox se falhou
-    return;
-  }
+    const json = await window.apiFetch('/permissoesUi');
+    console.log('[RBAC] /permissoesUi json =>', json);
 
-  if (!json || json.ok !== true || !Array.isArray(json.items)) {
-    console.error('[RBAC] Resposta inválida de /permissoesUi:', json);
-    // NÃO limpa checkbox se falhou
-    return;
-  }
-
-  const items = json.items;
-
-  // só limpa DEPOIS que confirmou que tem items válidos
-  document
-    .querySelectorAll('input[type="checkbox"][data-page][data-perfil]')
-    .forEach(ch => (ch.checked = false));
-
-  for (const row of items) {
-    const perfil = row.perfil;
-    const perms = Array.isArray(row.permissoes) ? row.permissoes : [];
-
-    if (perms.includes('*')) {
-      document
-        .querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"]`)
-        .forEach(ch => (ch.checked = true));
-      continue;
+    if (!json || !Array.isArray(json.items)) {
+      console.warn('[RBAC] Resposta inválida de /permissoesUi:', json);
+      return; // NÃO limpa os checks se veio inválido
     }
 
-    for (const p of perms) {
-      const pageKey = String(p).startsWith('page:') ? String(p).slice(5) : String(p);
-      const el = document.querySelector(
-        `input[type="checkbox"][data-perfil="${perfil}"][data-page="${pageKey}"]`
-      );
-      if (el) el.checked = true;
+    // limpa
+    document.querySelectorAll("input[type='checkbox'][data-perfil][data-page]").forEach(cb => { cb.checked = false; });
+
+    // aplica
+    for (const item of json.items) {
+      const perfil = item.perfil;
+      const perms = Array.isArray(item.permissoes) ? item.permissoes : [];
+
+      if (perms.includes("*")) {
+        document.querySelectorAll(`input[type='checkbox'][data-perfil="${perfil}"]`).forEach(cb => { cb.checked = true; });
+        continue;
+      }
+
+      for (const p of perms) {
+        const pageKey = p.startsWith("page:") ? p.slice(5) : p;
+        const cb = document.querySelector(`input[type='checkbox'][data-perfil="${perfil}"][data-page="${pageKey}"]`);
+        if (cb) cb.checked = true;
+      }
     }
+  } catch (err) {
+    console.error('[RBAC] Falha ao carregar /permissoesUi:', err);
   }
 }
 

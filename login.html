@@ -182,127 +182,50 @@
   <script type="module" src="./api/auth-client.js"></script>
 
   <script type="module">
-  // LOGIN (module): diagnóstico visível + fail-safe
-  (function () {
-    const form = document.getElementById("formLogin");
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const erroEl = document.getElementById("login-erro");
-    const btn = form ? form.querySelector('button[type="submit"]') : null;
-
-    function setError(msg){
-      try{
-        if (erroEl){
-          erroEl.style.display = msg ? 'block' : 'none';
-          erroEl.textContent = msg || '';
-        } else {
-          alert(msg);
-        }
-      }catch(e){
-        console.warn('[LOGIN] setError failed', e);
-        alert(msg);
+  (function(){
+    function getVal(selectorList) {
+      for (const sel of selectorList) {
+        const el = document.querySelector(sel);
+        if (el && typeof el.value === 'string') return el.value.trim();
       }
+      return "";
     }
 
-    function setLoading(on){
-      try{
-        if (btn){
-          btn.disabled = !!on;
-          btn.textContent = on ? 'Entrando...' : 'Entrar';
-        }
-      }catch(e){}
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.querySelector('form');
+      if (!form) return;
 
-    // Diagnóstico básico já ao carregar
-    try {
-      const apiBase = window.__API_BASE__ || window.__KGB_API_BASE__ || '';
-      console.log('[LOGIN][DIAG] __API_BASE__ =', apiBase);
-      console.log('[LOGIN][DIAG] typeof window.apiFetch =', typeof window.apiFetch);
-      console.log('[LOGIN][DIAG] typeof window.kgbAuth =', typeof window.kgbAuth);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-      if (!form) setError('ERRO: formLogin não encontrado (DOM).');
-      if (typeof window.kgbAuth !== 'object') setError('ERRO: kgbAuth não carregou. Verifique include do ./api/auth-client.js');
-      if (typeof window.apiFetch !== 'function') setError('ERRO: apiFetch não carregou. Verifique includes api-config.js + kgb-common.js (ordem).');
-      if (!apiBase) console.warn('[LOGIN][DIAG] API base vazia — api-config/kgb-common podem não ter resolvido ainda.');
-    } catch(e) {
-      console.warn('[LOGIN][DIAG] exception', e);
-    }
+        const email = getVal(['#email', "input[name='email']", "input[type='email']"]);
+        const senha = getVal(["#senha", '#password', "input[name='senha']", "input[name='password']", "input[type='password']"]);
 
-    if (!form) return;
+        console.log('[LOGIN][DIAG] email len=', email.length, ' senha len=', senha.length);
 
-    // Hard reset de token antigo
-    try { localStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
-    try { localStorage.removeItem('KGB_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch(e){}
-
-    // helper alias expected by caller code
-    function mostrarErro(msg){ setError(msg); }
-
-    form.addEventListener('submit', async function (e) {
-      e.preventDefault();
-      if (form.dataset.submitting === '1') return;
-      form.dataset.submitting = '1';
-      console.log('[LOGIN] submit fired');
-
-      setError('');
-      setLoading(true);
-
-      try {
-        const email = (emailInput?.value || '').trim();
-        const password = (passwordInput?.value || '');
-
-        console.log('LOGIN PAYLOAD', { email, password });
-
-        if (!email || !password){
-          setError('Preencha e-mail e senha.');
+        if (!email || !senha) {
+          alert('Preencha e-mail e senha.');
           return;
         }
 
-        if (typeof window.kgbAuth !== 'object' || typeof window.kgbAuth.api !== 'function') {
-          setError('ERRO: kgbAuth não está disponível.');
-          return;
-        }
+        const payload = { email, senha };
+        console.log('[LOGIN][DIAG] payload =>', payload);
 
-        // Send JSON body via central client; client will stringify and attach token when needed
-        let r;
         try {
-          r = await window.kgbAuth.api('/auth/login', { method: 'POST', body: { email, password } });
+          const login = await window.apiFetch('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+
+          const token = login.token || login.accessToken;
+          if (token) localStorage.setItem('token', token);
+
+          window.location.href = 'dashboard.html';
         } catch (err) {
-          console.error('[LOGIN] api call failed', err);
-          setError((err && err.message) ? err.message : 'Falha ao autenticar');
-          return;
+          console.error('[LOGIN] failed', err);
+          alert(err.message || 'Falha no login.');
         }
-
-        // api() returns { ok, status, data }
-        if (!r?.ok || !r?.data || !r.data.ok) {
-          const msg = r?.data?.error || r?.data?.message || 'Credenciais inválidas';
-          setError(msg);
-          console.error('[login] fail', r);
-          return;
-        }
-
-        // Save token if present
-        const token = r.data.token || r.data.jwt || r.data.access_token || r.data.accessToken || (r.data.data && (r.data.data.token || r.data.data.jwt));
-        try {
-          if (token && window.kgbAuth && typeof window.kgbAuth.setToken === 'function') {
-            window.kgbAuth.setToken(token);
-          } else if (token) {
-            try{ localStorage.setItem('KGB_AUTH_TOKEN', token); }catch(e){}
-          }
-        } catch (e) {}
-
-        const params = new URLSearchParams(location.search);
-        const returnUrl = params.get('returnUrl') || 'dashboard.html';
-
-        try { window.__ALLOW_REDIRECT__ = true; } catch(e){}
-        location.replace(returnUrl);
-
-      } catch (err) {
-        console.error('[LOGIN] exception', err);
-        setError('Falha ao conectar. Abra o Console e veja o erro.');
-      } finally {
-        setLoading(false);
-        try { form.dataset.submitting = '0'; } catch(e){}
-      }
+      });
     });
   })();
   </script>
