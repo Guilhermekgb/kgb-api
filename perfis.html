@@ -312,11 +312,34 @@ body.no-scroll{
 </script>
 
 <!-- 2) Protege a página (lê a meta) e aplica permissões -->
-<script type="module" src="./kgb-common.js">
-<script src="./api/proteger-pagina.js"></script>
+<script type="module" src="./api/api-config.js"></script>
+<script type="module" src="./kgb-common.js"></script>
+<script type="module" src="./api/auth-client.js"></script>
+<script type="module" src="./api/proteger-pagina.js"></script>
+
 <script>
-  try { window.guard && window.guard(); } catch(e){}
-  try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+  (async () => {
+    const meta = document.querySelector('meta[name="page-permission"]');
+    const permissao = meta?.content?.trim();
+
+    try {
+      if (permissao && typeof window.guard === 'function') {
+        await window.guard({ permissao });
+      }
+
+      // Em Live Server, forçar Render e persistir override (para não voltar a 127.0.0.1:3333)
+      const host = (location && location.hostname) ? location.hostname : '';
+      if (host === '127.0.0.1' || host === 'localhost') {
+        window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+        try { localStorage.setItem('API_BASE', window.__API_BASE__); } catch(e) {}
+        console.log('[KGB] forced API_BASE ->', window.__API_BASE__);
+      }
+
+      try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+    } catch (e) {
+      console.error('[PERFIS] guard falhou:', e);
+    }
+  })();
 </script>
 
 <script>

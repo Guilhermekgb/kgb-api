@@ -14,17 +14,16 @@
     host.endsWith(".netlify.app") ||
     host === "kgbprobuffet.netlify.app";
 
-  // Preferência de override só em LOCAL (pra não “quebrar” produção sem querer)
-  let localOverride = null;
+  // Preferência de override: respeitar localStorage 'API_BASE' when present (useful for Live Server)
+  let storageOverride = null;
   try {
-    localOverride =
-      localStorage.getItem("KGB_API_BASE_OVERRIDE") ||
-      sessionStorage.getItem("KGB_API_BASE_OVERRIDE");
-  } catch (_) {}
+    storageOverride = localStorage.getItem('API_BASE') || sessionStorage.getItem('API_BASE');
+  } catch (_) { storageOverride = null; }
 
-  // Regra final: se estivermos em localhost, apontar para a API local (3333).
-  // Permite override via localStorage/sessionStorage apenas em ambiente local.
-  const resolved = isLocal ? (localOverride || LOCAL_API) : RENDER_API;
+  // Regra final: se estivermos em localhost, apontar por padrão para RENDER_API
+  // mas respeitar override salvo em localStorage('API_BASE'). Em produção/netlify,
+  // usar RENDER_API.
+  const resolved = isLocal ? (storageOverride || RENDER_API) : RENDER_API;
 
   // Fonte única (nossa) — sempre editável
   window.__KGB_API_BASE__ = resolved;

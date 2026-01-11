@@ -565,6 +565,7 @@
     const host = (location && location.hostname) ? location.hostname : '';
     if (host === '127.0.0.1' || host === 'localhost') {
       window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+      try { localStorage.setItem('API_BASE', window.__API_BASE__); } catch(e) {}
       console.log('[KGB] forced API_BASE ->', window.__API_BASE__);
     }
   } catch(e) {}
