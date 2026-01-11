@@ -242,6 +242,14 @@
       try {
         if (permissao && typeof window.guard === 'function') await window.guard({ permissao });
 
+        // aguarda DOM pronto antes de continuar
+        const waitDom = () => new Promise((resolve) => {
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', resolve, { once: true });
+          } else resolve();
+        });
+        await waitDom();
+
         // Em ambiente de desenvolvimento (Live Server), força a API do Render
         try {
           const host = (location && location.hostname) ? location.hostname : '';
@@ -311,7 +319,6 @@
     const confirmaI   = document.getElementById('confirmarSenha');
     const fotoI       = document.getElementById('foto');
     const previewFoto = document.getElementById('previewFoto');
-    const perfisGroup = document.getElementById('perfisGroup');
 
     let fotoBase64  = '';
     let usuarioAtualEdicao = null;
@@ -337,6 +344,7 @@
         let arr = [];
         try {
           const resp = await api('/perfis', { method: 'GET' });
+          console.log('[KGB][cadastro-usuario] /perfis resp =', resp);
 
           // unwrap: aceita array direto, resp.data array, resp.data.items array, resp.items array
           const unwrapList = (r) => {
@@ -375,19 +383,45 @@
     }
 
        /** Monta os checkboxes de perfis no container #perfisGroup */
-    async function popularPerfisCheckboxes(selecionados = []){
-      const lista = await getPerfis();
-      if (!perfisGroup) return;
-      perfisGroup.innerHTML = lista.map(nome => {
+    async function popularPerfisCheckboxes(perfisOrSelecionados = [], selecionados = []){
+      const perfisGroup = document.getElementById('perfisGroup');
+      if (!perfisGroup) {
+        console.warn('[KGB][cadastro-usuario] perfisGroup não encontrado no DOM');
+        return;
+      }
+
+      // Decide se o primeiro argumento é a lista de perfis (vinda da API)
+      // ou a lista de perfis selecionados (chamada legacy). Para compatibilidade,
+      // se o primeiro array contém objetos, assumimos que é a lista de perfis.
+      let lista = [];
+      if (Array.isArray(perfisOrSelecionados) && perfisOrSelecionados.length && typeof perfisOrSelecionados[0] === 'object') {
+        lista = perfisOrSelecionados.map(p => (p && (p.nome || p.label)) ? (p.nome || p.label) : String(p));
+      } else {
+        // Caso legacy: perfisOrSelecionados representa selecionados; buscar lista via API
+        try {
+          lista = await getPerfis();
+        } catch (e) {
+          console.warn('[KGB][cadastro-usuario] falha ao obter perfis via API', e);
+          lista = [];
+        }
+        // Se caller passou selecionados como primeiro argumento, use-o
+        selecionados = Array.isArray(perfisOrSelecionados) ? perfisOrSelecionados : selecionados;
+      }
+
+      console.log('[KGB][cadastro-usuario] perfis carregados (final):', lista, 'selecionados=', selecionados);
+
+      perfisGroup.innerHTML = '';
+      (lista || []).forEach(nome => {
         const id = idSeguroPerfil(nome);
-        const checked = selecionados.includes(nome) ? 'checked' : '';
-        return `
+        const checked = (selecionados || []).includes(nome) ? 'checked' : '';
+        const html = `
           <label for="${id}">
             <input type="checkbox" id="${id}" name="perfis" value="${nome}" ${checked} />
             <span>${nome}</span>
           </label>
         `;
-      }).join('');
+        perfisGroup.insertAdjacentHTML('beforeend', html);
+      });
     }
 
     // Máscara WhatsApp
@@ -565,6 +599,39 @@
   </script>
 
   <!-- Script base: hamburguer + ícones -->
+  <script>
+    (async () => {
+      // garante DOM pronto
+      if (document.readyState === 'loading') {
+        await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+      }
+
+      // guard primeiro (se a página exigir)
+      const meta = document.querySelector('meta[name="page-permission"]');
+      const permissao = meta?.content?.trim();
+      if (permissao && typeof window.guard === 'function') {
+        try { await window.guard({ permissao }); } catch (e) { console.error('[KGB][cadastro-usuario] guard falhou:', e); return; }
+      }
+
+      try {
+        console.log('[KGB][cadastro-usuario] carregando perfis...');
+        const resp = await window.kgbAuth.api('/perfis', { method: 'GET' });
+        console.log('[KGB][cadastro-usuario] /perfis resp =', resp);
+
+        const data = resp?.data ?? resp;
+        const perfis = data?.items ?? data?.perfis ?? data ?? [];
+        console.log('[KGB][cadastro-usuario] perfis =', perfis);
+
+        if (typeof popularPerfisCheckboxes === 'function') {
+          await popularPerfisCheckboxes(perfis);
+        } else {
+          console.warn('[KGB][cadastro-usuario] popularPerfisCheckboxes não definida');
+        }
+      } catch (e) {
+        console.error('[KGB][cadastro-usuario] erro carregando perfis:', e);
+      }
+    })();
+  </script>
   <script>
       document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
   </script>
