@@ -622,15 +622,70 @@
         const perfis = data?.items ?? data?.perfis ?? data ?? [];
         console.log('[KGB][cadastro-usuario] perfis =', perfis);
 
-        if (typeof popularPerfisCheckboxes === 'function') {
-          await popularPerfisCheckboxes(perfis);
-        } else {
-          console.warn('[KGB][cadastro-usuario] popularPerfisCheckboxes não definida');
+        if (typeof window.popularPerfisCheckboxes !== 'function') {
+          console.error('[KGB][cadastro-usuario] window.popularPerfisCheckboxes NÃO existe (não vou renderizar)');
+          return;
         }
+        await window.popularPerfisCheckboxes(perfis);
       } catch (e) {
         console.error('[KGB][cadastro-usuario] erro carregando perfis:', e);
       }
     })();
+  </script>
+  <script>
+    // ✅ Função GLOBAL usada pelo bootstrap (não pode ficar "presa" em escopo de module)
+    window.popularPerfisCheckboxes = function popularPerfisCheckboxes(perfis, selecionados = []) {
+      try {
+        const perfisGroup = document.getElementById('perfisGroup');
+        if (!perfisGroup) {
+          console.warn('[KGB][cadastro-usuario] #perfisGroup não encontrado');
+          return;
+        }
+
+        // normaliza lista
+        const list = Array.isArray(perfis) ? perfis : [];
+        const pre = new Set((Array.isArray(selecionados) ? selecionados : []).map(String));
+
+        perfisGroup.innerHTML = '';
+
+        if (list.length === 0) {
+          perfisGroup.innerHTML = '<div style="opacity:.7">Nenhum perfil cadastrado.</div>';
+          return;
+        }
+
+        for (const p of list) {
+          const nome =
+            (typeof p === 'string' ? p : (p?.nome || p?.perfil || p?.name || '')).toString().trim();
+          if (!nome) continue;
+
+          const id = 'perfil_' + nome.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+
+          const wrap = document.createElement('label');
+          wrap.style.display = 'flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.gap = '10px';
+          wrap.style.margin = '6px 0';
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = nome;
+          cb.id = id;
+          cb.name = 'perfis';
+          cb.checked = pre.has(nome);
+
+          const span = document.createElement('span');
+          span.textContent = nome;
+
+          wrap.appendChild(cb);
+          wrap.appendChild(span);
+          perfisGroup.appendChild(wrap);
+        }
+
+        console.log('[KGB][cadastro-usuario] ✅ perfis renderizados:', list.length);
+      } catch (e) {
+        console.error('[KGB][cadastro-usuario] erro ao renderizar perfis', e);
+      }
+    };
   </script>
   <script>
       document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
