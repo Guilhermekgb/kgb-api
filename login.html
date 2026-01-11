@@ -181,6 +181,10 @@
   <script type="module" src="./kgb-common.js"></script>
   <script type="module" src="./api/auth-client.js"></script>
 
+  <script>
+    // FORÇA API DO RENDER NO LOGIN (DEV)
+    window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+  </script>
   <script type="module">
   (function(){
     function getVal(selectorList) {
