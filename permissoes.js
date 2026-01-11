@@ -331,13 +331,14 @@ async function renderizarTabela() {
     const thead = document.createElement("thead");
     const headerRow = document.createElement("tr");
     headerRow.innerHTML =
-      "<th>Página</th>" + perfis.map(p => `<th>${p}</th>`).join("");
+      "<th>Página</th>" + perfis.map(p => `<th data-perfil="${p}">${p}</th>`).join("");
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
     gruposEPaginas[modulo].forEach(p => {
       const tr = document.createElement("tr");
+      tr.setAttribute('data-page', p.id);
       let linha = `<td>${p.nome}</td>`;
       perfis.forEach(perfil => {
         const checked =
@@ -345,7 +346,7 @@ async function renderizarTabela() {
           permissoesSalvas[p.id].includes(perfil)
             ? "checked"
             : "";
-        linha += `<td><input type="checkbox" data-permissao="${p.id}" data-perfil="${perfil}" ${checked}></td>`;
+        linha += `<td><input type="checkbox" data-permissao="${p.id}" data-perfil="${perfil}" data-page="${p.id}" ${checked}></td>`;
       });
       tr.innerHTML = linha;
       tbody.appendChild(tr);
@@ -377,240 +378,75 @@ function atualizaResumo() {
 }
 
 async function salvarPermissoes() {
-  const novaPermissao = {};
-  document.querySelectorAll("input[type=checkbox]").forEach(chk => {
-    const permissao = chk.dataset.permissao;
-    const perfil = chk.dataset.perfil;
-    if (!novaPermissao[permissao]) novaPermissao[permissao] = [];
-    if (chk.checked) novaPermissao[permissao].push(perfil);
-  });
-
   try {
-    const resp = await api("/permissoesUi", {
-      method: "PUT",
-      body: novaPermissao
+    const perfis = {};
+
+    document.querySelectorAll('[data-perfil]').forEach(coluna => {
+      const perfil = coluna.getAttribute('data-perfil');
+      perfis[perfil] = [];
     });
 
-    if (!resp || (resp.status !== 200 && resp.status !== 204)) {
-      const msg =
-        (resp && (resp.error || resp.data?.error)) ||
-        "Não foi possível salvar as permissões.";
-      alert(msg);
-      return;
+    document.querySelectorAll('[data-page]').forEach(linha => {
+      const page = linha.getAttribute('data-page');
+
+      linha.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) {
+          const perfil = cb.getAttribute('data-perfil');
+          perfis[perfil].push(`page:${page}`);
+        }
+      });
+    });
+
+    // Admin sempre tudo
+    if (perfis.Administrador) {
+      perfis.Administrador = ["*"];
     }
 
-    alert("Permissões salvas com sucesso!");
-    await renderizarTabela();
-  } catch (e) {
-    console.warn('Erro ao salvar permissões:', String(e));
-    alert("Erro ao salvar permissões. Tente novamente em alguns instantes.");
+    const resp = await window.apiFetch('/permissoesUi', {
+      method: 'PUT',
+      body: JSON.stringify(perfis)
+    });
+
+    if (!resp.ok) {
+      throw new Error('Falha ao salvar permissões');
+    }
+
+    alert('Permissões salvas com sucesso!');
+  } catch (err) {
+    console.error('[PERMISSOES] Erro ao salvar:', err);
+    alert('Não foi possível salvar as permissões.');
   }
 }
+
 // Disponibiliza para o botão onclick="salvarPermissoes()"
 window.salvarPermissoes = salvarPermissoes;
 
-// ================= RBAC DA API (permissoesApi) =================
+async function carregarPermissoes() {
+  const resp = await window.apiFetch('/permissoesUi');
+  const data = await resp.json();
 
-// Vamos reaproveitar:
-// - a função api(endpoint, req) que já criamos lá em cima
-// - a lista de perfis (perfis) que usamos na tabela de permissões de página
+  if (!data.ok) return;
 
-// Garante que temos uma lista de perfis atualizada (fixos + extras da API)
-async function obterPerfisParaRbac() {
-  // Se você já tiver uma função carregarPerfis/perfis globais, use ela:
-  // aqui estou assumindo que "perfis" já é um array com os nomes.
-  if (typeof carregarPerfis === "function") {
-    try {
-      await carregarPerfis();
-    } catch (e) {
-      console.warn("Erro ao carregar perfis para RBAC API:");
+  data.items.forEach(item => {
+    const perfil = item.perfil;
+    const permissoes = item.permissoes || [];
+
+    if (permissoes.includes('*')) {
+      document
+        .querySelectorAll(`input[data-perfil="${perfil}"]`)
+        .forEach(cb => cb.checked = true);
+      return;
     }
-  }
-  if (Array.isArray(perfis) && perfis.length) {
-    return perfis;
-  }
-  // fallback bem simples, caso algo dê errado
-  return [
-    "Administrador",
-    "Vendedor",
-    "Financeiro",
-    "Maitre",
-    "Estoque",
-    "Responsável por Evento"
-  ];
-}
 
-// Carrega a matrix atual de permissões da API (/permissoesApi)
-async function carregarRbacApiMatrix() {
-  try {
-    const resp = await api("/permissoesApi", { method: "GET" });
-    if (resp && resp.status === 200 && resp.data && typeof resp.data === "object") {
-      return resp.data; // algo como { "leads:get": ["Administrador","Vendedor"], ... }
-    }
-  } catch (e) {
-    console.warn("Não foi possível carregar RBAC da API:");
-  }
-  return {};
-}
-
-// Monta a tabela dentro de #rbacApiEditor
-async function initRbacApi() {
-  const container = document.getElementById("rbacApiEditor");
-  if (!container) return; // se a seção não existir na página, não faz nada
-
-  container.innerHTML = `
-    <p style="padding:8px 0;">Carregando configurações de RBAC da API...</p>
-  `;
-
-  const listaPerfis = await obterPerfisParaRbac();
-  const matrix = await carregarRbacApiMatrix();
-
-  const chaves = Object.keys(matrix || {}).sort();
-
-  if (!chaves.length) {
-    container.innerHTML = `
-      <p style="padding:8px 0;">
-        Nenhuma regra personalizada encontrada em <code>/permissoesApi</code>.<br/>
-        A API deve estar usando as regras padrão internas do backend.
-      </p>
-    `;
-  } else {
-    // Monta tabela
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-
-    headRow.innerHTML =
-      "<th>Entidade</th><th>Ação</th>" +
-      listaPerfis.map(p => `<th>${p}</th>`).join("");
-
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-
-    chaves.forEach(key => {
-      const [entidade, acao] = String(key).split(":");
-      const perfisPermitidos = Array.isArray(matrix[key]) ? matrix[key] : [];
-
-      const tr = document.createElement("tr");
-      let html = `
-        <td>${entidade || ""}</td>
-        <td>${acao || ""}</td>
-      `;
-
-      listaPerfis.forEach(perfil => {
-        const checked = perfisPermitidos.includes(perfil) ? "checked" : "";
-        html += `
-          <td style="text-align:center;">
-            <input
-              type="checkbox"
-              data-rbac-key="${key}"
-              data-rbac-entity="${entidade || ""}"
-              data-rbac-action="${acao || ""}"
-              data-rbac-perfil="${perfil}"
-              ${checked}
-            />
-          </td>
-        `;
-      });
-
-      tr.innerHTML = html;
-      tbody.appendChild(tr);
+    permissoes.forEach(p => {
+      const page = p.replace('page:', '');
+      const cb = document.querySelector(
+        `input[data-perfil="${perfil}"][data-page="${page}"]`
+      );
+      if (cb) cb.checked = true;
     });
-
-    table.appendChild(tbody);
-    container.innerHTML = "";
-    container.appendChild(table);
-  }
-
-  // Liga os botões Salvar / Resetar
-  const btnSalvar = document.getElementById("rbacApiSalvar");
-  const btnReset  = document.getElementById("rbacApiReset");
-
-  if (btnSalvar) {
-    btnSalvar.onclick = function (e) {
-      e.preventDefault();
-      salvarRbacApi();
-    };
-  }
-  if (btnReset) {
-    btnReset.onclick = function (e) {
-      e.preventDefault();
-      resetarRbacApi();
-    };
-  }
-}
-
-// Lê os checkboxes da tabela e envia para /permissoesApi (PUT)
-async function salvarRbacApi() {
-  const editor = document.getElementById("rbacApiEditor");
-  if (!editor) return;
-
-  const novaMatrix = {};
-  editor.querySelectorAll('input[type="checkbox"][data-rbac-key]').forEach(chk => {
-    const key    = chk.dataset.rbacKey;
-    const perfil = chk.dataset.rbacPerfil;
-    if (!key || !perfil) return;
-
-    if (!novaMatrix[key]) novaMatrix[key] = [];
-    if (chk.checked) novaMatrix[key].push(perfil);
   });
-
-  try {
-    const resp = await api("/permissoesApi", {
-      method: "PUT",
-      body: novaMatrix
-    });
-
-    if (!resp || (resp.status !== 200 && resp.status !== 204)) {
-      const msg =
-        (resp && (resp.error || resp.data?.error)) ||
-        "Não foi possível salvar o RBAC da API.";
-      alert(msg);
-      return;
-    }
-
-    alert("RBAC da API salvo com sucesso!");
-    await initRbacApi();
-  } catch (e) {
-    console.warn('Erro ao salvar RBAC da API:', String(e));
-    alert("Erro ao salvar RBAC da API. Tente novamente em alguns instantes.");
-  }
 }
-
-// Chama DELETE /permissoesApi (backend deve resetar para padrões internos)
-async function resetarRbacApi() {
-  if (!confirm("Tem certeza que deseja resetar as regras da API para os padrões?")) {
-    return;
-  }
-
-  try {
-    const resp = await api("/permissoesApi", {
-      method: "DELETE"
-    });
-
-    if (!resp || (resp.status !== 200 && resp.status !== 204)) {
-      const msg =
-        (resp && (resp.error || resp.data?.error)) ||
-        "Não foi possível resetar o RBAC da API.";
-      alert(msg);
-      return;
-    }
-
-    alert("RBAC da API resetado para padrões com sucesso!");
-    await initRbacApi();
-  } catch (e) {
-    console.warn('Erro ao resetar RBAC da API:', String(e));
-    alert("Erro ao resetar RBAC da API. Tente novamente em alguns instantes.");
-  }
-}
-
-// Inicializa o editor da API quando a página carregar
-document.addEventListener("DOMContentLoaded", () => {
-  initRbacApi();
-});
-
 
 document.addEventListener("DOMContentLoaded", () => {
   renderizarTabela();
