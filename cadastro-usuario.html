@@ -239,10 +239,12 @@
     const permissao = meta?.content?.trim();
     try { if (permissao) window.guard({ permissao }); } catch(e){}
     try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+    try { if (typeof initPage === 'function') initPage(); } catch(e){}
   </script>
 
   <!-- Lógica da página -->
   <script type="module">
+  async function initPage(){
     // Helpers portal/memStore + api wrapper (page-local, minimal)
     const isPortalMode = () => !!(window.__KGB_PAGE_MEM__ || window.__MEM_CACHE__);
 
@@ -370,7 +372,7 @@
     const userId = params.get('id');
 
     // Primeiro monta checkbox vazio (sem seleção) para já aparecer UI
-    popularPerfisCheckboxes([]);
+    await popularPerfisCheckboxes([]);
 
     // Busca usuário para edição (se aplicável)
     let u;
@@ -394,7 +396,7 @@
 
         // Perfis selecionados (array ou legado)
         const selecionados = Array.isArray(u?.perfis) ? u.perfis : (u?.perfil ? [u.perfil] : []);
-        popularPerfisCheckboxes(selecionados);
+        await popularPerfisCheckboxes(selecionados);
 
         // Título
         const tituloSpan = document.querySelector('#tituloPagina span');
@@ -528,6 +530,7 @@
         if (window.lucide?.createIcons) lucide.createIcons();
       });
     });
+  }
   </script>
 
   <!-- Script base: hamburguer + ícones -->

@@ -1,192 +1,89 @@
-(function () {
-  function clearToken() {
-    try { localStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
-    try { localStorage.removeItem('KGB_TOKEN'); } catch(e){}
-    try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); } catch(e){}
-    try { delete window.KGB_AUTH_TOKEN; } catch(e){}
-    try { delete window.KGB_TOKEN; } catch(e){}
+/*
+  proteger-pagina.js
+  guard() síncrono que bloqueia execução de scripts da página até a validação.
+  - usa XMLHttpRequest síncrono para /auth/me
+  - considera '*' em permissoes como acesso total e retorna imediatamente sem checar meta
+  - redireciona 401 -> login.html, 403 -> acesso-negado.html
+  - não faz fallback silencioso
+*/
+(function(){
+  function clearToken(){ try{ localStorage.removeItem('KGB_AUTH_TOKEN'); localStorage.removeItem('KGB_TOKEN'); sessionStorage.removeItem('KGB_AUTH_TOKEN'); delete window.KGB_AUTH_TOKEN; delete window.KGB_TOKEN; }catch(e){}
   }
-
-  function redirectToLogin(reason) {
-    try {
-      const returnUrl =
-        new URLSearchParams(location.search).get('returnUrl') ||
-        (location.pathname.split('/').pop() || '') + location.search + location.hash ||
-        'dashboard.html';
-
+  function redirectToLogin(reason){
+    try{
+      const returnUrl = new URLSearchParams(location.search).get('returnUrl') || (location.pathname.split('/').pop()||'') + location.search + location.hash || 'dashboard.html';
       const url = './login.html?returnUrl=' + encodeURIComponent(returnUrl);
-
-      const dbg = (function(){
-        try { return window.AUTH_DEBUG === '1' || localStorage.getItem('AUTH_DEBUG') === '1' || location.search.indexOf('debug=1') !== -1; } catch(e){ return false; }
-      })();
-
-      if (dbg) {
-        console.warn('[GUARD] redirectToLogin DEBUG - reason:', reason);
-        console.warn('[GUARD] redirect url:', url);
-        alert("[GUARD DEBUG] Vou redirecionar para login.\n\nMotivo: " + reason + "\n\nDestino: " + url);
-        // atraso maior para capturar Network/Console
-        setTimeout(() => { location.href = url; }, 10000);
-        return;
-      }
-
-      location.href = url;
-    } catch (e) {
-      try { location.href = './login.html'; } catch (err) { /* ignore */ }
-    }
+      try{ location.href = url; }catch(e){ location.href = './login.html'; }
+    }catch(e){ try{ location.href = './login.html'; }catch(_){} }
   }
-
-  // Backwards-compatible alias used in older code
-  function goLogin() { redirectToLogin('legacy'); }
-
-  function getStoredToken() {
-    const keys = ["KGB_TOKEN", "token", "jwt", "KGB_AUTH_TOKEN"];
-    try {
-      for (const k of keys) {
-        const v = localStorage.getItem(k);
-        if (v && typeof v === 'string' && v.trim()) return v.trim();
-      }
-    } catch(e) {}
-
-    try {
-      for (const k of keys) {
-        const v = sessionStorage.getItem(k);
-        if (v && typeof v === 'string' && v.trim()) return v.trim();
-      }
-    } catch(e) {}
-
-    try {
-      const v = (window.KGB_TOKEN || window.token || window.jwt || window.KGB_AUTH_TOKEN);
-      if (v && typeof v === 'string' && v.trim()) return v.trim();
-    } catch(e) {}
-
+  function getStoredToken(){
+    try{ const keys = ['KGB_TOKEN','token','jwt','KGB_AUTH_TOKEN']; for(const k of keys){ try{ const v = localStorage.getItem(k); if(v && typeof v==='string' && v.trim()) return v.trim(); }catch(e){} } }catch(e){}
+    try{ const keys=['KGB_TOKEN','token','jwt','KGB_AUTH_TOKEN']; for(const k of keys){ try{ const v = sessionStorage.getItem(k); if(v && typeof v==='string' && v.trim()) return v.trim(); }catch(e){} } }catch(e){}
+    try{ const v = (window.KGB_TOKEN || window.token || window.jwt || window.KGB_AUTH_TOKEN); if(v && typeof v==='string' && v.trim()) return v.trim(); }catch(e){}
     return '';
   }
+  function getApiBaseNow(){ try{ return (window.__API_BASE__ || window.API_BASE || '').toString().trim(); }catch(e){ return ''; } }
 
-  function getApiBaseNow() {
-    try { return (window.__API_BASE__ || window.API_BASE || '').toString().trim(); } catch(e) { return ''; }
-  }
+  // Synchronous guard (blocks page flow). opts.permissao optional.
+  window.guard = function guard(opts){
+    try{
+      const required = (opts && (opts.permissao || opts.permission || opts.pagePermission)) || (document.querySelector('meta[name="page-permission"]')?.content?.trim()) || '';
+      const token = getStoredToken();
 
-  async function waitForApiBase(timeoutMs = 1500) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
+      if(!token){
+        if(!required) return true;
+        redirectToLogin('no-token');
+        throw new Error('no-token');
+      }
+
+      // Build URL for /auth/me: prefer configured API base, fallback to relative
       const base = getApiBaseNow();
-      if (base) return base;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    return '';
-  }
+      const url = (base ? String(base).replace(/\/+$/,'') : '') + '/auth/me';
 
-  // API pública: guard({ permissao })
-  window.guard = async function guard(opts = {}) {
-    const DBG = (function(){
-      try { return window.AUTH_DEBUG === '1' || localStorage.getItem('AUTH_DEBUG') === '1' || location.search.indexOf('debug=1') !== -1; } catch(e){ return false; }
-    })();
-    const guardLog = (...a) => { if (DBG) console.log('[GUARD]', ...a); };
-    const guardWarn = (...a) => { if (DBG) console.warn('[GUARD]', ...a); };
-    guardLog('start', location.pathname);
-
-    // Normalize required permission from multiple possible keys (pt/en)
-    const required = (opts && (opts.permissao || opts.permission || opts.requiredPermission || opts.pagePermission))
-      || document.querySelector('meta[name="page-permission"]')?.content?.trim()
-      || '';
-
-    // token must exist only if a permission is required
-    const token = getStoredToken();
-
-    // debug snapshot of storages (do not print token)
-    const dbg = (new URLSearchParams(location.search).get('debug') === '1') || (localStorage.getItem('AUTH_DEBUG') === '1');
-    if (dbg) {
-      const snap = {};
-      for (const k of ["KGB_TOKEN","token","jwt","KGB_AUTH_TOKEN"]) {
-        try { snap['ls.'+k] = !!localStorage.getItem(k); } catch(e){ snap['ls.'+k] = 'err'; }
-        try { snap['ss.'+k] = !!sessionStorage.getItem(k); } catch(e){ snap['ss.'+k] = 'err'; }
+      const xhr = new XMLHttpRequest();
+      try{
+        xhr.open('GET', url, false); // synchronous
+        if (token) try{ xhr.setRequestHeader('Authorization','Bearer ' + token); }catch(e){}
+        xhr.send(null);
+      }catch(e){
+        // network error: redirect to login to be safe
+        redirectToLogin('network-error');
+        throw e;
       }
-      console.log('[GUARD] token present?', !!token, 'required=', required, 'storage snapshot:', snap);
-    } else {
-      guardLog('token present?', !!token, 'required=', required);
-    }
 
-    if (!token) {
-      if (!required) {
-        guardLog('no token but no required permission -> allowing access');
-        return true;
-      }
-      guardWarn('no token found -> redirect to login');
-      // do not clear stored token here; just redirect so developer can inspect storage
-      redirectToLogin('no-token');
-      throw new Error('no-token');
-    }
+      const status = xhr.status || 0;
+      let payload = {};
+      try{ payload = xhr.responseText ? JSON.parse(xhr.responseText) : {}; }catch(e){ payload = {}; }
 
-    try {
-      // prefer centralized apiFetch (resolves __API_BASE__); never call relative /auth/me
-        const base = await waitForApiBase(1500);
-        guardLog('__API_BASE__ =', base || (window.__API_BASE__ || window.API_BASE || window.__KGB_API_BASE__ || window.KGB_API_BASE));
-        let resp = null;
-        if (typeof window.apiFetch === 'function') {
-          try { resp = await window.apiFetch('/auth/me'); } catch (e) { guardWarn('/auth/me via apiFetch failed', e && e.message); resp = null; }
-        } else {
-          if (!base) {
-            // debug snapshot of window API base values
-            const dbg = (new URLSearchParams(location.search).get('debug') === '1') || (localStorage.getItem('AUTH_DEBUG') === '1');
-            if (dbg) {
-              try { console.warn('[GUARD] waitForApiBase timed out; window.__API_BASE__ snapshot:', { __API_BASE__: window.__API_BASE__, API_BASE: window.API_BASE, __KGB_API_BASE__: window.__KGB_API_BASE__, KGB_API_BASE: window.KGB_API_BASE }); } catch(e){}
-            }
-            guardWarn('No API base configured (window.__API_BASE__ missing) after wait — avoiding relative /auth/me call');
-            redirectToLogin('no-api-base'); throw new Error('no-api-base');
-          }
-          const url = String(base).replace(/\/+$/,'') + '/auth/me';
-          try { resp = await fetch(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token }, credentials: 'include' }); } catch (e) { guardWarn('/auth/me fetch failed', e && e.message); resp = null; }
-        }
+      if(status === 401){ clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
+      if(status === 403){ location.href = './acesso-negado.html'; return; }
 
-      if (!resp) { guardWarn('/auth/me no response (network?)'); throw new Error('no-response'); }
-
-      let status = null; let payload = {};
-      if (resp && typeof resp.status === 'number') {
-        status = resp.status;
-        try { payload = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp; } catch (e) { payload = {}; }
-      } else if (resp && typeof resp === 'object') {
-        payload = resp;
-        status = (resp && resp.ok === false) ? (resp.status || 500) : 200;
-      } else { payload = {}; status = 500; }
-
-      if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
-      if (status === 403) { guardWarn('user has no permission (403) -> redirect to acesso-negado'); try { /* no alert for UX */ } catch (e){} location.href = './acesso-negado.html'; return; }
-
-      // prefer payload.data as the user object (API contract: { ok: true, data: { ... } })
       const userObj = (payload && payload.data) ? payload.data : payload;
       window.__KGB_USER__ = userObj || null;
 
-      // === RBAC: ADMINISTRADOR TEM ACESSO TOTAL ===
-      try {
-        const user = window.__KGB_USER__;
-        if (user && typeof user.perfil === 'string') {
-          const perfil = String(user.perfil || '').toLowerCase().trim();
-          if (perfil === 'administrador' || perfil === 'admin') {
-            guardLog('[RBAC] Administrador detectado - acesso total liberado');
-            return true;
-          }
-        }
-      } catch (e) { /* ignore */ }
-
-      // permissões (simples) — use a variável `required` normalizada
-      if (required && required !== '*' && window.__KGB_USER__) {
-        // Read permissions from payload.data.permissoes when available
+      // If user has global '*' permission, allow immediately without checking meta
+      try{
         const perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
-        const isAdmin = (window.__KGB_USER__.perfil || '').toLowerCase().includes('admin');
-        if (!isAdmin && !perms.includes('*') && !perms.includes(required)) {
-          guardWarn('permission check failed for', required, 'user.permissoes=', perms);
-          try { /* no alert */ } catch (e){}
-          window.location.href = './acesso-negado.html';
+        if (Array.isArray(perms) && perms.includes('*')) return true;
+      }catch(e){}
+
+      // Admin profile shortcut
+      try{
+        const perfil = (window.__KGB_USER__ && window.__KGB_USER__.perfil) ? String(window.__KGB_USER__.perfil).toLowerCase() : '';
+        if(perfil === 'administrador' || perfil === 'admin') return true;
+      }catch(e){}
+
+      // Enforce required permission if present
+      if(required){
+        const perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
+        if(!Array.isArray(perms) || !perms.includes(required)){
+          location.href = './acesso-negado.html';
           return;
         }
       }
 
       return true;
-    } catch (e) {
-      // Distinguish network errors vs auth errors already handled above
-      guardWarn('error during guard:', e && e.message);
-      // If token-related errors have already redirected, just rethrow
-      throw e;
-    }
+    }catch(e){ throw e; }
   };
 })();
+*** End Patch
