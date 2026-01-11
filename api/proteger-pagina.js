@@ -140,19 +140,21 @@
 
       if (!resp) { guardWarn('/auth/me no response (network?)'); throw new Error('no-response'); }
 
-      let status = null; let j = {};
+      let status = null; let payload = {};
       if (resp && typeof resp.status === 'number') {
         status = resp.status;
-        try { j = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp; } catch (e) { j = {}; }
+        try { payload = (typeof resp.json === 'function') ? await resp.json().catch(() => ({})) : resp; } catch (e) { payload = {}; }
       } else if (resp && typeof resp === 'object') {
-        j = resp;
+        payload = resp;
         status = (resp && resp.ok === false) ? (resp.status || 500) : 200;
-      } else { j = {}; status = 500; }
+      } else { payload = {}; status = 500; }
 
       if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
       if (status === 403) { guardWarn('user has no permission (403) -> redirect to acesso-negado'); try { /* no alert for UX */ } catch (e){} location.href = './acesso-negado.html'; return; }
 
-      window.__KGB_USER__ = j?.data || j || null;
+      // prefer payload.data as the user object (API contract: { ok: true, data: { ... } })
+      const userObj = (payload && payload.data) ? payload.data : payload;
+      window.__KGB_USER__ = userObj || null;
 
       // === RBAC: ADMINISTRADOR TEM ACESSO TOTAL ===
       try {
@@ -168,7 +170,8 @@
 
       // permissões (simples) — use a variável `required` normalizada
       if (required && required !== '*' && window.__KGB_USER__) {
-        const perms = window.__KGB_USER__.permissoes || [];
+        // Read permissions from payload.data.permissoes when available
+        const perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
         const isAdmin = (window.__KGB_USER__.perfil || '').toLowerCase().includes('admin');
         if (!isAdmin && !perms.includes('*') && !perms.includes(required)) {
           guardWarn('permission check failed for', required, 'user.permissoes=', perms);
