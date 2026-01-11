@@ -150,7 +150,7 @@
       } else { j = {}; status = 500; }
 
       if (status === 401) { guardWarn('token invalid (401) -> clearing token and redirect to login'); clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
-      if (status === 403) { guardWarn('user has no permission (403) -> not redirecting to login'); try { alert('Sem permissão para acessar esta página.'); } catch (e){} location.href = './dashboard.html'; return false; }
+      if (status === 403) { guardWarn('user has no permission (403) -> redirect to acesso-negado'); try { /* no alert for UX */ } catch (e){} location.href = './acesso-negado.html'; return; }
 
       window.__KGB_USER__ = j?.data || j || null;
 
@@ -172,9 +172,9 @@
         const isAdmin = (window.__KGB_USER__.perfil || '').toLowerCase().includes('admin');
         if (!isAdmin && !perms.includes('*') && !perms.includes(required)) {
           guardWarn('permission check failed for', required, 'user.permissoes=', perms);
-          try { alert('Sem permissão para acessar esta página.'); } catch (e){}
-          location.href = './dashboard.html';
-          return false;
+          try { /* no alert */ } catch (e){}
+          window.location.href = './acesso-negado.html';
+          return;
         }
       }
 

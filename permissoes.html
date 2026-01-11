@@ -32,9 +32,6 @@
 
 <!-- (mantém seu bloco que importa exigirPermissao do guard) -->
 <script src="./api/proteger-pagina.js"></script>
-<script>
-  try { window.guard && window.guard({ permissao: 'ver-permissoes' }); } catch(e){}
-</script>
 
   <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
 <script>
@@ -230,9 +227,7 @@ body.no-scroll{
 
   <!-- Menu + guard -->
   <script type="module" src="menu-lateral.js"></script>
-  <script>
-    try { window.guard && window.guard({ permissao: 'ver-permissoes' }); } catch(e){}
-  </script>
+      
 
   <!-- Permissões da UI -->
   <script type="module" src="permissoes.js"></script>

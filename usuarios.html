@@ -455,9 +455,7 @@
   <!-- proteger-pagina deve ser carregado antes do listener de load (módulo) -->
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
-    const meta = document.querySelector('meta[name="page-permission"]');
-    const permissao = meta?.content?.trim();
-    try { if (permissao) window.guard({ permissao }); } catch(e){}
+    try { window.guard && window.guard(); } catch(e){}
     try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
   </script>
 

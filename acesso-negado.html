@@ -5,9 +5,6 @@
   <meta charset="UTF-8" />
    <meta name="viewport" content="width=device-width, initial-scale=1">
    <!-- Redefinir senha usa o backend M36 e não deve ser bloqueada pelo guard -->
-  <script>
-    window.__KGB_GUARD_BYPASS__ = true;
-  </script>
   <script type="module" src="./remote-adapter.js"></script>
 
   <title>Acesso Negado</title>
@@ -57,11 +54,11 @@
     <a href="dashboard.html">Voltar para o início</a>
   </div>
   <script>
-    // volta automático para o dashboard após 3 segundos
-    setTimeout(() => { window.location.href = "dashboard.html"; }, 3000);
+    // volta automático para o dashboard após 2.5 segundos
+    setTimeout(() => { window.location.href = "dashboard.html"; }, 2500);
   </script>
   <script>
-    try { if (typeof window.guard === 'function') window.guard(); } catch(e){}
+    try { window.guard && window.guard(); } catch(e){}
   </script>
 </body>
 </html>
