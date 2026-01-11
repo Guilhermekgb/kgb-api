@@ -389,84 +389,74 @@ function atualizaResumo() {
 }
 
 async function salvarPermissoes() {
-  try {
-    const perfis = {};
+  // monta payload PERFIL -> [page:...]
+  const perfis = [...new Set([...document.querySelectorAll('input[type="checkbox"][data-perfil]')].map(x => x.dataset.perfil))];
 
-    document.querySelectorAll('[data-perfil]').forEach(coluna => {
-      const perfil = coluna.getAttribute('data-perfil');
-      perfis[perfil] = [];
-    });
+  const payload = perfis.map(perfil => {
+    // coleta páginas marcadas daquele perfil
+    const pages = [...document.querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"][data-page]`)]
+      .filter(ch => ch.checked)
+      .map(ch => 'page:' + ch.dataset.page);
 
-    document.querySelectorAll('[data-page]').forEach(linha => {
-      const page = linha.getAttribute('data-page');
+    // Administrador sempre "*"
+    if (perfil === 'Administrador') return { perfil, permissoes: ['*'] };
 
-      linha.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        if (cb.checked) {
-          const perfil = cb.getAttribute('data-perfil');
-          perfis[perfil].push(`page:${page}`);
-        }
-      });
-    });
+    return { perfil, permissoes: pages };
+  });
 
-    // Admin sempre tudo
-    if (perfis.Administrador) {
-      perfis.Administrador = ["*"];
-    }
+  // salva no servidor
+  await window.apiFetch('/permissoesUi', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
 
-    const payload = Object.entries(perfis).map(([perfil, permissoes]) => ({
-      perfil,
-      permissoes
-    }));
+  // ✅ recarrega do servidor imediatamente (para garantir persistência)
+  await carregarPermissoes();
 
-    const resp = await window.apiFetch('/permissoesUi', {
-      method: 'PUT',
-      body: JSON.stringify(payload)
-    });
-
-    if (!resp.ok) {
-      throw new Error('Falha ao salvar permissões');
-    }
-
-    alert('Permissões salvas com sucesso!');
-  } catch (err) {
-    console.error('[PERMISSOES] Erro ao salvar:', err);
-    alert('Não foi possível salvar as permissões.');
-  }
+  alert('Permissões salvas com sucesso!');
 }
 
 // Disponibiliza para o botão onclick="salvarPermissoes()"
 window.salvarPermissoes = salvarPermissoes;
 
 async function carregarPermissoes() {
-  const resp = await window.apiFetch('/permissoesUi');
-  const data = await resp.json();
+  const json = await window.apiFetch('/permissoesUi');
+  const items = Array.isArray((json && json.items) ? json.items : (await (json && json.json ? json.json() : {}))) ? ((json && json.items) ? json.items : []) : [];
 
-  if (!data.ok) return;
+  // limpa checks
+  document.querySelectorAll('input[type="checkbox"][data-page][data-perfil]').forEach(ch => ch.checked = false);
 
-  data.items.forEach(item => {
-    const perfil = item.perfil;
-    const permissoes = item.permissoes || [];
+  // marca checks com base no servidor
+  for (const row of items) {
+    const perfil = row.perfil;
+    const perms = Array.isArray(row.permissoes) ? row.permissoes : [];
 
-    if (permissoes.includes('*')) {
-      document
-        .querySelectorAll(`input[data-perfil="${perfil}"]`)
-        .forEach(cb => cb.checked = true);
-      return;
+    // admin "*": se vier como "*", marca tudo pra admin
+    if (perms.includes('*') || perms === '*') {
+      document.querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"]`).forEach(ch => ch.checked = true);
+      continue;
     }
 
-    permissoes.forEach(p => {
-      const page = p.replace('page:', '');
-      const cb = document.querySelector(
-        `input[data-perfil="${perfil}"][data-page="${page}"]`
-      );
-      if (cb) cb.checked = true;
-    });
-  });
+    for (const p of perms) {
+      // p deve ser "page:xxx.html"
+      const pageKey = String(p).startsWith('page:') ? String(p).slice(5) : String(p);
+      const sel = `input[type="checkbox"][data-perfil="${perfil}"][data-page="${pageKey}"]`;
+      const el = document.querySelector(sel);
+      if (el) el.checked = true;
+    }
+  }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  renderizarTabela();
-  try { window.lucide?.createIcons?.(); } catch {}
-});
+(async () => {
+  try {
+    await renderizarTabela();
+    try { window.lucide?.createIcons?.(); } catch {}
+    if (typeof window.guard === 'function') await window.guard();
+    await carregarPermissoes();
+  } catch (e) {
+    console.warn('[permissoes] inicializacao falhou', e);
+  }
+})();
 
 
