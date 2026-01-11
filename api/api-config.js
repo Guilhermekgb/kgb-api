@@ -23,7 +23,14 @@
   // Regra final: se estivermos em localhost, apontar por padrão para RENDER_API
   // mas respeitar override salvo em localStorage('API_BASE'). Em produção/netlify,
   // usar RENDER_API.
-  const resolved = isLocal ? (storageOverride || RENDER_API) : RENDER_API;
+  let resolved = RENDER_API;
+  if (isLocal) {
+    resolved = storageOverride || RENDER_API;
+    // persiste o override para manter comportamento estável durante o desenvolvimento
+    try { if (!storageOverride) localStorage.setItem('API_BASE', resolved); } catch (e) {}
+  } else {
+    resolved = RENDER_API;
+  }
 
   // Fonte única (nossa) — sempre editável
   window.__KGB_API_BASE__ = resolved;

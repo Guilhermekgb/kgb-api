@@ -501,10 +501,12 @@ async function carregarPermissoes() {
 }
 
 // Inicialização: rodar guard primeiro, depois renderizar e carregar permissões
+// Inicialização: rodar guard primeiro, depois renderizar e carregar permissões
 (async () => {
   try {
-    if (typeof renderizarTabela === 'function') renderizarTabela();
     if (typeof window.guard === 'function') await window.guard();
+
+    if (typeof renderizarTabela === 'function') await renderizarTabela();
     await carregarPermissoes();
 
     // Prefer addEventListener para o botão Salvar
