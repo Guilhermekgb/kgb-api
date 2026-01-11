@@ -53,7 +53,18 @@
 
       const status = xhr.status || 0;
       let payload = {};
-      try{ payload = xhr.responseText ? JSON.parse(xhr.responseText) : {}; }catch(e){ payload = {}; }
+      try{
+        const txt = (xhr.responseText || '').toString();
+        const t = txt.trim();
+        if (!t) {
+          payload = {};
+        } else if (t.startsWith('{') || t.startsWith('[')) {
+          try { payload = JSON.parse(txt); } catch(e) { payload = {}; }
+        } else {
+          // Response is a primitive (e.g. '*') — normalize to safe payload
+          payload = { data: { permissoes: (t === '*' ? ['*'] : []) } };
+        }
+      }catch(e){ payload = {}; }
 
       if(status === 401){ clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
       if(status === 403){ location.href = './acesso-negado.html'; return; }
@@ -63,7 +74,12 @@
 
       // If user has global '*' permission, allow immediately without checking meta
       try{
-        const perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
+        let perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
+        // If permissoes is a string, treat '*' specially and avoid JSON.parse('*')
+        if (typeof perms === 'string') {
+          if (perms === '*') return true;
+          try { perms = JSON.parse(perms); } catch(e) { perms = [perms]; }
+        }
         if (Array.isArray(perms) && perms.includes('*')) return true;
       }catch(e){}
 
