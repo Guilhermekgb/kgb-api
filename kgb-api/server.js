@@ -167,9 +167,13 @@ function initDb() {
   // SEED inicial de permissoes_ui
   // ================================
   try {
+    console.log('[SEED] Checando permissoes_ui...');
+
     const row = db
       .prepare('SELECT COUNT(*) as total FROM permissoes_ui')
       .get();
+
+    console.log('[SEED] Total permissoes_ui:', row && row.total);
 
     if (row && row.total === 0) {
       console.log('[SEED] Inserindo permissoes_ui padrão (Vendedor)');
@@ -183,16 +187,19 @@ function initDb() {
       ];
 
       db.prepare(`
-        INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
-        VALUES (?, ?, ?)
+        INSERT INTO permissoes_ui (perfil, permissoes_json)
+        VALUES (?, ?)
       `).run(
         'Vendedor',
-        JSON.stringify(permissoesVendedor),
-        Math.floor(Date.now()/1000)
+        JSON.stringify(permissoesVendedor)
       );
+
+      console.log('[SEED] permissoes_ui inserido com sucesso');
+    } else {
+      console.log('[SEED] Seed ignorado (tabela não vazia)');
     }
   } catch (err) {
-    console.error('[SEED][permissoes_ui] Erro ao inserir seed:', err);
+    console.error('[SEED][permissoes_ui] Erro:', err);
   }
 
   // Try to migrate existing plain senha -> senha_hash (hash if needed)
@@ -7979,14 +7986,35 @@ try { cleanupOldBackups(); } catch(e){}
 setInterval(() => { try{ cleanupOldBackups(); } catch(e){} }, 24 * 60 * 60 * 1000);
 
 // ========================= Inicialização =========================
-app.listen(PORT, () => {
-  console.log(`KGB API rodando em http://localhost:${PORT}`);
+// Ensure we only log when listen succeeds and capture listen errors
+const PORT = Number(process.env.PORT || 3333);
+
+// In production (Render) bind to 0.0.0.0, in local dev prefer 127.0.0.1
+const HOST =
+  process.env.RENDER ? '0.0.0.0' :
+  (process.env.HOST || '127.0.0.1');
+
+const server = app.listen(PORT, HOST, () => {
+  console.log(`[KGB] LISTEN OK http://${HOST}:${PORT}`);
   console.log(`DB em: ${DB_PATH}`);
   if (ALLOWLIST.length) {
     console.log('CORS allowlist:', ALLOWLIST.join(', '));
   } else {
     console.log('CORS allowlist vazia (aceita qualquer origem sem Origin em ambiente local).');
   }
+});
+
+server.on('error', (err) => {
+  console.error('[KGB] LISTEN ERROR:', err);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[KGB] uncaughtException:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[KGB] unhandledRejection:', err);
 });
 
 // Global error handler to ensure stacks are logged in Render
