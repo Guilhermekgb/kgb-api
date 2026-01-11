@@ -7209,59 +7209,61 @@ app.get('/perfis', (req, res) => {
 // GET /permissoesUi -> retorna permissões por perfil (admin)
 app.get('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
   try {
-    const rows = db.prepare('SELECT perfil, permissoes_json, updated_at FROM permissoes_ui').all() || [];
-    const items = (rows || []).map(r => ({ perfil: r.perfil, permissoes: (r.permissoes_json ? (() => { try { return JSON.parse(r.permissoes_json); } catch(e){ return []; } })() : []), updated_at: r.updated_at }));
+    const rows = db.prepare(`SELECT perfil, permissoes_json FROM permissoes_ui ORDER BY perfil`).all() || [];
+
+    const items = rows.map(r => {
+      let permissoes = [];
+      try { permissoes = JSON.parse(r.permissoes_json || '[]'); } catch (e) { permissoes = []; }
+      if (!Array.isArray(permissoes)) permissoes = [];
+      return { perfil: r.perfil, permissoes };
+    });
+
     return res.json({ ok: true, items });
   } catch (e) {
-    console.error('[permissoesUi] GET error', e && (e.stack || e));
-    return res.status(500).json({ ok: false, error: 'Erro ao listar permissoes UI', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
+    console.error('[permissoesUi] GET erro:', e && (e.stack || e));
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
 
 // PUT /permissoesUi -> salva permissões por perfil (admin)
 app.put('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
   try {
-    const body = req.body || {};
+    const body = req.body;
+    const items = Array.isArray(body) ? body : (Array.isArray(body?.items) ? body.items : []);
 
-    // Support two shapes: { items:[{perfil,permissoes:[...]}] } OR { '<permissao>': ['Perfil1','Perfil2'], ... }
-    const mapByPerfil = {}; // perfil -> Set(permissao)
-
-    if (Array.isArray(body.items)) {
-      for (const it of body.items) {
-        const pf = String(it.perfil || '').trim();
-        if (!pf) continue;
-        const perms = Array.isArray(it.permissoes) ? it.permissoes : [];
-        mapByPerfil[pf] = mapByPerfil[pf] || new Set();
-        perms.forEach(p => mapByPerfil[pf].add(String(p)));
-      }
-    } else if (body && typeof body === 'object') {
-      // body is mapping permissao -> [perfis]
-      for (const permissao of Object.keys(body)) {
-        const perfisList = Array.isArray(body[permissao]) ? body[permissao] : [];
-        perfisList.forEach(pf => {
-          const key = String(pf || '').trim(); if (!key) return;
-          mapByPerfil[key] = mapByPerfil[key] || new Set();
-          mapByPerfil[key].add(permissao);
-        });
-      }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Payload inválido: esperado array de {perfil, permissoes}' });
     }
 
-    const upsert = db.prepare('INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at) VALUES (@perfil, @permissoes_json, @updated_at) ON CONFLICT(perfil) DO UPDATE SET permissoes_json = @permissoes_json, updated_at = @updated_at');
-    const now = Date.now();
-    let count = 0;
-    const tx = db.transaction((entries) => {
-      for (const [perfil, setPerms] of Object.entries(entries)) {
-        const arr = Array.from(setPerms || []);
-        upsert.run({ perfil, permissoes_json: JSON.stringify(arr), updated_at: now });
-        count++;
+    const upsert = db.prepare(`
+      INSERT INTO permissoes_ui (perfil, permissoes_json)
+      VALUES (@perfil, @permissoes_json)
+      ON CONFLICT(perfil) DO UPDATE SET permissoes_json = excluded.permissoes_json
+    `);
+
+    const tx = db.transaction((rows) => {
+      for (const it of rows) {
+        const perfil = (it?.perfil || '').toString().trim();
+        let permissoes = it?.permissoes;
+
+        if (!perfil) continue;
+        if (perfil === 'Administrador' || perfil === 'Admin') {
+          permissoes = ['*'];
+        }
+
+        if (!Array.isArray(permissoes)) permissoes = [];
+        permissoes = permissoes.map(p => (p || '').toString().trim()).filter(Boolean);
+
+        upsert.run({ perfil, permissoes_json: JSON.stringify(permissoes) });
       }
     });
-    tx(mapByPerfil);
 
-    return res.json({ ok: true, saved: count });
+    tx(items);
+
+    return res.json({ ok: true });
   } catch (e) {
-    console.error('[permissoesUi] PUT error', e && (e.stack || e));
-    return res.status(500).json({ ok: false, error: 'Erro ao salvar permissoes UI', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
+    console.error('[permissoesUi] PUT erro:', e && e.stack ? e.stack : e);
+    return res.status(500).json({ ok: false, error: 'Erro interno' });
   }
 });
 
