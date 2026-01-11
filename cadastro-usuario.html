@@ -693,22 +693,20 @@
 
         if (!btn) console.warn('[KGB][cadastro-usuario] btnSalvarUsuario não encontrado');
         if (btn) {
-          btn.addEventListener('click', async (e) => {
+          btn.addEventListener('click', (e) => {
             e.preventDefault();
             console.log('[KGB][cadastro-usuario] CLICK salvar');
-            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario();
-            if (typeof salvarUsuario === 'function') return salvarUsuario();
-            console.error('[KGB][cadastro-usuario] salvarUsuario não definida');
-            alert('Erro: função salvarUsuario não encontrada. Veja o console.');
+            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario(e);
+            console.error('[KGB][cadastro-usuario] window.salvarUsuario não definida');
           });
         }
 
         if (formEl) {
-          formEl.addEventListener('submit', async (e) => {
+          formEl.addEventListener('submit', (e) => {
             e.preventDefault();
             console.log('[KGB][cadastro-usuario] SUBMIT form (bloqueado) -> chamando salvar');
-            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario();
-            if (typeof salvarUsuario === 'function') return salvarUsuario();
+            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario(e);
+            console.error('[KGB][cadastro-usuario] window.salvarUsuario não definida');
           });
         }
       });
