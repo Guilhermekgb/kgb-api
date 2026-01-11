@@ -164,7 +164,7 @@ function initDb() {
   }
 
   // ================================
-  // SEED inicial de permissoes_ui
+  // SEED inicial de permissoes_ui (apenas em DEV com flag explícita)
   // ================================
   try {
     console.log('[SEED] Checando permissoes_ui...');
@@ -175,28 +175,35 @@ function initDb() {
 
     console.log('[SEED] Total permissoes_ui:', row && row.total);
 
-    if (row && row.total === 0) {
-      console.log('[SEED] Inserindo permissoes_ui padrão (Vendedor)');
+    // Só executar seed automaticamente em ambiente de desenvolvimento e quando
+    // a variável de ambiente AUTO_SEED_PERMISSOES esteja habilitada para '1'.
+    if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED_PERMISSOES === '1') {
+      if (row && row.total === 0) {
+        console.log('[SEED] Inserindo permissoes_ui padrão (Vendedor)');
 
-      const permissoesVendedor = [
-        'page:orcamento.html',
-        'page:orcamento-detalhado.html',
-        'page:funil-leads.html',
-        'page:lista-propostas.html',
-        'page:notificacoes-vendedor.html'
-      ];
+        const permissoesVendedor = [
+          'page:orcamento.html',
+          'page:orcamento-detalhado.html',
+          'page:funil-leads.html',
+          'page:lista-propostas.html',
+          'page:notificacoes-vendedor.html'
+        ];
 
-      db.prepare(`
-        INSERT INTO permissoes_ui (perfil, permissoes_json)
-        VALUES (?, ?)
-      `).run(
-        'Vendedor',
-        JSON.stringify(permissoesVendedor)
-      );
+        db.prepare(`
+          INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
+          VALUES (?, ?, ?)
+        `).run(
+          'Vendedor',
+          JSON.stringify(permissoesVendedor),
+          new Date().toISOString()
+        );
 
-      console.log('[SEED] permissoes_ui inserido com sucesso');
+        console.log('[SEED] permissoes_ui inserido com sucesso');
+      } else {
+        console.log('[SEED] Seed ignorado (tabela não vazia)');
+      }
     } else {
-      console.log('[SEED] Seed ignorado (tabela não vazia)');
+      console.log('[SEED] automatic permissoes_ui seed skipped (not dev or AUTO_SEED_PERMISSOES not enabled)');
     }
   } catch (err) {
     console.error('[SEED][permissoes_ui] Erro:', err);
@@ -7215,8 +7222,19 @@ app.get('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
       let permissoes = [];
       try { permissoes = JSON.parse(r.permissoes_json || '[]'); } catch (e) { permissoes = []; }
       if (!Array.isArray(permissoes)) permissoes = [];
+      // normalize any '*' presence
+      if (permissoes.includes('*')) permissoes = ['*'];
       return { perfil: r.perfil, permissoes };
     });
+
+    // Garantir que o perfil Administrador sempre existe com ['*']
+    const hasAdmin = items.some(i => String(i.perfil).toLowerCase() === 'administrador' || String(i.perfil).toLowerCase() === 'admin');
+    if (!hasAdmin) {
+      items.unshift({ perfil: 'Administrador', permissoes: ['*'] });
+    }
+
+    // Ordena por perfil para estabilidade (alfabética)
+    items.sort((a,b) => String(a.perfil || '').localeCompare(String(b.perfil || '')));
 
     return res.json({ ok: true, items });
   } catch (e) {
@@ -7229,36 +7247,60 @@ app.get('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
 app.put('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
   try {
     const body = req.body;
-    const items = Array.isArray(body) ? body : (Array.isArray(body?.items) ? body.items : []);
+    const items = Array.isArray(body) ? body : (Array.isArray(body?.items) ? body.items : null);
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ ok: false, error: 'Payload inválido: esperado array de {perfil, permissoes}' });
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ ok: false, error: 'Payload inválido: esperado array de {perfil, permissoes} ou { items: [...] }' });
     }
 
+    if (items.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Payload inválido: array vazio não permitido' });
+    }
+
+    // Validação e normalização
+    const normalized = [];
+    for (const it of items) {
+      const perfil = (it?.perfil || '').toString().trim();
+      if (!perfil) continue;
+
+      let permissoes = it?.permissoes;
+      if (permissoes === '*' || (typeof permissoes === 'string' && permissoes.trim() === '*')) {
+        permissoes = ['*'];
+      } else if (!Array.isArray(permissoes)) {
+        // tentar desserializar se for string JSON
+        if (typeof permissoes === 'string' && (permissoes.trim().startsWith('[') || permissoes.trim().startsWith('{'))) {
+          try { permissoes = JSON.parse(permissoes); } catch { permissoes = []; }
+        } else {
+          permissoes = Array.isArray(permissoes) ? permissoes : [];
+        }
+      }
+
+      permissoes = permissoes.map(p => (p || '').toString().trim()).filter(Boolean);
+      if (permissoes.includes('*')) permissoes = ['*'];
+
+      // Força Administrador sempre ['*']
+      if (perfil.toLowerCase() === 'administrador' || perfil.toLowerCase() === 'admin') {
+        permissoes = ['*'];
+      }
+
+      normalized.push({ perfil, permissoes });
+    }
+
+    if (normalized.length === 0) return res.status(400).json({ ok: false, error: 'Nenhum perfil válido no payload' });
+
     const upsert = db.prepare(`
-      INSERT INTO permissoes_ui (perfil, permissoes_json)
-      VALUES (@perfil, @permissoes_json)
-      ON CONFLICT(perfil) DO UPDATE SET permissoes_json = excluded.permissoes_json
+      INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
+      VALUES (@perfil, @permissoes_json, @updated_at)
+      ON CONFLICT(perfil) DO UPDATE SET permissoes_json = excluded.permissoes_json, updated_at = excluded.updated_at
     `);
 
     const tx = db.transaction((rows) => {
       for (const it of rows) {
-        const perfil = (it?.perfil || '').toString().trim();
-        let permissoes = it?.permissoes;
-
-        if (!perfil) continue;
-        if (perfil === 'Administrador' || perfil === 'Admin') {
-          permissoes = ['*'];
-        }
-
-        if (!Array.isArray(permissoes)) permissoes = [];
-        permissoes = permissoes.map(p => (p || '').toString().trim()).filter(Boolean);
-
-        upsert.run({ perfil, permissoes_json: JSON.stringify(permissoes) });
+        upsert.run({ perfil: it.perfil, permissoes_json: JSON.stringify(it.permissoes), updated_at: new Date().toISOString() });
       }
     });
 
-    tx(items);
+    tx(normalized);
 
     return res.json({ ok: true });
   } catch (e) {
