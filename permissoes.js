@@ -75,31 +75,10 @@ const api = (endpoint, req = {}) => {
 // Lista de perfis que será usada na tabela (colunas)
 let perfis = [...perfisFixos];
 
-// Busca perfis extras na API (/perfis) e mistura com os fixos
+// Carrega perfis: NÃO chamar endpoint /perfis (pode retornar 404).
+// Usar lista fixa por padrão.
 async function carregarPerfis() {
-  const extras = [];
-  try {
-    const resp = await api("/perfis", { method: "GET" });
-    if (resp && resp.status === 200 && Array.isArray(resp.data)) {
-      resp.data.forEach(p => {
-        const nome = typeof p === "string" ? p : (p?.nome || "");
-        const s = String(nome || "").trim();
-        if (s) extras.push(s);
-      });
-    }
-  } catch (e) {
-    // Não repassar o objeto Error ao console para evitar que o auditor trate
-    // a presença do Error como uma exceção não tratada (JSHandle@error).
-    console.warn("Não foi possível carregar perfis da API. Usando apenas perfis fixos.");
-  }
-
-  const set = new Set(perfisFixos);
-  extras.forEach(n => {
-    const s = String(n || "").trim();
-    if (s && !set.has(s)) set.add(s);
-  });
-
-  perfis = Array.from(set);
+  perfis = Array.from(perfisFixos);
 }
 
 
@@ -389,60 +368,84 @@ function atualizaResumo() {
 }
 
 async function salvarPermissoes() {
-  // monta payload PERFIL -> [page:...]
-  const perfis = [...new Set([...document.querySelectorAll('input[type="checkbox"][data-perfil]')].map(x => x.dataset.perfil))];
+  const perfis = [...new Set(
+    [...document.querySelectorAll('input[type="checkbox"][data-perfil]')].map(x => x.dataset.perfil)
+  )];
 
   const payload = perfis.map(perfil => {
-    // coleta páginas marcadas daquele perfil
+    if (perfil === 'Administrador') return { perfil, permissoes: ['*'] };
+
     const pages = [...document.querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"][data-page]`)]
       .filter(ch => ch.checked)
       .map(ch => 'page:' + ch.dataset.page);
 
-    // Administrador sempre "*"
-    if (perfil === 'Administrador') return { perfil, permissoes: ['*'] };
-
     return { perfil, permissoes: pages };
   });
 
-  // salva no servidor
-  await window.apiFetch('/permissoesUi', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const res = await window.apiFetch('/permissoesUi', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-  // ✅ recarrega do servidor imediatamente (para garantir persistência)
-  await carregarPermissoes();
+    if (!res || res.ok !== true) {
+      console.error('[RBAC] PUT /permissoesUi retornou erro:', res);
+      alert('Não foi possível salvar as permissões (PUT retornou erro). Veja o Console.');
+      return; // não recarrega
+    }
 
-  alert('Permissões salvas com sucesso!');
+    // recarrega (seguro agora)
+    await carregarPermissoes();
+    alert('Permissões salvas com sucesso!');
+  } catch (e) {
+    console.error('[RBAC] Falha no PUT /permissoesUi', e);
+    alert('Não foi possível salvar as permissões (erro de rede/autorização). Veja o Console.');
+  }
 }
 
 // Disponibiliza para o botão onclick="salvarPermissoes()"
 window.salvarPermissoes = salvarPermissoes;
 
 async function carregarPermissoes() {
-  const json = await window.apiFetch('/permissoesUi');
-  const items = Array.isArray((json && json.items) ? json.items : (await (json && json.json ? json.json() : {}))) ? ((json && json.items) ? json.items : []) : [];
+  let json;
+  try {
+    json = await window.apiFetch('/permissoesUi');
+  } catch (e) {
+    console.error('[RBAC] Falha ao carregar /permissoesUi', e);
+    // NÃO limpa checkbox se falhou
+    return;
+  }
 
-  // limpa checks
-  document.querySelectorAll('input[type="checkbox"][data-page][data-perfil]').forEach(ch => ch.checked = false);
+  if (!json || json.ok !== true || !Array.isArray(json.items)) {
+    console.error('[RBAC] Resposta inválida de /permissoesUi:', json);
+    // NÃO limpa checkbox se falhou
+    return;
+  }
 
-  // marca checks com base no servidor
+  const items = json.items;
+
+  // só limpa DEPOIS que confirmou que tem items válidos
+  document
+    .querySelectorAll('input[type="checkbox"][data-page][data-perfil]')
+    .forEach(ch => (ch.checked = false));
+
   for (const row of items) {
     const perfil = row.perfil;
     const perms = Array.isArray(row.permissoes) ? row.permissoes : [];
 
-    // admin "*": se vier como "*", marca tudo pra admin
-    if (perms.includes('*') || perms === '*') {
-      document.querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"]`).forEach(ch => ch.checked = true);
+    if (perms.includes('*')) {
+      document
+        .querySelectorAll(`input[type="checkbox"][data-perfil="${perfil}"]`)
+        .forEach(ch => (ch.checked = true));
       continue;
     }
 
     for (const p of perms) {
-      // p deve ser "page:xxx.html"
       const pageKey = String(p).startsWith('page:') ? String(p).slice(5) : String(p);
-      const sel = `input[type="checkbox"][data-perfil="${perfil}"][data-page="${pageKey}"]`;
-      const el = document.querySelector(sel);
+      const el = document.querySelector(
+        `input[type="checkbox"][data-perfil="${perfil}"][data-page="${pageKey}"]`
+      );
       if (el) el.checked = true;
     }
   }
