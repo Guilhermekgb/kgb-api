@@ -152,6 +152,11 @@ const gruposEPaginas = {
     { id: "page:alertas.html",  nome: "Alertas" },
     { id: "page:agenda-equipe.html",                 nome: "Agenda" }
   ],
+  // Notificações do vendedor (item específico para RBAC)
+  // Adicionado para permitir regras granulares para o fluxo do vendedor
+  "NOTIFICAÇÕES-VENDEDOR": [
+    { id: "page:notificacoes-vendedor.html", nome: "Notificações do Vendedor" }
+  ],
 
     // ===== AGENDA — Fontes visíveis (por perfil) =====
   "AGENDA — Fontes visíveis": [

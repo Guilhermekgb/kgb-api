@@ -250,8 +250,10 @@ function getFunilColuna(leadId){
     "kanbanLeads", "pipeline", "boardLeads", "quadroLeads"
   ];
 
-  for(const key of cand){
-    let data = null;
+    <script type="module" src="menu-lateral.js"></script>
+    <script>
+      try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][lista-propostas] guard not available yet'); } } catch(e){ console.warn('[KGB][lista-propostas] guard call failed', e); }
+    </script>
     try{ if (typeof memGet === 'function') data = memGet(key, null); else data = null; }catch{}
     if(!data) continue;
 

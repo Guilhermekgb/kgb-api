@@ -132,5 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   <script type="module" src="./api/api-fetch.js">
+<script>
+  try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][notificacoes-vendedor] guard not available yet'); } } catch(e){ console.warn('[KGB][notificacoes-vendedor] guard call failed', e); }
+</script>
 </body>
 </html>

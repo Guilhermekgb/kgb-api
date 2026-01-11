@@ -229,5 +229,8 @@
   <script type="module" src="./api/api-fetch.js"></script>
   <script type="module" src="./kgb-common.js"></script>
 <script src="./api/proteger-pagina.js"></script>
+<script>
+  try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][funil-leads] guard not available yet'); } } catch(e){ console.warn('[KGB][funil-leads] guard call failed', e); }
+</script>
 </body>
 </html>

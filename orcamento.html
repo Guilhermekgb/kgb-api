@@ -381,5 +381,8 @@
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script type="module" src="./api/api-fetch.js" defer></script>
   <script src="orcamento.js"></script>
+  <script>
+    try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][orcamento] guard not available yet'); } } catch(e){ console.warn('[KGB][orcamento] guard call failed', e); }
+  </script>
 </body>
 </html>

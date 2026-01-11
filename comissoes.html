@@ -224,6 +224,9 @@
 
   <script type="module" src="./js/auth-helper.js">
   <script type="module" src="./api/api-fetch.js">
+  <script>
+    try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][comissoes] guard not available yet'); } } catch(e){ console.warn('[KGB][comissoes] guard call failed', e); }
+  </script>
 </body>
 </html>
 

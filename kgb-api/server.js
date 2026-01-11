@@ -150,6 +150,19 @@ function initDb() {
     console.error('[KGB][DB] migration error', e && (e.stack || e));
   }
 
+  // Ensure permissões UI table exists (perfil -> permissoes_json)
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS permissoes_ui (
+        perfil TEXT PRIMARY KEY,
+        permissoes_json TEXT NOT NULL,
+        updated_at INTEGER
+      );
+    `);
+  } catch (e) {
+    console.error('[KGB][DB] failed to ensure permissoes_ui table', e && (e.stack || e));
+  }
+
   // Try to migrate existing plain senha -> senha_hash (hash if needed)
   try {
     const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
@@ -925,6 +938,27 @@ function fetchUserForApi(id) {
     const isAdmin = String(perfil || '').toLowerCase() === 'administrador' || perfis.map(p => String(p).toLowerCase()).includes('administrador');
     if (isAdmin && (!Array.isArray(permissoes) || permissoes.length === 0)) {
       permissoes = ['*'];
+    }
+
+    // If no explicit permissoes on user row, try to build from permissoes_ui table using perfis
+    try {
+      if ((!Array.isArray(permissoes) || permissoes.length === 0) && Array.isArray(perfis) && perfis.length) {
+        const combined = new Set(permissoes || []);
+        for (const pf of perfis) {
+          try {
+            const r = db.prepare('SELECT permissoes_json FROM permissoes_ui WHERE perfil = ?').get(pf);
+            if (r && r.permissoes_json) {
+              const parsed = JSON.parse(r.permissoes_json);
+              if (Array.isArray(parsed)) parsed.forEach(x => combined.add(x));
+            }
+          } catch (e) {
+            // ignore per-profile read errors
+          }
+        }
+        permissoes = Array.from(combined);
+      }
+    } catch (e) {
+      // ignore
     }
 
     return { id: row.id, email: row.email, nome: row.nome, perfil, perfis, permissoes };
@@ -6959,6 +6993,65 @@ app.get('/perfis', (req, res) => {
   } catch (e) {
     console.error('[perfis] erro', e);
     return res.status(500).json({ ok: false, error: 'Erro ao listar perfis.' });
+  }
+});
+
+// GET /permissoesUi -> retorna permissões por perfil (admin)
+app.get('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT perfil, permissoes_json, updated_at FROM permissoes_ui').all() || [];
+    const items = (rows || []).map(r => ({ perfil: r.perfil, permissoes: (r.permissoes_json ? (() => { try { return JSON.parse(r.permissoes_json); } catch(e){ return []; } })() : []), updated_at: r.updated_at }));
+    return res.json({ ok: true, items });
+  } catch (e) {
+    console.error('[permissoesUi] GET error', e && (e.stack || e));
+    return res.status(500).json({ ok: false, error: 'Erro ao listar permissoes UI', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
+  }
+});
+
+// PUT /permissoesUi -> salva permissões por perfil (admin)
+app.put('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const body = req.body || {};
+
+    // Support two shapes: { items:[{perfil,permissoes:[...]}] } OR { '<permissao>': ['Perfil1','Perfil2'], ... }
+    const mapByPerfil = {}; // perfil -> Set(permissao)
+
+    if (Array.isArray(body.items)) {
+      for (const it of body.items) {
+        const pf = String(it.perfil || '').trim();
+        if (!pf) continue;
+        const perms = Array.isArray(it.permissoes) ? it.permissoes : [];
+        mapByPerfil[pf] = mapByPerfil[pf] || new Set();
+        perms.forEach(p => mapByPerfil[pf].add(String(p)));
+      }
+    } else if (body && typeof body === 'object') {
+      // body is mapping permissao -> [perfis]
+      for (const permissao of Object.keys(body)) {
+        const perfisList = Array.isArray(body[permissao]) ? body[permissao] : [];
+        perfisList.forEach(pf => {
+          const key = String(pf || '').trim(); if (!key) return;
+          mapByPerfil[key] = mapByPerfil[key] || new Set();
+          mapByPerfil[key].add(permissao);
+        });
+      }
+    }
+
+    const upsert = db.prepare('INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at) VALUES (@perfil, @permissoes_json, @updated_at) ON CONFLICT(perfil) DO UPDATE SET permissoes_json = @permissoes_json, updated_at = @updated_at');
+    const now = Date.now();
+    let count = 0;
+    const tx = db.transaction((entries) => {
+      for (const [perfil, setPerms] of Object.entries(entries)) {
+        const arr = Array.from(setPerms || []);
+        upsert.run({ perfil, permissoes_json: JSON.stringify(arr), updated_at: now });
+        count++;
+      }
+    });
+    tx(mapByPerfil);
+
+    return res.json({ ok: true, saved: count });
+  } catch (e) {
+    console.error('[permissoesUi] PUT error', e && (e.stack || e));
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar permissoes UI', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
   }
 });
 
