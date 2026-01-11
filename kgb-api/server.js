@@ -163,6 +163,38 @@ function initDb() {
     console.error('[KGB][DB] failed to ensure permissoes_ui table', e && (e.stack || e));
   }
 
+  // ================================
+  // SEED inicial de permissoes_ui
+  // ================================
+  try {
+    const row = db
+      .prepare('SELECT COUNT(*) as total FROM permissoes_ui')
+      .get();
+
+    if (row && row.total === 0) {
+      console.log('[SEED] Inserindo permissoes_ui padrão (Vendedor)');
+
+      const permissoesVendedor = [
+        'page:orcamento.html',
+        'page:orcamento-detalhado.html',
+        'page:funil-leads.html',
+        'page:lista-propostas.html',
+        'page:notificacoes-vendedor.html'
+      ];
+
+      db.prepare(`
+        INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
+        VALUES (?, ?, ?)
+      `).run(
+        'Vendedor',
+        JSON.stringify(permissoesVendedor),
+        Math.floor(Date.now()/1000)
+      );
+    }
+  } catch (err) {
+    console.error('[SEED][permissoes_ui] Erro ao inserir seed:', err);
+  }
+
   // Try to migrate existing plain senha -> senha_hash (hash if needed)
   try {
     const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
