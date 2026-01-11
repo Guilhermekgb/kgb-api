@@ -125,16 +125,16 @@ function randEmail(prefix = 'vend'){
     console.log('Vendor logged in token:', !!vendorToken);
 
     // Vendor should access dashboard and orcamento
-    await page.goto(`${UI_BASE}/dashboard.html`, { waitUntil: 'networkidle2' });
+    await page.goto(`${UI_BASE}/dashboard.html`, { waitUntil: 'domcontentloaded' });
     if (page.url().endsWith('acesso-negado.html')) throw new Error('Vendor unexpectedly blocked from dashboard');
     console.log('Vendor can access dashboard — OK');
 
-    await page.goto(`${UI_BASE}/orcamento.html`, { waitUntil: 'networkidle2' });
+    await page.goto(`${UI_BASE}/orcamento.html`, { waitUntil: 'domcontentloaded' });
     if (page.url().endsWith('acesso-negado.html')) throw new Error('Vendor unexpectedly blocked from orcamento');
     console.log('Vendor can access orcamento — OK');
 
     // Vendor should NOT access usuarios.html
-    await page.goto(`${UI_BASE}/usuarios.html`, { waitUntil: 'networkidle2' });
+    await page.goto(`${UI_BASE}/usuarios.html`, { waitUntil: 'domcontentloaded' });
     if (!page.url().endsWith('acesso-negado.html')) {
       throw new Error('Vendor should be blocked from usuarios.html but was not');
     }
