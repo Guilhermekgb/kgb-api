@@ -445,8 +445,11 @@ body.no-scroll{
       back.addEventListener('click', fechar);
     }
   })();
-</script>
+  </script>
 
-  <script type="module" src="./api/api-fetch.js">
+  <script type="module" src="./api/api-fetch.js"></script>
+  <script>
+    try { if (typeof window.guard === 'function') { window.guard(); } } catch(e){}
+  </script>
 </body>
 </html>

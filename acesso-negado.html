@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <meta name="page-permission" content="page:acesso-negado.html">
   <meta charset="UTF-8" />
    <meta name="viewport" content="width=device-width, initial-scale=1">
    <!-- Redefinir senha usa o backend M36 e não deve ser bloqueada pelo guard -->
@@ -55,5 +56,12 @@
     <p>Você não tem permissão para acessar esta página.</p>
     <a href="dashboard.html">Voltar para o início</a>
   </div>
+  <script>
+    // volta automático para o dashboard após 3 segundos
+    setTimeout(() => { window.location.href = "dashboard.html"; }, 3000);
+  </script>
+  <script>
+    try { if (typeof window.guard === 'function') window.guard(); } catch(e){}
+  </script>
 </body>
 </html>

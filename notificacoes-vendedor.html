@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta name="page-permission" content="page:notificacoes.html">
+  <meta name="page-permission" content="page:notificacoes-vendedor.html">
   <meta charset="UTF-8" />
   <title>Minhas Notificações (Vendedor)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -22,7 +22,7 @@
   <!-- === FIM PATCH __API_BASE__ (auto) === -->
 
   <script type="module" src="./kgb-common.js"></script>
-  <script type="module" src="js/auth-helper.js">
+  <script type="module" src="js/auth-helper.js"></script>
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script src="https://unpkg.com/lucide@latest" defer></script>
 
@@ -103,9 +103,9 @@ body.no-scroll{overflow:hidden}
   </main>
 </div>
 
-<script type="module" src="menu-lateral.js"></script>
-<script src="agenda-bridge.js"></script>
-<script type="module" src="notificacoes.js" defer>
+  <script type="module" src="menu-lateral.js"></script>
+  <script src="agenda-bridge.js"></script>
+  <script type="module" src="notificacoes.js" defer></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -131,9 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-  <script type="module" src="./api/api-fetch.js">
-<script>
-  try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][notificacoes-vendedor] guard not available yet'); } } catch(e){ console.warn('[KGB][notificacoes-vendedor] guard call failed', e); }
 </script>
+  <script type="module" src="./api/api-fetch.js"></script>
+  <script>
+    try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][notificacoes-vendedor] guard not available yet'); } } catch(e){ console.warn('[KGB][notificacoes-vendedor] guard call failed', e); }
+  </script>
 </body>
 </html>
