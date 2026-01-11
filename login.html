@@ -216,6 +216,9 @@
         console.log('[LOGIN][DIAG] payload =>', payload);
 
         try {
+          // FORÇA API DO RENDER AQUI (apenas no momento do submit desta página)
+          window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+
           const login = await window.apiFetch('/auth/login', {
             method: 'POST',
             body: JSON.stringify(payload)
