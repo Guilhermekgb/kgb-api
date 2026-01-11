@@ -42,6 +42,18 @@ function portalWriteSession(key, value) {
   } catch(e) {}
 }
 
+// Helpers para normalizar nomes de página (page: prefix)
+function normPageName(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  return s.startsWith('page:') ? s.slice(5) : s;
+}
+
+function withPagePrefix(v) {
+  const name = normPageName(v);
+  return name ? `page:${name}` : '';
+}
+
 // Wrapper cloud-only para requests: exige `window.apiFetch`; se ausente, lança `api_unavailable`
 async function apiRequest(path, opts) {
   const w = (typeof window !== 'undefined') ? window : null;
@@ -396,10 +408,10 @@ async function salvarPermissoes() {
 
     console.log('[RBAC] PUT /permissoesUi payload =>', payload);
 
-    const res = await window.apiFetch('/permissoesUi', {
+      const res = await window.apiFetch('/permissoesUi', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+        body: JSON.stringify(payload)
     });
 
     if (!res || res.ok !== true) {
@@ -422,44 +434,62 @@ window.salvarPermissoes = salvarPermissoes;
 
 async function carregarPermissoes() {
   try {
-    const json = await window.apiFetch('/permissoesUi');
+    let json;
+    try {
+      json = await window.apiFetch('/permissoesUi');
+    } catch (e) {
+      console.warn('[RBAC] falha ao carregar /permissoesUi:', e);
+      return; // IMPORTANTE: não limpar UI se GET falhar
+    }
+
     console.log('[RBAC] /permissoesUi json =>', json);
 
     if (!json || json.ok !== true || !Array.isArray(json.items)) {
-      console.warn('[RBAC] Resposta inválida /permissoesUi:', json);
-      return; // NÃO limpa checkboxes se resposta inválida
+      console.warn('[RBAC] resposta inválida /permissoesUi:', json);
+      return;
     }
 
-    // mapa perfil -> Set(perms)
-    const permsByPerfil = new Map();
-    for (const item of json.items) {
-      const perfil = String(item?.perfil || '').trim();
-      const perms = item?.permissoes;
+    // limpa somente quando temos resposta válida
+    document.querySelectorAll('input[type="checkbox"][data-perfil][data-page]').forEach(cb => {
+      cb.checked = false;
+    });
+
+    // cria mapa perfil -> Set(permissões com prefixo)
+    const map = new Map();
+    for (const it of json.items) {
+      const perfil = it?.perfil;
+      const permsRaw = it?.permissoes;
       if (!perfil) continue;
 
-      let set = new Set();
-      if (perms === '*' ) set = new Set(['*']);
-      else if (Array.isArray(perms)) set = new Set(perms.map(x => String(x).trim()).filter(Boolean));
-      else if (typeof perms === 'string') set = new Set([perms.trim()]);
-      permsByPerfil.set(perfil, set);
+      const set = new Set();
+      if (permsRaw === '*' || (Array.isArray(permsRaw) && permsRaw.includes('*'))) {
+        set.add('*');
+      } else if (Array.isArray(permsRaw)) {
+        for (const p of permsRaw) set.add(withPagePrefix(p));
+      } else if (typeof permsRaw === 'string') {
+        set.add(withPagePrefix(permsRaw));
+      }
+
+      map.set(perfil, set);
     }
 
-    const checks = Array.from(document.querySelectorAll('input[type="checkbox"][data-perfil][data-page]'));
+    // marca checkboxes
+    document.querySelectorAll('input[type="checkbox"][data-perfil][data-page]').forEach(cb => {
+      const perfil = cb.dataset.perfil;
+      const pageKey = withPagePrefix(cb.dataset.page);
+      const set = map.get(perfil);
+      if (!set) return;
 
-    // só agora (com resposta válida) vamos aplicar o estado
-    for (const ck of checks) {
-      const perfil = String(ck.dataset.perfil || '').trim();
-      const pageFile = String(ck.dataset.page || '').trim();
-      if (!perfil || !pageFile) continue;
-
-      const set = permsByPerfil.get(perfil) || new Set();
-      const permKey = `page:${pageFile}`;
-
-      ck.checked = set.has('*') || set.has(permKey);
-    }
+      if (set.has('*')) {
+        cb.checked = true;
+        return;
+      }
+      if (pageKey && set.has(pageKey)) {
+        cb.checked = true;
+      }
+    });
   } catch (e) {
-    console.warn('[RBAC] Não foi possível carregar permissões da API:', e);
-    // NÃO limpa nada
+    console.warn('[RBAC] erro ao aplicar permissões:', e);
   }
 }
 
