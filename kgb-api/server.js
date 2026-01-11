@@ -519,6 +519,36 @@ CREATE TABLE IF NOT EXISTS kv_store (
   updated_at INTEGER NOT NULL
 );
 `);
+// === TABELAS: degustacoes_disponiveis e agenda (Pacote 2) ===
+db.exec(`
+CREATE TABLE IF NOT EXISTS degustacoes_disponiveis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data TEXT NOT NULL,
+  hora TEXT,
+  titulo TEXT DEFAULT 'Degustação',
+  vagas INTEGER DEFAULT 1,
+  status TEXT DEFAULT 'disponivel', -- disponivel|lotado|cancelado
+  observacoes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS agenda (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tipo TEXT,
+  ref_id INTEGER,
+  titulo TEXT DEFAULT 'Compromisso',
+  data TEXT NOT NULL,
+  hora TEXT,
+  status TEXT DEFAULT 'pendente',
+  observacoes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_deg_data_hora ON degustacoes_disponiveis(data, hora);
+CREATE INDEX IF NOT EXISTS idx_agenda_data_hora ON agenda(data, hora);
+`);
 
 // ========================= Firebase Admin (Storage) =========================
 const admin = require('firebase-admin');
@@ -1625,6 +1655,147 @@ app.post('/public/leads', express.json({ limit: '50mb' }), (req, res) => {
     return res.status(500).json({ ok: false, error: 'Erro ao criar lead' });
   }
 });
+// === ROTAS: Degustações disponíveis (CRUD) ===
+app.get('/degustacoes-disponiveis', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM degustacoes_disponiveis ORDER BY data ASC, hora ASC').all();
+    return res.json({ ok: true, items: Array.isArray(rows) ? rows : [] });
+  } catch (e) {
+    console.error('[GET /degustacoes-disponiveis] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar degustações' });
+  }
+});
+
+app.post('/degustacoes-disponiveis', express.json(), requireAuth, (req, res) => {
+  try {
+    const body = req.body || {};
+    const data = String(body.data || '').trim();
+    if (!data) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
+    const hora = body.hora || null;
+    const titulo = body.titulo || 'Degustação';
+    const vagas = Number(body.vagas || 1) || 1;
+    const status = body.status || 'disponivel';
+    const observacoes = body.observacoes || null;
+
+    const stmt = db.prepare('INSERT INTO degustacoes_disponiveis (data,hora,titulo,vagas,status,observacoes,created_at,updated_at) VALUES (?,?,?,?,?,?,datetime(\'now\'),datetime(\'now\'))');
+    const info = stmt.run(data, hora, titulo, vagas, status, observacoes);
+    const id = info.lastInsertRowid;
+    const row = db.prepare('SELECT * FROM degustacoes_disponiveis WHERE id = ?').get(id);
+    return res.status(201).json({ ok: true, item: row });
+  } catch (e) {
+    console.error('[POST /degustacoes-disponiveis] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar degustação' });
+  }
+});
+
+app.put('/degustacoes-disponiveis/:id', express.json(), requireAuth, (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
+    const body = req.body || {};
+    const data = body.data ? String(body.data).trim() : null;
+    if (data === null) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
+    const hora = body.hora || null;
+    const titulo = body.titulo || 'Degustação';
+    const vagas = Number(body.vagas || 1) || 1;
+    const status = body.status || 'disponivel';
+    const observacoes = body.observacoes || null;
+
+    db.prepare('UPDATE degustacoes_disponiveis SET data = ?, hora = ?, titulo = ?, vagas = ?, status = ?, observacoes = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(data, hora, titulo, vagas, status, observacoes, id);
+    const row = db.prepare('SELECT * FROM degustacoes_disponiveis WHERE id = ?').get(id);
+    return res.json({ ok: true, item: row });
+  } catch (e) {
+    console.error('[PUT /degustacoes-disponiveis/:id] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar degustação' });
+  }
+});
+
+app.delete('/degustacoes-disponiveis/:id', requireAuth, (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
+    db.prepare('DELETE FROM degustacoes_disponiveis WHERE id = ?').run(id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /degustacoes-disponiveis/:id] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao remover degustação' });
+  }
+});
+
+// === ROTAS: Agenda (CRUD) ===
+app.get('/agenda', requireAuth, (req, res) => {
+  try {
+    const tipo = req.query.tipo ? String(req.query.tipo) : null;
+    let rows;
+    if (tipo) rows = db.prepare('SELECT * FROM agenda WHERE tipo = ? ORDER BY data ASC, hora ASC').all(tipo);
+    else rows = db.prepare('SELECT * FROM agenda ORDER BY data ASC, hora ASC').all();
+    return res.json({ ok: true, items: Array.isArray(rows) ? rows : [] });
+  } catch (e) {
+    console.error('[GET /agenda] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar agenda' });
+  }
+});
+
+app.post('/agenda', express.json(), requireAuth, (req, res) => {
+  try {
+    const body = req.body || {};
+    const data = String(body.data || '').trim();
+    if (!data) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
+    const hora = body.hora || null;
+    const tipo = body.tipo || 'evento';
+    const ref_id = body.ref_id || null;
+    const titulo = body.titulo || 'Compromisso';
+    const status = body.status || 'pendente';
+    const observacoes = body.observacoes || null;
+
+    const stmt = db.prepare('INSERT INTO agenda (tipo,ref_id,titulo,data,hora,status,observacoes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime(\'now\'))');
+    const info = stmt.run(tipo, ref_id, titulo, data, hora, status, observacoes, new Date().toISOString());
+    const id = info.lastInsertRowid;
+    const row = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+    return res.status(201).json({ ok: true, item: row });
+  } catch (e) {
+    console.error('[POST /agenda] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar agenda' });
+  }
+});
+
+app.put('/agenda/:id', express.json(), requireAuth, (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
+    const body = req.body || {};
+    const data = body.data ? String(body.data).trim() : null;
+    if (data === null) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
+    const hora = body.hora || null;
+    const tipo = body.tipo || 'evento';
+    const ref_id = body.ref_id || null;
+    const titulo = body.titulo || 'Compromisso';
+    const status = body.status || 'pendente';
+    const observacoes = body.observacoes || null;
+
+    db.prepare('UPDATE agenda SET tipo = ?, ref_id = ?, titulo = ?, data = ?, hora = ?, status = ?, observacoes = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(tipo, ref_id, titulo, data, hora, status, observacoes, id);
+    const row = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+    return res.json({ ok: true, item: row });
+  } catch (e) {
+    console.error('[PUT /agenda/:id] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar agenda' });
+  }
+});
+
+app.delete('/agenda/:id', requireAuth, (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
+    db.prepare('DELETE FROM agenda WHERE id = ?').run(id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /agenda/:id] erro:', e && e.message);
+    return res.status(500).json({ ok: false, error: 'Erro ao remover agenda' });
+  }
+});
+
 // ========================= CLIENTES (MÓDULO 10) =========================
 
 app.get('/clientes', (req, res) => {
