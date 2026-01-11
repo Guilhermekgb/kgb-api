@@ -139,6 +139,9 @@
     }
     .check-grid input[type="checkbox"]{ width:18px; height:18px; }
   </style>
+  <!-- API config + kgb-common (must load before page protect and UI scripts) -->
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
 </head>
 
 <body>
@@ -230,8 +233,6 @@
 <script type="module" src="menu-lateral.js"></script>
 
   <!-- Guard do modelo base -->
-  <script type="module" src="./api/api-config.js"></script>
-  <script type="module" src="./kgb-common.js"></script>
   <script type="module" src="./api/auth-client.js"></script>
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
