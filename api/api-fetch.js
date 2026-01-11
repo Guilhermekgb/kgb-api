@@ -1,66 +1,47 @@
-(function () {
-  async function apiFetch(path, options = {}) {
-    const opts = { ...options };
+window.apiFetch = async function apiFetch(path, options = {}) {
+  const base = (window.__API_BASE__ || '').replace(/\/+$/, '');
+  const url = path.startsWith('http')
+    ? path
+    : base + (path.startsWith('/') ? path : `/${path}`);
 
-    // garante cookie httpOnly em todas as chamadas
-    opts.credentials = 'include';
+  const headers = new Headers(options.headers || {});
+  headers.set('Accept', 'application/json');
 
-    // se o body for objeto, converte pra JSON
-    if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
-      opts.headers = { ...(opts.headers || {}), 'Content-Type': 'application/json' };
-      opts.body = JSON.stringify(opts.body);
-    }
+  const token =
+    localStorage.getItem('token') ||
+    localStorage.getItem('authToken') ||
+    localStorage.getItem('KGB_AUTH_TOKEN') ||
+    localStorage.getItem('kgb_token') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('authToken') ||
+    sessionStorage.getItem('KGB_AUTH_TOKEN') ||
+    sessionStorage.getItem('kgb_token');
 
-    function buildUrl(p) {
-      if (!p) return (window.__API_BASE__ || '');
-      if (/^https?:\/\//i.test(p)) return p;
-      const base = (window.__API_BASE__ || '').replace(/\/$/, '');
-      const pp = String(p).startsWith('/') ? p : '/' + String(p);
-      return base + pp;
-    }
-
-    // ensure headers object
-    opts.headers = Object.assign({}, opts.headers || {});
-
-    // include Authorization if token is present (use unified helper)
-    try {
-      const token = (typeof window.getAuthToken === 'function') ? (window.getAuthToken() || '') : (window.__KGB_TOKEN || '');
-      if (token && !opts.headers['Authorization'] && !opts.headers['authorization']) {
-        opts.headers['Authorization'] = 'Bearer ' + String(token);
-      }
-    } catch (e) {}
-
-    // Add optional timeout via AbortController. Default timeout 15000ms unless options.timeoutMs provided.
-    const timeoutMs = (typeof options.timeoutMs === 'number') ? options.timeoutMs : 15000;
-    const ac = new AbortController();
-    const id = setTimeout(() => ac.abort(), timeoutMs);
-    let res;
-    try {
-      res = await fetch(buildUrl(path), Object.assign({}, opts, { signal: ac.signal }));
-    } catch (err) {
-      clearTimeout(id);
-      const e = new Error('apiFetch failed or timed out');
-      e.cause = err;
-      e.timedout = err && err.name === 'AbortError';
-      throw e;
-    }
-    clearTimeout(id);
-
-    // tenta ler json; se falhar, retorna texto
-    const ct = res.headers.get('content-type') || '';
-    const payload = ct.includes('application/json')
-      ? await res.json().catch(() => null)
-      : await res.text().catch(() => null);
-
-    if (!res.ok) {
-      const err = new Error('apiFetch failed');
-      err.status = res.status;
-      err.payload = payload;
-      throw err;
-    }
-
-    return payload;
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
-  window.apiFetch = window.apiFetch || apiFetch;
-})();
+  const res = await fetch(url, { ...options, headers });
+
+  const raw = await res.text();
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  const isJson = contentType.includes('application/json');
+
+  let data = null;
+  if (isJson && raw) {
+    try { data = JSON.parse(raw); } catch { data = null; }
+  }
+
+  if (!res.ok) {
+    const msg = (data && (data.error || data.message))
+      ? (data.error || data.message)
+      : (raw || `HTTP ${res.status}`);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.url = url;
+    err.body = raw;
+    throw err;
+  }
+
+  return isJson ? (data ?? { ok: true }) : (raw || { ok: true });
+};

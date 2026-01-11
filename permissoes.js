@@ -411,6 +411,7 @@ async function carregarPermissoes() {
   let json;
   try {
     json = await window.apiFetch('/permissoesUi');
+    console.log('[RBAC] /permissoesUi json =>', json, typeof json);
   } catch (e) {
     console.error('[RBAC] Falha ao carregar /permissoesUi', e);
     // NÃO limpa checkbox se falhou

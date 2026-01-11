@@ -490,7 +490,7 @@ export function fecharSessao(sessaoId){
 
 
   // Expor window.apiFetch que SEMPRE usa window.API_BASE
-  window.apiFetch = async function apiFetch(path, options = {}) {
+  window.apiFetch = window.apiFetch || async function apiFetch(path, options = {}) {
     const base = (window.API_BASE || kgbResolveApiBase() || '').replace(/\/+$/,'');
     const p = (path || '').startsWith('/') ? path : `/${path}`;
     const url = `${base}${p}`;

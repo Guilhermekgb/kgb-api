@@ -519,7 +519,7 @@ window.__API_BASE__ = base;
   // Uso: apiFetch('/audit/log')  ou  apiFetch('/fin/metrics')
   const DEFAULT_TIMEOUT_MS = 12000;
 
-  window.apiFetch = async function apiFetch(path, opts = {}) {
+  window.apiFetch = window.apiFetch || async function apiFetch(path, opts = {}) {
     const base = (__kgbGetAPIBase() || '').replace(/\/+$/, '');
     const p = String(path || '');
     const isAbsolute = /^https?:\/\//i.test(p);

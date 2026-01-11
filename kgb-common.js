@@ -489,101 +489,69 @@ export function fecharSessao(sessaoId){
   console.log('[KGB] kgb-common: resolved API_BASE =', window.API_BASE);
 
 
-  // Expor window.apiFetch que SEMPRE usa window.API_BASE
-  window.apiFetch = async function apiFetch(path, options = {}) {
-    const base = (window.API_BASE || kgbResolveApiBase() || '').replace(/\/+$/,'');
-    const p = (path || '').startsWith('/') ? path : `/${path}`;
-    const url = `${base}${p}`;
-    const opts = { ...options };
-    opts.headers = { ...(options.headers || {}) };
+  // Garantir compatibilidade entre `window.API_BASE` e `window.__API_BASE__` e evitar LiveServer :5500
+  try {
+    window.__API_BASE__ = window.__API_BASE__ || window.API_BASE || '';
+    const origin = (window.location && window.location.origin) ? window.location.origin : '';
+    if (!window.__API_BASE__ || window.__API_BASE__ === origin || /:5500\b/.test(window.__API_BASE__)) {
+      window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+    }
+  } catch {}
 
-    // helpers para leitura/limpeza centralizada do token (compatível com várias chaves)
-    window.kgbGetAuthToken = window.kgbGetAuthToken || function () {
-      try {
-        if (window.KGB_AUTH_TOKEN) return window.KGB_AUTH_TOKEN;
-        const fromHelper = (typeof window.getAuthToken === 'function') ? window.getAuthToken() : null;
-        const fromUiLogin = (window.__ui_login && typeof window.__ui_login.get === 'function') ? window.__ui_login.get('auth.token') : null;
-        const candidates = [fromHelper, fromUiLogin,
-          (localStorage && localStorage.getItem) ? localStorage.getItem('KGB_AUTH_TOKEN') : null,
-          (localStorage && localStorage.getItem) ? localStorage.getItem('KGB_TOKEN') : null,
-          (sessionStorage && sessionStorage.getItem) ? sessionStorage.getItem('KGB_AUTH_TOKEN') : null,
-          (sessionStorage && sessionStorage.getItem) ? sessionStorage.getItem('KGB_TOKEN') : null,
-          (localStorage && localStorage.getItem) ? localStorage.getItem('auth.token') : null,
-        ];
-        const t = candidates.find(x => x && String(x).trim().length) || null;
-        if (t) try { window.KGB_AUTH_TOKEN = String(t); } catch (e) {}
-        return t;
-      } catch (e) { return null; }
-    };
+  // limpar override salvo ruim em localStorage
+  try {
+    const saved = localStorage.getItem('API_BASE');
+    if (saved && /:5500\b/.test(saved)) localStorage.removeItem('API_BASE');
+  } catch {}
 
-    window.kgbClearAuthToken = window.kgbClearAuthToken || function () {
-      try { window.KGB_AUTH_TOKEN = null; } catch (e) {}
-      try { localStorage.removeItem('KGB_AUTH_TOKEN'); localStorage.removeItem('KGB_TOKEN'); } catch (e) {}
-      try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch (e) {}
-      try { if (typeof window.clearAuthToken === 'function') window.clearAuthToken(); } catch (e) {}
-    };
+  // Definir `window.apiFetch` apenas se ainda não existir, usando o snippet robusto padrão.
+  window.apiFetch = window.apiFetch || (async function apiFetch(path, options = {}) {
+    const base = (window.__API_BASE__ || '').replace(/\/+$/, '');
+    const url = path.startsWith('http')
+      ? path
+      : base + (path.startsWith('/') ? path : `/${path}`);
 
-    // Injetar header Authorization quando disponível e NÃO enviar cookies
-    try {
-      if (!opts.credentials) opts.credentials = 'omit';
-      const token = (typeof window.kgbGetAuthToken === 'function') ? window.kgbGetAuthToken() : null;
-      if (token && !opts.headers.Authorization) {
-        opts.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (e) {}
+    const headers = new Headers(options.headers || {});
+    headers.set('Accept', 'application/json');
 
-    // Auto-stringify plain-object bodies to JSON and set Content-Type when missing
-    try {
-      const b = opts.body;
-      const isForm = (typeof FormData !== 'undefined' && b instanceof FormData);
-      const isBlob = (typeof Blob !== 'undefined' && b instanceof Blob);
-      const isStr = typeof b === 'string' || b instanceof String;
-      const isArrayBuffer = b instanceof ArrayBuffer || (ArrayBuffer.isView && ArrayBuffer.isView(b));
-      if (b != null && typeof b === 'object' && !isForm && !isBlob && !isArrayBuffer && !isStr) {
-        // Only set header if not already present (case-insensitive)
-        const hasCT = Object.keys(opts.headers || {}).some(h => String(h).toLowerCase() === 'content-type');
-        if (!hasCT) opts.headers['Content-Type'] = 'application/json';
-        try { opts.body = JSON.stringify(b); } catch (e) { /* keep body as-is on failure */ }
-      }
-    } catch (e) {}
+    const token =
+      localStorage.getItem('token') ||
+      localStorage.getItem('authToken') ||
+      localStorage.getItem('KGB_AUTH_TOKEN') ||
+      localStorage.getItem('kgb_token') ||
+      sessionStorage.getItem('token') ||
+      sessionStorage.getItem('authToken') ||
+      sessionStorage.getItem('KGB_AUTH_TOKEN') ||
+      sessionStorage.getItem('kgb_token');
 
-      try {
-      // DEBUG: show method/url/content-type/body type during stabilization
-      try {
-        const method = String(opts.method || 'GET').toUpperCase();
-        const hdrs = opts.headers || {};
-        const ct = (typeof hdrs.get === 'function') ? (hdrs.get('Content-Type') || hdrs.get('content-type')) : (hdrs['Content-Type'] || hdrs['content-type']);
-        console.debug('[KGB apiFetch]', method, url, 'CT=', ct, 'bodyType=', typeof opts.body);
-      } catch(e){}
-      const res = await fetch(url, opts);
-      // Se o backend respondeu 401, limpar token local e redirecionar para login
-      if (res && res.status === 401) {
-        const isDebug =
-          (typeof window !== 'undefined' && window.location && /[?&]debug=1\b/.test(window.location.search)) ||
-          (typeof window !== 'undefined' && window.AUTH_DEBUG == 1) ||
-          (typeof window !== 'undefined' && window.__AUTH_DEBUG__ == 1);
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
 
-        // Em DEBUG: não redirecionar (permite inspecionar a resposta)
-        if (isDebug) {
-          console.warn('[KGB] 401 recebido em DEBUG — não redirecionando automaticamente.');
-          return res;
-        }
+    const res = await fetch(url, { ...options, headers });
 
-        try { window.kgbClearAuthToken && window.kgbClearAuthToken(); } catch (e) {}
-        try {
-          const ret = encodeURIComponent(window.location.pathname.replace(/^\//,''));
-          window.location.replace('login.html?returnUrl=' + ret);
-        } catch (e) {
-          window.location.replace('login.html');
-        }
-        return res;
-      }
-      return res;
-    } catch (err) {
-      console.error('[KGB] apiFetch failed:', { url, err });
+    const raw = await res.text();
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const isJson = contentType.includes('application/json');
+
+    let data = null;
+    if (isJson && raw) {
+      try { data = JSON.parse(raw); } catch { data = null; }
+    }
+
+    if (!res.ok) {
+      const msg = (data && (data.error || data.message))
+        ? (data.error || data.message)
+        : (raw || `HTTP ${res.status}`);
+      const err = new Error(msg);
+      err.status = res.status;
+      err.url = url;
+      err.body = raw;
       throw err;
     }
-  };
+
+    return isJson ? (data ?? { ok: true }) : (raw || { ok: true });
+  });
 
   // pequeno helper para uso interno: chama window.apiFetch e propaga erro api_unavailable
   async function __call_apiFetch(path, opts = {}) {
