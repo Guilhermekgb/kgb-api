@@ -338,7 +338,7 @@ async function renderizarTabela() {
     const tbody = document.createElement("tbody");
     gruposEPaginas[modulo].forEach(p => {
       const tr = document.createElement("tr");
-      tr.setAttribute('data-page', p.id);
+      tr.setAttribute('data-page', String(p.id || '').replace(/^page:/, ''));
       let linha = `<td>${p.nome}</td>`;
       perfis.forEach(perfil => {
         const checked =
@@ -346,7 +346,7 @@ async function renderizarTabela() {
           permissoesSalvas[p.id].includes(perfil)
             ? "checked"
             : "";
-        linha += `<td><input type="checkbox" data-permissao="${p.id}" data-perfil="${perfil}" data-page="${p.id}" ${checked}></td>`;
+        linha += `<td><input type="checkbox" data-permissao="${p.id}" data-perfil="${perfil}" data-page="${String(p.id||'').replace(/^page:/,'')}" ${checked}></td>`;
       });
       tr.innerHTML = linha;
       tbody.appendChild(tr);
