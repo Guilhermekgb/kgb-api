@@ -302,10 +302,21 @@ const permissoesPorModulo = gruposEPaginas;
 /* ===== Renderização ===== */
 async function carregarPermissoesUi() {
   try {
-    const resp = await api("/permissoesUi", { method: "GET" });
-    if (resp && resp.status === 200 && resp.data && typeof resp.data === "object") {
-      return resp.data;
-    }
+    const resp = await window.apiFetch('/permissoesUi');
+    const json = await resp.json();
+    if (!json || !json.ok) return {};
+
+    // transforma array { perfil, permissoes: [...] } → mapa permissao -> [perfis]
+    const map = {};
+    (json.items || []).forEach(item => {
+      const perfil = String(item.perfil || '');
+      const permis = Array.isArray(item.permissoes) ? item.permissoes : [];
+      permis.forEach(p => {
+        map[p] = map[p] || [];
+        if (!map[p].includes(perfil)) map[p].push(perfil);
+      });
+    });
+    return map;
   } catch (e) {
     console.warn("Não foi possível carregar permissões da API.");
   }
