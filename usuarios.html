@@ -368,7 +368,7 @@
         renderUsuarios(usuarios);
       } catch (e) {
         console.error('Erro ao carregar usuários', e);
-        alert('Erro ao carregar usuários');
+        alert('Erro ao carregar usuários: ' + (e?.message || e));
       }
     }
 
@@ -453,9 +453,24 @@
   <!-- proteger-pagina deve ser carregado antes do listener de load (módulo) -->
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
-    try { window.guard && window.guard(); } catch(e){}
-    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
-    try { if (typeof window.carregarUsuarios === 'function') window.carregarUsuarios(); } catch(e){}
+    (async () => {
+      try {
+        if (typeof window.guard === 'function') await window.guard();
+      } catch (e) {
+        console.error('[USUARIOS] guard falhou:', e);
+        // redirecionamento possivelmente já ocorreu dentro do guard
+        return;
+      }
+
+      try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+
+      try {
+        if (typeof window.carregarUsuarios === 'function') await window.carregarUsuarios();
+      } catch (e) {
+        console.error('[USUARIOS] erro init carregarUsuarios:', e);
+        alert('Erro ao carregar usuários: ' + (e?.message || e));
+      }
+    })();
   </script>
 
 

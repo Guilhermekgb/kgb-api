@@ -235,11 +235,19 @@
   <script type="module" src="./api/auth-client.js"></script>
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
-    const meta = document.querySelector('meta[name="page-permission"]');
-    const permissao = meta?.content?.trim();
-    try { if (permissao) window.guard({ permissao }); } catch(e){}
-    try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
-    try { if (typeof initPage === 'function') initPage(); } catch(e){}
+    (async () => {
+      const meta = document.querySelector('meta[name="page-permission"]');
+      const permissao = meta?.content?.trim();
+      try {
+        if (permissao && typeof window.guard === 'function') await window.guard({ permissao });
+      } catch (e) {
+        console.error('[CAD-USUARIO] guard falhou:', e);
+        return;
+      }
+
+      try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
+      try { if (typeof initPage === 'function') await initPage(); } catch(e) { console.error('[CAD-USUARIO] initPage falhou:', e); }
+    })();
   </script>
 
   <!-- Lógica da página -->
