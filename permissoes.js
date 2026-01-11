@@ -293,25 +293,32 @@ const permissoesPorModulo = gruposEPaginas;
 /* ===== Renderização ===== */
 async function carregarPermissoesUi() {
   try {
-    const resp = await window.apiFetch('/permissoesUi');
-    const json = await resp.json();
-    if (!json || !json.ok) return {};
+    let json;
+    try {
+      json = await window.apiFetch('/permissoesUi');
+    } catch (e) {
+      console.warn('[RBAC] falha ao carregar /permissoesUi (ui loader):', e);
+      return {};
+    }
+    if (!json || json.ok !== true || !Array.isArray(json.items)) return {};
 
     // transforma array { perfil, permissoes: [...] } → mapa permissao -> [perfis]
     const map = {};
     (json.items || []).forEach(item => {
-      const perfil = String(item.perfil || '');
+      const perfil = String(item.perfil || '').trim();
       const permis = Array.isArray(item.permissoes) ? item.permissoes : [];
-      permis.forEach(p => {
+      permis.forEach(pRaw => {
+        const p = withPagePrefix(pRaw);
+        if (!p) return;
         map[p] = map[p] || [];
         if (!map[p].includes(perfil)) map[p].push(perfil);
       });
     });
     return map;
   } catch (e) {
-    console.warn("Não foi possível carregar permissões da API.");
+    console.warn("Não foi possível carregar permissões da API.", e);
+    return {};
   }
-  return {};
 }
 
 async function renderizarTabela() {
