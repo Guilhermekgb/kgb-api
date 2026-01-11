@@ -402,9 +402,14 @@ async function salvarPermissoes() {
       perfis.Administrador = ["*"];
     }
 
+    const payload = Object.entries(perfis).map(([perfil, permissoes]) => ({
+      perfil,
+      permissoes
+    }));
+
     const resp = await window.apiFetch('/permissoesUi', {
       method: 'PUT',
-      body: JSON.stringify(perfis)
+      body: JSON.stringify(payload)
     });
 
     if (!resp.ok) {
