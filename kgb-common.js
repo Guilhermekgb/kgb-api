@@ -462,6 +462,7 @@ export function fecharSessao(sessaoId){
   // KGB: API BASE (single source of truth)
   // =========================
   const KGB_RENDER_API = "https://kgb-api-v2.onrender.com";
+  const KGB_LOCAL_API = "http://127.0.0.1:3333";
 
   function kgbResolveApiBase() {
     const host = (location.hostname || "").toLowerCase();
@@ -476,9 +477,9 @@ export function fecharSessao(sessaoId){
     // 2) Se cair aqui, ainda assim: Netlify => Render
     if (isNetlify) return KGB_RENDER_API;
 
-    // 3) Em local, manter Render como padrão (se vocês usam assim)
+    // 3) Em local, preferir a API local (3333)
     const isLocal = host === 'localhost' || host === '127.0.0.1';
-    if (isLocal) return KGB_RENDER_API;
+    if (isLocal) return KGB_LOCAL_API;
 
     // 4) fallback final
     return KGB_RENDER_API;
@@ -494,7 +495,9 @@ export function fecharSessao(sessaoId){
     window.__API_BASE__ = window.__API_BASE__ || window.API_BASE || '';
     const origin = (window.location && window.location.origin) ? window.location.origin : '';
     if (!window.__API_BASE__ || window.__API_BASE__ === origin || /:5500\b/.test(window.__API_BASE__)) {
-      window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+      // usar a resolução calculada por kgbResolveApiBase (window.API_BASE),
+      // que já prefere local quando apropriado.
+      window.__API_BASE__ = window.API_BASE || 'https://kgb-api-v2.onrender.com';
     }
   } catch {}
 

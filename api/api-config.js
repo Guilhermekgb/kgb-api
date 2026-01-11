@@ -1,6 +1,7 @@
 // api/api-config.js
 (() => {
   const RENDER_API = "https://kgb-api-v2.onrender.com";
+  const LOCAL_API = "http://127.0.0.1:3333";
 
   // Detecta Netlify (domínio padrão) e também seu domínio custom
   const host = (location.hostname || "").toLowerCase();
@@ -21,9 +22,9 @@
       sessionStorage.getItem("KGB_API_BASE_OVERRIDE");
   } catch (_) {}
 
-  // Regra final: Forçar uso do Render API para testes locais e produção.
-  // Ignora qualquer override local para garantir testes contra https://kgb-api-v2.onrender.com
-  const resolved = RENDER_API;
+  // Regra final: se estivermos em localhost, apontar para a API local (3333).
+  // Permite override via localStorage/sessionStorage apenas em ambiente local.
+  const resolved = isLocal ? (localOverride || LOCAL_API) : RENDER_API;
 
   // Fonte única (nossa) — sempre editável
   window.__KGB_API_BASE__ = resolved;
