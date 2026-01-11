@@ -477,104 +477,7 @@
 
     const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || '').trim());
 
-    // Submit handler exposto globalmente
-    window.salvarUsuario = async function salvarUsuario(e) {
-      try {
-        if (e && typeof e.preventDefault === 'function') e.preventDefault();
-
-        const nome     = (nomeI.value   || '').trim();
-        const emailRaw = (emailI.value  || '').trim().toLowerCase();
-        const email    = emailRaw;
-        const whatsapp = (whatsI?.value || '').replace(/\D/g, '');
-        const senha    = (senhaI.value  || '').trim();
-        const conf     = (confirmaI.value || '').trim();
-
-        // Coleta múltiplos perfis
-        function getPerfisSelecionados() {
-          return Array.from(document.querySelectorAll('input[name="perfis"]:checked'))
-            .map(el => el.value)
-            .filter(Boolean);
-        }
-        const selecionados = getPerfisSelecionados();
-
-        if (!nome)                return alert('Informe o nome.');
-        if (!isValidEmail(email)) return alert('E-mail inválido.');
-        if (!selecionados.length) return alert('Selecione ao menos um perfil.');
-
-        // Regras: criação exige senha; edição permite senha opcional
-        if (!userId) {
-          if (!senha) return alert('Senha obrigatória para novo usuário.');
-          if (senha.length < 4)   return alert('Senha muito curta.');
-          if (senha !== conf)     return alert('As senhas não coincidem.');
-        } else if (senha || conf) {
-          if (senha.length < 4)   return alert('Senha muito curta.');
-          if (senha !== conf)     return alert('As senhas não coincidem.');
-        }
-
-        let fotoParaSalvar = '';
-        if (fotoBase64) fotoParaSalvar = fotoBase64;
-        else if (usuarioAtualEdicao?.foto) fotoParaSalvar = usuarioAtualEdicao.foto;
-
-        const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
-        const method = userId ? 'PUT' : 'POST';
-
-        const perfisSelecionados = getPerfisSelecionados();
-
-        const payload = {
-          nome,
-          email,
-          whatsapp,
-          perfis: perfisSelecionados,
-        };
-
-        if (!userId) {
-          payload.password = senha;
-          payload.senha = senha;
-        } else if (senha) {
-          payload.password = senha;
-          payload.senha = senha;
-        }
-
-        if (!payload.perfil && Array.isArray(payload.perfis) && payload.perfis.length) {
-          payload.perfil = payload.perfis[0];
-        }
-
-        console.log('[KGB][cadastro-usuario] payload ->', payload);
-
-        let resp;
-        try {
-          resp = await api(endpoint, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } catch (err) {
-          console.error('[KGB][cadastro-usuario] erro chamando ' + method + ' ' + endpoint + ':', err);
-          alert('Falha ao salvar usuário (erro de rede). Veja o console.');
-          return;
-        }
-
-        const status = resp?.status ?? resp?.statusCode ?? null;
-        const data = resp?.data ?? resp ?? null;
-        console.log('[KGB][cadastro-usuario] POST /usuarios status=', status, 'data=', data);
-
-        const httpOk = (status === 200 || status === 201 || resp?.ok === true);
-        const appOk = (data && data.ok !== false);
-
-        if (!httpOk || !appOk) {
-          const msg = data?.message || data?.error || data?.mensagem || (typeof data === 'string' ? data : null) || 'A API não confirmou o salvamento. Veja o console.';
-          alert('Não foi possível salvar o usuário: ' + msg);
-          return;
-        }
-
-        alert('✅ Usuário salvo com sucesso!');
-        // redirect with cache-buster
-        window.location.href = 'usuarios.html?ts=' + Date.now();
-      } catch (e) {
-        console.error('[KGB][cadastro-usuario] salvarUsuario erro:', e);
-        alert('Erro ao salvar usuário. Veja o console.');
-      }
-    };
+    
 
     // Olhinhos
     document.querySelectorAll('.olho').forEach(btn => {
@@ -681,40 +584,119 @@
     };
   </script>
   <script>
-    (function () {
-      function safeOnReady(fn) {
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
-        else fn();
-      }
+    <script>
+      (function () {
+        // garante log único
+        console.log("[KGB][cadastro-usuario] bootstrap script carregado");
 
-      safeOnReady(() => {
-        const btn = document.getElementById('btnSalvarUsuario');
-        const formEl = document.getElementById('formCadastroUsuario');
+        // expõe função no window SEM depender de escopo de module
+        window.salvarUsuario = async function (ev) {
+          try {
+            if (ev && ev.preventDefault) ev.preventDefault();
 
-        if (!btn) console.warn('[KGB][cadastro-usuario] btnSalvarUsuario não encontrado');
-        if (btn) {
-          btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('[KGB][cadastro-usuario] CLICK salvar');
-            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario(e);
-            console.error('[KGB][cadastro-usuario] window.salvarUsuario não definida');
-          });
+            console.log("[KGB][cadastro-usuario] salvarUsuario() chamado");
+
+            const nome = (document.querySelector("#nome")?.value || "").trim();
+            const email = (document.querySelector("#email")?.value || "").trim();
+            const whatsapp = (document.querySelector("#telefone")?.value || "").trim();
+
+            const senha = document.querySelector("#senha")?.value || "";
+            const confirmar = document.querySelector("#confirmarSenha")?.value || "";
+
+            const perfisSelecionados = Array.from(
+              document.querySelectorAll('input[name="perfis"]:checked')
+            ).map(el => el.value);
+
+            if (!nome || !email) {
+              alert("Preencha nome e e-mail.");
+              return;
+            }
+            if (senha || confirmar) {
+              if (senha !== confirmar) {
+                alert("Senha e Confirmar Senha não conferem.");
+                return;
+              }
+            }
+            if (!perfisSelecionados.length) {
+              alert("Selecione pelo menos 1 perfil.");
+              return;
+            }
+
+            const payload = {
+              nome,
+              name: nome,
+              email,
+              whatsapp,
+              telefone: whatsapp,
+
+              perfis: perfisSelecionados,
+              perfil: perfisSelecionados[0],
+
+              senha: senha || undefined,
+              password: senha || undefined,
+            };
+
+            console.log("[KGB][cadastro-usuario] payload ->", payload);
+
+            if (!window.kgbAuth || !window.kgbAuth.api) {
+              console.error("[KGB][cadastro-usuario] window.kgbAuth.api não disponível");
+              alert("Erro interno: API client não carregou.");
+              return;
+            }
+
+            const resp = await window.kgbAuth.api("/usuarios", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            console.log("[KGB][cadastro-usuario] POST /usuarios resp =", resp);
+
+            const ok =
+              resp?.ok === true ||
+              resp?.status === 200 ||
+              resp?.status === 201 ||
+              resp?.data?.ok === true ||
+              resp?.data?.success === true;
+
+            if (!ok) {
+              const msg = resp?.data?.message || resp?.data?.error || resp?.message || "Falha ao salvar usuário.";
+              alert(msg);
+              return;
+            }
+
+            alert("Usuário salvo com sucesso!");
+            window.location.href = "usuarios.html?ts=" + Date.now();
+          } catch (err) {
+            console.error("[KGB][cadastro-usuario] erro ao salvar:", err);
+            alert("Erro ao salvar usuário. Veja o console.");
+          }
+        };
+
+        // bind seguro (não depende de inline onclick)
+        function bind() {
+          const btn = document.getElementById("btnSalvarUsuario");
+          const form = document.getElementById("formCadastroUsuario");
+
+          console.log("[KGB][cadastro-usuario] bind()", { btn: !!btn, form: !!form });
+
+          if (btn) {
+            btn.addEventListener("click", (ev) => window.salvarUsuario(ev));
+          }
+
+          if (form) {
+            form.addEventListener("submit", (ev) => window.salvarUsuario(ev));
+          }
         }
 
-        if (formEl) {
-          formEl.addEventListener('submit', (e) => {
-            e.preventDefault();
-            console.log('[KGB][cadastro-usuario] SUBMIT form (bloqueado) -> chamando salvar');
-            if (typeof window.salvarUsuario === 'function') return window.salvarUsuario(e);
-            console.error('[KGB][cadastro-usuario] window.salvarUsuario não definida');
-          });
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", bind);
+        } else {
+          bind();
         }
-      });
-    })();
+      })();
+    </script>
 
-    document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
-  </script>
-
-  <!-- legacy auth/api-fetch removed: now use api/auth-client.js -->
+    <!-- legacy auth/api-fetch removed: now use api/auth-client.js -->
 </body>
 </html>
