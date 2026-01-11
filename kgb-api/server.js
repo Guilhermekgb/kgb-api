@@ -7325,25 +7325,34 @@ app.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
           email,
           senha_hash,
           perfil,
-          perfis
+          perfis,
+          created_at
         ) VALUES (
           @id,
           @nome,
           @email,
           @senha_hash,
           @perfil,
-          @perfis
+          @perfis,
+          @created_at
         )
       `);
 
-      stmt.run({
-        id,
-        nome: String(nome || '').trim(),
-        email: emailNorm,
-        senha_hash: senhaHash,
-        perfil: perfilSalvar,
-        perfis: JSON.stringify(perfis)
-      });
+      try {
+        const info = stmt.run({
+          id,
+          nome: String(nome || '').trim(),
+          email: emailNorm,
+          senha_hash: senhaHash,
+          perfil: perfilSalvar,
+          perfis: JSON.stringify(perfis),
+          created_at: nowIso
+        });
+        console.log('[usuarios] INSERT OK', { id, changes: info.changes, lastInsertRowid: info.lastInsertRowid });
+      } catch (runErr) {
+        console.error('[usuarios] INSERT ERROR', runErr && (runErr.stack || runErr));
+        throw runErr;
+      }
 
       const user = { id, nome: String(nome || '').trim(), email: emailNorm, perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
       return res.status(201).json({ ok: true, user });
@@ -7987,15 +7996,15 @@ setInterval(() => { try{ cleanupOldBackups(); } catch(e){} }, 24 * 60 * 60 * 100
 
 // ========================= Inicialização =========================
 // Ensure we only log when listen succeeds and capture listen errors
-const PORT = Number(process.env.PORT || 3333);
+const LISTEN_PORT = Number(process.env.PORT || PORT);
 
 // In production (Render) bind to 0.0.0.0, in local dev prefer 127.0.0.1
 const HOST =
   process.env.RENDER ? '0.0.0.0' :
   (process.env.HOST || '127.0.0.1');
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`[KGB] LISTEN OK http://${HOST}:${PORT}`);
+const server = app.listen(LISTEN_PORT, HOST, () => {
+  console.log(`[KGB] LISTEN OK http://${HOST}:${LISTEN_PORT}`);
   console.log(`DB em: ${DB_PATH}`);
   if (ALLOWLIST.length) {
     console.log('CORS allowlist:', ALLOWLIST.join(', '));
