@@ -477,8 +477,9 @@
 
     const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || '').trim());
 
-    // Submit
-    form?.addEventListener('submit', async (e) => {
+   // Submit
+formUsuario?.addEventListener('submit', async (
+e) => {
       e.preventDefault();
 
       const nome     = (nomeI.value   || '').trim();
@@ -517,11 +518,18 @@
       // Envia apenas os campos exigidos: nome, email, whatsapp (opcional), perfis (array) e password
       const body = { nome, email, whatsapp, perfis: selecionados };
 
-      // password payload rules: include only when creating or when provided on edit
+      // compat: alguns backends esperam "senha" e outros "password"
       if (!userId) {
         body.password = senha;
+        body.senha = senha;
       } else if (senha) {
         body.password = senha;
+        body.senha = senha;
+      }
+
+      // compat: alguns backends usam "perfil" (string) além de "perfis" (array)
+      if (!body.perfil && Array.isArray(body.perfis) && body.perfis.length) {
+        body.perfil = body.perfis[0];
       }
 
       const endpoint = userId ? `/usuarios/${encodeURIComponent(userId)}` : '/usuarios';
@@ -540,9 +548,16 @@
       };
 
       if (!userId) {
+        payload.password = senha;
         payload.senha = senha;
       } else if (senha) {
+        payload.password = senha;
         payload.senha = senha;
+      }
+
+      // compat: alguns backends usam "perfil" (string) além de "perfis" (array)
+      if (!payload.perfil && Array.isArray(payload.perfis) && payload.perfis.length) {
+        payload.perfil = payload.perfis[0];
       }
 
       console.log('[KGB][cadastro-usuario] payload ->', payload);
