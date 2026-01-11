@@ -4,6 +4,10 @@ const crypto = require('crypto');
 const UI_BASE = process.env.UI_BASE || 'http://127.0.0.1:5500';
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:3333';
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function randEmail(prefix = 'vend'){
   return `${prefix}_${crypto.randomBytes(4).toString('hex')}@kgb.com`;
 }
@@ -81,10 +85,8 @@ function randEmail(prefix = 'vend'){
     // Click Save
     const saveSel = '#btnSalvarPermissoes';
     await page.waitForSelector(saveSel, { timeout: 5000 });
-    await Promise.all([
-      page.click(saveSel),
-      page.waitForTimeout(1500)
-    ]);
+    await page.click(saveSel);
+    await sleep(1500);
 
     // GET /permissoesUi after save (log)
     const after = await page.evaluate(async () => {

@@ -24,6 +24,30 @@
   }
   function getApiBaseNow(){ try{ return (window.__API_BASE__ || window.API_BASE || '').toString().trim(); }catch(e){ return ''; } }
 
+  // Normaliza permissões em formato diverso para um Array seguro.
+  function normalizePerms(perms) {
+    if (Array.isArray(perms)) return perms;
+    if (perms === '*' || perms === '"*"' || perms === '["*"]') return ['*'];
+    if (typeof perms === 'string') {
+      const s = perms.trim();
+      if (s === '*') return ['*'];
+      // tenta detectar JSON apenas se aparenta ser JSON
+      const looksJson = (s.startsWith('[') && s.endsWith(']')) || (s.startsWith('{') && s.endsWith('}'));
+      if (looksJson) {
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && Array.isArray(parsed.permissoes)) return parsed.permissoes;
+        } catch (e) {
+          // ignore parse error
+        }
+      }
+      // fallback: string não-JSON
+      return [];
+    }
+    return [];
+  }
+
   // Synchronous guard (blocks page flow). opts.permissao optional.
   window.guard = function guard(opts){
     try{
@@ -74,13 +98,9 @@
 
       // If user has global '*' permission, allow immediately without checking meta
       try{
-        let perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
-        // If permissoes is a string, treat '*' specially and avoid JSON.parse('*')
-        if (typeof perms === 'string') {
-          if (perms === '*') return true;
-          try { perms = JSON.parse(perms); } catch(e) { perms = [perms]; }
-        }
-        if (Array.isArray(perms) && perms.includes('*')) return true;
+        const permsRaw = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
+        const perms = normalizePerms(permsRaw);
+        if (perms.includes('*')) return true;
       }catch(e){}
 
       // Admin profile shortcut
@@ -91,8 +111,8 @@
 
       // Enforce required permission if present
       if(required){
-        const perms = (window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : [];
-        if(!Array.isArray(perms) || !perms.includes(required)){
+        const permsForCheck = normalizePerms((window.__KGB_USER__ && window.__KGB_USER__.permissoes) ? window.__KGB_USER__.permissoes : []);
+        if(!permsForCheck.includes(required)){
           location.href = './acesso-negado.html';
           return;
         }
