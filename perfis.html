@@ -391,16 +391,16 @@ window.addEventListener('resize', () => {
 }
 
 
-  // === Helper para chamar a API com token ===
-  const authHeader = () => {
-    const t = (portalRead('token') || portalReadSession('token'));
-    return t ? { Authorization: 'Bearer ' + t } : {};
-  };
-
-  // API helper: sempre usa `apiRequest` (que prefere `window.apiFetch` e fallback para fetch nativo)
-  const api = (endpoint, req = {}) => {
-    const headers = { ...authHeader(), ...(req.headers || {}) };
-    return apiRequest(endpoint, { ...req, headers });
+  // === Helper API (cloud-first) usando o cliente central window.kgbAuth ===
+  const api = async (endpoint, req = {}) => {
+    if (window && window.kgbAuth && typeof window.kgbAuth.api === 'function') {
+      try {
+        return await window.kgbAuth.api(endpoint, req);
+      } catch (err) {
+        return { status: err?.status || 500, error: err?.message || String(err) };
+      }
+    }
+    throw new Error('api_unavailable');
   };
 
   // === Perfis: fixos + personalizados da API ===
@@ -417,8 +417,19 @@ window.addEventListener('resize', () => {
     let extras = [];
     try {
       const resp = await api('/perfis', { method: 'GET' });
-      if (resp && resp.status === 200 && Array.isArray(resp.data)) {
-        extras = resp.data;
+
+      // unwrap para suportar {ok:true, items:[...]} etc
+      const unwrapList = (r) => {
+        if (Array.isArray(r)) return r;
+        const d = (r && typeof r === 'object' && 'data' in r) ? r.data : r;
+        if (Array.isArray(d)) return d;
+        if (Array.isArray(d?.items)) return d.items;
+        if (Array.isArray(r?.items)) return r.items;
+        return [];
+      };
+
+      if (resp && resp.status === 200) {
+        extras = unwrapList(resp);
       }
     } catch (e) {
       console.warn('Não foi possível carregar perfis da API, usando apenas perfis fixos.', e);
@@ -630,7 +641,6 @@ window.addEventListener('resize', () => {
 
 
 
-  <script type="module" src="./js/auth-helper.js">
-  <script type="module" src="./api/api-fetch.js">
+  <!-- legacy includes removed -->
 </body>
 </html>
