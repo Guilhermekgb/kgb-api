@@ -289,24 +289,6 @@ function ensureColunas(){
     cols.unshift({ nome: "Novo Lead", icone: "user-plus" });
     try { writeLS('colunasLead', cols); } catch(e){ console.warn('[FUNIL] Não foi possível salvar colunas na memória:', e); }
   }
-    try {
-      const usuarioAtual = (typeof getUsuarioAtual === "function" ? getUsuarioAtual() : {}) || {};
-      const responsavelNome = usuarioAtual.nome || usuarioAtual.email || null;
-      const agoraISO = new Date().toISOString();
-      apiRequest('POST', '/leads/historico', {
-        leadId: String(lead.id),
-        item: {
-          dataISO: agoraISO,
-          tipo: "Movimentação",
-          observacao: `Movido de "${de}" para "${para}" no funil.`,
-          responsavel: responsavelNome,
-          de: de,
-          para: para
-        }
-      }).catch(function(e){ console.warn('[HIST] Falha ao enviar movimentação para API:', e); });
-    } catch (e) {
-      console.warn('[HIST] Erro ao preparar envio de movimentação para API:', e);
-    }
   return cols;
 }
 function isArquivado(ld){
