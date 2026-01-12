@@ -634,85 +634,123 @@ const ESTOQUE_MOVIMENTOS_FILE  = 'estoque-movimentos.json';
 const CHECKLIST_LINKS_FILE = 'checklist-links.json';
 
 
-// === GET /leads/:id — retorna um lead específico (por ID) ===
-app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+// =========================================================
+// LEADS (persistência: SQLite com JSON completo)
+// =========================================================
+
+// garanta tabela (se já existir algo parecido, mantenha 1 só)
+function ensureLeadsTable(db) {
   try {
-    const tenantId = String(req.user?.tenantId || 'default');
-    const leadId   = String(req.params.id || '').trim();
-
-    if (!leadId) {
-      return res.status(400).json({ error: 'id obrigatório' });
-    }
-
-    // 1) try sqlite first
-    try {
-      const row = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
-      if (row) {
-        let data = {};
-        try { data = JSON.parse(row.data || '{}'); } catch (e) { data = {}; }
-        const full = Object.assign({}, data, { id: row.id, tenantId: row.tenantId, token: row.token, createdAt: row.createdAt, updatedAt: row.updatedAt });
-        console.log('[API] GET /leads/:id returning keys (sqlite):', Object.keys(full || {}));
-        return res.json({ ok: true, data: full });
-      }
-    } catch (e) {
-      console.warn('[API] GET /leads/:id sqlite read failed:', e && e.message);
-    }
-
-    // 2) fallback to in-memory store
-    const storeLead = leadsStore.get(leadId);
-    if (storeLead && String(storeLead.tenantId || 'default') === tenantId) {
-      console.log('[API] GET /leads/:id returning keys (store):', Object.keys(storeLead || {}));
-      return res.json({ ok: true, data: storeLead });
-    }
-
-    // 3) fallback to persisted file
-    const allLeads = loadJSON(LEADS_FILE, []);
-    const leads    = Array.isArray(allLeads) ? allLeads : [];
-
-    const lead = leads.find((l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId);
-    if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
-    console.log('[API] GET /leads/:id returning keys (file):', Object.keys(lead || {}));
-    return res.json({ ok: true, data: lead });
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id TEXT PRIMARY KEY,
+        tenantId TEXT,
+        data TEXT NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_leads_tenant_updatedAt ON leads(tenantId, updatedAt);
+    `);
   } catch (e) {
-    console.error('[GET /leads/:id] erro:', e);
-    return res.status(500).json({ error: 'Erro ao buscar lead' });
+    console.warn('[DB] ensureLeadsTable failed:', e && e.message);
   }
-});
-// === POST /leads — cria ou atualiza um lead (Módulo 7) ===
+}
+
+// helper: gera id/token se não vierem
+function ensureLeadIds(raw, tenantId = 'default') {
+  const now = Date.now();
+  const id =
+    raw?.id || raw?._id || raw?.leadId || raw?.lead_id ||
+    (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${now}-${Math.random().toString(16).slice(2)}`);
+
+  const token =
+    raw?.token || raw?.leadToken || raw?.lead_token ||
+    (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `t-${now}-${Math.random().toString(16).slice(2)}`);
+
+  return { id, token, tenantId, now };
+}
+
+// POST /leads -> salva JSON COMPLETO e retorna JSON COMPLETO
 app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
-    const tenantId = String(req.user?.tenantId || 'default');
-    const incoming = req.body || {};
-    console.log('[API] POST /leads incoming keys:', Object.keys(incoming || {}));
+    const tenantId = (req.user && req.user.tenantId) ? req.user.tenantId : 'default';
+    const raw = req.body || {};
 
-    // id / token generation
-    const id = incoming.id || incoming._id || incoming.leadId || crypto.randomUUID();
-    const token = incoming.token || incoming.leadToken || crypto.randomUUID();
+    const { id, token, now } = ensureLeadIds(raw, tenantId);
 
-    // normalize payload and keep complete object
-    const lead = pickLeadPayload(Object.assign({}, incoming, { id, token }));
+    // IMPORTANTE: salva tudo que veio do front + ids
+    const lead = {
+      ...raw,
+      id,
+      tenantId,
+      token,
+      updatedAt: now,
+      createdAt: raw.createdAt || now,
+    };
 
-    // save in-memory
-    leadsStore.set(String(lead.id), lead);
+    ensureLeadsTable(db);
 
-    // also persist to file for compatibility
-    const allLeads = loadJSON(LEADS_FILE, []);
-    const leadsArr = Array.isArray(allLeads) ? allLeads : [];
-    const idx = leadsArr.findIndex(l => String(l.id) === String(lead.id) && String(l.tenantId || 'default') === String(lead.tenantId || 'default'));
-    if (idx >= 0) {
-      leadsArr[idx] = Object.assign({}, leadsArr[idx], lead);
-    } else {
-      leadsArr.push(lead);
+    // upsert using better-sqlite3 (sync)
+    try {
+      db.prepare(`INSERT INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET tenantId = excluded.tenantId, data = excluded.data, updatedAt = excluded.updatedAt`).run(
+        id, tenantId, JSON.stringify(lead), now
+      );
+    } catch (e) {
+      // better-sqlite3 doesn't support excluded on older SQLite versions; fallback to replace
+      try {
+        db.prepare(`REPLACE INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)`).run(id, tenantId, JSON.stringify(lead), now);
+      } catch (err) {
+        console.error('[LEADS] upsert/replace failed:', err && err.message);
+        throw err;
+      }
     }
-    saveJSON(LEADS_FILE, leadsArr);
 
-    try { console.log('[API] POST /leads saved keys:', Object.keys(lead || {})); } catch(e){}
-    return res.status(201).json({ ok: true, data: lead });
+    // update in-memory store for fast access
+    leadsStore.set(String(id), lead);
+
+    return res.json({ ok: true, data: lead });
   } catch (e) {
-    console.error('[POST /leads] erro:', e);
-    return res.status(500).json({ error: 'Erro ao salvar lead' });
+    console.error('[LEADS] POST error:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar lead' });
   }
 });
+
+// GET /leads/:id -> retorna JSON COMPLETO
+app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  try {
+    const tenantId = (req.user && req.user.tenantId) ? req.user.tenantId : 'default';
+    const id = req.params.id;
+
+    ensureLeadsTable(db);
+
+    // try sqlite row
+    try {
+      const row = db.prepare(`SELECT data FROM leads WHERE id = ? AND tenantId = ?`).get(id, tenantId);
+      if (row && row.data) {
+        const lead = JSON.parse(row.data);
+        return res.json({ ok: true, data: lead });
+      }
+    } catch (e) {
+      console.warn('[LEADS] sqlite read failed:', e && e.message);
+    }
+
+    // fallback to in-memory
+    const stored = leadsStore.get(String(id));
+    if (stored && String(stored.tenantId || 'default') === String(tenantId)) {
+      return res.json({ ok: true, data: stored });
+    }
+
+    // fallback to file
+    const all = loadJSON(LEADS_FILE, []);
+    const found = Array.isArray(all) ? all.find(l => String(l.id) === String(id) && String(l.tenantId || 'default') === String(tenantId)) : null;
+    if (!found) return res.status(404).json({ ok: false, error: 'Lead não encontrado' });
+    return res.json({ ok: true, data: found });
+  } catch (e) {
+    console.error('[LEADS] GET/:id error:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao buscar lead' });
+  }
+});
+
 // ========================= CLIENTES (MÓDULO 10) =========================
 
 app.get('/clientes', (req, res) => {
@@ -1251,57 +1289,40 @@ app.use(express.json({ limit: '50mb' }));
 
 // ========================= M6 – Funil de Leads: API básica =========================
 
-// GET /leads → lista leads do funil (usado no sync inicial)
+// GET /leads -> lista JSON COMPLETO
 app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
-    const tenantId = String(req.user?.tenantId || 'default');
+    const tenantId = (req.user && req.user.tenantId) ? req.user.tenantId : 'default';
 
-    const all = loadJSON(LEADS_FILE, []);
-    let leads = Array.isArray(all)
-      ? all.filter(l => String(l.tenantId || 'default') === tenantId)
-      : [];
+    ensureLeadsTable(db);
 
-    // Filtro opcional: ?ids=1,2,3
-    const idsStr = String(req.query.ids || '').trim();
-    if (idsStr) {
-      const idSet = new Set(
-        idsStr.split(',').map(s => s.trim()).filter(Boolean)
-      );
-      leads = leads.filter(ld => idSet.has(String(ld.id)));
-    }
-
-    // prefer sqlite rows if available
+    // try sqlite first
     try {
-      const rows = db.prepare('SELECT * FROM leads WHERE tenantId = ? ORDER BY COALESCE(updatedAt, createdAt) DESC').all(tenantId);
-      if (Array.isArray(rows) && rows.length) {
+      const rows = db.prepare(`SELECT data FROM leads WHERE tenantId = ? ORDER BY updatedAt DESC LIMIT 300`).all(tenantId);
+      if (Array.isArray(rows)) {
         const items = rows.map(r => {
-          let obj = {};
-          try { obj = JSON.parse(r.data || '{}'); } catch (e) { obj = {}; }
-          return Object.assign({}, obj, { id: r.id, tenantId: r.tenantId, token: r.token, createdAt: r.createdAt, updatedAt: r.updatedAt });
-        });
-        // optional filter by ids query
-        const idsStr = String(req.query.ids || '').trim();
-        if (idsStr) {
-          const idSet = new Set(idsStr.split(',').map(s => s.trim()).filter(Boolean));
-          return res.json({ ok: true, data: items.filter(it => idSet.has(String(it.id))) });
-        }
+          try { return JSON.parse(r.data); } catch { return null; }
+        }).filter(Boolean);
+
         return res.json({ ok: true, data: items });
       }
     } catch (e) {
-      console.warn('[API] GET /leads sqlite list failed:', e && e.message);
+      console.warn('[LEADS] GET list sqlite failed:', e && e.message);
     }
 
     // fallback to in-memory store
     if (leadsStore.size > 0) {
-      const items = Array.from(leadsStore.values()).filter(it => String(it.tenantId || 'default') === tenantId);
+      const items = Array.from(leadsStore.values()).filter(it => String(it.tenantId || 'default') === String(tenantId));
       return res.json({ ok: true, data: items });
     }
 
-    // fallback to file-based leads
-    return res.json({ ok: true, data: leads });
+    // fallback to file
+    const all = loadJSON(LEADS_FILE, []);
+    const items = Array.isArray(all) ? all.filter(l => String(l.tenantId || 'default') === String(tenantId)) : [];
+    return res.json({ ok: true, data: items });
   } catch (e) {
-    console.error('[GET /leads] erro:', e);
-    return res.status(500).json({ error: 'Erro ao listar leads' });
+    console.error('[LEADS] GET list error:', e);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar leads' });
   }
 });
 
