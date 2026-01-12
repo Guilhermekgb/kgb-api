@@ -6,33 +6,39 @@
     return payload;
   }
 
+  const TOKEN_KEYS = ["token", "TOKEN", "kgb_token", "KGB_TOKEN", "auth_token"];
+
   function getToken() {
     try {
-      return (
-        (typeof window !== 'undefined' && window.KGB_AUTH_TOKEN) ||
-        (localStorage && localStorage.getItem ? localStorage.getItem('KGB_AUTH_TOKEN') : null) ||
-        (localStorage && localStorage.getItem ? localStorage.getItem('KGB_TOKEN') : null) ||
-        (sessionStorage && sessionStorage.getItem ? sessionStorage.getItem('KGB_AUTH_TOKEN') : null) ||
-        (sessionStorage && sessionStorage.getItem ? sessionStorage.getItem('KGB_TOKEN') : null) ||
-        null
-      );
+      if (typeof window !== 'undefined' && window.KGB_AUTH_TOKEN) return window.KGB_AUTH_TOKEN;
+      for (const k of TOKEN_KEYS) {
+        try {
+          const v = localStorage.getItem(k);
+          if (v && String(v).trim()) return v;
+        } catch (e) {}
+        try {
+          const v2 = sessionStorage.getItem(k);
+          if (v2 && String(v2).trim()) return v2;
+        } catch (e) {}
+      }
+      return null;
     } catch (e) { return (typeof window !== 'undefined' && window.KGB_AUTH_TOKEN) || null; }
   }
 
   function setToken(token) {
     if (!token) return;
     const t = String(token);
-    try { localStorage.setItem('KGB_AUTH_TOKEN', t); } catch (e) {}
-    try { localStorage.setItem('KGB_TOKEN', t); } catch (e) {}
-    try { sessionStorage.setItem('KGB_AUTH_TOKEN', t); } catch (e) {}
-    try { sessionStorage.setItem('KGB_TOKEN', t); } catch (e) {}
+    try { localStorage.setItem('token', t); } catch (e) {}
     try { window.KGB_AUTH_TOKEN = t; } catch (e) {}
   }
 
   function clearToken() {
     try { window.KGB_AUTH_TOKEN = null; } catch (e) {}
-    try { localStorage.removeItem('KGB_AUTH_TOKEN'); localStorage.removeItem('KGB_TOKEN'); } catch(e){}
-    try { sessionStorage.removeItem('KGB_AUTH_TOKEN'); sessionStorage.removeItem('KGB_TOKEN'); } catch(e){}
+    for (const k of TOKEN_KEYS) {
+      try { localStorage.removeItem(k); } catch (e) {}
+      try { sessionStorage.removeItem(k); } catch (e) {}
+    }
+    try { localStorage.removeItem('token'); } catch (e) {}
   }
 
   async function api(path, opts = {}) {
@@ -60,13 +66,22 @@
       } catch (e) {
         try { data = await raw.text(); } catch (e2) { data = null; }
       }
-      return { status: raw.status, data, ok: raw.ok };
+      const resp = { status: raw.status, data, ok: raw.ok };
+      if (resp.status === 401) {
+        try { clearToken(); } catch (e) {}
+        try { window.location.href = '/login.html'; } catch (e) {}
+      }
+      return resp;
     }
 
     // If window.apiFetch returned a plain object
     const status = (raw && raw.status) ? raw.status : 200;
     const data = raw && raw.data ? raw.data : raw;
     const ok = raw && typeof raw.ok === 'boolean' ? raw.ok : true;
+    if (status === 401) {
+      try { clearToken(); } catch (e) {}
+      try { window.location.href = '/login.html'; } catch (e) {}
+    }
     return { status, data, ok };
   }
 
