@@ -14,6 +14,42 @@ const csv      = require('fast-csv');
 const multer   = require('multer');
 const bcrypt   = require('bcryptjs');
 
+// === LEADS STORE (simples) ===
+const leadsStore = new Map(); // id -> lead completo
+
+function nowISO() { return new Date().toISOString(); }
+
+function pickLeadPayload(body) {
+  const b = body || {};
+  return {
+    id: b.id || b._id || b.leadId || b.lead_id || null,
+    token: b.token || b.leadToken || b.lead_token || null,
+    tenantId: b.tenantId || b.tenant_id || 'default',
+
+    nome: b.nome || b.nomeCompleto || b.nome_completo || b.clienteNome || b.cliente_nome || '',
+    whatsapp: b.whatsapp || b.whatsApp || b.celular || b.telefoneWhats || '',
+    telefone: b.telefone || b.fone || '',
+    email: b.email || b.e_mail || '',
+
+    dataEvento: b.dataEvento || b.data_evento || b.data || '',
+    horario: b.horario || b.hora || '',
+    localEvento: b.localEvento || b.local_evento || b.endereco || '',
+    convidados: b.convidados || b.qtdConvidados || b.qtd_convidados || b.quantidadeConvidados || '',
+
+    status: b.status || 'Novo lead',
+    colunaFunil: b.colunaFunil || b.coluna_funil || b.coluna || 'Novo lead',
+    responsavel: b.responsavel || b.responsavelNome || b.responsavel_nome || '',
+
+    observacoes: b.observacoes || b.obs || '',
+    totalEstimado: b.totalEstimado || b.total_estimado || b.valorTotal || b.valor_total || null,
+
+    createdAt: b.createdAt || nowISO(),
+    updatedAt: nowISO(),
+
+    raw: b
+  };
+}
+
 // Optional AWS S3 presign support (enabled when AWS env vars are provided)
 let s3Client = null;
 let hasS3 = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.S3_BUCKET && process.env.AWS_REGION);
@@ -591,6 +627,14 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
       return res.status(400).json({ error: 'id obrigatório' });
     }
 
+    // 1) try in-memory store
+    const storeLead = leadsStore.get(leadId);
+    if (storeLead && String(storeLead.tenantId || 'default') === tenantId) {
+      console.log('[API] GET /leads/:id returning keys (store):', Object.keys(storeLead || {}));
+      return res.json({ ok: true, data: storeLead });
+    }
+
+    // 2) fallback to persisted file
     const allLeads = loadJSON(LEADS_FILE, []);
     const leads    = Array.isArray(allLeads) ? allLeads : [];
 
@@ -602,7 +646,7 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
-    console.log('[API] GET /leads/:id returning keys:', Object.keys(lead || {}));
+    console.log('[API] GET /leads/:id returning keys (file):', Object.keys(lead || {}));
     return res.json({ ok: true, data: lead });
   } catch (e) {
     console.error('[GET /leads/:id] erro:', e);
@@ -613,60 +657,32 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
 app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
-    const body     = req.body || {};
+    const incoming = req.body || {};
+    console.log('[API] POST /leads incoming keys:', Object.keys(incoming || {}));
 
-    console.log('[API] POST /leads incoming keys:', Object.keys(req.body || {}));
+    // id / token generation
+    const id = incoming.id || incoming._id || incoming.leadId || crypto.randomUUID();
+    const token = incoming.token || incoming.leadToken || crypto.randomUUID();
 
-    // id do lead (se não mandar, geramos um)
-    let id = String(body.id || '').trim();
-    if (!id) {
-      id = crypto.randomUUID
-        ? crypto.randomUUID()
-        : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
-    }
+    // normalize payload and keep complete object
+    const lead = pickLeadPayload(Object.assign({}, incoming, { id, token }));
 
+    // save in-memory
+    leadsStore.set(String(lead.id), lead);
+
+    // also persist to file for compatibility
     const allLeads = loadJSON(LEADS_FILE, []);
-    const leads    = Array.isArray(allLeads) ? allLeads : [];
-
-    const idx = leads.findIndex(
-      (l) => String(l.id) === id && String(l.tenantId || 'default') === tenantId
-    );
-
-    // base do lead que vamos salvar
-    const leadBase = {
-      ...body,
-      id,
-      tenantId
-    };
-
-    // se o front já mandou token, usamos ele; senão geramos um
-    if (!leadBase.token) {
-      leadBase.token =
-        (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36))) +
-        '-' + Math.random().toString(36).slice(2, 6);
-    }
-
+    const leadsArr = Array.isArray(allLeads) ? allLeads : [];
+    const idx = leadsArr.findIndex(l => String(l.id) === String(lead.id) && String(l.tenantId || 'default') === String(lead.tenantId || 'default'));
     if (idx >= 0) {
-      // atualiza lead existente
-      const antigo = leads[idx];
-      leads[idx] = {
-        ...antigo,
-        ...leadBase,
-        id: antigo.id,
-        tenantId: antigo.tenantId || tenantId
-      };
-      savedLead = leads[idx];
+      leadsArr[idx] = Object.assign({}, leadsArr[idx], lead);
     } else {
-      // novo lead
-      leads.push(leadBase);
-      savedLead = leadBase;
+      leadsArr.push(lead);
     }
+    saveJSON(LEADS_FILE, leadsArr);
 
-    saveJSON(LEADS_FILE, leads);
-
-    // Log e retorno do lead completo (para o front receber os campos enviados)
-    try { console.log('[API] POST /leads saved keys:', Object.keys(savedLead || {})); } catch(e){}
-    return res.json({ ok: true, data: savedLead });
+    try { console.log('[API] POST /leads saved keys:', Object.keys(lead || {})); } catch(e){}
+    return res.status(201).json({ ok: true, data: lead });
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
@@ -1229,8 +1245,14 @@ app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
       leads = leads.filter(ld => idSet.has(String(ld.id)));
     }
 
+    // if in-memory store has data, prefer it
+    if (leadsStore.size > 0) {
+      const items = Array.from(leadsStore.values()).filter(it => String(it.tenantId || 'default') === tenantId);
+      return res.json({ ok: true, data: items });
+    }
+
     // pode devolver array direto (getLeadsAll aceita isso)
-    return res.json(leads);
+    return res.json({ ok: true, data: leads });
   } catch (e) {
     console.error('[GET /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao listar leads' });
