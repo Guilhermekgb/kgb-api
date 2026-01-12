@@ -29,7 +29,7 @@
 <script type="module" src="./kgb-common.js"></script>
 
 <!-- Guard / RBAC (usa helpers do common) -->
-<script type="module" src="js/auth-helper.js">
+<script type="module" src="js/auth-helper.js"></script>
 <script type="module" src="./api/proteger-pagina.js"></script>
 
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -250,10 +250,6 @@ function getFunilColuna(leadId){
     "kanbanLeads", "pipeline", "boardLeads", "quadroLeads"
   ];
 
-    <script type="module" src="menu-lateral.js"></script>
-    <script>
-      try { if (typeof window.guard === 'function') { window.guard(); } else { console.debug('[KGB][lista-propostas] guard not available yet'); } } catch(e){ console.warn('[KGB][lista-propostas] guard call failed', e); }
-    </script>
     try{ if (typeof memGet === 'function') data = memGet(key, null); else data = null; }catch{}
     if(!data) continue;
 
@@ -446,8 +442,7 @@ try{
 </script>
 
 
-  <script type="module" src="./api/api-fetch.js">
-  <script src="./menu-lateral.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
   <script>
     window.addEventListener('DOMContentLoaded', () => {
       if (window.initMenuLateral) window.initMenuLateral({ mountId: 'menuLateralMount' });
