@@ -1110,7 +1110,37 @@ async function salvarLeadFunil(nextAction) {
 
   switch (String(nextAction || '').toLowerCase()) {
     case 'evento':
-      window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(novoLead.id)}`;
+      try {
+        const apiResp = typeof salvoApi !== 'undefined' ? salvoApi : null;
+
+        console.log('[ORÇAMENTO] resposta API completa:', apiResp);
+
+        const saved =
+          apiResp?.data ??
+          apiResp?.item ??
+          apiResp?.lead ??
+          apiResp;
+
+        const savedId = saved?.id;
+
+        console.log('[ORÇAMENTO] ID retornado pela API:', savedId);
+
+        if (!savedId) {
+          console.error('[ORÇAMENTO] ERRO: API não retornou ID válido');
+          alert('Erro ao salvar orçamento. Tente novamente.');
+          return; // bloqueia qualquer redirect
+        }
+
+        // Limpa possíveis ids antigos no storage local
+        try { localStorage.removeItem('leadId'); } catch (e) {}
+        try { localStorage.removeItem('orcamentoId'); } catch (e) {}
+
+        // ÚNICO redirect permitido: usa o id retornado pela API
+        window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(savedId)}`;
+      } catch (e) {
+        console.error('[ORÇAMENTO] falha ao redirecionar para detalhado:', e);
+        alert('Erro ao abrir o detalhado do orçamento.');
+      }
       break;
 
     case 'proposta':
