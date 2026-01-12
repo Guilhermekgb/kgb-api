@@ -230,10 +230,10 @@ function getFunilColuna(leadId){
     if(!data) return null;
 
     const cols = data.colunas || data.columns || data.listas || data.boards || data;
-    if(!cols || typeof cols !== "object") continue;
+    if(!cols || typeof cols !== "object") return null;
 
     const arr = Array.isArray(cols) ? cols : (Array.isArray(cols.items) ? cols.items : null);
-    if(!arr) continue;
+    if(!arr) return null;
 
     for(const col of arr){
       const nome = col.nome || col.titulo || col.name || col.label || "";
