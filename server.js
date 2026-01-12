@@ -103,6 +103,23 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// === LEADS table (store full payload in JSON) ===
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      tenantId TEXT,
+      token TEXT,
+      data TEXT,
+      createdAt TEXT,
+      updatedAt TEXT
+    );
+  `);
+  console.log('[DB] ensured leads table');
+} catch (e) {
+  console.warn('[DB] failed to ensure leads table', e && e.message);
+}
+
 // Ensure minimal `usuarios` table and common columns (non-destructive)
 try {
   db.exec(`
@@ -627,25 +644,33 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
       return res.status(400).json({ error: 'id obrigatório' });
     }
 
-    // 1) try in-memory store
+    // 1) try sqlite first
+    try {
+      const row = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+      if (row) {
+        let data = {};
+        try { data = JSON.parse(row.data || '{}'); } catch (e) { data = {}; }
+        const full = Object.assign({}, data, { id: row.id, tenantId: row.tenantId, token: row.token, createdAt: row.createdAt, updatedAt: row.updatedAt });
+        console.log('[API] GET /leads/:id returning keys (sqlite):', Object.keys(full || {}));
+        return res.json({ ok: true, data: full });
+      }
+    } catch (e) {
+      console.warn('[API] GET /leads/:id sqlite read failed:', e && e.message);
+    }
+
+    // 2) fallback to in-memory store
     const storeLead = leadsStore.get(leadId);
     if (storeLead && String(storeLead.tenantId || 'default') === tenantId) {
       console.log('[API] GET /leads/:id returning keys (store):', Object.keys(storeLead || {}));
       return res.json({ ok: true, data: storeLead });
     }
 
-    // 2) fallback to persisted file
+    // 3) fallback to persisted file
     const allLeads = loadJSON(LEADS_FILE, []);
     const leads    = Array.isArray(allLeads) ? allLeads : [];
 
-    const lead = leads.find(
-      (l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
-    );
-
-    if (!lead) {
-      return res.status(404).json({ error: 'Lead não encontrado' });
-    }
-
+    const lead = leads.find((l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId);
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
     console.log('[API] GET /leads/:id returning keys (file):', Object.keys(lead || {}));
     return res.json({ ok: true, data: lead });
   } catch (e) {
@@ -1245,13 +1270,34 @@ app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
       leads = leads.filter(ld => idSet.has(String(ld.id)));
     }
 
-    // if in-memory store has data, prefer it
+    // prefer sqlite rows if available
+    try {
+      const rows = db.prepare('SELECT * FROM leads WHERE tenantId = ? ORDER BY COALESCE(updatedAt, createdAt) DESC').all(tenantId);
+      if (Array.isArray(rows) && rows.length) {
+        const items = rows.map(r => {
+          let obj = {};
+          try { obj = JSON.parse(r.data || '{}'); } catch (e) { obj = {}; }
+          return Object.assign({}, obj, { id: r.id, tenantId: r.tenantId, token: r.token, createdAt: r.createdAt, updatedAt: r.updatedAt });
+        });
+        // optional filter by ids query
+        const idsStr = String(req.query.ids || '').trim();
+        if (idsStr) {
+          const idSet = new Set(idsStr.split(',').map(s => s.trim()).filter(Boolean));
+          return res.json({ ok: true, data: items.filter(it => idSet.has(String(it.id))) });
+        }
+        return res.json({ ok: true, data: items });
+      }
+    } catch (e) {
+      console.warn('[API] GET /leads sqlite list failed:', e && e.message);
+    }
+
+    // fallback to in-memory store
     if (leadsStore.size > 0) {
       const items = Array.from(leadsStore.values()).filter(it => String(it.tenantId || 'default') === tenantId);
       return res.json({ ok: true, data: items });
     }
 
-    // pode devolver array direto (getLeadsAll aceita isso)
+    // fallback to file-based leads
     return res.json({ ok: true, data: leads });
   } catch (e) {
     console.error('[GET /leads] erro:', e);
