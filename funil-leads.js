@@ -68,13 +68,12 @@ function writeLS(key, val){
 }
 function removeLS(key){ try { delete window.__FUNIL_MEM__[key]; } catch(e){} }
 
-// Helper para requisicoes — exige window.apiFetch
+// Helper para requisicoes — usa window.kgbAuth.api
 async function apiRequest(method, path, body){
-  if (typeof window.apiFetch !== 'function') throw new Error('window.apiFetch não disponível');
+  if (!window.kgbAuth || typeof window.kgbAuth.api !== 'function') throw new Error('kgbAuth.api não disponível');
   const opts = { method };
   if (body !== undefined) opts.body = body;
-  const r = await window.apiFetch(path, opts);
-  return r;
+  return await window.kgbAuth.api(path, opts);
 }
 
 // === helper: publica/atualiza "Próxima ação" do lead na Agenda Unificada ===
@@ -195,8 +194,8 @@ function filterLeadsByUser(leads){
 
 // Base da API (vem do patch do HTML)
 const apiBase = (typeof window !== 'undefined' && (window.__API_BASE__ || window.API_BASE)) || '';
-// --- Compat wrapper: apiFetch required
-// NOTE: este módulo exige window.apiFetch; não há fallback.
+// --- Compat wrapper: kgbAuth.api required
+// NOTE: este módulo exige window.kgbAuth.api; não há fallback.
 
 // getLeadsAll helper: always returns an array (never throws)
 if (!window.getLeadsAll) {
