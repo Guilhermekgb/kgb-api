@@ -308,8 +308,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (window.getLeadById) {
     try {
       const apiLead = await window.getLeadById(id);
+      console.log("[DETALHADO] payload bruto (getLeadById):", apiLead);
       if (apiLead && apiLead.id) {
-          lead = (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function') ? window.kgbNormalizeLead(apiLead) : apiLead;
+        lead = (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function') ? window.kgbNormalizeLead(apiLead) : apiLead;
+        console.log("[DETALHADO] lead normalizado (getLeadById):", lead);
       }
     } catch (e) {
       console.warn('[LEAD] Falha ao buscar na API via getLeadById', e);
@@ -320,9 +322,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!lead && window.__API_BASE__) {
     try {
       const j = await postToApi('/leads/' + encodeURIComponent(id), { method: 'GET' });
+      console.log("[DETALHADO] payload bruto (direct):", j);
       lead = j?.data || j || null;
       if (lead && (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function')) {
         lead = window.kgbNormalizeLead(lead);
+        console.log("[DETALHADO] lead normalizado (direct):", lead);
       }
     } catch (e) {
       console.warn('[LEAD] Falha ao buscar na API direta', e);
@@ -334,8 +338,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const buf = memGet('leads_buffer', []) || [];
       lead = buf.find(l => String((l && (l.id || l.leadId || l._id)) || '') === String(id)) || null;
+      console.log("[DETALHADO] payload bruto (buffer):", lead);
       if (lead && (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function')) {
         lead = window.kgbNormalizeLead(lead);
+        console.log("[DETALHADO] lead normalizado (buffer):", lead);
       }
     } catch (e) {
       lead = null;

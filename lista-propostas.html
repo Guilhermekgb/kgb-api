@@ -193,8 +193,10 @@ async function fetchLeadsFromApi(){
   if(!base) return memGet('leads', []);
   try{
     const d = await window.kgbAuth.api(base + '/leads', { method: 'GET' });
+    console.log("[LISTA-PROPOSTAS] payload bruto:", d);
     const arr = Array.isArray(d) ? d : (d?.data||[]);
     const norm = (Array.isArray(arr) ? arr : []).map(l => (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function') ? window.kgbNormalizeLead(l) : l);
+    console.log("[LISTA-PROPOSTAS] primeiros 3 normalizados:", norm?.slice?.(0,3) ?? norm);
     memSet('leads', norm);
     return norm;
   }catch(e){ console.warn('[Propostas] Erro ao buscar leads da API', e); return memGet('leads', []); }
