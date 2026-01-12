@@ -1594,6 +1594,7 @@ function ensureLeadsTable() {
         tenantId TEXT,
         token TEXT,
         data_json TEXT,
+        payload TEXT,
         updatedAt TEXT,
         createdAt TEXT
       );
@@ -1603,6 +1604,14 @@ function ensureLeadsTable() {
   }
 }
 
+  // Defensive: ensure payload column exists for older DBs
+  try {
+    db.prepare("ALTER TABLE leads ADD COLUMN payload TEXT").run();
+    console.log("[DB] leads: coluna payload criada");
+  } catch (e) {
+    console.log("[DB] leads: payload já existe (ok)");
+  }
+
 // POST /leads -> salva JSON completo
 app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
   try {
@@ -1611,19 +1620,22 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
     ensureLeadsTable();
 
     try {
-      db.prepare(`INSERT INTO leads (id, tenantId, token, data_json, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?)
+      const payloadJson = JSON.stringify(lead);
+      db.prepare(`INSERT INTO leads (id, tenantId, token, data_json, payload, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           tenantId=excluded.tenantId,
           token=excluded.token,
           data_json=excluded.data_json,
+          payload=excluded.payload,
           updatedAt=excluded.updatedAt`).run(
-        lead.id, lead.tenantId, lead.token, JSON.stringify(lead), lead.createdAt, lead.updatedAt
+        lead.id, lead.tenantId, lead.token, payloadJson, payloadJson, lead.createdAt, lead.updatedAt
       );
     } catch (e) {
       // fallback for older SQLite: REPLACE
-      db.prepare(`REPLACE INTO leads (id, tenantId, token, data_json, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(lead.id, lead.tenantId, lead.token, JSON.stringify(lead), lead.createdAt, lead.updatedAt);
+      const payloadJson = JSON.stringify(lead);
+      db.prepare(`REPLACE INTO leads (id, tenantId, token, data_json, payload, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(lead.id, lead.tenantId, lead.token, payloadJson, payloadJson, lead.createdAt, lead.updatedAt);
     }
 
     // update in-memory store
@@ -2533,9 +2545,12 @@ app.get('/leads', requireAuth, (req, res) => {
     ensureLeadsTable();
 
     try {
-      const rows = db.prepare(`SELECT data_json FROM leads WHERE tenantId = ? ORDER BY updatedAt DESC LIMIT 300`).all(tenantId);
+      const rows = db.prepare(`SELECT *, data_json, payload FROM leads WHERE tenantId = ? ORDER BY updatedAt DESC LIMIT 300`).all(tenantId);
       const items = Array.isArray(rows) ? rows.map(r => {
-        try { return JSON.parse(r.data_json || '{}'); } catch { return null; }
+        try {
+          const payload = r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : {};
+          return { ...payload, ...r };
+        } catch (e) { return null; }
       }).filter(Boolean) : [];
       return res.json({ ok: true, data: items });
     } catch (e) {
@@ -2560,10 +2575,13 @@ app.get('/leads', requireAuth, (req, res) => {
 
       // 1) SQLite primeiro (fonte principal)
       try {
-        const row = db.prepare('SELECT data_json FROM leads WHERE id = ?').get(id);
-        if (row && row.data_json) {
-          const data = typeof row.data_json === 'string' ? JSON.parse(row.data_json) : row.data_json;
-          return res.json({ ok: true, data });
+        const row = db.prepare('SELECT *, data_json, payload FROM leads WHERE id = ?').get(id);
+        if (row) {
+          const payload = row.payload ? (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) : {};
+          // merge giving precedence to DB row fields when conflicts (row should reflect meta columns)
+          const merged = { ...payload, ...row };
+          // try to return a clean object (strip internal payload/raw fields if desired)
+          return res.json({ ok: true, data: merged });
         }
       } catch (e) {
         console.warn('[GET /leads/:id] sqlite lookup failed:', e?.message || e);
