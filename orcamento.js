@@ -105,6 +105,21 @@ async function postToApi(path, opts = {}){
   return null;
 }
 
+// Aguarda guard/auth-client estar disponível antes de usar window.kgbAuth.api
+async function ensureAuthReady() {
+  try {
+    if (window.kgbAuth?.api) return true;
+    if (typeof window.guard === 'function') {
+      const r = window.guard();
+      if (r && typeof r.then === 'function') await r;
+    }
+    return !!window.kgbAuth?.api;
+  } catch (e) {
+    console.warn('[ORÇAMENTO] ensureAuthReady falhou:', e);
+    return false;
+  }
+}
+
 async function salvarLeadNaApi(novoLead) {
   const base = window.__API_BASE__ || API_BASE || "";
   if (!base) return null;
@@ -936,6 +951,12 @@ async function salvarLeadFunil(nextAction) {
 
   // --- NOVO: salvar também na API /leads ---
   try {
+    const ok = await ensureAuthReady();
+    if (!ok) {
+      alert("Auth ainda não carregou (kgbAuth.api indisponível). Recarregue a página e tente novamente.");
+      return;
+    }
+
     const salvoApi = await salvarLeadNaApi(novoLead);
 
     const apiId =
