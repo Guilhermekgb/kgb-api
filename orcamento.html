@@ -6,14 +6,7 @@
   <title>Orçamento – Sistema Buffet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Helpers globais (moved to end to ensure correct load order) -->
-
-<!-- (Opcional) ativar ENFORCE do guard -->
-<script>try{ localStorage.setItem('guard.enforce','1'); }catch(e){}</script>
-
-<!-- Guard / RBAC (usa coisas do common) -->
-<script type="module" src="js/auth-helper.js">
-<!-- proteger-pagina.js será carregado após os scripts da página -->
+<!-- (Guard/RBAC) carregado no fim do <body> pela ordem padrão (api-config -> kgb-common -> proteger-pagina -> api-fetch -> script da página) -->
 
   <!-- CSS globais existentes -->
   <link rel="stylesheet" href="menu-lateral.css">
@@ -313,9 +306,7 @@
     });
   });
 </script>
-
-  <script type="module" src="./api/api-config.js"></script>
-
+  
   <!-- Modal: conflitos de data -->
   <div id="modalConflitosData" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:2000; align-items:center; justify-content:center;">
     <div style="background:#fffaf4; width:min(820px, 92vw); max-height:80vh; overflow:auto; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.2); padding:18px;">
