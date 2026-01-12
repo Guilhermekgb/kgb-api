@@ -111,10 +111,23 @@ async function salvarLeadNaApi(novoLead) {
 
     try {
       const payload = await window.kgbAuth.api(base + '/leads', { method: 'POST', body: novoLead });
-      return payload?.data || payload || null;
-  
+
+      console.log("[ORÇAMENTO] POST /leads payload:", payload);
+
+      // Normaliza formatos possíveis vindos do backend
+      const leadObj =
+        payload?.lead ||
+        payload?.item ||
+        payload?.data ||
+        payload?.result ||
+        (payload?.ok && payload?.id ? payload : null) ||
+        payload ||
+        null;
+
+      return leadObj;
+
       // nota: removido fallback para window.apiFetch — kgbAuth.api é requerido
-  
+
   } catch (e) {
     console.warn('[ORÇAMENTO] Falha ao chamar /leads:', e);
     return null;
@@ -928,19 +941,13 @@ async function salvarLeadFunil(nextAction) {
     const apiId =
       salvoApi?.id ||
       salvoApi?._id ||
-      salvoApi?.lead?.id ||
-      salvoApi?.lead?._id ||
-      salvoApi?.item?.id ||
-      salvoApi?.item?._id ||
-      salvoApi?.data?.id ||
-      salvoApi?.data?._id ||
+      salvoApi?.leadId ||
+      salvoApi?.lead_id ||
       null;
 
     const apiToken =
       salvoApi?.token ||
-      salvoApi?.lead?.token ||
-      salvoApi?.item?.token ||
-      salvoApi?.data?.token ||
+      salvoApi?.leadToken ||
       null;
 
     if (!apiId) {
