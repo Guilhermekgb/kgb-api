@@ -7,28 +7,7 @@
 <meta name="api-base" content="">
 
 
-  <!-- === INÍCIO PATCH __API_BASE__ (auto) === -->
-<script>
-  (function(){
-    var host = String(location.hostname||"").toLowerCase();
-
-    // Produção (Netlify) -> API (usar mesma origem por padrão)
-    var PROD_API = window.location.origin;
-
-    // Desenvolvimento local
-  var DEV_API  = window.location.origin; // use same-origin during local development
-
-
-    var base = (/\.netlify\.app$/.test(host)) ? PROD_API
-             : (host === "localhost" || host === "127.0.0.1") ? DEV_API
-             : PROD_API;
-
-    try { localStorage.setItem("API_BASE", base); } catch(e) {}
-    window.__API_BASE__ = base;
-    console.log("[KGB] __API_BASE__ =", base);
-  })();
-</script>
-<!-- === FIM PATCH __API_BASE__ (auto) === -->
+  <!-- inline API_BASE override removed — use ./api/api-config.js to resolve base -->
 
   <title>Funil de Leads</title>
 
