@@ -2552,6 +2552,46 @@ app.get('/leads', requireAuth, (req, res) => {
   }
 });
 
+  // ===================== LEADS: GET /leads/:id =====================
+  app.get('/leads/:id', requireAuth, async (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ ok: false, error: 'Missing id' });
+
+      // 1) SQLite primeiro (fonte principal)
+      try {
+        const row = db.prepare('SELECT data_json FROM leads WHERE id = ?').get(id);
+        if (row && row.data_json) {
+          const data = typeof row.data_json === 'string' ? JSON.parse(row.data_json) : row.data_json;
+          return res.json({ ok: true, data });
+        }
+      } catch (e) {
+        console.warn('[GET /leads/:id] sqlite lookup failed:', e?.message || e);
+      }
+
+      // 2) Fallback: leadsStore em memória (se existir)
+      try {
+        if (typeof leadsStore !== 'undefined' && leadsStore && leadsStore.has(id)) {
+          return res.json({ ok: true, data: leadsStore.get(id) });
+        }
+      } catch (e) { /* ignore */ }
+
+      // 3) Fallback: arquivo leads.json (se existir na sua base)
+      try {
+        const arr = loadJSON(LEADS_FILE, []);
+        const found = (Array.isArray(arr) ? arr : []).find(l => String(l?.id) === id);
+        if (found) return res.json({ ok: true, data: found });
+      } catch (e) {
+        console.warn('[GET /leads/:id] file lookup failed:', e?.message || e);
+      }
+
+      return res.status(404).json({ ok: false, error: 'Lead not found', id });
+    } catch (err) {
+      console.error('[GET /leads/:id] error:', err);
+      return res.status(500).json({ ok: false, error: 'Internal error' });
+    }
+  });
+
 // PUT /leads/:id → chamado quando você arrasta o card de coluna
 app.put('/leads/:id', requireAuth, (req, res) => {
   try {
