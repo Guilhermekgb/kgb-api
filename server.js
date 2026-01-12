@@ -602,6 +602,7 @@ app.get('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => 
       return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
+    console.log('[API] GET /leads/:id returning keys:', Object.keys(lead || {}));
     return res.json({ ok: true, data: lead });
   } catch (e) {
     console.error('[GET /leads/:id] erro:', e);
@@ -613,6 +614,8 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
     const body     = req.body || {};
+
+    console.log('[API] POST /leads incoming keys:', Object.keys(req.body || {}));
 
     // id do lead (se não mandar, geramos um)
     let id = String(body.id || '').trim();
@@ -652,21 +655,18 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
         id: antigo.id,
         tenantId: antigo.tenantId || tenantId
       };
+      savedLead = leads[idx];
     } else {
       // novo lead
       leads.push(leadBase);
+      savedLead = leadBase;
     }
 
     saveJSON(LEADS_FILE, leads);
 
-    // devolve id e token pro front
-    return res.json({
-      ok: true,
-      data: {
-        id: leadBase.id,
-        token: leadBase.token
-      }
-    });
+    // Log e retorno do lead completo (para o front receber os campos enviados)
+    try { console.log('[API] POST /leads saved keys:', Object.keys(savedLead || {})); } catch(e){}
+    return res.json({ ok: true, data: savedLead });
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
