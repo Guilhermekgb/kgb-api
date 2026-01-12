@@ -259,6 +259,51 @@ try{ if (typeof window !== 'undefined') { window.eventosApiGet = window.eventosA
 
 export { eventosApiGet, eventosApiPut };
 
+// Normalizador de lead: harmoniza campos de várias formas retornadas pela API
+function _normalizeLead(raw){
+  if (!raw || typeof raw !== 'object') return raw;
+  const r = raw || {};
+  const id = r.id || r.leadId || r._id || r.uid || r.uuid || r.lead_id || r.leadID || null;
+  const nome = r.nome || r.nomeCliente || r.clientName || r.name || r.title || '';
+  const whatsapp = r.whatsapp || r.whats || r.whatsApp || r.phone || r.celular || r.cel || '';
+  const telefone = r.telefone || r.phone || r.telefoneContato || '';
+  const email = r.email || r.email_cliente || r.contact_email || '';
+  const dataEvento = r.dataEvento || r.data_evento || r.dataISO || r.data || r.date || null;
+  const horarioEvento = r.horarioEvento || r.horario || r.hora || r.time || '';
+  const local = r.local || r.local_evento || r.localEvento || r.endereco || '';
+  const qtd = (r.qtd ?? r.quantidade ?? r.convidados ?? r.pax ?? r.quantity) || 0;
+  const tipoEvento = r.tipoEvento || r.tipo || r.eventType || '';
+  const comoConheceu = r.comoConheceu || r.origem || r.referencia || r.source || '';
+  const observacoes = r.observacoes || r.obs || r.observacao || r.note || r.notes || '';
+  const status = r.status || r.estado || r.situacao || r._status || '';
+  const responsavel = r.responsavel || r.responsavel_nome || r.owner || r.atribuido || null;
+  const token = r.token || r._token || null;
+
+  const normalized = Object.assign({}, r, {
+    id: id == null ? id : String(id),
+    nome: String(nome || ''),
+    whatsapp: whatsapp || '',
+    telefone: telefone || '',
+    email: email || '',
+    dataEvento: dataEvento || null,
+    horarioEvento: horarioEvento || '',
+    local: local || '',
+    qtd: Number(qtd || 0),
+    tipoEvento: tipoEvento || '',
+    comoConheceu: comoConheceu || '',
+    observacoes: observacoes || '',
+    status: status || '',
+    responsavel: responsavel || null,
+    token: token || null,
+    _raw: r
+  });
+  return normalized;
+}
+
+// Expor globalmente e como export para módulos
+try{ if (typeof window !== 'undefined') window.kgbNormalizeLead = window.kgbNormalizeLead || _normalizeLead } catch(e){}
+export { _normalizeLead as kgbNormalizeLead };
+
 /* ===== Tickets (ingressos) ===== */
 export function gerarLoteIngressos({eventoId,tipoId,qtd=100,digits=4}){
   const lotes = readLS(K_KEYS.LOTES,[]) || [];

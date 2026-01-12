@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const apiLead = await window.getLeadById(id);
       if (apiLead && apiLead.id) {
-        lead = apiLead;
+          lead = (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function') ? window.kgbNormalizeLead(apiLead) : apiLead;
       }
     } catch (e) {
       console.warn('[LEAD] Falha ao buscar na API via getLeadById', e);
@@ -321,6 +321,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const j = await postToApi('/leads/' + encodeURIComponent(id), { method: 'GET' });
       lead = j?.data || j || null;
+      if (lead && (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function')) {
+        lead = window.kgbNormalizeLead(lead);
+      }
     } catch (e) {
       console.warn('[LEAD] Falha ao buscar na API direta', e);
     }
@@ -330,7 +333,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!lead) {
     try {
       const buf = memGet('leads_buffer', []) || [];
-      lead = buf.find(l => String(l.id) === String(id)) || null;
+      lead = buf.find(l => String((l && (l.id || l.leadId || l._id)) || '') === String(id)) || null;
+      if (lead && (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function')) {
+        lead = window.kgbNormalizeLead(lead);
+      }
     } catch (e) {
       lead = null;
     }

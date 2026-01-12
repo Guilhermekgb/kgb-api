@@ -194,8 +194,9 @@ async function fetchLeadsFromApi(){
   try{
     const d = await window.kgbAuth.api(base + '/leads', { method: 'GET' });
     const arr = Array.isArray(d) ? d : (d?.data||[]);
-    memSet('leads', arr);
-    return arr;
+    const norm = (Array.isArray(arr) ? arr : []).map(l => (window.kgbNormalizeLead && typeof window.kgbNormalizeLead === 'function') ? window.kgbNormalizeLead(l) : l);
+    memSet('leads', norm);
+    return norm;
   }catch(e){ console.warn('[Propostas] Erro ao buscar leads da API', e); return memGet('leads', []); }
 }
 const asStr = v => (v==null) ? "" : String(v);
