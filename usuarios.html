@@ -370,6 +370,15 @@
         renderUsuarios(usuarios);
       } catch (e) {
         console.error('Erro ao carregar usuários', e);
+        const msg = String(e?.message || e || '');
+        if (msg.indexOf('Forbidden') !== -1 || msg.indexOf('forbidden') !== -1) {
+          window.location.href = 'acesso-negado.html?from=usuarios';
+          return;
+        }
+        if (msg.indexOf('Unauthorized') !== -1 || msg.indexOf('unauthorized') !== -1) {
+          window.location.href = 'login.html?from=usuarios';
+          return;
+        }
         alert('Erro ao carregar usuários: ' + (e?.message || e));
       }
     }

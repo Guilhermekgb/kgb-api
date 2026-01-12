@@ -66,27 +66,55 @@
       } catch (e) {
         try { data = await raw.text(); } catch (e2) { data = null; }
       }
-      const resp = { status: raw.status, data, ok: raw.ok };
-      if (resp.status === 401) {
+      const status = raw.status;
+      let parsedRaw = null;
+      try { parsedRaw = data && typeof data === 'object' ? data : null; } catch (e) { parsedRaw = null; }
+
+      const ok = (parsedRaw && typeof parsedRaw.ok === 'boolean')
+        ? parsedRaw.ok
+        : (status >= 200 && status < 300);
+
+      const result = { ok, status, data };
+
+      if (status === 401) {
         try { clearToken(); } catch (e) {}
-        try { window.location.href = '/login.html'; } catch (e) {}
+        try { const from = encodeURIComponent(window.location.pathname + window.location.search); window.location.href = `login.html?from=${from}`; } catch (e) {}
+        throw new Error('Unauthorized');
       }
-      return resp;
+
+      if (status === 403) {
+        try { const from = encodeURIComponent(window.location.pathname + window.location.search); window.location.href = `acesso-negado.html?from=${from}`; } catch (e) {}
+        throw new Error('Forbidden');
+      }
+
+      return result;
     }
 
     // If window.apiFetch returned a plain object
     const status = (raw && raw.status) ? raw.status : 200;
     const data = raw && raw.data ? raw.data : raw;
-    const ok = raw && typeof raw.ok === 'boolean' ? raw.ok : true;
+    let parsedRaw = null;
+    try { parsedRaw = data && typeof data === 'object' ? data : null; } catch (e) { parsedRaw = null; }
+
+    const ok = (parsedRaw && typeof parsedRaw.ok === 'boolean')
+      ? parsedRaw.ok
+      : (status >= 200 && status < 300);
+
+    const result = { ok, status, data };
     if (status === 401) {
       try { clearToken(); } catch (e) {}
-      try { window.location.href = '/login.html'; } catch (e) {}
+      try { const from = encodeURIComponent(window.location.pathname + window.location.search); window.location.href = `login.html?from=${from}`; } catch (e) {}
+      throw new Error('Unauthorized');
     }
-    return { status, data, ok };
+    if (status === 403) {
+      try { const from = encodeURIComponent(window.location.pathname + window.location.search); window.location.href = `acesso-negado.html?from=${from}`; } catch (e) {}
+      throw new Error('Forbidden');
+    }
+    return result;
   }
 
   async function login(email, password) {
-    const data = await api('/auth/login', { method: 'POST', body: { email, password } });
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, senha: password }) });
 
     const ok = data?.ok;
     if (ok === false) throw new Error(data?.error || 'Credenciais inválidas');
