@@ -56,16 +56,16 @@ const getJSON = (k, def = []) => {
     const ORC = ['leads','propostasIndex','notificacoes','propostaLogs','orcamentos'];
     if (ORC.includes(k)) {
       try {
-        if (window.__API_BASE__ && (window.apiFetch || (window.kgbAuth && typeof window.kgbAuth.api === 'function'))) {
+        if (window.__API_BASE__ && window.kgbAuth && typeof window.kgbAuth.api === 'function') {
           (async ()=>{
             try {
               const base = window.__API_BASE__;
               if (k === 'leads' || k === 'propostasIndex') {
-                const d = await (window.kgbAuth && typeof window.kgbAuth.api === 'function' ? window.kgbAuth.api(base + '/leads', { method: 'GET' }) : window.apiFetch(base + '/leads', { method: 'GET' }));
+                const d = await window.kgbAuth.api(base + '/leads', { method: 'GET' });
                 memSet('leads', Array.isArray(d) ? d : (d?.data||[]));
                 memSet('propostasIndex', Array.isArray(d) ? d : (d?.data||[]));
               } else if (k === 'orcamentos') {
-                const d = await (window.kgbAuth && typeof window.kgbAuth.api === 'function' ? window.kgbAuth.api(base + '/orcamentos', { method: 'GET' }) : window.apiFetch(base + '/orcamentos', { method: 'GET' }));
+                const d = await window.kgbAuth.api(base + '/orcamentos', { method: 'GET' });
                 memSet('orcamentos', Array.isArray(d) ? d : (d?.data||[]));
               }
             } catch(e){}
@@ -85,8 +85,8 @@ const getJSON = (k, def = []) => {
 function readLeadsCache(){ try { return memGet('leads', []) || []; } catch { return []; } }
 function persistLeadsArray(leads){
   try { memSet('leads', leads); } catch {}
-  try { if (window.__API_BASE__ && (window.apiFetch || (window.kgbAuth && typeof window.kgbAuth.api === 'function'))) {
-    (async ()=>{ try { const base = window.__API_BASE__; for(const l of Array.isArray(leads)?leads:[leads]){ await (window.kgbAuth && typeof window.kgbAuth.api === 'function' ? window.kgbAuth.api(base + '/leads', { method: 'POST', body: l }) : window.apiFetch(base + '/leads', { method: 'POST', body: l })); } } catch(e){} })(); } } catch(e){} }
+  try { if (window.__API_BASE__ && window.kgbAuth && typeof window.kgbAuth.api === 'function') {
+    (async ()=>{ try { const base = window.__API_BASE__; for(const l of Array.isArray(leads)?leads:[leads]){ await window.kgbAuth.api(base + '/leads', { method: 'POST', body: l }); } } catch(e){} })(); } } catch(e){} }
 function persistLead(l){ persistLeadsArray([l]); }
 // === API – salvar lead no backend ===
 // Ensure a global API_BASE exists without redeclaring it (avoids duplicate "Identifier ... already been declared")
@@ -100,9 +100,7 @@ try{
 // Helper genérico para chamadas ao backend usando window.apiFetch (sem fallback direto para fetch)
 async function postToApi(path, opts = {}){
   try{
-    if (window.kgbAuth && typeof window.kgbAuth.api === 'function') return await window.kgbAuth.api(path, opts);
-    if (window.apiFetch) return await window.apiFetch(path, opts);
-    console.warn('[postToApi] window.apiFetch não disponível para', path);
+    return await window.kgbAuth.api(path, opts);
   }catch(e){ console.warn('[postToApi] erro', e); }
   return null;
 }
@@ -112,17 +110,11 @@ async function salvarLeadNaApi(novoLead) {
   if (!base) return null;
 
     try {
-      if (window.kgbAuth && typeof window.kgbAuth.api === 'function') {
-        const payload = await window.kgbAuth.api(base + '/leads', { method: 'POST', body: novoLead });
-        return payload?.data || payload || null;
-      }
-      if (window.apiFetch) {
-      const payload = await window.apiFetch(base + '/leads', { method: 'POST', body: novoLead });
+      const payload = await window.kgbAuth.api(base + '/leads', { method: 'POST', body: novoLead });
       return payload?.data || payload || null;
-    }
-    // sem window.apiFetch: não prosseguir (regra: sempre usar window.apiFetch no frontend)
-    console.warn('[ORÇAMENTO] window.apiFetch não disponível — não enviar via fetch direto');
-    return null;
+  
+      // nota: removido fallback para window.apiFetch — kgbAuth.api é requerido
+  
   } catch (e) {
     console.warn('[ORÇAMENTO] Falha ao chamar /leads:', e);
     return null;
@@ -135,16 +127,11 @@ async function salvarOrcamentoNaApi(leadId, dadosOrcamento) {
   if (!base || !leadId) return null;
 
     try {
-      if (window.kgbAuth && typeof window.kgbAuth.api === 'function') {
-        const payload = await window.kgbAuth.api(base + '/orcamentos', { method: 'POST', body: { leadId: String(leadId), dados: dadosOrcamento } });
-        return payload?.orcamento || payload || null;
-      }
-      if (window.apiFetch) {
-      const payload = await window.apiFetch(base + '/orcamentos', { method: 'POST', body: { leadId: String(leadId), dados: dadosOrcamento } });
+      const payload = await window.kgbAuth.api(base + '/orcamentos', { method: 'POST', body: { leadId: String(leadId), dados: dadosOrcamento } });
       return payload?.orcamento || payload || null;
-    }
-    console.warn('[ORÇAMENTO] window.apiFetch não disponível — não enviar via fetch direto');
-    return null;
+    
+      // nota: removido fallback para window.apiFetch — kgbAuth.api é requerido
+    
   } catch (e) {
     console.warn('[ORÇAMENTO] Falha ao chamar /orcamentos:', e);
     return null;
@@ -374,11 +361,11 @@ let servicosDisponiveis   = [];
 
 async function carregarCatalogosDaNuvem() {
   try {
-    if (!(window.apiFetch || (window.kgbAuth && typeof window.kgbAuth.api === 'function'))) return;
+    if (!window.kgbAuth || typeof window.kgbAuth.api !== 'function') return;
     const [c1, c2, c3] = await Promise.all([
-      (window.kgbAuth && typeof window.kgbAuth.api === 'function') ? window.kgbAuth.api('/catalogo/cardapios', { method: 'GET' }) : window.apiFetch('/catalogo/cardapios', { method: 'GET' }),
-      (window.kgbAuth && typeof window.kgbAuth.api === 'function') ? window.kgbAuth.api('/catalogo/adicionais', { method: 'GET' }) : window.apiFetch('/catalogo/adicionais', { method: 'GET' }),
-      (window.kgbAuth && typeof window.kgbAuth.api === 'function') ? window.kgbAuth.api('/catalogo/servicos', { method: 'GET' }) : window.apiFetch('/catalogo/servicos', { method: 'GET' }),
+      window.kgbAuth.api('/catalogo/cardapios', { method: 'GET' }),
+      window.kgbAuth.api('/catalogo/adicionais', { method: 'GET' }),
+      window.kgbAuth.api('/catalogo/servicos', { method: 'GET' }),
     ]);
 
     cardapiosDisponiveis  = Array.isArray(c1?.data) ? c1.data : (Array.isArray(c1) ? c1 : (c1?.items||[]));
