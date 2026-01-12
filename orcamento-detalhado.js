@@ -52,12 +52,12 @@ const getJSON = (k, def=[]) => {
     const orcKeys = ['leads','propostasIndex','propostaLogs','notificacoes'];
     if (orcKeys.includes(k) || k?.startsWith('proposta')){
       try{
-        if (window.__API_BASE__ && window.apiFetch) {
+        if (window.__API_BASE__ && window.kgbAuth && typeof window.kgbAuth.api === 'function') {
           (async ()=>{
             try {
               const base = window.__API_BASE__;
               if (k === 'leads' || k === 'propostasIndex') {
-                const d = await window.apiFetch(base + '/leads', { method: 'GET' });
+                const d = await window.kgbAuth.api(base + '/leads', { method: 'GET' });
                 memSet('leads', Array.isArray(d) ? d : (d?.data||[]));
                 memSet('propostasIndex', Array.isArray(d) ? d : (d?.data||[]));
               }
@@ -122,11 +122,10 @@ function getUsuariosAtivos(){
     return arr.filter(u => ['administrador','vendedor'].includes(String(u?.perfil||'').toLowerCase()));
   } catch { return []; }
 }
-// Helper genérico para chamadas ao backend com fallback para fetch
+// Helper genérico para chamadas ao backend — usa `kgbAuth.api` diretamente
 async function postToApi(path, opts = {}){
   try{
-    if (window.apiFetch) return await window.apiFetch(path, opts);
-    console.warn('[postToApi] window.apiFetch não disponível para', path);
+    return await window.kgbAuth.api(path, opts);
   }catch(e){ console.warn('[postToApi] erro', e); }
   return null;
 }
