@@ -221,31 +221,25 @@ function parseDateAny(v){
 /* tenta achar a coluna do funil para um lead (por id) */
 function getFunilColuna(leadId){
   const idS = String(leadId);
-  const cand = [
-    "funil", "funilLeads", "funilQuadro", "quadroFunil",
-    "kanbanLeads", "pipeline", "boardLeads", "quadroLeads"
-  ];
+  try {
+    // tenta ler colunas vindas da memória do módulo (compatível com formato várias fontes)
+    const data = (typeof memGet === 'function') ? (memGet('colunasLead') || memGet('colunas') || memGet('funil') || null) : null;
+    const cols = data && (data.colunas || data.columns || data.listas || data.boards) ? (data.colunas || data.columns || data.listas || data.boards) : data || [];
+    const arr = Array.isArray(cols) ? cols : (Array.isArray(cols.items) ? cols.items : []);
 
-    try{ if (typeof memGet === 'function') data = memGet(key, null); else data = null; }catch{}
-    if(!data) return null;
-
-    const cols = data.colunas || data.columns || data.listas || data.boards || data;
-    if(!cols || typeof cols !== "object") return null;
-
-    const arr = Array.isArray(cols) ? cols : (Array.isArray(cols.items) ? cols.items : null);
-    if(!arr) return null;
-
-    for(const col of arr){
+    for (const col of arr) {
       const nome = col.nome || col.titulo || col.name || col.label || "";
       const items = col.itens || col.items || col.cards || col.leads || [];
-      for(const it of items){
-        if(typeof it === "string" || typeof it === "number"){
-          if(String(it) === idS) return nome;
-        }else if(it && (String(it.id)===idS || String(it.leadId)===idS)){
+      for (const it of items) {
+        if (typeof it === 'string' || typeof it === 'number') {
+          if (String(it) === idS) return nome;
+        } else if (it && (String(it.id) === idS || String(it.leadId) === idS)) {
           return nome;
         }
       }
     }
+  } catch (e) {
+    console.warn('[Propostas] getFunilColuna erro:', e);
   }
   return "";
 }
