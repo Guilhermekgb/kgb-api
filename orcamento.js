@@ -924,11 +924,34 @@ async function salvarLeadFunil(nextAction) {
   // --- NOVO: salvar também na API /leads ---
   try {
     const salvoApi = await salvarLeadNaApi(novoLead);
-    if (salvoApi) {
-      // se a API devolveu id/token, atualizamos o objeto local
-      if (salvoApi.id)    novoLead.id = salvoApi.id;
-      if (salvoApi.token) novoLead.token = salvoApi.token; // em geral será o mesmo
+
+    const apiId =
+      salvoApi?.id ||
+      salvoApi?._id ||
+      salvoApi?.lead?.id ||
+      salvoApi?.lead?._id ||
+      salvoApi?.item?.id ||
+      salvoApi?.item?._id ||
+      salvoApi?.data?.id ||
+      salvoApi?.data?._id ||
+      null;
+
+    const apiToken =
+      salvoApi?.token ||
+      salvoApi?.lead?.token ||
+      salvoApi?.item?.token ||
+      salvoApi?.data?.token ||
+      null;
+
+    if (!apiId) {
+      alert("Não consegui salvar o lead na nuvem (sem id retornado). Não vou abrir o detalhado.");
+      console.error("[ORÇAMENTO] salvarLeadNaApi não retornou id:", salvoApi);
+      return;
     }
+
+    novoLead.id = String(apiId);
+    if (apiToken) novoLead.token = apiToken;
+
   } catch (e) {
     console.warn("[ORÇAMENTO] Erro ao salvar lead na API (gerarProposta):", e);
   }
