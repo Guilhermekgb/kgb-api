@@ -1567,91 +1567,69 @@ const ESTOQUE_MOVIMENTOS_FILE  = 'estoque-movimentos.json';
 const CHECKLIST_LINKS_FILE = 'checklist-links.json';
 
 
-// === GET /leads/:id — retorna um lead específico (por ID) ===
-app.get('/leads/:id', requireAuth, (req, res) => {
+// =========================================================
+// LEADS (persistência: SQLite com JSON completo)
+// =========================================================
+
+function normalizeLead(body) {
+  const b = body && typeof body === 'object' ? body : {};
+  const now = new Date().toISOString();
+  const lead = { ...b };
+
+  lead.tenantId = lead.tenantId || lead.tenant_id || 'default';
+  lead.id = lead.id || lead._id || lead.leadId || lead.lead_id || (crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)));
+  lead.token = lead.token || lead.leadToken || (crypto && crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + '-' + Date.now().toString(36)));
+
+  lead.createdAt = lead.createdAt || now;
+  lead.updatedAt = now;
+
+  return lead;
+}
+
+function ensureLeadsTable() {
   try {
-    const tenantId = String(req.user?.tenantId || 'default');
-    const leadId   = String(req.params.id || '').trim();
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id TEXT PRIMARY KEY,
+        tenantId TEXT,
+        token TEXT,
+        data_json TEXT,
+        updatedAt TEXT,
+        createdAt TEXT
+      );
+    `);
+  } catch (e) {
+    console.warn('[DB] ensureLeadsTable failed:', e && e.message);
+  }
+}
 
-    if (!leadId) {
-      return res.status(400).json({ error: 'id obrigatório' });
+// POST /leads -> salva JSON completo
+app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
+  try {
+    const lead = normalizeLead(req.body || {});
+
+    ensureLeadsTable();
+
+    try {
+      db.prepare(`INSERT INTO leads (id, tenantId, token, data_json, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          tenantId=excluded.tenantId,
+          token=excluded.token,
+          data_json=excluded.data_json,
+          updatedAt=excluded.updatedAt`).run(
+        lead.id, lead.tenantId, lead.token, JSON.stringify(lead), lead.createdAt, lead.updatedAt
+      );
+    } catch (e) {
+      // fallback for older SQLite: REPLACE
+      db.prepare(`REPLACE INTO leads (id, tenantId, token, data_json, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(lead.id, lead.tenantId, lead.token, JSON.stringify(lead), lead.createdAt, lead.updatedAt);
     }
 
-    const allLeads = loadJSON(LEADS_FILE, []);
-    const leads    = Array.isArray(allLeads) ? allLeads : [];
-
-    const lead = leads.find(
-      (l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
-    );
-
-    if (!lead) {
-      return res.status(404).json({ error: 'Lead não encontrado' });
-    }
+    // update in-memory store
+    try { leadsStore.set(String(lead.id), lead); } catch(e) {}
 
     return res.json({ ok: true, data: lead });
-  } catch (e) {
-    console.error('[GET /leads/:id] erro:', e);
-    return res.status(500).json({ error: 'Erro ao buscar lead' });
-  }
-});
-// === POST /leads — cria ou atualiza um lead (Módulo 7) ===
-app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
-
-  try {
-    const tenantId = String(req.user?.tenantId || 'default');
-    const body     = req.body || {};
-
-    // id do lead (se não mandar, geramos um)
-    let id = String(body.id || '').trim();
-    if (!id) {
-      id = crypto.randomUUID
-        ? crypto.randomUUID()
-        : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
-    }
-
-    const allLeads = loadJSON(LEADS_FILE, []);
-    const leads    = Array.isArray(allLeads) ? allLeads : [];
-
-    const idx = leads.findIndex(
-      (l) => String(l.id) === id && String(l.tenantId || 'default') === tenantId
-    );
-
-    // base do lead que vamos salvar
-    const leadBase = {
-      ...body,
-      id,
-      tenantId
-    };
-
-    // se o front já mandou token, usamos ele; senão geramos um
-    if (!leadBase.token) {
-      leadBase.token =
-        (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36))) +
-        '-' + Math.random().toString(36).slice(2, 6);
-    }
-
-    if (idx >= 0) {
-      // atualiza lead existente
-      const antigo = leads[idx];
-      leads[idx] = {
-        ...antigo,
-        ...leadBase,
-        id: antigo.id,
-        tenantId: antigo.tenantId || tenantId
-      };
-    } else {
-      // novo lead
-      leads.push(leadBase);
-    }
-
-    saveJSON(LEADS_FILE, leads);
-
-    // Log e retorno do lead completo (para o front receber os campos enviados)
-    const savedLead = (idx >= 0) ? leads[idx] : leadBase;
-    console.log('[POST /leads] body:', body);
-    console.log('[POST /leads] saved:', savedLead && (typeof savedLead === 'object' ? JSON.stringify(savedLead) : savedLead));
-
-    return res.json({ ok: true, data: savedLead });
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
@@ -2547,30 +2525,30 @@ app.post('/webhooks/assinaturas', rawJson, (req, res) => {
 
 // ========================= M6 – Funil de Leads: API básica =========================
 
-// GET /leads → lista leads do funil (usado no sync inicial)
+// GET /leads -> lista JSON COMPLETO
 app.get('/leads', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
 
-    const all = loadJSON(LEADS_FILE, []);
-    let leads = Array.isArray(all)
-      ? all.filter(l => String(l.tenantId || 'default') === tenantId)
-      : [];
+    ensureLeadsTable();
 
-    // Filtro opcional: ?ids=1,2,3
-    const idsStr = String(req.query.ids || '').trim();
-    if (idsStr) {
-      const idSet = new Set(
-        idsStr.split(',').map(s => s.trim()).filter(Boolean)
-      );
-      leads = leads.filter(ld => idSet.has(String(ld.id)));
+    try {
+      const rows = db.prepare(`SELECT data_json FROM leads WHERE tenantId = ? ORDER BY updatedAt DESC LIMIT 300`).all(tenantId);
+      const items = Array.isArray(rows) ? rows.map(r => {
+        try { return JSON.parse(r.data_json || '{}'); } catch { return null; }
+      }).filter(Boolean) : [];
+      return res.json({ ok: true, data: items });
+    } catch (e) {
+      console.warn('[LEADS] GET list sqlite failed:', e && e.message);
     }
 
-    // pode devolver array direto (getLeadsAll aceita isso)
-    return res.json(leads);
+    // fallback to file-based list
+    const all = loadJSON(LEADS_FILE, []);
+    const items = Array.isArray(all) ? all.filter(l => String(l.tenantId || 'default') === tenantId) : [];
+    return res.json({ ok: true, data: items });
   } catch (e) {
     console.error('[GET /leads] erro:', e);
-    return res.status(500).json({ error: 'Erro ao listar leads' });
+    return res.status(500).json({ ok: false, error: 'Erro ao listar leads' });
   }
 });
 
