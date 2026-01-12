@@ -227,7 +227,7 @@ function getFunilColuna(leadId){
   ];
 
     try{ if (typeof memGet === 'function') data = memGet(key, null); else data = null; }catch{}
-    if(!data) continue;
+    if(!data) return null;
 
     const cols = data.colunas || data.columns || data.listas || data.boards || data;
     if(!cols || typeof cols !== "object") continue;
