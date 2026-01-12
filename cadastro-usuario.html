@@ -159,7 +159,7 @@
           <i data-lucide="user-plus"></i> <span>Cadastrar Novo Usuário</span>
         </h2>
 
-        <form id="formCadastroUsuario" autocomplete="off">
+        <form id="formCadastroUsuario" autocomplete="off" onsubmit="console.log('[KGB][cadastro-usuario] onsubmit inline'); event.preventDefault(); window.salvarUsuario && window.salvarUsuario(event);">
           <!-- Foto de perfil -->
           <div class="form-linha">
             <div>
@@ -216,7 +216,13 @@
           </div>
 
           <div class="form-rodape">
-            <button id="btnSalvarUsuario" type="button" class="botao-dourado">Salvar Usuário</button>
+            <button
+              id="btnSalvarUsuario"
+              type="button"
+              class="botao-dourado"
+            >
+              Salvar Usuário
+            </button>
           </div>
         </form>
       </div>
@@ -584,119 +590,109 @@
     };
   </script>
   <script>
-    <script>
-      (function () {
-        // garante log único
-        console.log("[KGB][cadastro-usuario] bootstrap script carregado");
+(function () {
+  function $id(id){ return document.getElementById(id); }
 
-        // expõe função no window SEM depender de escopo de module
-        window.salvarUsuario = async function (ev) {
-          try {
-            if (ev && ev.preventDefault) ev.preventDefault();
+  function getSelectedPerfis() {
+    const group = $id('perfisGroup') || document.querySelector('#perfisGroup');
+    if (!group) return [];
+    return Array.from(group.querySelectorAll('input[type="checkbox"][data-perfil], input[type="checkbox"][name="perfis"]'))
+      .filter(ch => ch.checked)
+      .map(ch => ch.getAttribute('data-perfil') || ch.value)
+      .filter(Boolean);
+  }
 
-            console.log("[KGB][cadastro-usuario] salvarUsuario() chamado");
+  async function salvarUsuario(ev) {
+    try {
+      if (ev && ev.preventDefault) ev.preventDefault();
 
-            const nome = (document.querySelector("#nome")?.value || "").trim();
-            const email = (document.querySelector("#email")?.value || "").trim();
-            const whatsapp = (document.querySelector("#telefone")?.value || "").trim();
+      const nome = ($id('nome')?.value || '').trim();
+      const email = ($id('email')?.value || '').trim();
+      const telefone = ($id('telefone')?.value || '').trim();
 
-            const senha = document.querySelector("#senha")?.value || "";
-            const confirmar = document.querySelector("#confirmarSenha")?.value || "";
+      const senha = ($id('senha')?.value || '').trim();
+      const confirmar = ($id('confirmarSenha')?.value || '').trim();
 
-            const perfisSelecionados = Array.from(
-              document.querySelectorAll('input[name="perfis"]:checked')
-            ).map(el => el.value);
+      const perfis = getSelectedPerfis();
 
-            if (!nome || !email) {
-              alert("Preencha nome e e-mail.");
-              return;
-            }
-            if (senha || confirmar) {
-              if (senha !== confirmar) {
-                alert("Senha e Confirmar Senha não conferem.");
-                return;
-              }
-            }
-            if (!perfisSelecionados.length) {
-              alert("Selecione pelo menos 1 perfil.");
-              return;
-            }
+      console.log('[KGB][cadastro-usuario] salvarUsuario() chamado', { nome, email, telefone, perfis });
 
-            const payload = {
-              nome,
-              name: nome,
-              email,
-              whatsapp,
-              telefone: whatsapp,
+      if (!nome) return alert('Informe o nome.');
+      if (!email) return alert('Informe o e-mail.');
+      if (perfis.length < 1) return alert('Selecione pelo menos 1 perfil.');
+      if (!senha) return alert('Informe a senha.');
+      if (senha !== confirmar) return alert('As senhas não conferem.');
 
-              perfis: perfisSelecionados,
-              perfil: perfisSelecionados[0],
+      if (!window.kgbAuth || typeof window.kgbAuth.api !== 'function') {
+        console.error('[KGB][cadastro-usuario] window.kgbAuth.api não disponível');
+        return alert('Erro: auth client não carregou. Recarregue a página (Ctrl+F5).');
+      }
 
-              senha: senha || undefined,
-              password: senha || undefined,
-            };
+      const payload = {
+        nome,
+        email,
+        whatsapp: telefone,
+        telefone,
+        perfis,
+        perfil: perfis[0] || '',
+        senha,
+        password: senha
+      };
 
-            console.log("[KGB][cadastro-usuario] payload ->", payload);
+      console.log('[KGB][cadastro-usuario] payload ->', payload);
 
-            if (!window.kgbAuth || !window.kgbAuth.api) {
-              console.error("[KGB][cadastro-usuario] window.kgbAuth.api não disponível");
-              alert("Erro interno: API client não carregou.");
-              return;
-            }
+      const resp = await window.kgbAuth.api('/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-            const resp = await window.kgbAuth.api("/usuarios", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+      console.log('[KGB][cadastro-usuario] POST /usuarios resp =', resp);
 
-            console.log("[KGB][cadastro-usuario] POST /usuarios resp =", resp);
+      const okHttp = resp && (resp.status === 200 || resp.status === 201 || resp.ok === true);
+      const dataOk = !resp?.data || resp.data.ok !== false;
 
-            const ok =
-              resp?.ok === true ||
-              resp?.status === 200 ||
-              resp?.status === 201 ||
-              resp?.data?.ok === true ||
-              resp?.data?.success === true;
+      if (!okHttp || !dataOk) {
+        const msg = resp?.data?.message || resp?.data?.erro || resp?.message || 'Falha ao salvar usuário.';
+        console.error('[KGB][cadastro-usuario] erro ao salvar:', resp);
+        return alert(msg);
+      }
 
-            if (!ok) {
-              const msg = resp?.data?.message || resp?.data?.error || resp?.message || "Falha ao salvar usuário.";
-              alert(msg);
-              return;
-            }
+      alert('Usuário salvo com sucesso!');
+      window.location.href = 'usuarios.html?ts=' + Date.now();
+    } catch (e) {
+      console.error('[KGB][cadastro-usuario] exceção salvarUsuario:', e);
+      alert('Erro ao salvar usuário. Veja o console.');
+    }
+  }
 
-            alert("Usuário salvo com sucesso!");
-            window.location.href = "usuarios.html?ts=" + Date.now();
-          } catch (err) {
-            console.error("[KGB][cadastro-usuario] erro ao salvar:", err);
-            alert("Erro ao salvar usuário. Veja o console.");
-          }
-        };
+  window.salvarUsuario = salvarUsuario;
 
-        // bind seguro (não depende de inline onclick)
-        function bind() {
-          const btn = document.getElementById("btnSalvarUsuario");
-          const form = document.getElementById("formCadastroUsuario");
+  function bind() {
+    const btn = $id('btnSalvarUsuario');
+    const form = $id('formCadastroUsuario');
 
-          console.log("[KGB][cadastro-usuario] bind()", { btn: !!btn, form: !!form });
+    if (btn) {
+      btn.addEventListener('click', salvarUsuario);
+    } else {
+      console.warn('[KGB][cadastro-usuario] btnSalvarUsuario não encontrado');
+    }
 
-          if (btn) {
-            btn.addEventListener("click", (ev) => window.salvarUsuario(ev));
-          }
+    if (form) {
+      form.addEventListener('submit', salvarUsuario);
+    } else {
+      console.warn('[KGB][cadastro-usuario] formCadastroUsuario não encontrado');
+    }
 
-          if (form) {
-            form.addEventListener("submit", (ev) => window.salvarUsuario(ev));
-          }
-        }
+    console.log('[KGB][cadastro-usuario] bootstrap ok: bind salvarUsuario');
+  }
 
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", bind);
-        } else {
-          bind();
-        }
-      })();
-    </script>
-
-    <!-- legacy auth/api-fetch removed: now use api/auth-client.js -->
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+})();
+</script>
 </body>
 </html>

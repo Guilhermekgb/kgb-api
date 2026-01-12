@@ -417,6 +417,7 @@ window.addEventListener('resize', () => {
     let extras = [];
     try {
       const resp = await api('/perfis', { method: 'GET' });
+      console.log('[KGB][perfis] /perfis resp =', resp);
 
       // unwrap para suportar {ok:true, items:[...]} etc
       const unwrapList = (r) => {
@@ -505,7 +506,11 @@ window.addEventListener('resize', () => {
     await carregarPerfis();
     desenharTabela();
     try { window.lucide?.createIcons?.(); } catch (e) {}
-    try { aplicarPermissoesNaTela(); } catch (e) { console.warn(e); }
+    if (typeof aplicarPermissoesNaTela === 'function') {
+      try { aplicarPermissoesNaTela(); } catch (e) { console.warn(e); }
+    } else {
+      console.warn('[KGB][perfis] aplicarPermissoesNaTela não existe (ok seguir sem ela)');
+    }
   }
 
   // === Ações de CRUD ===
@@ -633,9 +638,31 @@ window.addEventListener('resize', () => {
   window.editarPerfil = editarPerfil;
   window.excluirPerfil = excluirPerfil;
 
-  // Inicializa ao abrir a página
+  // Inicializa ao abrir a página — aguarda guard + DOM
   document.addEventListener('DOMContentLoaded', () => {
-    renderizarPerfis();
+    (async () => {
+      const waitDom = () => new Promise((resolve) => {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', resolve, { once: true });
+        } else resolve();
+      });
+
+      try {
+        if (typeof window.guard === 'function') await window.guard();
+      } catch (e) {
+        console.error('[PERFIS] guard falhou:', e);
+        return;
+      }
+
+      await waitDom();
+
+      try {
+        if (typeof renderizarPerfis === 'function') await renderizarPerfis();
+        else console.warn('[KGB][perfis] renderizarPerfis não definido');
+      } catch (e) {
+        console.error('[PERFIS] erro ao renderizarPerfis', e);
+      }
+    })();
   });
 </script>
 

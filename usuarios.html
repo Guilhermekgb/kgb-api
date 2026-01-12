@@ -366,6 +366,7 @@
           return;
         }
 
+        console.log('[KGB][usuarios] usuarios.length =', Array.isArray(usuarios) ? usuarios.length : 'NAO_ARRAY', usuarios);
         renderUsuarios(usuarios);
       } catch (e) {
         console.error('Erro ao carregar usuários', e);
@@ -375,9 +376,18 @@
 
     function renderUsuarios(usuarios) {
       try {
-      const tbody = document.querySelector('#tbodyUsuarios');
+      const tbody =
+        document.querySelector('#tbodyUsuarios') ||
+        document.querySelector('#usuariosBody') ||
+        document.querySelector('#lista-usuarios') ||
+        document.querySelector('#tabela-usuarios tbody') ||
+        document.querySelector('tbody');
       const vazio = document.querySelector('#vazio');
-      if (!tbody) return;
+      console.log('[KGB][usuarios] renderUsuarios tbody=', tbody);
+      if (!tbody) {
+        console.error('[KGB][usuarios] tbody não encontrado na renderUsuarios');
+        return;
+      }
       tbody.innerHTML = '';
       if (!Array.isArray(usuarios) || usuarios.length === 0) {
         if (vazio) vazio.style.display = 'block';
@@ -455,28 +465,38 @@
   <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
     (async () => {
+      const waitDom = () => new Promise((resolve) => {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', resolve, { once: true });
+        } else {
+          resolve();
+        }
+      });
+
       try {
         if (typeof window.guard === 'function') await window.guard();
+        await waitDom();
 
-        // Em ambiente de desenvolvimento (Live Server), força a API do Render
-        try {
-          const host = (location && location.hostname) ? location.hostname : '';
-          if (host === '127.0.0.1' || host === 'localhost') {
-            window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
-            try { localStorage.setItem('API_BASE', window.__API_BASE__); } catch (e) {}
-            console.log('[KGB] forced API_BASE ->', window.__API_BASE__);
-          }
-        } catch(e) {}
+        // Re-força API_BASE em localhost (se o arquivo já tem, manter — isso aqui só garante)
+        if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+          window.__API_BASE__ = 'https://kgb-api-v2.onrender.com';
+          try { localStorage.setItem('API_BASE', window.__API_BASE__); } catch(e) {}
+          console.log('[KGB][usuarios] forced API_BASE ->', window.__API_BASE__);
+        }
+
       } catch (e) {
         console.error('[USUARIOS] guard falhou:', e);
-        // redirecionamento possivelmente já ocorreu dentro do guard
         return;
       }
 
       try { window.aplicarPermissoesNaTela && window.aplicarPermissoesNaTela(); } catch(e){}
 
       try {
-        if (typeof window.carregarUsuarios === 'function') await window.carregarUsuarios();
+        if (typeof window.carregarUsuarios === 'function') {
+          await window.carregarUsuarios();
+        } else {
+          console.warn('[KGB][usuarios] window.carregarUsuarios não definido');
+        }
       } catch (e) {
         console.error('[USUARIOS] erro init carregarUsuarios:', e);
         alert('Erro ao carregar usuários: ' + (e?.message || e));
