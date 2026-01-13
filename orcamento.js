@@ -1252,28 +1252,7 @@ async function salvarLeadFunil(nextAction) {
     }
   }
   // ===== Notificações Internas (Agenda + Feed) =====
-  try {
-    // Agenda Unificada
-    window.__agendaBridge?.upsertUnifiedItem({
-      id: `lead:new:${novoLead.id}`,
-      src: 'lead',
-      title: `Novo lead: ${novoLead.nome || '—'}`,
-      date: todayISO(),
-      status: 'scheduled',
-      audience: 'vendas',
-      entity: { type:'lead', id: String(novoLead.id) },
-      desc: novoLead.tipoEvento ? `Tipo: ${novoLead.tipoEvento}` : ''
-    });
-
-    // Feed curto (Recentes)
-    window.__agendaBridge?.publishNotificationFeed?.({
-      id:`feed:lead:new:${novoLead.id}`,
-      title:`Novo lead criado: ${novoLead.nome || '—'}`,
-      level:'info',
-      createdAtISO:new Date().toISOString(),
-      audience:'vendas'
-    });
-  } catch(e){ console.warn('hook lead:new', e); }
+  // (Removido: não deve chamar bridge de agenda ao salvar lead)
 
   // ===== Lista de Propostas (índice) — sem duplicar =====
   // Observação: índice de propostas agora é servido pela API; não gravamos mais em storage persistente.
