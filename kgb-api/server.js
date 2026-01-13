@@ -74,6 +74,41 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// ==== MIGRAÇÃO DEFENSIVA (NÃO QUEBRAR DEPLOY) ====
+async function ensureLeadsSchema() {
+  try {
+    // 1) cria tabela com payload já previsto (idempotente)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS leads (
+        tenantId TEXT NOT NULL,
+        id TEXT NOT NULL,
+        token TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        payload TEXT,
+        PRIMARY KEY (tenantId, id)
+      );
+    `);
+
+    // 2) checa colunas existentes (idempotente)
+    const cols = db.prepare(`PRAGMA table_info(leads)`).all() || [];
+    const names = new Set(cols.map(c => c.name));
+
+    // 3) adiciona payload apenas se faltar
+    if (!names.has('payload')) {
+      try {
+        db.prepare(`ALTER TABLE leads ADD COLUMN payload TEXT`).run();
+        console.log('[LEADS] coluna payload adicionada');
+      } catch (e) {
+        console.warn('[LEADS] ALTER payload ignorado:', String(e && e.message ? e.message : e));
+      }
+    }
+  } catch (e) {
+    console.warn('[LEADS] ensureLeadsSchema failed (non-fatal):', e && (e.message || e));
+  }
+}
+// ==== FIM MIGRAÇÃO DEFENSIVA ====
+
 // Auth debug helper
 const AUTH_DEBUG = process.env.AUTH_DEBUG === '1';
 const dlog = (...args) => { if (AUTH_DEBUG) console.log('[AUTH_DEBUG]', ...args); };
@@ -1604,13 +1639,10 @@ function ensureLeadsTable() {
   }
 }
 
-  // Defensive: ensure payload column exists for older DBs
-  try {
-    db.prepare("ALTER TABLE leads ADD COLUMN payload TEXT").run();
-    console.log("[DB] leads: coluna payload criada");
-  } catch (e) {
-    console.log("[DB] leads: payload já existe (ok)");
-  }
+  // Run defensive leads schema migration (non-fatal)
+  ensureLeadsSchema()
+    .then(() => console.log('[LEADS] schema OK'))
+    .catch(err => console.error('[LEADS] schema FAILED (non-fatal):', err && (err.message || err)));
 
 // POST /leads -> salva JSON completo
 // ===== PATCH: POST /leads - persistir payload completo =====
