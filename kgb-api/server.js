@@ -1831,44 +1831,10 @@ app.delete('/degustacoes-disponiveis/:id', requireAuth, (req, res) => {
 });
 
 // === ROTAS: Agenda (CRUD) ===
-  app.get('/leads/:id', requireAuth, (req, res) => {
-    try {
-      const tenantId = req.tenantId || 'default';
-      const id = String(req.params.id || '').trim();
-      if (!id) return res.status(400).json({ ok: false, error: 'Missing id' });
+// (Obs) Rotas de agenda foram removidas daqui porque havia código solto/fora de handler.
+// Mantemos apenas o DELETE abaixo, e as demais rotas (se existirem) devem ficar em seção própria.
 
-      const row = db.prepare(`SELECT * FROM leads WHERE tenantId=? AND id=?`).get(tenantId, id);
-      if (!row) return res.status(404).json({ ok: false, error: 'Lead não encontrado' });
-
-      let payloadObj = {};
-      try { if (row.payload) payloadObj = JSON.parse(row.payload); } catch (e) { payloadObj = {}; }
-
-      const merged = { ...payloadObj, ...row };
-      delete merged.payload;
-      return res.json({ ok: true, data: merged });
-    } catch (err) {
-      console.error('[LEADS] erro GET /leads/:id:', err);
-      return res.status(500).json({ ok: false, error: 'Erro ao buscar lead' });
-    }
-  });
-    if (data === null) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
-    const hora = body.hora || null;
-    const tipo = body.tipo || 'evento';
-    const ref_id = body.ref_id || null;
-    const titulo = body.titulo || 'Compromisso';
-    const status = body.status || 'pendente';
-    const observacoes = body.observacoes || null;
-
-    db.prepare('UPDATE agenda SET tipo = ?, ref_id = ?, titulo = ?, data = ?, hora = ?, status = ?, observacoes = ?, updated_at = datetime(\'now\') WHERE id = ?')
-      .run(tipo, ref_id, titulo, data, hora, status, observacoes, id);
-    const row = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
-    return res.json({ ok: true, item: row });
-  } catch (e) {
-    console.error('[PUT /agenda/:id] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao atualizar agenda' });
-  }
-});
-
+// (não mexer na linha abaixo)
 app.delete('/agenda/:id', requireAuth, (req, res) => {
   try {
     const id = Number(req.params.id || 0);
