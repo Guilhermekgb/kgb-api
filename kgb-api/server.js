@@ -2109,37 +2109,37 @@ app.delete('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, re
   });
 
   // POST /feiras — cria ou atualiza (se enviar id)
-  app.post('/feiras', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
+  app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
     try {
-      const body = req.body || {};
-      const all = loadJSON(FEIRAS_FILE, []);
-      const id = String(body.id || crypto.randomUUID());
-      const idx = all.findIndex(f => String(f.id) === id);
-      const now = new Date().toISOString();
-      const feira = { ...(body || {}), id, criadoEm: body.criadoEm || now };
-      if (idx >= 0) {
-        all[idx] = { ...all[idx], ...feira };
-      } else {
-        all.push(feira);
-      }
-      saveJSON(FEIRAS_FILE, all);
-      return res.status(idx >= 0 ? 200 : 201).json({ ok: true, data: feira });
-    } catch (e) {
-      console.error('[POST /feiras] erro:', e);
-      return res.status(500).json({ ok: false, error: 'Erro ao salvar feira' });
-    }
-  });
+      const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
+      let leadFinal = { ...incoming };
+      const id = leadFinal.id || crypto.randomUUID();
+      const tenantId = req.user?.tenantId || 'default';
 
-  // PUT /feiras/:id — atualiza feira
-  app.put('/feiras/:id', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
-    try {
-      const id = String(req.params.id || '').trim();
-      if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
-      const body = req.body || {};
-      const all = loadJSON(FEIRAS_FILE, []);
-      const idx = all.findIndex(f => String(f.id) === id);
-      if (idx === -1) return res.status(404).json({ ok: false, error: 'Feira não encontrada' });
-      all[idx] = { ...all[idx], ...body };
+      const payloadToSave = JSON.stringify({
+        ...leadFinal,
+        id,
+        tenantId
+      });
+
+      db.prepare(`
+        INSERT INTO leads (id, tenantId, payload, createdAt, updatedAt)
+        VALUES (?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(id) DO UPDATE SET
+          payload = excluded.payload,
+          updatedAt = datetime('now')
+      `).run(
+        id,
+        tenantId,
+        payloadToSave
+      );
+
+      console.log('[LEADS] SALVO:', { id, tenantId });
+
+      res.json({
+        ok: true,
+        id
+      });
       saveJSON(FEIRAS_FILE, all);
       return res.json({ ok: true, data: all[idx] });
     } catch (e) {
@@ -2661,60 +2661,31 @@ app.get('/leads', requireAuth, (req, res) => {
 });
 
   // ===================== LEADS: GET /leads/:id =====================
+
   app.get('/leads/:id', requireAuth, async (req, res) => {
+    const { id } = req.params;
 
-    try {
-      const id = String(req.params.id || '').trim();
-      const tenantId = req.user?.tenantId || req.user?.tenant || 'default';
-      if (!id) return res.status(400).json({ ok: false, error: 'Missing id' });
+    const row = db
+      .prepare(`SELECT payload FROM leads WHERE id = ?`)
+      .get(id);
 
-      // Logar tenant e id
-      console.log('[LEADS] GET /leads/:id id=', id, 'tenant=', tenantId, 'user=', req.user?.email || req.user?.id || 'n/a');
-
-      // 1) SQLite primeiro (fonte principal)
-      try {
-        const row = db.prepare('SELECT *, data_json, payload FROM leads WHERE id = ?').get(id);
-        if (row) {
-          // Diagnóstico de tenant mismatch
-          const rowAnyTenant = db.prepare('SELECT tenantId FROM leads WHERE id = ?').get(id);
-          if (rowAnyTenant && rowAnyTenant.tenantId && rowAnyTenant.tenantId !== tenantId) {
-            console.warn('[LEADS] tenant mismatch: id existe em tenant', rowAnyTenant.tenantId, 'mas request tenant é', tenantId);
-          }
-          let payloadParsed = {};
-          try {
-            if (row && row.payload) payloadParsed = JSON.parse(row.payload);
-          } catch (e) { payloadParsed = {}; }
-          const merged = { ...payloadParsed, ...row };
-          delete merged.payload;
-          delete merged.data_json;
-          console.log('[LEADS] GET /leads/:id id=', id, 'tenant=', tenantId);
-          return res.json({ ok: true, item: merged });
-        }
-      } catch (e) {
-        console.warn('[GET /leads/:id] sqlite lookup failed:', e?.message || e);
-      }
-
-      // 2) Fallback: leadsStore em memória (se existir)
-      try {
-        if (typeof leadsStore !== 'undefined' && leadsStore && leadsStore.has(id)) {
-          return res.json({ ok: true, data: leadsStore.get(id) });
-        }
-      } catch (e) { /* ignore */ }
-
-      // 3) Fallback: arquivo leads.json (se existir na sua base)
-      try {
-        const arr = loadJSON(LEADS_FILE, []);
-        const found = (Array.isArray(arr) ? arr : []).find(l => String(l?.id) === id);
-        if (found) return res.json({ ok: true, data: found });
-      } catch (e) {
-        console.warn('[GET /leads/:id] file lookup failed:', e?.message || e);
-      }
-
-      return res.status(404).json({ ok: false, error: 'Lead not found', id });
-    } catch (err) {
-      console.error('[GET /leads/:id] error:', err);
-      return res.status(500).json({ ok: false, error: 'Internal error' });
+    if (!row) {
+      console.warn('[LEADS] GET 404 id:', id);
+      return res.status(404).json({ ok: false, error: 'Lead not found' });
     }
+
+    let payload;
+    try {
+      payload = JSON.parse(row.payload);
+    } catch (e) {
+      console.error('[LEADS] ERRO parse payload:', e);
+      return res.status(500).json({ ok: false });
+    }
+
+    res.json({
+      ok: true,
+      data: payload
+    });
   });
 
 // PUT /leads/:id → chamado quando você arrasta o card de coluna
