@@ -82,6 +82,10 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
+console.log('[KGB][DB] SQLite path:', db.filename || DB_PATH);
+db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, rows) => {
+  console.log('[KGB][DB] tables:', rows);
+});
 // Diagnóstico do schema da tabela leads (compatível sqlite3-style)
 try {
   if (typeof db.all === 'function') {
@@ -143,13 +147,11 @@ function ensureLeadsSchema(db) {
   try {
     db.exec(`
       CREATE TABLE IF NOT EXISTS leads (
-        tenantId TEXT NOT NULL,
-        id TEXT NOT NULL,
-        token TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
+        id TEXT PRIMARY KEY,
+        tenantId TEXT,
         payload TEXT,
-        PRIMARY KEY (tenantId, id)
+        createdAt TEXT,
+        updatedAt TEXT
       );
     `);
 
