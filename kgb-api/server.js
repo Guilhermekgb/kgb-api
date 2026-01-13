@@ -1660,7 +1660,6 @@ function ensureLeadsTable() {
 // ===== PATCH: POST /leads - persistir payload completo =====
 app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
   try {
-    const tenantId = req.tenantId || 'default';
 
     // body cru que veio do front
     const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
@@ -1673,15 +1672,21 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res
     const token = incoming.token || crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    // ✅ lead final: mantém tudo do incoming + adiciona metadados
-    const leadFinal = {
+    // PATCH: Forçar tenantId do token
+    const tenantFromToken = req.user?.tenantId || req.user?.tenant || null;
+    let leadFinal = {
       ...incoming,
-      tenantId,
       id,
       token,
       createdAt: incoming.createdAt || nowIso,
       updatedAt: nowIso,
     };
+    if (tenantFromToken) {
+      leadFinal.tenantId = tenantFromToken;
+    } else if (!leadFinal.tenantId) {
+      leadFinal.tenantId = 'default';
+    }
+    console.log('[LEADS] POST tenantId final =', leadFinal.tenantId, 'user=', req.user?.email || req.user?.id || 'n/a');
 
     // ✅ payload COMPLETO (é isso que vamos salvar no DB)
     const payloadStr = JSON.stringify(leadFinal);
@@ -2587,14 +2592,24 @@ app.get('/leads', requireAuth, (req, res) => {
 
   // ===================== LEADS: GET /leads/:id =====================
   app.get('/leads/:id', requireAuth, async (req, res) => {
+
     try {
       const id = String(req.params.id || '').trim();
+      const tenantId = req.user?.tenantId || req.user?.tenant || 'default';
       if (!id) return res.status(400).json({ ok: false, error: 'Missing id' });
+
+      // Logar tenant e id
+      console.log('[LEADS] GET /leads/:id id=', id, 'tenant=', tenantId, 'user=', req.user?.email || req.user?.id || 'n/a');
 
       // 1) SQLite primeiro (fonte principal)
       try {
         const row = db.prepare('SELECT *, data_json, payload FROM leads WHERE id = ?').get(id);
         if (row) {
+          // Diagnóstico de tenant mismatch
+          const rowAnyTenant = db.prepare('SELECT tenantId FROM leads WHERE id = ?').get(id);
+          if (rowAnyTenant && rowAnyTenant.tenantId && rowAnyTenant.tenantId !== tenantId) {
+            console.warn('[LEADS] tenant mismatch: id existe em tenant', rowAnyTenant.tenantId, 'mas request tenant é', tenantId);
+          }
           const payload = row.payload ? (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) : {};
           const merged = { ...payload, ...row };
           // remove raw storage fields that are not part of the logical lead
