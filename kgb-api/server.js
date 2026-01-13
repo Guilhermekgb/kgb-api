@@ -1617,6 +1617,8 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
   try {
     const lead = normalizeLead(req.body || {});
 
+    console.log('[LEADS] salvando payload keys:', Object.keys(lead || {}).slice(0,30));
+
     ensureLeadsTable();
 
     try {
@@ -1641,7 +1643,16 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
     // update in-memory store
     try { leadsStore.set(String(lead.id), lead); } catch(e) {}
 
-    return res.json({ ok: true, data: lead });
+    const responseData = {
+      ...(lead || {}),
+      tenantId: lead.tenantId || 'default',
+      id: lead.id,
+      token: lead.token,
+      createdAt: lead.createdAt,
+      updatedAt: lead.updatedAt
+    };
+
+    return res.json({ ok: true, data: responseData });
   } catch (e) {
     console.error('[POST /leads] erro:', e);
     return res.status(500).json({ error: 'Erro ao salvar lead' });
@@ -2549,7 +2560,10 @@ app.get('/leads', requireAuth, (req, res) => {
       const items = Array.isArray(rows) ? rows.map(r => {
         try {
           const payload = r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : {};
-          return { ...payload, ...r };
+          const merged = { ...payload, ...r };
+          delete merged.payload;
+          delete merged.data_json;
+          return merged;
         } catch (e) { return null; }
       }).filter(Boolean) : [];
       return res.json({ ok: true, data: items });
@@ -2578,9 +2592,10 @@ app.get('/leads', requireAuth, (req, res) => {
         const row = db.prepare('SELECT *, data_json, payload FROM leads WHERE id = ?').get(id);
         if (row) {
           const payload = row.payload ? (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) : {};
-          // merge giving precedence to DB row fields when conflicts (row should reflect meta columns)
           const merged = { ...payload, ...row };
-          // try to return a clean object (strip internal payload/raw fields if desired)
+          // remove raw storage fields that are not part of the logical lead
+          delete merged.payload;
+          delete merged.data_json;
           return res.json({ ok: true, data: merged });
         }
       } catch (e) {
