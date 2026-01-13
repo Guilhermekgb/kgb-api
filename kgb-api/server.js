@@ -86,19 +86,36 @@ console.log('[KGB][DB] SQLite path:', db.filename || DB_PATH);
 db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, rows) => {
   console.log('[KGB][DB] tables:', rows);
 });
-// Diagnóstico do schema da tabela leads (compatível sqlite3-style)
 try {
-  if (typeof db.all === 'function') {
-    db.all("PRAGMA table_info(leads)", [], (err, rows) => {
-      if (err) {
-        console.error("[KGB][SCHEMA] erro PRAGMA leads:", err);
-      } else {
-        console.log("[KGB][SCHEMA] PRAGMA table_info(leads):", JSON.stringify(rows, null, 2));
-      }
-    });
-  }
+  // (1) caminho do DB (melhor esforço)
+  const dbPath =
+    (typeof DB_PATH !== 'undefined' && DB_PATH) ||
+    process.env.SQLITE_PATH ||
+    './data.db';
+  console.log('[KGB][DB] SQLite path:', dbPath);
+
+  // (2) listar tabelas existentes
+  const tables = db.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+  ).all();
+  console.log('[KGB][DB] tables:', tables.map(t => t.name));
+
+  // (3) garantir tabela leads (schema mínimo seguro)
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      tenantId TEXT,
+      payload TEXT,
+      createdAt TEXT,
+      updatedAt TEXT
+    )
+  `).run();
+
+  // (4) PRAGMA schema da tabela CORRETA: leads
+  const pragma = db.prepare("PRAGMA table_info(leads)").all();
+  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', pragma);
 } catch (e) {
-  console.warn('[KGB][SCHEMA] Falha ao obter PRAGMA table_info(leads) (db.all):', e?.message || e);
+  console.log('[KGB][DB] init/schema logs failed:', e?.message || e);
 }
 // Diagnóstico do schema da tabela leads
 try {
