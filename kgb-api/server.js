@@ -82,43 +82,35 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
-// ==============================
-// [KGB][DB] Debug (better-sqlite3)
-// ==============================
+// --- LEADS: garantir tabela no SQLite (Render/local) ---
 try {
-  // caminho do arquivo (pelo seu log atual, parece ser ./data.db)
-  console.log("[KGB][DB] Caminho SQLite:", DB_PATH || "./data.db");
-
-  const tables = db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-    .all()
-    .map((r) => r.name);
-
-  console.log("[KGB][DB] tables:", tables);
-
-  // garante tabela leads (id TEXT UUID)
-  db.prepare(`
+  // explícito: usar "leads" (sem typo)
+  db.exec(`
     CREATE TABLE IF NOT EXISTS leads (
       id TEXT PRIMARY KEY,
       tenantId TEXT NOT NULL,
       payload TEXT NOT NULL,
-      createdAt TEXT,
-      updatedAt TEXT
-    )
-  `).run();
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_leads_tenantId ON leads(tenantId);
+  `);
 
-  const leadsSchema = db.prepare("PRAGMA table_info(leads)").all();
-  console.log("[KGB][SCHEMA] PRAGMA table_info(leads):", leadsSchema);
+  // listar tabelas após garantir schema
+  const tables = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type='table'
+    ORDER BY name
+  `).all();
+
+  console.log('[KGB][DB] tables (after ensure leads):', tables.map(t => t.name));
+
+  const schemaLeads = db.prepare(`PRAGMA table_info(leads)`).all();
+  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', schemaLeads);
 } catch (e) {
-  console.error("[KGB][DB] debug error:", e?.message || e);
+  console.error('[KGB][DB] failed ensuring leads table:', e?.message || e);
 }
-// Diagnóstico do schema da tabela leads
-try {
-  const pragmaLeads = db.prepare('PRAGMA table_info(leads)').all();
-  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', pragmaLeads);
-} catch (e) {
-  console.warn('[KGB][SCHEMA] Falha ao obter PRAGMA table_info(leads):', e?.message || e);
-}
+// --- /LEADS ---
 // --- KGB: sanitize values for sqlite (avoid binding objects -> 500) ---
 function kgbSafeStringify(v) {
   try { return JSON.stringify(v); } catch (e) { return String(v); }
