@@ -82,6 +82,39 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
+// --- KGB: sanitize values for sqlite (avoid binding objects -> 500) ---
+function kgbSafeStringify(v) {
+  try { return JSON.stringify(v); } catch (e) { return String(v); }
+}
+function kgbToSqlValue(v) {
+  if (v === undefined) return null;
+  if (v === null) return null;
+  if (v instanceof Date) return v.toISOString();
+  const t = typeof v;
+  if (t === 'string' || t === 'number' || t === 'boolean') return v;
+  // arrays/objects/functions -> stringify
+  return kgbSafeStringify(v);
+}
+function kgbSanitizeSqlParams(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) out[k] = kgbToSqlValue(v);
+  return out;
+}
+function kgbPickLeadPayload(src) {
+  // payload completo que o front precisa enxergar no detalhado
+  const allowed = [
+    'id','nome','whatsapp','telefone','email',
+    'dataEvento','dataEventoISO','horarioEvento',
+    'local','qtd','tipoEvento','comoConheceu','observacoes',
+    'origem','status','responsavel','responsavel_nome',
+    'cardapios_enviados','adicionaisSelecionados','servicosSelecionados',
+    'descontoReais','descontoPorcentagem','valorTotal','proximoContato',
+    'dataCriacao','historico'
+  ];
+  const p = {};
+  for (const k of allowed) if (k in (src || {})) p[k] = src[k];
+  return p;
+}
 db.pragma('journal_mode = WAL');
 
 // ==== MIGRAÇÃO DEFENSIVA SÍNCRONA (NÃO QUEBRAR DEPLOY) ====
@@ -1672,7 +1705,7 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res
     const token = incoming.token || crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    // PATCH: Forçar tenantId do token
+    // Forçar tenantId do token
     const tenantFromToken = req.user?.tenantId || req.user?.tenant || null;
     let leadFinal = {
       ...incoming,
@@ -1686,10 +1719,20 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res
     } else if (!leadFinal.tenantId) {
       leadFinal.tenantId = 'default';
     }
-    console.log('[LEADS] POST tenantId final =', leadFinal.tenantId, 'user=', req.user?.email || req.user?.id || 'n/a');
 
-    // ✅ payload COMPLETO (é isso que vamos salvar no DB)
-    const payloadStr = JSON.stringify(leadFinal);
+    // NÃO enviar objetos crus para o sqlite
+    delete leadFinal.raw;
+    delete leadFinal._raw;
+
+    // payload completo (texto) para o detalhado
+    const payloadObj = kgbPickLeadPayload(leadFinal);
+    const payloadStr = kgbSafeStringify(payloadObj);
+    leadFinal.payload = payloadStr;
+
+    // IMPORTANTÍSSIMO: sanitiza qualquer valor antes de bind no sqlite
+    const sqlParams = kgbSanitizeSqlParams(leadFinal);
+
+    console.log('[LEADS] POST tenantId final =', leadFinal.tenantId, 'id=', leadFinal.id);
 
     // garante coluna payload (defensivo)
     try {
@@ -1699,27 +1742,27 @@ app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res
     }
 
     // UPSERT simples: se existir, atualiza; se não, insere
-    const exists = db.prepare(`SELECT id FROM leads WHERE tenantId=? AND id=?`).get(tenantId, id);
+    const exists = db.prepare(`SELECT id FROM leads WHERE tenantId=? AND id=?`).get(leadFinal.tenantId, id);
 
     if (exists) {
       db.prepare(`
         UPDATE leads
-           SET token = ?,
-               updatedAt = ?,
-               payload = ?
-         WHERE tenantId = ? AND id = ?
-      `).run(token, nowIso, payloadStr, tenantId, id);
+           SET token = @token,
+               updatedAt = @updatedAt,
+               payload = @payload
+         WHERE tenantId = @tenantId AND id = @id
+      `).run(sqlParams);
     } else {
       db.prepare(`
         INSERT INTO leads (tenantId, id, token, createdAt, updatedAt, payload)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(tenantId, id, token, leadFinal.createdAt || nowIso, nowIso, payloadStr);
+        VALUES (@tenantId, @id, @token, @createdAt, @updatedAt, @payload)
+      `).run(sqlParams);
     }
 
-    // ✅ responde com o lead completo (pra redirecionar e já usar no detalhado)
+    // responde com o lead completo (pra redirecionar e já usar no detalhado)
     return res.json({ ok: true, data: leadFinal });
   } catch (err) {
-    console.error('[LEADS] erro POST /leads:', err);
+    console.error('[LEADS] POST ERROR', err?.message, err?.stack);
     return res.status(500).json({ ok: false, error: 'Erro ao salvar lead' });
   }
 });
@@ -2610,12 +2653,15 @@ app.get('/leads', requireAuth, (req, res) => {
           if (rowAnyTenant && rowAnyTenant.tenantId && rowAnyTenant.tenantId !== tenantId) {
             console.warn('[LEADS] tenant mismatch: id existe em tenant', rowAnyTenant.tenantId, 'mas request tenant é', tenantId);
           }
-          const payload = row.payload ? (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) : {};
-          const merged = { ...payload, ...row };
-          // remove raw storage fields that are not part of the logical lead
+          let payloadParsed = {};
+          try {
+            if (row && row.payload) payloadParsed = JSON.parse(row.payload);
+          } catch (e) { payloadParsed = {}; }
+          const merged = { ...payloadParsed, ...row };
           delete merged.payload;
           delete merged.data_json;
-          return res.json({ ok: true, data: merged });
+          console.log('[LEADS] GET /leads/:id id=', id, 'tenant=', tenantId);
+          return res.json({ ok: true, item: merged });
         }
       } catch (e) {
         console.warn('[GET /leads/:id] sqlite lookup failed:', e?.message || e);
