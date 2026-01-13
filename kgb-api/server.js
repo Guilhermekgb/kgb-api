@@ -21,6 +21,16 @@ const bcrypt   = require('bcryptjs');
 // Boot log to help identify which server.js is running on the host
 console.log('[BOOT]', 'KGB API SERVER LOADED', new Date().toISOString());
 
+// --- FATAL LOGS (Render) ---
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException:', err);
+  // deixo o processo cair explicitamente para o Render registrar o motivo
+  process.exit(1);
+});
+
 // Optional AWS S3 presign support (enabled when AWS env vars are provided)
 let s3Client = null;
 let hasS3 = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.S3_BUCKET && process.env.AWS_REGION);
@@ -74,10 +84,9 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
-// ==== MIGRAÇÃO DEFENSIVA (NÃO QUEBRAR DEPLOY) ====
-async function ensureLeadsSchema() {
+// ==== MIGRAÇÃO DEFENSIVA SÍNCRONA (NÃO QUEBRAR DEPLOY) ====
+function ensureLeadsSchema(db) {
   try {
-    // 1) cria tabela com payload já previsto (idempotente)
     db.exec(`
       CREATE TABLE IF NOT EXISTS leads (
         tenantId TEXT NOT NULL,
@@ -90,24 +99,25 @@ async function ensureLeadsSchema() {
       );
     `);
 
-    // 2) checa colunas existentes (idempotente)
-    const cols = db.prepare(`PRAGMA table_info(leads)`).all() || [];
-    const names = new Set(cols.map(c => c.name));
+    // Checa colunas existentes
+    const cols = db.prepare(`PRAGMA table_info(leads)`).all();
+    const hasPayload = Array.isArray(cols) && cols.some(c => c && c.name === 'payload');
 
-    // 3) adiciona payload apenas se faltar
-    if (!names.has('payload')) {
+    if (!hasPayload) {
       try {
-        db.prepare(`ALTER TABLE leads ADD COLUMN payload TEXT`).run();
-        console.log('[LEADS] coluna payload adicionada');
+        db.exec(`ALTER TABLE leads ADD COLUMN payload TEXT;`);
+        console.log('[LEADS] coluna payload criada via ALTER TABLE');
       } catch (e) {
-        console.warn('[LEADS] ALTER payload ignorado:', String(e && e.message ? e.message : e));
+        console.warn('[LEADS] aviso: não foi possível adicionar coluna payload (ignorado):', e?.message || e);
       }
+    } else {
+      console.log('[LEADS] schema OK (payload já existe)');
     }
   } catch (e) {
-    console.warn('[LEADS] ensureLeadsSchema failed (non-fatal):', e && (e.message || e));
+    console.warn('[LEADS] schema ensure falhou (não-fatal):', e?.message || e);
   }
 }
-// ==== FIM MIGRAÇÃO DEFENSIVA ====
+// ==== FIM MIGRAÇÃO DEFENSIVA SÍNCRONA ====
 
 // Auth debug helper
 const AUTH_DEBUG = process.env.AUTH_DEBUG === '1';
@@ -1639,10 +1649,12 @@ function ensureLeadsTable() {
   }
 }
 
-  // Run defensive leads schema migration (non-fatal)
-  ensureLeadsSchema()
-    .then(() => console.log('[LEADS] schema OK'))
-    .catch(err => console.error('[LEADS] schema FAILED (non-fatal):', err && (err.message || err)));
+  // Run defensive leads schema migration synchronously (non-fatal)
+  try {
+    ensureLeadsSchema(db);
+  } catch (e) {
+    console.error('[LEADS] ensureLeadsSchema threw (non-fatal):', e && (e.message || e));
+  }
 
 // POST /leads -> salva JSON completo
 // ===== PATCH: POST /leads - persistir payload completo =====
