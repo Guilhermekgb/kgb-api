@@ -82,40 +82,35 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
-console.log('[KGB][DB] SQLite path:', db.filename || DB_PATH);
-db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, rows) => {
-  console.log('[KGB][DB] tables:', rows);
-});
+// ==============================
+// [KGB][DB] Debug (better-sqlite3)
+// ==============================
 try {
-  // (1) caminho do DB (melhor esforço)
-  const dbPath =
-    (typeof DB_PATH !== 'undefined' && DB_PATH) ||
-    process.env.SQLITE_PATH ||
-    './data.db';
-  console.log('[KGB][DB] SQLite path:', dbPath);
+  // caminho do arquivo (pelo seu log atual, parece ser ./data.db)
+  console.log("[KGB][DB] Caminho SQLite:", DB_PATH || "./data.db");
 
-  // (2) listar tabelas existentes
-  const tables = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-  ).all();
-  console.log('[KGB][DB] tables:', tables.map(t => t.name));
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    .all()
+    .map((r) => r.name);
 
-  // (3) garantir tabela leads (schema mínimo seguro)
+  console.log("[KGB][DB] tables:", tables);
+
+  // garante tabela leads (id TEXT UUID)
   db.prepare(`
     CREATE TABLE IF NOT EXISTS leads (
       id TEXT PRIMARY KEY,
-      tenantId TEXT,
-      payload TEXT,
+      tenantId TEXT NOT NULL,
+      payload TEXT NOT NULL,
       createdAt TEXT,
       updatedAt TEXT
     )
   `).run();
 
-  // (4) PRAGMA schema da tabela CORRETA: leads
-  const pragma = db.prepare("PRAGMA table_info(leads)").all();
-  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', pragma);
+  const leadsSchema = db.prepare("PRAGMA table_info(leads)").all();
+  console.log("[KGB][SCHEMA] PRAGMA table_info(leads):", leadsSchema);
 } catch (e) {
-  console.log('[KGB][DB] init/schema logs failed:', e?.message || e);
+  console.error("[KGB][DB] debug error:", e?.message || e);
 }
 // Diagnóstico do schema da tabela leads
 try {
