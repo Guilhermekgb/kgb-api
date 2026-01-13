@@ -8,6 +8,174 @@ function parseDataLocal(str){
   const d = new Date(s);
   return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
+
+
+(function () {
+  async function apiGetLeadById(id) {
+    const hasKgbAuth = !!(window.kgbAuth && typeof window.kgbAuth.api === "function");
+    const hasApiFetch = typeof window.apiFetch === "function";
+
+    if (!hasKgbAuth && !hasApiFetch) {
+      console.error("[DETALHADO] ERRO: client de API não carregado (kgbAuth.api/apiFetch).");
+      throw new Error("Client de API não carregado");
+    }
+
+    let data;
+    if (hasKgbAuth) {
+      data = await window.kgbAuth.api(`/leads/${encodeURIComponent(id)}`, { method: "GET" });
+    } else {
+      const resp = await window.apiFetch(`/leads/${encodeURIComponent(id)}`, { method: "GET" });
+      if (resp && typeof resp.ok === "boolean" && typeof resp.json === "function") {
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => "");
+          throw new Error(`GET /leads/${id} falhou: ${resp.status} ${txt}`);
+        }
+        data = await resp.json();
+      } else {
+        data = resp;
+      }
+    }
+
+    const payload = (data && typeof data === "object" && "ok" in data && "data" in data) ? data.data : data;
+
+    console.log("[DETALHADO] payload bruto (direct):", data);
+    console.log("[DETALHADO] payload usado:", payload);
+
+    return payload;
+  }
+
+  function normalizeLead(lead) {
+    try {
+      if (typeof window.kgbNormalizeLead === "function") {
+        return window.kgbNormalizeLead(lead);
+      }
+    } catch (_) {}
+    return lead;
+  }
+
+  function bindLeadToForm(lead) {
+  const obj = lead || {};
+  const keys = Object.keys(obj);
+
+  let filled = 0;
+  let tried = 0;
+
+  console.log("[DETALHADO] keys:", keys);
+  console.log("[DETALHADO] keys (join):", keys.join(" | "));
+  console.log("[DETALHADO] obj completo:", obj);
+
+  // 1) data-bind (preferido)
+  document.querySelectorAll("[data-bind]").forEach((el) => {
+    const key = el.getAttribute("data-bind");
+    if (!key) return;
+
+    tried++;
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+    console.log("[DETALHADO] preenchido:", key, "=>", val, "| el:", el);
+  });
+
+  // 2) fallback: name/id iguais às keys
+  keys.forEach((key) => {
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    const byName = document.querySelector(`[name="${CSS.escape(key)}"]`);
+    const byId = document.getElementById(key);
+    const el = byName || byId;
+
+    if (!el) return;
+
+    tried++;
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+  });
+
+  // 3) hardening: IDs "lead-*" (caso exista UI baseada nisso)
+  const idMap = {
+    "lead-nome": "nome",
+    "lead-whatsapp": "whatsapp",
+    "lead-telefone": "telefone",
+    "lead-email": "email",
+    "lead-data": "dataEvento",
+    "lead-horario": "horarioEvento",
+    "lead-local": "local",
+    "lead-qtd": "qtd",
+    "lead-tipo": "tipoEvento",
+    "lead-como": "comoConheceu",
+    "lead-observacoes": "observacoes",
+  };
+
+  Object.entries(idMap).forEach(([elementId, key]) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    tried++;
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+  });
+
+  console.log(`[DETALHADO] bind OK — filled=${filled}, tried=${tried}, binds=${document.querySelectorAll("[data-bind]").length}`);
+  }
+
+  async function initDetalhado() {
+    try {
+      const id = new URLSearchParams(window.location.search).get("id");
+      console.log("[DETALHADO] init, id =", id);
+
+      if (!id) {
+        console.warn("[DETALHADO] Sem id na URL. Nada a carregar.");
+        return;
+      }
+
+      const lead = await apiGetLeadById(id);
+      const norm = normalizeLead(lead);
+
+      console.log("[DETALHADO] lead normalizado:", norm);
+
+      console.log("[DETALHADO] resumo campos (json):", JSON.stringify({
+        nome: norm?.nome,
+        whatsapp: norm?.whatsapp,
+        telefone: norm?.telefone,
+        email: norm?.email,
+        dataEvento: norm?.dataEvento,
+        horarioEvento: norm?.horarioEvento,
+        local: norm?.local,
+        qtd: norm?.qtd,
+        tipoEvento: norm?.tipoEvento,
+        comoConheceu: norm?.comoConheceu,
+        observacoes: norm?.observacoes,
+      }, null, 2));
+
+      window.__CURRENT_LEAD__ = norm;
+
+      bindLeadToForm(norm);
+
+      console.log("[DETALHADO] bind OK");
+    } catch (err) {
+      console.error("[DETALHADO] ERRO initDetalhado:", err);
+      alert("Não foi possível carregar os dados do orçamento. Tente novamente.");
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initDetalhado);
+  } else {
+    initDetalhado();
+  }
+})();
+
 function formatBRDate(v){
   const d = parseDataLocal(v);
   if(!d) return "-";

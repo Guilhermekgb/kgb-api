@@ -131,4 +131,16 @@
       return true;
     }catch(e){ throw e; }
   };
-})();
+      // Auto-guard: se a página tiver meta page-permission, protege automaticamente
+      try {
+        const perm = document.querySelector('meta[name="page-permission"]')?.content?.trim();
+        if (perm && typeof window.guard === 'function') {
+          // roda o guard imediatamente (se não tiver token, redireciona para login)
+          window.guard({ permissao: perm });
+          console.log('[GUARD] auto-guard aplicado:', perm);
+        }
+      } catch (e) {
+        console.warn('[GUARD] auto-guard falhou:', e);
+      }
+
+    })();

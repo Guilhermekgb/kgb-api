@@ -175,55 +175,55 @@
     </button>
   </div>
 
-  <div class="grid-2">
+    <div class="grid-2">
     <div>
       <label>Nome</label>
-      <div id="lead-nome" class="campo-leitura">-</div>
+      <div id="lead-nome" data-bind="nome" class="campo-leitura">-</div>
     </div>
     <div>
       <label>WhatsApp</label>
-      <div id="lead-whatsapp" class="campo-leitura">-</div>
+      <div id="lead-whatsapp" data-bind="whatsapp" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Telefone</label>
-      <div id="lead-telefone" class="campo-leitura">-</div>
+      <div id="lead-telefone" data-bind="telefone" class="campo-leitura">-</div>
     </div>
     <div>
       <label>E-mail</label>
-      <div id="lead-email" class="campo-leitura">-</div>
+      <div id="lead-email" data-bind="email" class="campo-leitura">-</div>
     </div>
   </div>
 
   <div class="grid-2">
     <div>
       <label>Data do Evento</label>
-      <div id="lead-data" class="campo-leitura">-</div>
+      <div id="lead-data" data-bind="dataEvento" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Horário</label>
-      <div id="lead-horario" class="campo-leitura">-</div>
+      <div id="lead-horario" data-bind="horarioEvento" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Local do Evento</label>
-      <div id="lead-local" class="campo-leitura">-</div>
+      <div id="lead-local" data-bind="local" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Qtd. Convidados</label>
-      <div id="lead-qtd" class="campo-leitura">-</div>
+      <div id="lead-qtd" data-bind="qtd" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Tipo de Evento</label>
-      <div id="lead-tipo" class="campo-leitura">-</div>
+      <div id="lead-tipo" data-bind="tipoEvento" class="campo-leitura">-</div>
     </div>
     <div>
       <label>Como nos conheceu</label>
-      <div id="lead-como" class="campo-leitura">-</div>
+      <div id="lead-como" data-bind="comoConheceu" class="campo-leitura">-</div>
     </div>
   </div>
 
   <div>
     <label>Observações</label>
-    <div id="lead-observacoes" class="campo-leitura">-</div>
+    <div id="lead-observacoes" data-bind="observacoes" class="campo-leitura">-</div>
   </div>
 </section>
 <!-- Responsável pelo lead -->
@@ -562,9 +562,9 @@
 <!-- Ordem padronizada de infraestrutura + script da página -->
 <script type="module" src="./api/api-config.js"></script>
 <script type="module" src="./api/auth-client.js"></script>
+<script type="module" src="./api/api-fetch.js"></script>
 <script type="module" src="./kgb-common.js"></script>
 <script type="module" src="./api/proteger-pagina.js"></script>
-<script type="module" src="./api/api-fetch.js"></script>
 <script src="orcamento-detalhado.js"></script>
 </body>
 </html>

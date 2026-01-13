@@ -120,32 +120,112 @@ async function ensureAuthReady() {
   }
 }
 
-async function salvarLeadNaApi(novoLead) {
-  const base = window.__API_BASE__ || API_BASE || "";
-  if (!base) return null;
+async function salvarLeadNaApi(lead) {
+  try {
+    // 1) Escolhe o client certo (cloud + auth)
+    const hasKgbAuth = !!(window.kgbAuth && typeof window.kgbAuth.api === "function");
+    const hasApiFetch = typeof window.apiFetch === "function";
 
+    if (!hasKgbAuth && !hasApiFetch) {
+      console.error("[ORCAMENTO] ERRO: Nenhum client disponível (kgbAuth.api ou apiFetch). Verifique includes no orcamento.html.");
+      throw new Error("Client de API não carregado");
+    }
+
+    // 2) Tenta ler token APENAS do auth-client (sem localStorage manual aqui)
+    // (o apiFetch/kgbAuth.api já deve injetar token sozinho — isso é só pra log)
+    let tokenPresente = false;
     try {
-      const payload = await window.kgbAuth.api(base + '/leads', { method: 'POST', body: novoLead });
-
-      console.log("[ORÇAMENTO] POST /leads payload:", payload);
-
-      // Normaliza formatos possíveis vindos do backend
-      const leadObj =
-        payload?.lead ||
-        payload?.item ||
-        payload?.data ||
-        payload?.result ||
-        (payload?.ok && payload?.id ? payload : null) ||
-        payload ||
+      const t =
+        (window.kgbAuth && typeof window.kgbAuth.getToken === "function" && window.kgbAuth.getToken()) ||
+        (window.kgbAuth && window.kgbAuth.token) ||
         null;
+      tokenPresente = !!t;
+    } catch (_) {}
 
-      return leadObj;
+    console.log("[ORCAMENTO] token presente?", tokenPresente);
 
-      // nota: removido fallback para window.apiFetch — kgbAuth.api é requerido
+    // 3) Faz POST /leads com o client que injeta Bearer automaticamente
+    const bodyPayload = lead; // mantenha exatamente o objeto normalizado que você já envia
 
-  } catch (e) {
-    console.warn('[ORÇAMENTO] Falha ao chamar /leads:', e);
-    return null;
+    console.log("[ORCAMENTO] ENVIANDO PARA API /leads (json):", JSON.stringify(bodyPayload || lead || {}, null, 2));
+    console.log("[ORCAMENTO] ENVIANDO keys:", Object.keys(bodyPayload || lead || {}));
+
+    let resp;
+    if (hasKgbAuth) {
+      resp = await window.kgbAuth.api("/leads", {
+        method: "POST",
+        body: bodyPayload
+      });
+    } else {
+      resp = await window.apiFetch("/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyPayload)
+      });
+    }
+
+    // 4) Normaliza resposta (kgbAuth.api pode devolver já como objeto; apiFetch pode devolver Response)
+    let data = resp;
+
+    // Se veio um Response (fetch), converte:
+    if (resp && typeof resp === "object" && typeof resp.ok === "boolean" && typeof resp.json === "function") {
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        console.error("[ORCAMENTO] POST /leads falhou:", resp.status, txt);
+        throw new Error(`POST /leads falhou: ${resp.status}`);
+      }
+      data = await resp.json();
+    }
+
+    console.log("[ORCAMENTO] POST /leads ok:", data);
+
+    // Se apiFetch retornou envelope { ok, status, data }, pega o miolo
+    const respPayload = (data && typeof data === "object" && "ok" in data && "data" in data)
+      ? data.data
+      : data;
+
+    const id = respPayload?.id ?? respPayload?.lead?.id ?? null;
+
+    console.log("[ORCAMENTO] payload usado p/ id:", respPayload);
+    console.log("[ORCAMENTO] id retornado:", id);
+
+    if (!id) {
+      console.error("[ORCAMENTO] resposta completa:", data);
+      throw new Error("API não retornou id do lead");
+    }
+
+    // Confirmação final: GET /leads/:id para verificar o que foi salvo no backend
+    try {
+      const hasKgbAuth = !!(window.kgbAuth && typeof window.kgbAuth.api === "function");
+      const hasApiFetch = typeof window.apiFetch === "function";
+      let check = null;
+
+      if (hasKgbAuth) {
+        check = await window.kgbAuth.api(`/leads/${encodeURIComponent(id)}`, { method: "GET" });
+      } else if (hasApiFetch) {
+        const respCheck = await window.apiFetch(`/leads/${encodeURIComponent(id)}`, { method: "GET" });
+        if (respCheck && typeof respCheck.ok === "boolean" && typeof respCheck.json === "function") {
+          if (!respCheck.ok) {
+            const txt = await respCheck.text().catch(() => "");
+            console.warn(`[ORCAMENTO] GET /leads/${id} retornou erro:`, respCheck.status, txt);
+          } else {
+            check = await respCheck.json();
+          }
+        } else {
+          check = respCheck;
+        }
+      }
+
+      const checkPayload = (check && typeof check === "object" && "ok" in check && "data" in check) ? check.data : check;
+      console.log("[ORCAMENTO] CONFIRMAÇÃO BACKEND GET /leads/:id (json):", JSON.stringify(checkPayload, null, 2));
+    } catch (e) {
+      console.warn("[ORCAMENTO] Falha ao confirmar GET /leads/:id:", e);
+    }
+
+    return respPayload; // <- importantíssimo: devolve o lead real (com id), não o envelope
+  } catch (err) {
+    console.error("[ORCAMENTO] salvarLeadNaApi ERRO:", err);
+    throw err;
   }
 }
 
@@ -210,6 +290,112 @@ function minimizeLead(l){
     dataCriacao: l.dataCriacao || new Date().toISOString(),
     historico: Array.isArray(l.historico) ? l.historico.slice(-30) : [] // mantém só os últimos itens
   };
+}
+
+// === Helper: coleta campos do formulário sem depender de ids ===
+function kgbIsVisible(el){
+  if(!el) return false;
+  if(el.disabled) return false;
+  const cs = window.getComputedStyle(el);
+  if(cs.display === "none" || cs.visibility === "hidden") return false;
+  if(el.type === "hidden" || el.hidden) return false;
+  if(el.offsetParent === null && cs.position !== "fixed") return false;
+  return true;
+}
+
+function kgbReadValue(el){
+  if(!el) return "";
+  const v = ("value" in el) ? el.value : el.textContent;
+  return (v ?? "").toString().trim();
+}
+
+function kgbPickBestElement(cands){
+  if(!cands || !cands.length) return null;
+
+  const vis = cands.filter(kgbIsVisible);
+  const visWithVal = vis.find(el => kgbReadValue(el) !== "");
+  if(visWithVal) return visWithVal;
+
+  const anyWithVal = cands.find(el => kgbReadValue(el) !== "");
+  if(anyWithVal) return anyWithVal;
+
+  if(vis.length) return vis[0];
+
+  return cands[0];
+}
+
+function kgbGetField(key){
+  const selData = document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`);
+  const selName = document.querySelectorAll(`[name="${CSS.escape(key)}"]`);
+  const byId = document.getElementById(key);
+
+  const cands = [
+    ...Array.from(selData),
+    ...Array.from(selName),
+    ...(byId ? [byId] : []),
+  ];
+
+  const picked = kgbPickBestElement(cands);
+  const val = kgbReadValue(picked);
+  const meta = picked ? {
+    id: picked.id || null,
+    name: picked.getAttribute?.("name") || null,
+    dataField: picked.getAttribute?.("data-field") || null,
+    tag: picked.tagName,
+    type: picked.type || null,
+    visible: kgbIsVisible(picked),
+    valuePreview: val,
+  } : null;
+
+  console.log("[ORCAMENTO][FIELD]", key, "cands=", cands.length, "picked=", meta);
+
+  return val === "" ? undefined : val;
+}
+
+function kgbGetAnyField(keys) {
+  for (const k of keys) {
+    const v = kgbGetField(k);
+    if (v !== undefined) return v;
+  }
+  return undefined;
+}
+
+function coletarLeadDoFormulario() {
+  const form = document.querySelector('#form-orcamento');
+  if (!form) {
+    console.error('[ORCAMENTO] form-orcamento não encontrado');
+    return {};
+  }
+
+  const data = {};
+  const fields = [
+    'nome',
+    'whatsapp',
+    'telefone',
+    'email',
+    'dataEvento',
+    'horarioEvento',
+    'local',
+    'qtd',
+    'tipoEvento',
+    'comoConheceu',
+    'observacoes'
+  ];
+
+  fields.forEach(key => {
+    const el = form.querySelector(`[name="${key}"]`);
+    if (!el) {
+      console.warn(`[ORCAMENTO] campo não encontrado: ${key}`);
+      return;
+    }
+
+    const value = el.value?.trim() ?? '';
+    console.log(`[ORCAMENTO] campo ${key}:`, value);
+    data[key] = value;
+  });
+
+  console.log('[ORCAMENTO] lead FINAL coletado do formulário:', data);
+  return data;
 }
 
 // === PATCH B1: SUBMIT do Orçamento chama salvarLeadFunil ===
@@ -862,6 +1048,9 @@ async function salvarLeadFunil(nextAction) {
   // ===== coleta campos =====
   const qtd = parseInt((val("#convidados") || "0").replace(/\D/g, ""), 10) || 0;
 
+  // coleta independente do HTML (por name / data-field / id)
+  const baseLead = typeof coletarLeadDoFormulario === 'function' ? coletarLeadDoFormulario() : {};
+
   // usa a constante já parseada (não window.usuarioLogado)
   const responsavelFinal =
     val("#responsavel_lead") ||
@@ -944,6 +1133,8 @@ async function salvarLeadFunil(nextAction) {
       responsavel: responsavelFinal
     }]
   };
+  // Sobrepõe com valores vindos diretamente do formulário (name/data-field) quando disponíveis
+  try { Object.assign(novoLead, baseLead); console.log('[ORCAMENTO] merged baseLead into novoLead:', baseLead); } catch(e){}
    // Token público (gerado ANTES de enviar para API)
   novoLead.token =
     (crypto.randomUUID?.() || (Math.random().toString(36).slice(2) + Date.now().toString(36))) +
@@ -957,7 +1148,16 @@ async function salvarLeadFunil(nextAction) {
       return;
     }
 
-    const salvoApi = await salvarLeadNaApi(novoLead);
+    // Garantir que o que vai para a API é o objeto final (merge baseLead) e normalizado
+    const baseLead = (typeof coletarLeadDoFormulario === 'function') ? coletarLeadDoFormulario() : {};
+    const novoLeadFinal = { ...(novoLead || {}), ...baseLead };
+    const leadNormalizado = (typeof window.kgbNormalizeLead === "function")
+      ? window.kgbNormalizeLead(novoLeadFinal)
+      : novoLeadFinal;
+
+    console.log("[ORCAMENTO] leadNormalizado ANTES do POST (json):", JSON.stringify(leadNormalizado, null, 2));
+
+    const salvoApi = await salvarLeadNaApi(leadNormalizado);
 
     const apiId =
       salvoApi?.id ||
@@ -1111,32 +1311,32 @@ async function salvarLeadFunil(nextAction) {
   switch (String(nextAction || '').toLowerCase()) {
     case 'evento':
       try {
-        const apiResp = typeof salvoApi !== 'undefined' ? salvoApi : null;
+        const saved = typeof salvoApi !== 'undefined'
+          ? salvoApi
+          : await (async () => {
+              const baseLead = (typeof coletarLeadDoFormulario === 'function') ? coletarLeadDoFormulario() : {};
+              const novoLeadFinal = { ...(novoLead || {}), ...baseLead };
+              const leadNormalizado = (typeof window.kgbNormalizeLead === "function") ? window.kgbNormalizeLead(novoLeadFinal) : novoLeadFinal;
+              console.log("[ORCAMENTO] leadNormalizado ANTES do POST (json):", JSON.stringify(leadNormalizado, null, 2));
+              return await salvarLeadNaApi(leadNormalizado);
+            })();
+        const savedId = saved?.id ?? null;
 
-        console.log('[ORÇAMENTO] resposta API completa:', apiResp);
-
-        const saved =
-          apiResp?.data ??
-          apiResp?.item ??
-          apiResp?.lead ??
-          apiResp;
-
-        const savedId = saved?.id;
-
-        console.log('[ORÇAMENTO] ID retornado pela API:', savedId);
+        console.log('[ORÇAMENTO] resposta API (saved):', saved);
+        console.log('[ORÇAMENTO] ID retornado (savedId):', savedId);
 
         if (!savedId) {
-          console.error('[ORÇAMENTO] ERRO: API não retornou ID válido');
-          alert('Erro ao salvar orçamento. Tente novamente.');
-          return; // bloqueia qualquer redirect
+          console.error('[ORÇAMENTO] ERRO: API não retornou ID válido (savedId)');
+          throw new Error('API não retornou ID válido');
         }
 
         // Limpa possíveis ids antigos no storage local
         try { localStorage.removeItem('leadId'); } catch (e) {}
         try { localStorage.removeItem('orcamentoId'); } catch (e) {}
 
-        // ÚNICO redirect permitido: usa o id retornado pela API
+        // redirect ÚNICO e definitivo
         window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(savedId)}`;
+        return;
       } catch (e) {
         console.error('[ORÇAMENTO] falha ao redirecionar para detalhado:', e);
         alert('Erro ao abrir o detalhado do orçamento.');

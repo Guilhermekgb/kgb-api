@@ -96,44 +96,44 @@
             <div>
               <h2 class="subtitulo">Dados do Evento</h2>
               <label for="nome"><i data-lucide="user"></i> Nome completo:</label>
-              <input type="text" id="nome" name="nome">
+              <input type="text" id="nome" name="nome" data-field="nome">
             </div>
 
             <div class="campo-data">
               <label for="data_evento"><i data-lucide="calendar"></i> Data do Evento:</label>
-              <input type="date" id="data_evento" name="data_evento">
+              <input type="date" id="data_evento" name="dataEvento" data-field="dataEvento">
             </div>
 
             <div id="alertaData" class="alerta-data" style="display:none"></div>
 
             <div>
               <label for="whatsapp"><i data-lucide="smartphone"></i> WhatsApp:</label>
-              <input type="tel" id="whatsapp" name="whatsapp">
+              <input type="tel" id="whatsapp" name="whatsapp" data-field="whatsapp">
             </div>
 
             <div>
               <label for="telefone"><i data-lucide="phone"></i> Telefone:</label>
-              <input type="tel" id="telefone" name="telefone">
+              <input type="tel" id="telefone" name="telefone" data-field="telefone">
             </div>
 
             <div>
               <label for="local_evento"><i data-lucide="map-pin"></i> Local do Evento:</label>
-              <input type="text" id="local_evento" name="local_evento">
+              <input type="text" id="local_evento" name="local" data-field="local">
             </div>
 
             <div>
               <label for="convidados"><i data-lucide="users"></i> Quantidade de Convidados:</label>
-              <input type="number" id="convidados" name="convidados">
+              <input type="number" id="convidados" name="qtd" data-field="qtd">
             </div>
 
             <div>
               <label for="email"><i data-lucide="mail"></i> E-mail:</label>
-              <input type="email" id="email" name="email">
+              <input type="email" id="email" name="email" data-field="email">
             </div>
 
             <div>
               <label for="como_conheceu"><i data-lucide="search"></i> Como nos conheceu?</label>
-              <select id="como_conheceu" name="como_conheceu">
+              <select id="como_conheceu" name="comoConheceu" data-field="comoConheceu">
                 <option value="">Selecione</option>
               </select>
             </div>
@@ -142,14 +142,14 @@
           <div class="grid-2">
             <div>
               <label for="tipo_evento"><i data-lucide="type"></i> Tipo de Evento:</label>
-              <select id="tipo_evento" name="tipo_evento">
+              <select id="tipo_evento" name="tipoEvento" data-field="tipoEvento">
                 <option value="">Selecione</option>
               </select>
             </div>
 
             <div>
               <label for="horario_evento"><i data-lucide="clock"></i> Horário do Evento:</label>
-              <input type="time" id="horario_evento" name="horario_evento">
+              <input type="time" id="horario_evento" name="horarioEvento" data-field="horarioEvento">
             </div>
           </div>
 
@@ -210,7 +210,7 @@
         </button>
       </div>
 
-      <textarea id="observacoes" placeholder="Informações adicionais..." rows="6"></textarea>
+      <textarea id="observacoes" name="observacoes" data-field="observacoes" placeholder="Informações adicionais..." rows="6"></textarea>
     </div>
   </div>
   <!-- /GRID FECHADA AQUI -->
