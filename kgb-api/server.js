@@ -1613,49 +1613,65 @@ function ensureLeadsTable() {
   }
 
 // POST /leads -> salva JSON completo
-app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
+// ===== PATCH: POST /leads - persistir payload completo =====
+app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
   try {
-    const lead = normalizeLead(req.body || {});
+    const tenantId = req.tenantId || 'default';
 
-    console.log('[LEADS] salvando payload keys:', Object.keys(lead || {}).slice(0,30));
+    // body cru que veio do front
+    const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
 
-    ensureLeadsTable();
+    // LOG REAL do que chegou
+    console.log('[LEADS] req.body keys:', Object.keys(incoming || {}));
 
-    try {
-      const payloadJson = JSON.stringify(lead);
-      db.prepare(`INSERT INTO leads (id, tenantId, token, data_json, payload, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          tenantId=excluded.tenantId,
-          token=excluded.token,
-          data_json=excluded.data_json,
-          payload=excluded.payload,
-          updatedAt=excluded.updatedAt`).run(
-        lead.id, lead.tenantId, lead.token, payloadJson, payloadJson, lead.createdAt, lead.updatedAt
-      );
-    } catch (e) {
-      // fallback for older SQLite: REPLACE
-      const payloadJson = JSON.stringify(lead);
-      db.prepare(`REPLACE INTO leads (id, tenantId, token, data_json, payload, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(lead.id, lead.tenantId, lead.token, payloadJson, payloadJson, lead.createdAt, lead.updatedAt);
-    }
+    // ids/metadata do servidor
+    const id = incoming.id || crypto.randomUUID();
+    const token = incoming.token || crypto.randomUUID();
+    const nowIso = new Date().toISOString();
 
-    // update in-memory store
-    try { leadsStore.set(String(lead.id), lead); } catch(e) {}
-
-    const responseData = {
-      ...(lead || {}),
-      tenantId: lead.tenantId || 'default',
-      id: lead.id,
-      token: lead.token,
-      createdAt: lead.createdAt,
-      updatedAt: lead.updatedAt
+    // ✅ lead final: mantém tudo do incoming + adiciona metadados
+    const leadFinal = {
+      ...incoming,
+      tenantId,
+      id,
+      token,
+      createdAt: incoming.createdAt || nowIso,
+      updatedAt: nowIso,
     };
 
-    return res.json({ ok: true, data: responseData });
-  } catch (e) {
-    console.error('[POST /leads] erro:', e);
-    return res.status(500).json({ error: 'Erro ao salvar lead' });
+    // ✅ payload COMPLETO (é isso que vamos salvar no DB)
+    const payloadStr = JSON.stringify(leadFinal);
+
+    // garante coluna payload (defensivo)
+    try {
+      db.prepare(`ALTER TABLE leads ADD COLUMN payload TEXT`).run();
+    } catch (e) {
+      // ignora se já existe
+    }
+
+    // UPSERT simples: se existir, atualiza; se não, insere
+    const exists = db.prepare(`SELECT id FROM leads WHERE tenantId=? AND id=?`).get(tenantId, id);
+
+    if (exists) {
+      db.prepare(`
+        UPDATE leads
+           SET token = ?,
+               updatedAt = ?,
+               payload = ?
+         WHERE tenantId = ? AND id = ?
+      `).run(token, nowIso, payloadStr, tenantId, id);
+    } else {
+      db.prepare(`
+        INSERT INTO leads (tenantId, id, token, createdAt, updatedAt, payload)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(tenantId, id, token, leadFinal.createdAt || nowIso, nowIso, payloadStr);
+    }
+
+    // ✅ responde com o lead completo (pra redirecionar e já usar no detalhado)
+    return res.json({ ok: true, data: leadFinal });
+  } catch (err) {
+    console.error('[LEADS] erro POST /leads:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao salvar lead' });
   }
 });
 
@@ -1771,48 +1787,26 @@ app.delete('/degustacoes-disponiveis/:id', requireAuth, (req, res) => {
 });
 
 // === ROTAS: Agenda (CRUD) ===
-app.get('/agenda', requireAuth, (req, res) => {
-  try {
-    const tipo = req.query.tipo ? String(req.query.tipo) : null;
-    let rows;
-    if (tipo) rows = db.prepare('SELECT * FROM agenda WHERE tipo = ? ORDER BY data ASC, hora ASC').all(tipo);
-    else rows = db.prepare('SELECT * FROM agenda ORDER BY data ASC, hora ASC').all();
-    return res.json({ ok: true, items: Array.isArray(rows) ? rows : [] });
-  } catch (e) {
-    console.error('[GET /agenda] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao listar agenda' });
-  }
-});
+  app.get('/leads/:id', requireAuth, (req, res) => {
+    try {
+      const tenantId = req.tenantId || 'default';
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ ok: false, error: 'Missing id' });
 
-app.post('/agenda', express.json(), requireAuth, (req, res) => {
-  try {
-    const body = req.body || {};
-    const data = String(body.data || '').trim();
-    if (!data) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
-    const hora = body.hora || null;
-    const tipo = body.tipo || 'evento';
-    const ref_id = body.ref_id || null;
-    const titulo = body.titulo || 'Compromisso';
-    const status = body.status || 'pendente';
-    const observacoes = body.observacoes || null;
+      const row = db.prepare(`SELECT * FROM leads WHERE tenantId=? AND id=?`).get(tenantId, id);
+      if (!row) return res.status(404).json({ ok: false, error: 'Lead não encontrado' });
 
-    const stmt = db.prepare('INSERT INTO agenda (tipo,ref_id,titulo,data,hora,status,observacoes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,datetime(\'now\'))');
-    const info = stmt.run(tipo, ref_id, titulo, data, hora, status, observacoes, new Date().toISOString());
-    const id = info.lastInsertRowid;
-    const row = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
-    return res.status(201).json({ ok: true, item: row });
-  } catch (e) {
-    console.error('[POST /agenda] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao criar agenda' });
-  }
-});
+      let payloadObj = {};
+      try { if (row.payload) payloadObj = JSON.parse(row.payload); } catch (e) { payloadObj = {}; }
 
-app.put('/agenda/:id', express.json(), requireAuth, (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
-    const body = req.body || {};
-    const data = body.data ? String(body.data).trim() : null;
+      const merged = { ...payloadObj, ...row };
+      delete merged.payload;
+      return res.json({ ok: true, data: merged });
+    } catch (err) {
+      console.error('[LEADS] erro GET /leads/:id:', err);
+      return res.status(500).json({ ok: false, error: 'Erro ao buscar lead' });
+    }
+  });
     if (data === null) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
     const hora = body.hora || null;
     const tipo = body.tipo || 'evento';
