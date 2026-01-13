@@ -82,6 +82,27 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
+// Diagnóstico do schema da tabela leads (compatível sqlite3-style)
+try {
+  if (typeof db.all === 'function') {
+    db.all("PRAGMA table_info(leads)", [], (err, rows) => {
+      if (err) {
+        console.error("[KGB][SCHEMA] erro PRAGMA leads:", err);
+      } else {
+        console.log("[KGB][SCHEMA] PRAGMA table_info(leads):", JSON.stringify(rows, null, 2));
+      }
+    });
+  }
+} catch (e) {
+  console.warn('[KGB][SCHEMA] Falha ao obter PRAGMA table_info(leads) (db.all):', e?.message || e);
+}
+// Diagnóstico do schema da tabela leads
+try {
+  const pragmaLeads = db.prepare('PRAGMA table_info(leads)').all();
+  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', pragmaLeads);
+} catch (e) {
+  console.warn('[KGB][SCHEMA] Falha ao obter PRAGMA table_info(leads):', e?.message || e);
+}
 // --- KGB: sanitize values for sqlite (avoid binding objects -> 500) ---
 function kgbSafeStringify(v) {
   try { return JSON.stringify(v); } catch (e) { return String(v); }
