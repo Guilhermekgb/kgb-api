@@ -1320,13 +1320,25 @@ async function salvarLeadFunil(nextAction) {
               console.log("[ORCAMENTO] leadNormalizado ANTES do POST (json):", JSON.stringify(leadNormalizado, null, 2));
               return await salvarLeadNaApi(leadNormalizado);
             })();
-        const savedId = saved?.id ?? null;
+
+        const id = String(
+          saved?.data?.id ||
+          saved?.data?.data?.id ||
+          saved?.id ||
+          saved?._id ||
+          saved?.leadId ||
+          saved?.lead_id ||
+          salvoApi?.data?.id ||
+          salvoApi?.id ||
+          novoLead?.id ||
+          ''
+        ).trim();
 
         console.log('[ORÇAMENTO] resposta API (saved):', saved);
-        console.log('[ORÇAMENTO] ID retornado (savedId):', savedId);
+        console.log('[ORÇAMENTO] id retornado:', id);
 
-        if (!savedId) {
-          console.error('[ORÇAMENTO] ERRO: API não retornou ID válido (savedId)');
+        if (!id) {
+          console.error('[ORÇAMENTO] ERRO: API não retornou ID válido', saved);
           throw new Error('API não retornou ID válido');
         }
 
@@ -1334,8 +1346,8 @@ async function salvarLeadFunil(nextAction) {
         try { localStorage.removeItem('leadId'); } catch (e) {}
         try { localStorage.removeItem('orcamentoId'); } catch (e) {}
 
-        // redirect ÚNICO e definitivo
-        window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(savedId)}`;
+        console.log("[ORCAMENTO] redirect final usando id do backend:", id);
+        window.location.href = `orcamento-detalhado.html?id=${encodeURIComponent(id)}`;
         return;
       } catch (e) {
         console.error('[ORÇAMENTO] falha ao redirecionar para detalhado:', e);
