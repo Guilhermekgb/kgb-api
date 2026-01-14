@@ -131,6 +131,9 @@
     if (!token) throw new Error('login_no_token');
 
     setToken(token);
+    try {
+      localStorage.setItem('kgb_api_base', (__API_BASE__ || window.__API_BASE__ || ''));
+    } catch (e) {}
     return data;
   }
 

@@ -13,6 +13,9 @@
     try{
       const returnUrl = new URLSearchParams(location.search).get('returnUrl') || (location.pathname.split('/').pop()||'') + location.search + location.hash || 'dashboard.html';
       const url = './login.html?returnUrl=' + encodeURIComponent(returnUrl);
+      const resolvedBase = getApiBaseNow();
+      const token = getStoredToken();
+      console.warn('[GUARD] redirect', { reason, status: reason, hasToken: !!token, apiBase: resolvedBase });
       try{ location.href = url; }catch(e){ location.href = './login.html'; }
     }catch(e){ try{ location.href = './login.html'; }catch(_){} }
   }
@@ -65,14 +68,20 @@
       const url = (base ? String(base).replace(/\/+$/,'') : '') + '/auth/me';
 
       const xhr = new XMLHttpRequest();
+      let networkError = false;
       try{
         xhr.open('GET', url, false); // synchronous
         if (token) try{ xhr.setRequestHeader('Authorization','Bearer ' + token); }catch(e){}
         xhr.send(null);
       }catch(e){
-        // network error: redirect to login to be safe
-        redirectToLogin('network-error');
-        throw e;
+        networkError = true;
+      }
+      if (networkError) {
+        // Não limpar token nem redirecionar, apenas alertar
+        setTimeout(function(){
+          alert('A API está temporariamente indisponível. Tente novamente mais tarde.');
+        }, 100);
+        return false;
       }
 
       const status = xhr.status || 0;
@@ -91,7 +100,7 @@
       }catch(e){ payload = {}; }
 
       if(status === 401){ clearToken(); redirectToLogin('unauthorized'); throw new Error('unauthorized'); }
-      if(status === 403){ location.href = './acesso-negado.html'; return; }
+      if(status === 403){ clearToken(); location.href = './acesso-negado.html'; return; }
 
       const userObj = (payload && payload.data) ? payload.data : payload;
       // Normalize and protect permissoes to avoid code doing JSON.parse('*') elsewhere
