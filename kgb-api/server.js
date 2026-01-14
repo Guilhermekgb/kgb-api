@@ -556,6 +556,25 @@ const app = express();
 // --- TEMP: Bootstrap admin (enable only with BOOTSTRAP_KEY) ---
 // NOTE: must be declared AFTER `const app = express();` and AFTER `db` exists if used.
 app.post('/bootstrap-admin', async (req, res) => {
+      // [BOOTSTRAP] ensure legacy schema compatibility (Render DB may be older)
+      function ensureUsuariosColumns(db) {
+        return new Promise((resolve, reject) => {
+          db.all("PRAGMA table_info(usuarios)", [], (err, rows) => {
+            if (err) return reject(err);
+            const cols = new Set((rows || []).map(r => String(r.name)));
+            if (!cols.has("createdAt")) {
+              db.run("ALTER TABLE usuarios ADD COLUMN createdAt TEXT", [], (e2) => {
+                if (e2) return reject(e2);
+                return resolve();
+              });
+            } else {
+              return resolve();
+            }
+          });
+        });
+      }
+
+    await ensureUsuariosColumns(db);
   try {
     const key = String(req.headers['x-bootstrap-key'] || '');
     const expected = String(process.env.BOOTSTRAP_KEY || '');
