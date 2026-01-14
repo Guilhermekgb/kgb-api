@@ -705,31 +705,40 @@ function ensureLeadIds(raw, tenantId = 'default') {
 // POST /leads -> salva JSON COMPLETO e retorna JSON COMPLETO
 
 app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  const token = (req.headers.authorization || '').slice(0, 30);
+  const hasUser = !!req.user;
+  const tenantId = req.user?.tenantId || req.tenantId || null;
+  console.log('[LEADS] incoming', { hasUser, tenantIdPresent: !!tenantId, path: req.path });
   try {
+    if (!tenantId) {
+      return res.status(401).json({ ok: false, error: 'missing tenantId (auth)' });
+    }
     const payload = req.body || {};
-    const tenantId = (req.tenantId) || (req.user && (req.user.tenantId || req.user.tenant)) || payload.tenantId || "default";
     const id = payload.id || payload.token || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
     const payloadDb = { ...payload, id };
     const dataStr = JSON.stringify(payloadDb);
-    // Log apenas as chaves do payload
     console.log('[LEADS] upsert keys=', Object.keys(payload || {}));
-    // Upsert seguro: só colunas existentes
     const sql = `INSERT INTO leads (id, tenantId, data, updatedAt)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET
         tenantId = excluded.tenantId,
         data = excluded.data,
         updatedAt = CURRENT_TIMESTAMP`;
-    db.run(sql, [id, tenantId, dataStr], function (err) {
-      if (err) {
-        console.error('[LEADS] ERROR', err);
-        return res.status(500).json({ ok: false, error: 'LEAD_UPSERT_FAILED' });
-      }
-      return res.json({ ok: true, id, item: payloadDb });
-    });
+    try {
+      db.run(sql, [id, tenantId, dataStr], function (err) {
+        if (err) {
+          console.error('[LEADS] ERROR', err && (err.stack || err));
+          return res.status(500).json({ ok: false, error: String(err?.message || err) });
+        }
+        return res.json({ ok: true, id, item: payloadDb });
+      });
+    } catch (err) {
+      console.error('[LEADS] ERROR', err && (err.stack || err));
+      return res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
   } catch (err) {
-    console.error('[LEADS] ERROR', err);
-    return res.status(500).json({ ok: false, error: 'LEAD_POST_FATAL' });
+    console.error('[LEADS] ERROR', err && (err.stack || err));
+    return res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
 });
 
