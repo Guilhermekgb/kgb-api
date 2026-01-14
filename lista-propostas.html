@@ -7,10 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- inline API_BASE override removed — use ./api/api-config.js to resolve base -->
 <!-- Helpers globais SEMPRE antes do guard -->
-<script type="module" src="./kgb-common.js"></script>
 
 <!-- Guard / RBAC (usa helpers do common) -->
-<script type="module" src="./api/proteger-pagina.js"></script>
+
 
   <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -411,9 +410,17 @@ try{
 </script>
 
 
-  <script type="module" src="./api/api-config.js"></script>
   <script type="module" src="./api/auth-client.js"></script>
   <script type="module" src="./api/api-fetch.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.initMenuLateral) window.initMenuLateral({ mountId: 'menuLateralMount' });
+    });
+  <script type="module" src="./api/api-config.js"></script>
+  <script type="module" src="./api/api-fetch.js"></script>
+  <script type="module" src="./api/auth-client.js"></script>
+  <script type="module" src="./kgb-common.js"></script>
+  <script type="module" src="./api/proteger-pagina.js"></script>
   <script>
     window.addEventListener('DOMContentLoaded', () => {
       if (window.initMenuLateral) window.initMenuLateral({ mountId: 'menuLateralMount' });
