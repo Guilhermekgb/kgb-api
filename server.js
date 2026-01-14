@@ -707,50 +707,123 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
     const raw = req.body || {};
 
-    // tenantId: preserve o que você já usa hoje (req.tenantId / req.user.tenantId / header)
     const tenantId =
       (req.tenantId) ||
       (req.user && (req.user.tenantId || req.user.tenant)) ||
-      (raw.tenantId) ||
+      raw.tenantId ||
       "default";
 
-    const id = (raw.id !== undefined && raw.id !== null && String(raw.id).trim() !== "")
-      ? String(raw.id)
-      : String(Date.now());
+    const id =
+      (raw.id !== undefined && raw.id !== null && String(raw.id).trim() !== "")
+        ? String(raw.id)
+        : String(Date.now());
 
     const updatedAt = new Date().toISOString();
 
     let dataStr = "";
     try { dataStr = JSON.stringify(raw); } catch { dataStr = String(raw); }
 
-    // DEBUG schema real (pra confirmar colunas)
-    try {
-      db.all("PRAGMA table_info(leads)", [], (e, rows) => {
-        if (e) return console.error("[KGB][LEADS][POST] PRAGMA error", e.message);
-        console.log("[KGB][LEADS][POST] table_info(leads) =", (rows || []).map(r => r.name));
-      });
-    } catch {}
-
-    // UPSERT somente nas colunas existentes do schema "data JSON"
-    const sql = `
-      INSERT INTO leads (id, tenantId, data, updatedAt)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        tenantId = excluded.tenantId,
-        data = excluded.data,
-        updatedAt = excluded.updatedAt
+    // 1) garantir tabela mínima (não quebra se já existir)
+    const createSql = `
+      CREATE TABLE IF NOT EXISTS leads (
+        id TEXT,
+        tenantId TEXT,
+        data TEXT,
+        updatedAt TEXT
+      )
     `.trim().replace(/\s+/g, " ");
 
-    console.log("[KGB][LEADS][POST] upsert id=", id, "tenantId=", tenantId, "bytes=", Buffer.byteLength(dataStr, "utf8"));
-
-    db.run(sql, [id, tenantId, dataStr, updatedAt], function (err) {
-      if (err) {
-        console.error("[KGB][LEADS][POST] UPSERT FAIL =", err.message);
-        console.error("[KGB][LEADS][POST] SQL =", sql);
-        console.error("[KGB][LEADS][POST] STACK =", err.stack || err);
-        return res.status(500).json({ ok: false, error: "LEAD_UPSERT_FAILED" });
+    db.run(createSql, [], (createErr) => {
+      if (createErr) {
+        console.error("[KGB][LEADS][POST] CREATE FAIL =", createErr.message);
+        console.error("[KGB][LEADS][POST] STACK =", createErr.stack || createErr);
+        return res.status(500).json({ ok: false, error: "LEADS_TABLE_CREATE_FAILED" });
       }
-      return res.json({ ok: true, id });
+
+      // 2) descobrir colunas reais e garantir coluna data
+      db.all("PRAGMA table_info(leads)", [], (infoErr, cols) => {
+        if (infoErr) {
+          console.error("[KGB][LEADS][POST] PRAGMA FAIL =", infoErr.message);
+          console.error("[KGB][LEADS][POST] STACK =", infoErr.stack || infoErr);
+          return res.status(500).json({ ok: false, error: "LEADS_TABLE_INFO_FAILED" });
+        }
+
+        const names = (cols || []).map(c => c.name);
+        console.log("[KGB][LEADS][POST] table_info(leads) =", names);
+
+        const hasData = names.includes("data");
+        const hasTenantId = names.includes("tenantId");
+        const hasUpdatedAt = names.includes("updatedAt");
+        const hasId = names.includes("id");
+
+        // se não tiver "data", cria (isso resolve bancos antigos)
+        const ensureData = (cb) => {
+          if (hasData) return cb();
+          db.run("ALTER TABLE leads ADD COLUMN data TEXT", [], (alterErr) => {
+            if (alterErr) {
+              console.error("[KGB][LEADS][POST] ALTER ADD data FAIL =", alterErr.message);
+              console.error("[KGB][LEADS][POST] STACK =", alterErr.stack || alterErr);
+              return res.status(500).json({ ok: false, error: "LEADS_ALTER_ADD_DATA_FAILED" });
+            }
+            console.log("[KGB][LEADS][POST] Added column: data");
+            cb();
+          });
+        };
+
+        ensureData(() => {
+          // 3) UPDATE primeiro (não depende de PK/UNIQUE)
+          // Usa só colunas que existem (compatível com schema real)
+          const sets = [];
+          const params = [];
+
+          if (hasTenantId) { sets.push("tenantId = ?"); params.push(tenantId); }
+          sets.push("data = ?"); params.push(dataStr);
+          if (hasUpdatedAt) { sets.push("updatedAt = ?"); params.push(updatedAt); }
+
+          const updateSql = `UPDATE leads SET ${sets.join(", ")} WHERE id = ?`;
+          params.push(id);
+
+          console.log("[KGB][LEADS][POST] UPDATE id=", id, "bytes=", Buffer.byteLength(dataStr, "utf8"));
+
+          db.run(updateSql, params, function (upErr) {
+            if (upErr) {
+              console.error("[KGB][LEADS][POST] UPDATE FAIL =", upErr.message);
+              console.error("[KGB][LEADS][POST] SQL =", updateSql);
+              console.error("[KGB][LEADS][POST] STACK =", upErr.stack || upErr);
+              return res.status(500).json({ ok: false, error: "LEAD_UPDATE_FAILED" });
+            }
+
+            // Se atualizou, acabou
+            if (this && this.changes && this.changes > 0) {
+              return res.json({ ok: true, id });
+            }
+
+            // 4) INSERT se não existia
+            const colsIns = [];
+            const valsIns = [];
+            const paramsIns = [];
+
+            if (hasId) { colsIns.push("id"); valsIns.push("?"); paramsIns.push(id); }
+            if (hasTenantId) { colsIns.push("tenantId"); valsIns.push("?"); paramsIns.push(tenantId); }
+            colsIns.push("data"); valsIns.push("?"); paramsIns.push(dataStr);
+            if (hasUpdatedAt) { colsIns.push("updatedAt"); valsIns.push("?"); paramsIns.push(updatedAt); }
+
+            const insertSql = `INSERT INTO leads (${colsIns.join(", ")}) VALUES (${valsIns.join(", ")})`;
+
+            console.log("[KGB][LEADS][POST] INSERT id=", id);
+
+            db.run(insertSql, paramsIns, (insErr) => {
+              if (insErr) {
+                console.error("[KGB][LEADS][POST] INSERT FAIL =", insErr.message);
+                console.error("[KGB][LEADS][POST] SQL =", insertSql);
+                console.error("[KGB][LEADS][POST] STACK =", insErr.stack || insErr);
+                return res.status(500).json({ ok: false, error: "LEAD_INSERT_FAILED" });
+              }
+              return res.json({ ok: true, id });
+            });
+          });
+        });
+      });
     });
   } catch (err) {
     console.error("[KGB][LEADS][POST] FATAL =", err && err.stack ? err.stack : err);
