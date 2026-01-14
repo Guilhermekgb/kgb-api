@@ -6,6 +6,8 @@ require('dotenv').config();
 
 const express  = require('express');
 const cors     = require('cors');
+// [BUILD] marker para debug Render
+console.log('[BUILD] KGB-API running commit marker: leads-upsert-fixed-2026-01-14');
 const crypto   = require('crypto');
 const Database = require('better-sqlite3');
 const fs       = require('fs');
@@ -1719,6 +1721,8 @@ function ensureLeadsTable() {
 // POST /leads -> salva JSON completo
 // ===== PATCH: POST /leads - persistir payload completo =====
 app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
+  console.log('[LEADS] handler version: leads-upsert-fixed-2026-01-14');
+  console.log('[LEADS] req=', { method: req.method, path: req.path });
   try {
 
     // body cru que veio do front
