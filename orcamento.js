@@ -1,23 +1,31 @@
-// ==== Orçamento – Sistema Buffet (JS unificado, limpo) ====
+if (window.__kgb_orcamento_loaded__) {
+  console.warn('[orcamento] already loaded; skipping duplicate execution');
+} else {
+  window.__kgb_orcamento_loaded__ = true;
 
-// --------- utilidades básicas ----------
-function mostrarToast(msg){
-  try{
-    const el = document.createElement("div");
-    el.className = "popup-sucesso";
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(()=> el.remove(), 2200);
-  }catch{}
-}
-// In-memory store (não usar storage do navegador)
-const memoryStore = {
-  leads: [],
-  propostasIndex: [],
-  orcamentos: [],
-  usuarios: [],
-  modelos_index: [],
-  modelos: {},
+  // helper local só para este arquivo
+  const $ = (id) => document.getElementById(id);
+
+  // ==== Orçamento – Sistema Buffet (JS unificado, limpo) ====
+
+  // --------- utilidades básicas ----------
+  function mostrarToast(msg){
+    try{
+      const el = document.createElement("div");
+      el.className = "popup-sucesso";
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(()=> el.remove(), 2200);
+    }catch{}
+  }
+  // In-memory store (não usar storage do navegador)
+  const memoryStore = {
+    leads: [],
+    propostasIndex: [],
+    orcamentos: [],
+    usuarios: [],
+    modelos_index: [],
+    modelos: {},
   produtosBuffet: [],
   adicionaisBuffet: [],
   servicosBuffet: [],
@@ -1999,3 +2007,4 @@ function openModelPicker(){
   };
 }
   });
+}
