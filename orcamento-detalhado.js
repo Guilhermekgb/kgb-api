@@ -10,26 +10,6 @@ function parseDataLocal(str){
 }
 
 
-function normalizeLeadResponse(res) {
-  if (!res) return null;
-  // alguns backends retornam { ok, data: ... }
-  const data = (typeof res === 'object' && res !== null && 'data' in res) ? res.data : res;
-  if (data && typeof data === 'object') {
-    if (data.payload && typeof data.payload === 'object') return data.payload;
-    if (data.lead && typeof data.lead === 'object') {
-      if (data.lead.payload && typeof data.lead.payload === 'object') return data.lead.payload;
-      return data.lead;
-    }
-    if (data.item && typeof data.item === 'object') {
-      if (data.item.payload && typeof data.item.payload === 'object') return data.item.payload;
-      return data.item;
-    }
-    // já está flat
-    return data;
-  }
-  return null;
-}
-
 (function () {
   async function apiGetLeadById(id) {
     const hasKgbAuth = !!(window.kgbAuth && typeof window.kgbAuth.api === "function");
@@ -56,10 +36,12 @@ function normalizeLeadResponse(res) {
       }
     }
 
-    console.log('[DETALHADO] GET raw response =', data);
-    const lead = normalizeLeadResponse(data);
-    console.log('[DETALHADO] normalized lead =', lead);
-    return lead;
+    const payload = (data && typeof data === "object" && "ok" in data && "data" in data) ? data.data : data;
+
+    console.log("[DETALHADO] payload bruto (direct):", data);
+    console.log("[DETALHADO] payload usado:", payload);
+
+    return payload;
   }
 
   function normalizeLead(lead) {
@@ -72,34 +54,79 @@ function normalizeLeadResponse(res) {
   }
 
   function bindLeadToForm(lead) {
-    console.log('[DETALHADO] bindLeadToForm lead=', lead);
-    const obj = lead || {};
-    const keys = Object.keys(obj);
-    let filled = 0;
-    let tried = 0;
-    document.querySelectorAll('[data-bind]').forEach(function (el) {
-      const key = el.getAttribute('data-bind');
-      // Fallbacks para campos comuns
-      let val = obj[key];
-      if (val === undefined) {
-        if (key === 'nome') val = obj.nome ?? obj.clienteNome ?? obj.nomeCliente ?? '';
-        if (key === 'whatsapp') val = obj.whatsapp ?? obj.telefone ?? obj.celular ?? '';
-        if (key === 'dataEvento') val = obj.dataEvento ?? obj.data ?? obj.data_evento ?? '';
-        if (key === 'email') val = obj.email ?? obj.emailCliente ?? obj.clienteEmail ?? '';
-        if (key === 'local') val = obj.local ?? obj.endereco ?? obj.localEvento ?? '';
-        if (key === 'tipoEvento') val = obj.tipoEvento ?? obj.tipo ?? obj.tipo_evento ?? '';
-        if (key === 'qtd') val = obj.qtd ?? obj.quantidade ?? obj.qtdPessoas ?? '';
-        if (key === 'comoConheceu') val = obj.comoConheceu ?? obj.origem ?? '';
-        if (key === 'observacoes') val = obj.observacoes ?? obj.obs ?? obj.comentarios ?? '';
-      }
-      if (val === undefined || val === null || val === "") return;
-      tried++;
-      if ("value" in el) el.value = String(val);
-      else el.textContent = String(val);
-      filled++;
-      console.log('[DETALHADO] preenchido:', key, '=>', val, '| el:', el);
-    });
-    console.log(`[DETALHADO] bind OK — filled=${filled}, tried=${tried}, binds=${document.querySelectorAll("[data-bind]").length}`);
+  const obj = lead || {};
+  const keys = Object.keys(obj);
+
+  let filled = 0;
+  let tried = 0;
+
+  console.log("[DETALHADO] keys:", keys);
+  console.log("[DETALHADO] keys (join):", keys.join(" | "));
+  console.log("[DETALHADO] obj completo:", obj);
+
+  // 1) data-bind (preferido)
+  document.querySelectorAll("[data-bind]").forEach((el) => {
+    const key = el.getAttribute("data-bind");
+    if (!key) return;
+
+    tried++;
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+    console.log("[DETALHADO] preenchido:", key, "=>", val, "| el:", el);
+  });
+
+  // 2) fallback: name/id iguais às keys
+  keys.forEach((key) => {
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    const byName = document.querySelector(`[name="${CSS.escape(key)}"]`);
+    const byId = document.getElementById(key);
+    const el = byName || byId;
+
+    if (!el) return;
+
+    tried++;
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+  });
+
+  // 3) hardening: IDs "lead-*" (caso exista UI baseada nisso)
+  const idMap = {
+    "lead-nome": "nome",
+    "lead-whatsapp": "whatsapp",
+    "lead-telefone": "telefone",
+    "lead-email": "email",
+    "lead-data": "dataEvento",
+    "lead-horario": "horarioEvento",
+    "lead-local": "local",
+    "lead-qtd": "qtd",
+    "lead-tipo": "tipoEvento",
+    "lead-como": "comoConheceu",
+    "lead-observacoes": "observacoes",
+  };
+
+  Object.entries(idMap).forEach(([elementId, key]) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const val = obj[key];
+    if (val === undefined || val === null || val === "") return;
+
+    tried++;
+    if ("value" in el) el.value = String(val);
+    else el.textContent = String(val);
+
+    filled++;
+  });
+
+  console.log(`[DETALHADO] bind OK — filled=${filled}, tried=${tried}, binds=${document.querySelectorAll("[data-bind]").length}`);
   }
 
   async function initDetalhado() {
@@ -112,15 +139,30 @@ function normalizeLeadResponse(res) {
         return;
       }
 
-      const res = await apiGetLeadById(id);
-      // res já é normalizado
-      if (!res) {
-        console.error('[DETALHADO] lead normalize failed. res=', res);
-        alert('Não foi possível carregar o lead (formato inesperado).');
-        return;
-      }
-      window.__CURRENT_LEAD__ = res;
-      bindLeadToForm(res);
+      const lead = await apiGetLeadById(id);
+      const norm = normalizeLead(lead);
+
+      console.log("[DETALHADO] lead normalizado:", norm);
+
+      console.log("[DETALHADO] resumo campos (json):", JSON.stringify({
+        nome: norm?.nome,
+        whatsapp: norm?.whatsapp,
+        telefone: norm?.telefone,
+        email: norm?.email,
+        dataEvento: norm?.dataEvento,
+        horarioEvento: norm?.horarioEvento,
+        local: norm?.local,
+        qtd: norm?.qtd,
+        tipoEvento: norm?.tipoEvento,
+        comoConheceu: norm?.comoConheceu,
+        observacoes: norm?.observacoes,
+      }, null, 2));
+
+      window.__CURRENT_LEAD__ = norm;
+
+      bindLeadToForm(norm);
+
+      console.log("[DETALHADO] bind OK");
     } catch (err) {
       console.error("[DETALHADO] ERRO initDetalhado:", err);
       alert("Não foi possível carregar os dados do orçamento. Tente novamente.");
@@ -145,7 +187,6 @@ function formatBRDate(v){
 // ==== Orçamento Detalhado – JS ====
 
 // Helpers
-const byId = (id) => document.getElementById(id);
 // In-memory store (não usar storage do navegador)
 const memoryStore = {
   leads: [],
@@ -521,18 +562,18 @@ function renderErro(msg){
 
 // --- Render principal ---
 function renderLead(){
-  byId("lead-nome").textContent = lead.nome || "-";
-  byId("lead-whatsapp").textContent = lead.whatsapp || "-";
-  byId("lead-telefone").textContent = lead.telefone || "-";
-  byId("lead-email").textContent = lead.email || "-";
+  $("lead-nome").textContent = lead.nome || "-";
+  $("lead-whatsapp").textContent = lead.whatsapp || "-";
+  $("lead-telefone").textContent = lead.telefone || "-";
+  $("lead-email").textContent = lead.email || "-";
 
-  byId("lead-data").textContent = formatBRDate(lead.dataEvento);
-  byId("lead-horario").textContent = lead.horarioEvento || "-";
-  byId("lead-local").textContent = lead.local || "-";
-  byId("lead-qtd").textContent = lead.qtd ?? "-";
-  byId("lead-tipo").textContent = lead.tipoEvento || "-";
-  byId("lead-como").textContent = lead.comoConheceu || "-";
-// usando seu helper byId
+  $("lead-data").textContent = formatBRDate(lead.dataEvento);
+  $("lead-horario").textContent = lead.horarioEvento || "-";
+  $("lead-local").textContent = lead.local || "-";
+  $("lead-qtd").textContent = lead.qtd ?? "-";
+  $("lead-tipo").textContent = lead.tipoEvento || "-";
+  $("lead-como").textContent = lead.comoConheceu || "-";
+// usando seu helper $
 const elObs = document.getElementById("lead-observacoes");
 if (elObs) elObs.textContent = lead.observacoes || "-";
 
@@ -541,7 +582,7 @@ if (elObs) elObs.textContent = lead.observacoes || "-";
   const qtd = Number(lead.qtd || 0);
   let subtotal = 0;
 
-  const lista = byId("lista-itens");
+  const lista = $("lista-itens");
   if (lista) lista.innerHTML = "";
 
   (lead.cardapios_enviados||[]).forEach(c=>{
@@ -581,10 +622,10 @@ if (elObs) elObs.textContent = lead.observacoes || "-";
   const total = Math.max(0, subtotal - desc);
   const porPessoa = (Number(lead.qtd || 0) > 0) ? total / Number(lead.qtd) : 0;
 
-  if (byId("val-subtotal")) byId("val-subtotal").textContent = brl(subtotal);
-  if (byId("val-desconto")) byId("val-desconto").textContent = brl(desc);
-  if (byId("val-total"))    byId("val-total").textContent    = brl(total);
-  if (byId("val-porpessoa"))byId("val-porpessoa").textContent= brl(porPessoa);
+  if ($("val-subtotal")) $("val-subtotal").textContent = brl(subtotal);
+  if ($("val-desconto")) $("val-desconto").textContent = brl(desc);
+  if ($("val-total"))    $("val-total").textContent    = brl(total);
+  if ($("val-porpessoa"))$("val-porpessoa").textContent= brl(porPessoa);
 
   atualizarStatusVisualizacaoUI();
 
@@ -667,8 +708,8 @@ function montarLinkProposta(l){
 
 // --- Visualização UI ---
 function atualizarStatusVisualizacaoUI(){
-const box = byId("visualizacao-status");
-  const lista = byId("lista-visualizacoes");
+const box = $("visualizacao-status");
+  const lista = $("lista-visualizacoes");
   if (!box || !lista) return; // ← evita erro se IDs mudarem
   const views = Number(lead.visualizacoes || 0);
   const dtISO = lead.dataVisualizacao;
@@ -1241,7 +1282,7 @@ function abrirArquivar(){
   openModal("modal-arquivar");
 }
 function confirmarArquivar(){
-  const motivo = $("selMotivoArquivamento").value.trim();
+  const motivo = $("selMotivoArquivar").value.trim();
   const obs = ($("inpObsArquivar")?.value || "").trim();
   if (!motivo) {
     alert("Escolha um motivo.");
@@ -1634,7 +1675,7 @@ function setupResponsavelUI(){
     // atualiza no cache de leads (memória) e tenta sincronizar com a API
     let leads = readLeadsCache() || [];
     const idx = leads.findIndex(l => String(l?.id) === String(lead?.id));
-      if (idx >=  0){
+      if (idx >= 0){
       const antigo = _nomeResponsavelAtual(leads[idx]) || '';
       if (!Array.isArray(leads[idx].historico)) leads[idx].historico = [];
       leads[idx].historico.push({
@@ -1694,7 +1735,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 // ==== PATCH: Degustação no Orçamento Detalhado (GLOBAL) ====
 (function(){
-  function $(id){ return document.getElementById(id); }
   function getLS(k, fb){ try { return memGet(k, fb) ?? fb; } catch { return fb; } }
   function setLS(k, v){ try { memSet(k, v); } catch {} }
   function formatBRDate(iso){
