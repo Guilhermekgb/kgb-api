@@ -11,7 +11,7 @@ function mostrarToast(msg){
   }catch{}
 }
 
-const $ = (id) => document.getElementById(id);
+const byId = (id) => document.getElementById(id);
 // In-memory store (não usar storage do navegador)
 const memoryStore = {
   leads: [],
@@ -608,7 +608,7 @@ async function carregarCatalogosDaNuvem() {
 //      Render: Cardápios / Faixas
 // =========================================
 function preencherCardapios() {
-  const container = $("cardapiosLista");
+  const container = byId("cardapiosLista");
   if (!container) return;
   container.innerHTML = "";
 
@@ -693,7 +693,7 @@ function preencherCardapios() {
 //            Render: Adicionais
 // =========================================
 function preencherAdicionais() {
-  const container = $("adicionaisLista");
+  const container = byId("adicionaisLista");
   if (!container) return;
   container.innerHTML = "";
 
@@ -734,7 +734,7 @@ function preencherAdicionais() {
   atualizarBadgeAdicionais();
 }
 function atualizarTagsAdicionais() {
-  const tagContainer = $("tagAdicional");
+  const tagContainer = byId("tagAdicional");
   if (!tagContainer) return;
   tagContainer.innerHTML = "";
   const selecionados = document.querySelectorAll("#adicionaisLista input[type='checkbox']:checked");
@@ -758,7 +758,7 @@ function atualizarTagsAdicionais() {
 //         Render: Serviços/Pacotes
 // =========================================
 function preencherServicos() {
-  const container = $("servicosLista");
+  const container = byId("servicosLista");
   if (!container) return;
   container.innerHTML = "";
 
@@ -799,7 +799,7 @@ function preencherServicos() {
   atualizarBadgeServicos();
 }
 function atualizarTagsServicos() {
-  const tagContainer = $("tagPacote");
+  const tagContainer = byId("tagPacote");
   if (!tagContainer) return;
   tagContainer.innerHTML = "";
   const selecionados = document.querySelectorAll("#servicosLista input[type='checkbox']:checked");
@@ -905,7 +905,7 @@ function atualizarBadgeServicos(){
 function preencherSelects() {
   // Como conheceu
   const opcoesConheceu = getJSON("comoConheceu", []);
-  const selectConheceu = $("como_conheceu");
+  const selectConheceu = byId("como_conheceu");
   if (selectConheceu) {
     selectConheceu.innerHTML = `<option value="">Selecione</option>`;
     opcoesConheceu.forEach(op => {
@@ -917,7 +917,7 @@ function preencherSelects() {
 
   // Tipos de evento
   const tipos = getJSON("tiposEvento", []);
-  const tipoSel = $("tipo_evento");
+  const tipoSel = byId("tipo_evento");
   if (tipoSel) {
     tipoSel.innerHTML = `<option value="">Selecione</option>`;
     tipos.forEach(t => {
@@ -928,7 +928,7 @@ function preencherSelects() {
   }
 
   // Responsáveis
-  const campoResp = $("responsavel_lead");
+  const campoResp = byId("responsavel_lead");
   const usuarios = getJSON("usuarios", []);
   if (campoResp) {
     campoResp.innerHTML = `<option value="">Selecione o responsável</option>`;
@@ -1409,8 +1409,8 @@ async function gerarProposta() {
 //   Modais & stubs auxiliares
 // =========================================
 function abrirModalPacotes() {
-  const modal = $("modalPacotes");
-  const lista = $("listaPacotesModal");
+  const modal = byId("modalPacotes");
+  const lista = byId("listaPacotesModal");
   if (!modal || !lista) return;
 
   lista.innerHTML = "";
@@ -1430,9 +1430,10 @@ function abrirModalPacotes() {
   modal.classList.remove("hidden");
 }
 function fecharModalPacotes(){ $("modalPacotes")?.classList.add("hidden"); }
+function fecharModalPacotes(){ byId("modalPacotes")?.classList.add("hidden"); }
 function adicionarPacotesSelecionados() {
   const checkboxes = document.querySelectorAll("#listaPacotesModal input[type='checkbox']:checked");
-  const container = $("tagPacote");
+  const container = byId("tagPacote");
   if (!container) return;
 
   checkboxes.forEach(cb => {
@@ -1449,7 +1450,9 @@ function adicionarPacotesSelecionados() {
 
 // ===== Degustação via Orçamento =====
 (function(){
-  function $(id){ return document.getElementById(id); }
+// Função local para evitar conflito global
+(function(){
+  function byIdLocal(id){ return document.getElementById(id); }
   function getLS(k, fb){ try { return memGet(k, fb) ?? fb; } catch { return fb; } }
   function setLS(k, v){ try { memSet(k, v); } catch {} }
 
@@ -1460,7 +1463,7 @@ function adicionarPacotesSelecionados() {
 
   // Abre o modal e carrega as datas de 'degustacoesDisponiveis'
   window.abrirModalDegustacao = function(){
-    var modal = $('modalDeg'), sel = $('selDeg'), extra = $('degCamposExtra');
+    var modal = byIdLocal('modalDeg'), sel = byIdLocal('selDeg'), extra = byIdLocal('degCamposExtra');
     if (!modal || !sel) return;
 
     var slots = getLS('degustacoesDisponiveis', []);
@@ -1477,8 +1480,8 @@ function adicionarPacotesSelecionados() {
     if (extra) extra.style.display = 'none';
 
     // pré-preenche nome (se existir no formulário do orçamento)
-    var nomePadrao = ($('nome') && $('nome').value) || ($('clienteNome') && $('clienteNome').value) || '';
-    var nomeI = $('degNomeCasal'), acompI = $('degAcomp');
+    var nomePadrao = (byIdLocal('nome') && byIdLocal('nome').value) || (byIdLocal('clienteNome') && byIdLocal('clienteNome').value) || '';
+    var nomeI = byIdLocal('degNomeCasal'), acompI = byIdLocal('degAcomp');
     if (nomeI) nomeI.value = nomePadrao;
     if (acompI) acompI.value = '0';
 
@@ -1490,7 +1493,7 @@ function adicionarPacotesSelecionados() {
   };
 
   window.fecharModalDeg = function(){
-    var modal = $('modalDeg');
+    var modal = byIdLocal('modalDeg');
     if (modal) modal.style.display = 'none';
   };
 
