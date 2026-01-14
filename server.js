@@ -1,3 +1,17 @@
+// Helper único para upsert seguro de leads
+function upsertLeadFixed(db, { id, tenantId, payload }) {
+  const payloadDb = { ...payload, id };
+  const dataJson = JSON.stringify(payloadDb);
+  db.prepare(`
+    INSERT INTO leads (id, tenantId, data, updatedAt)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      tenantId = excluded.tenantId,
+      data = excluded.data,
+      updatedAt = CURRENT_TIMESTAMP
+  `).run(id, tenantId, dataJson);
+  return payloadDb;
+}
 // server.js — Backend mínimo para financeiro/assinaturas + backups da Área do Cliente
 // deps base: npm i express better-sqlite3 dotenv cors
 // extras usados aqui: npm i firebase-admin fast-csv
@@ -715,23 +729,9 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
     }
     const payload = req.body || {};
     const id = payload.id || payload.token || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-    const payloadDb = { ...payload, id };
-    const dataStr = JSON.stringify(payloadDb);
-    console.log('[LEADS] upsert keys=', Object.keys(payload || {}));
-    const sql = `INSERT INTO leads (id, tenantId, data, updatedAt)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        tenantId = excluded.tenantId,
-        data = excluded.data,
-        updatedAt = CURRENT_TIMESTAMP`;
     try {
-      db.run(sql, [id, tenantId, dataStr], function (err) {
-        if (err) {
-          console.error('[LEADS] ERROR', err && (err.stack || err));
-          return res.status(500).json({ ok: false, error: String(err?.message || err) });
-        }
-        return res.json({ ok: true, id, item: payloadDb });
-      });
+      const item = upsertLeadFixed(db, { id, tenantId, payload });
+      return res.json({ ok: true, id, item });
     } catch (err) {
       console.error('[LEADS] ERROR', err && (err.stack || err));
       return res.status(500).json({ ok: false, error: String(err?.message || err) });
@@ -1356,38 +1356,25 @@ app.get('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 // PUT /leads/:id → chamado quando você arrasta o card de coluna
 app.put('/leads/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
   try {
-    const tenantId = String(req.user?.tenantId || 'default');
+    const tenantId = req.user?.tenantId || req.tenantId || null;
     const id = String(req.params.id || '').trim();
-
     if (!id) {
       return res.status(400).json({ error: 'id é obrigatório' });
     }
-
-    const all = loadJSON(LEADS_FILE, []);
-    const leads = Array.isArray(all) ? all : [];
-    const idx = leads.findIndex(
-      l => String(l.id) === id && String(l.tenantId || 'default') === tenantId
-    );
-
-    if (idx < 0) {
-      return res.status(404).json({ error: 'Lead não encontrado' });
+    if (!tenantId) {
+      return res.status(401).json({ error: 'missing tenantId (auth)' });
     }
-
-    const lead = { ...leads[idx] };
-    const body = req.body || {};
-
-    if (body.status != null) lead.status = String(body.status);
-    if (body.dataFechamento != null) lead.dataFechamento = body.dataFechamento;
-    if (body.proximoContato != null) lead.proximoContato = body.proximoContato;
-    if (body.responsavel != null) lead.responsavel = body.responsavel;
-
-    leads[idx] = lead;
-    saveJSON(LEADS_FILE, leads);
-
-    return res.json({ ok: true, lead });
+    const payload = req.body || {};
+    try {
+      const item = upsertLeadFixed(db, { id, tenantId, payload });
+      return res.json({ ok: true, id, item });
+    } catch (err) {
+      console.error('[PUT /leads/:id] erro:', err && (err.stack || err));
+      return res.status(500).json({ error: String(err?.message || err) });
+    }
   } catch (e) {
-    console.error('[PUT /leads/:id] erro:', e);
-    return res.status(500).json({ error: 'Erro ao atualizar lead' });
+    console.error('[PUT /leads/:id] erro:', e && (e.stack || e));
+    return res.status(500).json({ error: String(e?.message || e) });
   }
 });
 
