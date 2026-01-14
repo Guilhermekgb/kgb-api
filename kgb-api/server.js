@@ -1,3 +1,43 @@
+const crypto = require('crypto');
+
+// --- TEMP: Bootstrap admin (enable only with BOOTSTRAP_KEY) ---
+app.post('/bootstrap-admin', async (req, res) => {
+  try {
+    const key = String(req.headers['x-bootstrap-key'] || '');
+    const expected = String(process.env.BOOTSTRAP_KEY || '');
+
+    if (!expected || key !== expected) {
+      return res.status(403).json({ ok: false, error: 'forbidden' });
+    }
+
+    const email = String(req.body?.email || process.env.ADMIN_EMAIL || 'admin@kgb.com').trim().toLowerCase();
+    const senha = String(req.body?.senha || req.body?.password || process.env.ADMIN_PASSWORD || 'admin123').trim();
+    const nome = String(req.body?.nome || 'Administrador').trim();
+
+    // Usa o db já existente no server.js (better-sqlite3)
+    // Tabela usuarios: (id, email, senha_hash, nome, perfil, createdAt, updatedAt)
+    // Observação: seu log mostrou migração para usuarios.senha_hash
+    const now = new Date().toISOString();
+    const userId = crypto.randomUUID();
+
+    const existing = db.prepare('SELECT id, email FROM usuarios WHERE lower(email) = lower(?) LIMIT 1').get(email);
+    if (existing) {
+      return res.status(200).json({ ok: true, already: true, email });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const senha_hash = await bcrypt.hash(senha, 10);
+
+    db.prepare(
+      'INSERT INTO usuarios (id, email, senha_hash, nome, perfil, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(userId, email, senha_hash, nome, 'Administrador', now, now);
+
+    return res.status(201).json({ ok: true, created: true, email });
+  } catch (err) {
+    console.error('[BOOTSTRAP][ERR]', err?.message, err?.stack);
+    return res.status(500).json({ ok: false, error: 'bootstrap_failed', message: String(err?.message || err) });
+  }
+});
 // server.js — Backend mínimo para financeiro/assinaturas + backups da Área do Cliente
 // deps base: npm i express better-sqlite3 dotenv cors
 // extras usados aqui: npm i firebase-admin fast-csv
