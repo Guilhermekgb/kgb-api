@@ -671,20 +671,77 @@ function ensureLeadIds(raw, tenantId = 'default') {
 
 // POST /leads -> salva JSON COMPLETO e retorna JSON COMPLETO
 app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
+  // ===== [KGB][LEADS][POST] debug + sanitize (isolado) =====
+  function _kgbType(v) {
+    if (v === null) return "null";
+    if (Array.isArray(v)) return "array";
+    return typeof v;
+  }
+
+  function _kgbSafePreview(obj, maxLen = 1400) {
+    try {
+      const s = JSON.stringify(obj);
+      if (!s) return "";
+      return s.length > maxLen ? s.slice(0, maxLen) + "…(trunc)" : s;
+    } catch {
+      return "[unstringifiable]";
+    }
+  }
+
+  function _kgbToDbScalar(v) {
+    if (v === undefined) return null;
+    if (v === null) return null;
+    const t = typeof v;
+    if (t === "number") return Number.isFinite(v) ? v : null;
+    if (t === "boolean") return v ? 1 : 0;
+    if (t === "string") return v;
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+
+  function _kgbNormalizeBodyToDb(body) {
+    const clean = {};
+    const keys = Object.keys(body || {});
+    for (const k of keys) clean[k] = _kgbToDbScalar(body[k]);
+    return clean;
+  }
+
+  const _rawBody = (req && req.body) ? req.body : {};
+  const _keys = Object.keys(_rawBody || {});
+  let _payloadStr = "";
+  let _payloadBytes = 0;
+  try {
+    _payloadStr = JSON.stringify(_rawBody);
+    _payloadBytes = Buffer.byteLength(_payloadStr, "utf8");
+  } catch {
+    _payloadStr = "[unstringifiable]";
+    _payloadBytes = 0;
+  }
+
+  console.log("[KGB][LEADS][POST] keys=", _keys.slice(0, 120));
+  console.log("[KGB][LEADS][POST] types(sample)=", _keys.slice(0, 30).map(k => [k, _kgbType(_rawBody[k])]));
+  console.log("[KGB][LEADS][POST] payloadBytes=", _payloadBytes);
+  console.log("[KGB][LEADS][POST] payloadPreview=", _kgbSafePreview(_rawBody));
+
+  const body = _rawBody;
+  const bodyDb = _kgbNormalizeBodyToDb(_rawBody);
+  const payloadDb = _kgbToDbScalar(_rawBody);
+
   try {
     const tenantId = (req.user && req.user.tenantId) ? req.user.tenantId : 'default';
-    const raw = req.body || {};
-
-    const { id, token, now } = ensureLeadIds(raw, tenantId);
+    const { id, token, now } = ensureLeadIds(body, tenantId);
 
     // IMPORTANTE: salva tudo que veio do front + ids
     const lead = {
-      ...raw,
+      ...body,
       id,
       tenantId,
       token,
       updatedAt: now,
-      createdAt: raw.createdAt || now,
+      createdAt: body.createdAt || now,
     };
 
     ensureLeadsTable(db);
@@ -693,15 +750,21 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
     try {
       db.prepare(`INSERT INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET tenantId = excluded.tenantId, data = excluded.data, updatedAt = excluded.updatedAt`).run(
-        id, tenantId, JSON.stringify(lead), now
+        id, tenantId, payloadDb, now
       );
     } catch (e) {
       // better-sqlite3 doesn't support excluded on older SQLite versions; fallback to replace
       try {
-        db.prepare(`REPLACE INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)`).run(id, tenantId, JSON.stringify(lead), now);
+        db.prepare(`REPLACE INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)`).run(id, tenantId, payloadDb, now);
       } catch (err) {
-        console.error('[LEADS] upsert/replace failed:', err && err.message);
-        throw err;
+        console.error("[KGB][LEADS][POST] INSERT FAIL =", err && err.message);
+        console.error("[KGB][LEADS][POST] STACK =", err && err.stack ? err.stack : err);
+        console.error("[KGB][LEADS][POST] debug keys=", _keys);
+        console.error("[KGB][LEADS][POST] debug payloadBytes=", _payloadBytes);
+        return res.status(500).json({
+          ok: false,
+          error: "LEAD_INSERT_FAILED"
+        });
       }
     }
 
@@ -710,8 +773,14 @@ app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
 
     return res.json({ ok: true, data: lead });
   } catch (e) {
-    console.error('[LEADS] POST error:', e);
-    return res.status(500).json({ ok: false, error: 'Erro ao salvar lead' });
+    console.error("[KGB][LEADS][POST] INSERT FAIL =", e && e.message);
+    console.error("[KGB][LEADS][POST] STACK =", e && e.stack ? e.stack : e);
+    console.error("[KGB][LEADS][POST] debug keys=", _keys);
+    console.error("[KGB][LEADS][POST] debug payloadBytes=", _payloadBytes);
+    return res.status(500).json({
+      ok: false,
+      error: "LEAD_INSERT_FAILED"
+    });
   }
 });
 
