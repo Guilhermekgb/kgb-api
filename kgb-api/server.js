@@ -46,7 +46,6 @@ require('dotenv').config();
 
 const express  = require('express');
 const cors     = require('cors');
-const crypto   = require('crypto');
 const Database = require('better-sqlite3');
 const fs       = require('fs');
 const path     = require('path');
@@ -6491,7 +6490,6 @@ app.post('/portal/token', verifyFirebaseToken, (req, res) => {
     const tokens = loadPortalTokens();
 
     // gera token aleatório
-    const crypto = require('crypto');
     const token = crypto.randomBytes(24).toString('hex');
 
     // monta só os dados "públicos" do evento (nada sensível)
