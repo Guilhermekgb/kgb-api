@@ -636,6 +636,39 @@ const CHECKLIST_LINKS_FILE = 'checklist-links.json';
 
 // =========================================================
 // LEADS (persistência: SQLite com JSON completo)
+// ===== [KGB][LEADS] schema helpers (isolado) =====
+function kgbDbRun(db, sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
+}
+
+function kgbDbAll(db, sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+}
+
+async function kgbEnsureLeadColumns(db, wantedCols) {
+  const info = await kgbDbAll(db, "PRAGMA table_info(leads)");
+  const existing = new Set(info.map(r => r.name));
+  const added = [];
+  for (const [col, type] of Object.entries(wantedCols)) {
+    if (!existing.has(col)) {
+      await kgbDbRun(db, `ALTER TABLE leads ADD COLUMN ${col} ${type}`);
+      added.push(col);
+    }
+  }
+  if (added.length) {
+    console.log("[KGB][LEADS] Added columns:", added);
+  }
+}
 // =========================================================
 
 // garanta tabela (se já existir algo parecido, mantenha 1 só)
@@ -671,116 +704,57 @@ function ensureLeadIds(raw, tenantId = 'default') {
 
 // POST /leads -> salva JSON COMPLETO e retorna JSON COMPLETO
 app.post('/leads', verifyFirebaseToken, ensureAllowed('sync'), (req, res) => {
-  // ===== [KGB][LEADS][POST] debug + sanitize (isolado) =====
-  function _kgbType(v) {
-    if (v === null) return "null";
-    if (Array.isArray(v)) return "array";
-    return typeof v;
-  }
-
-  function _kgbSafePreview(obj, maxLen = 1400) {
-    try {
-      const s = JSON.stringify(obj);
-      if (!s) return "";
-      return s.length > maxLen ? s.slice(0, maxLen) + "…(trunc)" : s;
-    } catch {
-      return "[unstringifiable]";
-    }
-  }
-
-  function _kgbToDbScalar(v) {
-    if (v === undefined) return null;
-    if (v === null) return null;
-    const t = typeof v;
-    if (t === "number") return Number.isFinite(v) ? v : null;
-    if (t === "boolean") return v ? 1 : 0;
-    if (t === "string") return v;
-    try {
-      return JSON.stringify(v);
-    } catch {
-      return String(v);
-    }
-  }
-
-  function _kgbNormalizeBodyToDb(body) {
-    const clean = {};
-    const keys = Object.keys(body || {});
-    for (const k of keys) clean[k] = _kgbToDbScalar(body[k]);
-    return clean;
-  }
-
-  const _rawBody = (req && req.body) ? req.body : {};
-  const _keys = Object.keys(_rawBody || {});
-  let _payloadStr = "";
-  let _payloadBytes = 0;
   try {
-    _payloadStr = JSON.stringify(_rawBody);
-    _payloadBytes = Buffer.byteLength(_payloadStr, "utf8");
-  } catch {
-    _payloadStr = "[unstringifiable]";
-    _payloadBytes = 0;
-  }
+    const raw = req.body || {};
 
-  console.log("[KGB][LEADS][POST] keys=", _keys.slice(0, 120));
-  console.log("[KGB][LEADS][POST] types(sample)=", _keys.slice(0, 30).map(k => [k, _kgbType(_rawBody[k])]));
-  console.log("[KGB][LEADS][POST] payloadBytes=", _payloadBytes);
-  console.log("[KGB][LEADS][POST] payloadPreview=", _kgbSafePreview(_rawBody));
+    // tenantId: preserve o que você já usa hoje (req.tenantId / req.user.tenantId / header)
+    const tenantId =
+      (req.tenantId) ||
+      (req.user && (req.user.tenantId || req.user.tenant)) ||
+      (raw.tenantId) ||
+      "default";
 
-  const body = _rawBody;
-  const bodyDb = _kgbNormalizeBodyToDb(_rawBody);
-  const payloadDb = _kgbToDbScalar(_rawBody);
+    const id = (raw.id !== undefined && raw.id !== null && String(raw.id).trim() !== "")
+      ? String(raw.id)
+      : String(Date.now());
 
-  try {
-    const tenantId = (req.user && req.user.tenantId) ? req.user.tenantId : 'default';
-    const { id, token, now } = ensureLeadIds(body, tenantId);
+    const updatedAt = new Date().toISOString();
 
-    // IMPORTANTE: salva tudo que veio do front + ids
-    const lead = {
-      ...body,
-      id,
-      tenantId,
-      token,
-      updatedAt: now,
-      createdAt: body.createdAt || now,
-    };
+    let dataStr = "";
+    try { dataStr = JSON.stringify(raw); } catch { dataStr = String(raw); }
 
-    ensureLeadsTable(db);
-
-    // upsert using better-sqlite3 (sync)
+    // DEBUG schema real (pra confirmar colunas)
     try {
-      db.prepare(`INSERT INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET tenantId = excluded.tenantId, data = excluded.data, updatedAt = excluded.updatedAt`).run(
-        id, tenantId, payloadDb, now
-      );
-    } catch (e) {
-      // better-sqlite3 doesn't support excluded on older SQLite versions; fallback to replace
-      try {
-        db.prepare(`REPLACE INTO leads (id, tenantId, data, updatedAt) VALUES (?, ?, ?, ?)`).run(id, tenantId, payloadDb, now);
-      } catch (err) {
-        console.error("[KGB][LEADS][POST] INSERT FAIL =", err && err.message);
-        console.error("[KGB][LEADS][POST] STACK =", err && err.stack ? err.stack : err);
-        console.error("[KGB][LEADS][POST] debug keys=", _keys);
-        console.error("[KGB][LEADS][POST] debug payloadBytes=", _payloadBytes);
-        return res.status(500).json({
-          ok: false,
-          error: "LEAD_INSERT_FAILED"
-        });
+      db.all("PRAGMA table_info(leads)", [], (e, rows) => {
+        if (e) return console.error("[KGB][LEADS][POST] PRAGMA error", e.message);
+        console.log("[KGB][LEADS][POST] table_info(leads) =", (rows || []).map(r => r.name));
+      });
+    } catch {}
+
+    // UPSERT somente nas colunas existentes do schema "data JSON"
+    const sql = `
+      INSERT INTO leads (id, tenantId, data, updatedAt)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        tenantId = excluded.tenantId,
+        data = excluded.data,
+        updatedAt = excluded.updatedAt
+    `.trim().replace(/\s+/g, " ");
+
+    console.log("[KGB][LEADS][POST] upsert id=", id, "tenantId=", tenantId, "bytes=", Buffer.byteLength(dataStr, "utf8"));
+
+    db.run(sql, [id, tenantId, dataStr, updatedAt], function (err) {
+      if (err) {
+        console.error("[KGB][LEADS][POST] UPSERT FAIL =", err.message);
+        console.error("[KGB][LEADS][POST] SQL =", sql);
+        console.error("[KGB][LEADS][POST] STACK =", err.stack || err);
+        return res.status(500).json({ ok: false, error: "LEAD_UPSERT_FAILED" });
       }
-    }
-
-    // update in-memory store for fast access
-    leadsStore.set(String(id), lead);
-
-    return res.json({ ok: true, data: lead });
-  } catch (e) {
-    console.error("[KGB][LEADS][POST] INSERT FAIL =", e && e.message);
-    console.error("[KGB][LEADS][POST] STACK =", e && e.stack ? e.stack : e);
-    console.error("[KGB][LEADS][POST] debug keys=", _keys);
-    console.error("[KGB][LEADS][POST] debug payloadBytes=", _payloadBytes);
-    return res.status(500).json({
-      ok: false,
-      error: "LEAD_INSERT_FAILED"
+      return res.json({ ok: true, id });
     });
+  } catch (err) {
+    console.error("[KGB][LEADS][POST] FATAL =", err && err.stack ? err.stack : err);
+    return res.status(500).json({ ok: false, error: "LEAD_POST_FATAL" });
   }
 });
 
