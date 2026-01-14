@@ -6,8 +6,6 @@ require('dotenv').config();
 
 const express  = require('express');
 const cors     = require('cors');
-// [BUILD] marker para debug Render
-console.log('[BUILD] KGB-API running commit marker: leads-upsert-fixed-2026-01-14');
 const crypto   = require('crypto');
 const Database = require('better-sqlite3');
 const fs       = require('fs');
@@ -22,16 +20,6 @@ const bcrypt   = require('bcryptjs');
 
 // Boot log to help identify which server.js is running on the host
 console.log('[BOOT]', 'KGB API SERVER LOADED', new Date().toISOString());
-
-// --- FATAL LOGS (Render) ---
-process.on('unhandledRejection', (reason) => {
-  console.error('[FATAL] unhandledRejection:', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('[FATAL] uncaughtException:', err);
-  // deixo o processo cair explicitamente para o Render registrar o motivo
-  process.exit(1);
-});
 
 // Optional AWS S3 presign support (enabled when AWS env vars are provided)
 let s3Client = null;
@@ -84,102 +72,7 @@ const ALLOWLIST = String(process.env.ALLOWED_ORIGINS || process.env.ALLOWLIST_OR
 
 // ========================= Banco de Dados (SQLite) =========================
 const db = new Database(DB_PATH);
-// --- LEADS: garantir tabela no SQLite (Render/local) ---
-try {
-  // explícito: usar "leads" (sem typo)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS leads (
-      id TEXT PRIMARY KEY,
-      tenantId TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_leads_tenantId ON leads(tenantId);
-  `);
-
-  // listar tabelas após garantir schema
-  const tables = db.prepare(`
-    SELECT name FROM sqlite_master
-    WHERE type='table'
-    ORDER BY name
-  `).all();
-
-  console.log('[KGB][DB] tables (after ensure leads):', tables.map(t => t.name));
-
-  const schemaLeads = db.prepare(`PRAGMA table_info(leads)`).all();
-  console.log('[KGB][SCHEMA] PRAGMA table_info(leads):', schemaLeads);
-} catch (e) {
-  console.error('[KGB][DB] failed ensuring leads table:', e?.message || e);
-}
-// --- /LEADS ---
-// --- KGB: sanitize values for sqlite (avoid binding objects -> 500) ---
-function kgbSafeStringify(v) {
-  try { return JSON.stringify(v); } catch (e) { return String(v); }
-}
-function kgbToSqlValue(v) {
-  if (v === undefined) return null;
-  if (v === null) return null;
-  if (v instanceof Date) return v.toISOString();
-  const t = typeof v;
-  if (t === 'string' || t === 'number' || t === 'boolean') return v;
-  // arrays/objects/functions -> stringify
-  return kgbSafeStringify(v);
-}
-function kgbSanitizeSqlParams(obj) {
-  const out = {};
-  for (const [k, v] of Object.entries(obj || {})) out[k] = kgbToSqlValue(v);
-  return out;
-}
-function kgbPickLeadPayload(src) {
-  // payload completo que o front precisa enxergar no detalhado
-  const allowed = [
-    'id','nome','whatsapp','telefone','email',
-    'dataEvento','dataEventoISO','horarioEvento',
-    'local','qtd','tipoEvento','comoConheceu','observacoes',
-    'origem','status','responsavel','responsavel_nome',
-    'cardapios_enviados','adicionaisSelecionados','servicosSelecionados',
-    'descontoReais','descontoPorcentagem','valorTotal','proximoContato',
-    'dataCriacao','historico'
-  ];
-  const p = {};
-  for (const k of allowed) if (k in (src || {})) p[k] = src[k];
-  return p;
-}
 db.pragma('journal_mode = WAL');
-
-// ==== MIGRAÇÃO DEFENSIVA SÍNCRONA (NÃO QUEBRAR DEPLOY) ====
-function ensureLeadsSchema(db) {
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS leads (
-        id TEXT PRIMARY KEY,
-        tenantId TEXT,
-        payload TEXT,
-        createdAt TEXT,
-        updatedAt TEXT
-      );
-    `);
-
-    // Checa colunas existentes
-    const cols = db.prepare(`PRAGMA table_info(leads)`).all();
-    const hasPayload = Array.isArray(cols) && cols.some(c => c && c.name === 'payload');
-
-    if (!hasPayload) {
-      try {
-        db.exec(`ALTER TABLE leads ADD COLUMN payload TEXT;`);
-        console.log('[LEADS] coluna payload criada via ALTER TABLE');
-      } catch (e) {
-        console.warn('[LEADS] aviso: não foi possível adicionar coluna payload (ignorado):', e?.message || e);
-      }
-    } else {
-      console.log('[LEADS] schema OK (payload já existe)');
-    }
-  } catch (e) {
-    console.warn('[LEADS] schema ensure falhou (não-fatal):', e?.message || e);
-  }
-}
-// ==== FIM MIGRAÇÃO DEFENSIVA SÍNCRONA ====
 
 // Auth debug helper
 const AUTH_DEBUG = process.env.AUTH_DEBUG === '1';
@@ -242,80 +135,6 @@ function initDb() {
   safeAddColumn('usuarios', "must_change_password INTEGER DEFAULT 0");
   safeAddColumn('usuarios', "created_at TEXT DEFAULT (datetime('now'))");
 
-  // Defensive migration: ensure perfis and perfil exist (some deployments miss perfis)
-  try {
-    const colNames = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
-    if (!colNames.includes('perfis')) {
-      db.exec("ALTER TABLE usuarios ADD COLUMN perfis TEXT");
-      console.log('[DB] Added missing column usuarios.perfis');
-    }
-    if (!colNames.includes('perfil')) {
-      db.exec("ALTER TABLE usuarios ADD COLUMN perfil TEXT");
-      console.log('[DB] Added missing column usuarios.perfil');
-    }
-  } catch (e) {
-    console.error('[KGB][DB] migration error', e && (e.stack || e));
-  }
-
-  // Ensure permissões UI table exists (perfil -> permissoes_json)
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS permissoes_ui (
-        perfil TEXT PRIMARY KEY,
-        permissoes_json TEXT NOT NULL,
-        updated_at INTEGER
-      );
-    `);
-  } catch (e) {
-    console.error('[KGB][DB] failed to ensure permissoes_ui table', e && (e.stack || e));
-  }
-
-  // ================================
-  // SEED inicial de permissoes_ui (apenas em DEV com flag explícita)
-  // ================================
-  try {
-    console.log('[SEED] Checando permissoes_ui...');
-
-    const row = db
-      .prepare('SELECT COUNT(*) as total FROM permissoes_ui')
-      .get();
-
-    console.log('[SEED] Total permissoes_ui:', row && row.total);
-
-    // Só executar seed automaticamente em ambiente de desenvolvimento e quando
-    // a variável de ambiente AUTO_SEED_PERMISSOES esteja habilitada para '1'.
-    if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED_PERMISSOES === '1') {
-      if (row && row.total === 0) {
-        console.log('[SEED] Inserindo permissoes_ui padrão (Vendedor)');
-
-        const permissoesVendedor = [
-          'page:orcamento.html',
-          'page:orcamento-detalhado.html',
-          'page:funil-leads.html',
-          'page:lista-propostas.html',
-          'page:notificacoes-vendedor.html'
-        ];
-
-        db.prepare(`
-          INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
-          VALUES (?, ?, ?)
-        `).run(
-          'Vendedor',
-          JSON.stringify(permissoesVendedor),
-          new Date().toISOString()
-        );
-
-        console.log('[SEED] permissoes_ui inserido com sucesso');
-      } else {
-        console.log('[SEED] Seed ignorado (tabela não vazia)');
-      }
-    } else {
-      console.log('[SEED] automatic permissoes_ui seed skipped (not dev or AUTO_SEED_PERMISSOES not enabled)');
-    }
-  } catch (err) {
-    console.error('[SEED][permissoes_ui] Erro:', err);
-  }
-
   // Try to migrate existing plain senha -> senha_hash (hash if needed)
   try {
     const cols = db.prepare("PRAGMA table_info(usuarios)").all().map(c => c.name);
@@ -351,37 +170,6 @@ function initDb() {
 
 // Call initDb early to ensure core tables exist
 initDb();
-// Ensure a default admin user exists when DB is empty and env vars provided
-function ensureDefaultAdmin() {
-  try {
-    const cnt = db.prepare('SELECT COUNT(*) as c FROM usuarios').get();
-    const total = (cnt && cnt.c) ? Number(cnt.c) : 0;
-    if (total === 0) {
-      const adminEmail = process.env.ADMIN_EMAIL;
-      const adminPass = process.env.ADMIN_PASSWORD;
-      if (adminEmail && adminPass) {
-        const id = crypto.randomUUID();
-        const emailNorm = String(adminEmail).toLowerCase().trim();
-        const nowIso = new Date().toISOString();
-        const senhaHash = bcrypt.hashSync(String(adminPass), 10);
-        try {
-          db.prepare(`INSERT INTO usuarios (id, email, nome, perfil, senha_hash, senha, created_at, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-            .run(id, emailNorm, 'Administrador', 'Administrador', senhaHash, null, nowIso, 0);
-          console.log('[BOOTSTRAP] admin criado:', emailNorm);
-        } catch (e) {
-          console.warn('[BOOTSTRAP] falha ao criar admin:', e && e.message);
-        }
-      } else {
-        console.log('[BOOTSTRAP] ADMIN_* não configurado; nenhum admin criado');
-      }
-    }
-  } catch (e) {
-    console.warn('[BOOTSTRAP] erro ao verificar/ins criar admin:', e && e.message);
-  }
-}
-
-// Attempt bootstrap (idempotent)
-ensureDefaultAdmin();
 
 // Tabelas
 db.exec(`
@@ -672,36 +460,6 @@ CREATE TABLE IF NOT EXISTS kv_store (
   updated_at INTEGER NOT NULL
 );
 `);
-// === TABELAS: degustacoes_disponiveis e agenda (Pacote 2) ===
-db.exec(`
-CREATE TABLE IF NOT EXISTS degustacoes_disponiveis (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  data TEXT NOT NULL,
-  hora TEXT,
-  titulo TEXT DEFAULT 'Degustação',
-  vagas INTEGER DEFAULT 1,
-  status TEXT DEFAULT 'disponivel', -- disponivel|lotado|cancelado
-  observacoes TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS agenda (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo TEXT,
-  ref_id INTEGER,
-  titulo TEXT DEFAULT 'Compromisso',
-  data TEXT NOT NULL,
-  hora TEXT,
-  status TEXT DEFAULT 'pendente',
-  observacoes TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_deg_data_hora ON degustacoes_disponiveis(data, hora);
-CREATE INDEX IF NOT EXISTS idx_agenda_data_hora ON agenda(data, hora);
-`);
 
 // ========================= Firebase Admin (Storage) =========================
 const admin = require('firebase-admin');
@@ -793,9 +551,6 @@ function savePortalTokens(tokens) {
 
 // ========================= App / CORS =========================
 const app = express();
-// Ensure body parsers are registered early (before any routes)
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
 // Em DEV: não confiar em proxy — usar host direto (evita comportamento de x-forwarded-proto alterando secure)
 app.set('trust proxy', false);
 const isDev = process.env.NODE_ENV !== 'production';
@@ -863,8 +618,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Parser JSON global moved earlier near app creation to ensure parsers run before routes.
-// app.use(express.json({ limit: '50mb' }));
+// Parser JSON global: deve ser declarado ANTES das rotas que esperam `req.body`.
+// Mantemos rotas webhook que usam `rawJson` especificando `express.raw()` localmente.
+app.use(express.json({ limit: '50mb' }));
 
 // Diagnostic endpoint and boot log should be available early (before static/catch-all)
 console.log('[BOOT]', 'express.json configured', new Date().toISOString());
@@ -1123,27 +879,6 @@ function fetchUserForApi(id) {
       permissoes = ['*'];
     }
 
-    // If no explicit permissoes on user row, try to build from permissoes_ui table using perfis
-    try {
-      if ((!Array.isArray(permissoes) || permissoes.length === 0) && Array.isArray(perfis) && perfis.length) {
-        const combined = new Set(permissoes || []);
-        for (const pf of perfis) {
-          try {
-            const r = db.prepare('SELECT permissoes_json FROM permissoes_ui WHERE perfil = ?').get(pf);
-            if (r && r.permissoes_json) {
-              const parsed = JSON.parse(r.permissoes_json);
-              if (Array.isArray(parsed)) parsed.forEach(x => combined.add(x));
-            }
-          } catch (e) {
-            // ignore per-profile read errors
-          }
-        }
-        permissoes = Array.from(combined);
-      }
-    } catch (e) {
-      // ignore
-    }
-
     return { id: row.id, email: row.email, nome: row.nome, perfil, perfis, permissoes };
   } catch (e) {
     console.warn('[fetchUserForApi] failed', e && e.message);
@@ -1193,67 +928,20 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireAdmin(req, res, next) {
-  try {
-    const tokenUser = req.user || {};
-
-    // Try to enrich from DB when possible
-    let user = tokenUser;
-    try {
-      if (tokenUser && tokenUser.id) {
-        const full = fetchUserForApi(tokenUser.id);
-        if (full) user = Object.assign({}, tokenUser, full);
-      }
-    } catch (e) { /* ignore enrichment errors */ }
-
-    const perfil = user.perfil || user.role || null;
-
-    const perfis = Array.isArray(user.perfis) ? user.perfis : Array.isArray(user.roles) ? user.roles : perfil ? [perfil] : [];
-
-    console.log('[KGB][RBAC] user=', { id: user.id, email: user.email, perfil, perfis });
-
-    const isAdmin = perfil === 'Administrador' || perfil === 'admin' || perfis.includes('Administrador') || perfis.includes('admin');
-
-    if (!isAdmin) {
-      return res.status(403).json({ ok: false, error: 'Acesso negado: apenas administrador' });
-    }
-
-    // attach the enriched user for downstream handlers
-    req.user = user;
-    return next();
-  } catch (e) {
-    console.error('[KGB][RBAC] requireAdmin error:', e.stack || e);
-    return res.status(500).json({
-      ok: false,
-      error: 'Erro interno no controle de acesso',
-      ...(process.env.AUTH_DEBUG === '1' ? { detail: String(e.stack || e) } : {})
-    });
-  }
-}
-
 // Rotas de autenticação: /auth/login, /auth/logout, /auth/me
-app.post('/auth/login', async (req, res) => {
-  // Ensure email/password variables are in function scope
-  let email = '';
-  let password = '';
-  try {
-    // DEBUG TEMP
-    console.log('[POST /auth/login] content-type:', req.headers['content-type']);
-    try { console.log('[POST /auth/login] body keys:', Object.keys(req.body || {})); } catch(e) { console.log('[POST /auth/login] body (unreadable)'); }
-
-    const b = req.body || {};
-    email = (b.email || b.Email || b.nome || '').toString().trim();
-    password = (b.password || b.senha || b.Senha || b.novaSenha || '').toString();
-
-    // expose build header to help detect which code is running
-    try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
-    console.log('[AUTH] login attempt (start)', { email: String(email).toLowerCase(), hasPassword: !!password, buildId: BUILD_ID });
-
-    if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
-  } catch (e) {
-    console.error('[POST /auth/login] pre-check error:', e && (e.stack || e));
-    return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
+app.post('/auth/login', express.json(), async (req, res) => {
+  // handler for login
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[AUTH] POST /auth/login req.headers=', req.headers);
+    try { console.log('[AUTH] POST /auth/login body keys=', Object.keys(req.body || {})); } catch(e){}
   }
+  const { email } = req.body || {};
+  const password = (req.body?.password ?? req.body?.senha ?? '').toString();
+  // expose build header to help detect which code is running
+  try { res.setHeader('X-KGB-BUILD', BUILD_ID); } catch (e) {}
+  console.log('[AUTH] login attempt (start)', { email, hasPassword: !!password, buildId: BUILD_ID });
+  if (!email || !password) return res.status(400).json({ ok: false, error: 'Missing email or password', buildId: BUILD_ID });
 
   try {
       const emailRaw = String(email || '');
@@ -1318,19 +1006,12 @@ app.post('/auth/login', async (req, res) => {
       if (row) {
         console.log('[AUTH] branch', 'db');
         try {
-          const hash = (row.senha_hash || row.password_hash || row.senha || '').toString();
-          const hasHash = !!(hash && String(hash).trim());
+          const hasHash = !!(row.senha_hash && String(row.senha_hash).trim());
           if (!hasHash) {
-            console.error('[KGB] user without password hash', { id: row.id, email: row.email });
-            return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
+            dlog('login: user has no senha_hash, failing auth', { id: row.id });
+            return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
           }
-          let bcryptOk = false;
-          try {
-            bcryptOk = await bcrypt.compare(String(password || ''), String(hash));
-          } catch (e) {
-            console.error('[KGB] bcrypt compare failed', e && (e.stack || e));
-            return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
-          }
+          const bcryptOk = await bcrypt.compare(String(password || ''), String(row.senha_hash));
           dlog('login check', { id: row.id, hasHash, bcryptOk });
           if (!bcryptOk) {
             console.warn('[AUTH] invalid credentials', { email, branch: 'db' });
@@ -1359,8 +1040,9 @@ app.post('/auth/login', async (req, res) => {
           try { res.setHeader('KGB_TOKEN', token); } catch (e) {}
           return res.status(200).json({ ok: true, token: token, user: { id: userId, email: row.email, nome: row.nome, perfil: normalizePerfil(row.perfil) }, buildId: BUILD_ID });
         } catch (errCompare) {
-          console.error('[KGB] /auth/login bcrypt branch error', errCompare && (errCompare.stack || errCompare));
-          return res.status(500).json({ ok: false, error: 'Erro interno', buildId: BUILD_ID });
+          console.warn('[AUTH] bcrypt compare failed', errCompare && errCompare.message);
+          console.warn('[AUTH] invalid credentials', { email, branch: 'db', reason: 'compare_error' });
+          return res.status(401).json({ ok: false, error: 'Credenciais inválidas', buildId: BUILD_ID });
         }
       }
 
@@ -1674,127 +1356,49 @@ const ESTOQUE_MOVIMENTOS_FILE  = 'estoque-movimentos.json';
 const CHECKLIST_LINKS_FILE = 'checklist-links.json';
 
 
-// =========================================================
-// LEADS (persistência: SQLite com JSON completo)
-// =========================================================
-
-function normalizeLead(body) {
-  const b = body && typeof body === 'object' ? body : {};
-  const now = new Date().toISOString();
-  const lead = { ...b };
-
-  lead.tenantId = lead.tenantId || lead.tenant_id || 'default';
-  lead.id = lead.id || lead._id || lead.leadId || lead.lead_id || (crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)));
-  lead.token = lead.token || lead.leadToken || (crypto && crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + '-' + Date.now().toString(36)));
-
-  lead.createdAt = lead.createdAt || now;
-  lead.updatedAt = now;
-
-  return lead;
-}
-
-function ensureLeadsTable() {
+// === GET /leads/:id — retorna um lead específico (por ID) ===
+app.get('/leads/:id', requireAuth, (req, res) => {
   try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS leads (
-        id TEXT PRIMARY KEY,
-        tenantId TEXT,
-        token TEXT,
-        data_json TEXT,
-        payload TEXT,
-        updatedAt TEXT,
-        createdAt TEXT
-      );
-    `);
+    const tenantId = String(req.user?.tenantId || 'default');
+    const leadId   = String(req.params.id || '').trim();
+
+    if (!leadId) {
+      return res.status(400).json({ error: 'id obrigatório' });
+    }
+
+    const allLeads = loadJSON(LEADS_FILE, []);
+    const leads    = Array.isArray(allLeads) ? allLeads : [];
+
+    const lead = leads.find(
+      (l) => String(l.id) === leadId && String(l.tenantId || 'default') === tenantId
+    );
+
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
+    return res.json({ ok: true, data: lead });
   } catch (e) {
-    console.warn('[DB] ensureLeadsTable failed:', e && e.message);
+    console.error('[GET /leads/:id] erro:', e);
+    return res.status(500).json({ error: 'Erro ao buscar lead' });
   }
-}
+});
+// === POST /leads — cria ou atualiza um lead (Módulo 7) ===
+app.post('/leads', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
 
-  // Run defensive leads schema migration synchronously (non-fatal)
   try {
-    ensureLeadsSchema(db);
+    const payload = req.body || {};
+    // garantir id (se não veio, gerar)
+    const leadId = (payload && payload.id) ? String(payload.id) : crypto.randomUUID();
+    // tenantId já existe no handler (pelo log aparece "tenantId final = default")
+    const tenantIdFinal = req.user?.tenantId || 'default';
+    // salva tudo em data JSON (sem colunas dinâmicas)
+    upsertLeadFixed(db, { id: leadId, tenantId: tenantIdFinal, payload });
+    // retornar sucesso
+    return res.status(200).json({ ok: true, id: leadId });
   } catch (e) {
-    console.error('[LEADS] ensureLeadsSchema threw (non-fatal):', e && (e.message || e));
-  }
-
-// POST /leads -> salva JSON completo
-// ===== PATCH: POST /leads - persistir payload completo =====
-app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
-  console.log('[LEADS] handler version: leads-upsert-fixed-2026-01-14');
-  console.log('[LEADS] req=', { method: req.method, path: req.path });
-  try {
-
-    // body cru que veio do front
-    const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
-
-    // LOG REAL do que chegou
-    console.log('[LEADS] req.body keys:', Object.keys(incoming || {}));
-
-    // ids/metadata do servidor
-    const id = incoming.id || crypto.randomUUID();
-    const token = incoming.token || crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-
-    // Forçar tenantId do token
-    const tenantFromToken = req.user?.tenantId || req.user?.tenant || null;
-    let leadFinal = {
-      ...incoming,
-      id,
-      token,
-      createdAt: incoming.createdAt || nowIso,
-      updatedAt: nowIso,
-    };
-    if (tenantFromToken) {
-      leadFinal.tenantId = tenantFromToken;
-    } else if (!leadFinal.tenantId) {
-      leadFinal.tenantId = 'default';
-    }
-
-    // NÃO enviar objetos crus para o sqlite
-    delete leadFinal.raw;
-    delete leadFinal._raw;
-
-    // payload completo (texto) para o detalhado
-    const payloadObj = kgbPickLeadPayload(leadFinal);
-    const payloadStr = kgbSafeStringify(payloadObj);
-    leadFinal.payload = payloadStr;
-
-    // IMPORTANTÍSSIMO: sanitiza qualquer valor antes de bind no sqlite
-    const sqlParams = kgbSanitizeSqlParams(leadFinal);
-
-    console.log('[LEADS] POST tenantId final =', leadFinal.tenantId, 'id=', leadFinal.id);
-
-    // garante coluna payload (defensivo)
-    try {
-      db.prepare(`ALTER TABLE leads ADD COLUMN payload TEXT`).run();
-    } catch (e) {
-      // ignora se já existe
-    }
-
-    // UPSERT simples: se existir, atualiza; se não, insere
-    const exists = db.prepare(`SELECT id FROM leads WHERE tenantId=? AND id=?`).get(leadFinal.tenantId, id);
-
-    if (exists) {
-      db.prepare(`
-        UPDATE leads
-           SET token = @token,
-               updatedAt = @updatedAt,
-               payload = @payload
-         WHERE tenantId = @tenantId AND id = @id
-      `).run(sqlParams);
-    } else {
-      db.prepare(`
-        INSERT INTO leads (tenantId, id, token, createdAt, updatedAt, payload)
-        VALUES (@tenantId, @id, @token, @createdAt, @updatedAt, @payload)
-      `).run(sqlParams);
-    }
-
-    // responde com o lead completo (pra redirecionar e já usar no detalhado)
-    return res.json({ ok: true, data: leadFinal });
-  } catch (err) {
-    console.error('[LEADS] POST ERROR', err?.message, err?.stack);
-    return res.status(500).json({ ok: false, error: 'Erro ao salvar lead' });
+    console.error('[POST /leads] erro:', e);
+    return res.status(500).json({ error: 'Erro ao salvar lead' });
   }
 });
 
@@ -1841,91 +1445,6 @@ app.post('/public/leads', express.json({ limit: '50mb' }), (req, res) => {
     return res.status(500).json({ ok: false, error: 'Erro ao criar lead' });
   }
 });
-// === ROTAS: Degustações disponíveis (CRUD) ===
-app.get('/degustacoes-disponiveis', requireAuth, (req, res) => {
-  try {
-    const rows = db.prepare('SELECT * FROM degustacoes_disponiveis ORDER BY data ASC, hora ASC').all();
-    return res.json({ ok: true, items: Array.isArray(rows) ? rows : [] });
-  } catch (e) {
-    console.error('[GET /degustacoes-disponiveis] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao listar degustações' });
-  }
-});
-
-app.post('/degustacoes-disponiveis', express.json(), requireAuth, (req, res) => {
-  try {
-    const body = req.body || {};
-    const data = String(body.data || '').trim();
-    if (!data) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
-    const hora = body.hora || null;
-    const titulo = body.titulo || 'Degustação';
-    const vagas = Number(body.vagas || 1) || 1;
-    const status = body.status || 'disponivel';
-    const observacoes = body.observacoes || null;
-
-    const stmt = db.prepare('INSERT INTO degustacoes_disponiveis (data,hora,titulo,vagas,status,observacoes,created_at,updated_at) VALUES (?,?,?,?,?,?,datetime(\'now\'),datetime(\'now\'))');
-    const info = stmt.run(data, hora, titulo, vagas, status, observacoes);
-    const id = info.lastInsertRowid;
-    const row = db.prepare('SELECT * FROM degustacoes_disponiveis WHERE id = ?').get(id);
-    return res.status(201).json({ ok: true, item: row });
-  } catch (e) {
-    console.error('[POST /degustacoes-disponiveis] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao criar degustação' });
-  }
-});
-
-app.put('/degustacoes-disponiveis/:id', express.json(), requireAuth, (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
-    const body = req.body || {};
-    const data = body.data ? String(body.data).trim() : null;
-    if (data === null) return res.status(400).json({ ok: false, error: 'Campo data é obrigatório' });
-    const hora = body.hora || null;
-    const titulo = body.titulo || 'Degustação';
-    const vagas = Number(body.vagas || 1) || 1;
-    const status = body.status || 'disponivel';
-    const observacoes = body.observacoes || null;
-
-    db.prepare('UPDATE degustacoes_disponiveis SET data = ?, hora = ?, titulo = ?, vagas = ?, status = ?, observacoes = ?, updated_at = datetime(\'now\') WHERE id = ?')
-      .run(data, hora, titulo, vagas, status, observacoes, id);
-    const row = db.prepare('SELECT * FROM degustacoes_disponiveis WHERE id = ?').get(id);
-    return res.json({ ok: true, item: row });
-  } catch (e) {
-    console.error('[PUT /degustacoes-disponiveis/:id] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao atualizar degustação' });
-  }
-});
-
-app.delete('/degustacoes-disponiveis/:id', requireAuth, (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
-    db.prepare('DELETE FROM degustacoes_disponiveis WHERE id = ?').run(id);
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[DELETE /degustacoes-disponiveis/:id] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao remover degustação' });
-  }
-});
-
-// === ROTAS: Agenda (CRUD) ===
-// (Obs) Rotas de agenda foram removidas daqui porque havia código solto/fora de handler.
-// Mantemos apenas o DELETE abaixo, e as demais rotas (se existirem) devem ficar em seção própria.
-
-// (não mexer na linha abaixo)
-app.delete('/agenda/:id', requireAuth, (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ ok: false, error: 'id inválido' });
-    db.prepare('DELETE FROM agenda WHERE id = ?').run(id);
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[DELETE /agenda/:id] erro:', e && e.message);
-    return res.status(500).json({ ok: false, error: 'Erro ao remover agenda' });
-  }
-});
-
 // ========================= CLIENTES (MÓDULO 10) =========================
 
 app.get('/clientes', (req, res) => {
@@ -2113,37 +1632,37 @@ app.delete('/clientes/:id', verifyFirebaseToken, ensureAllowed('sync'), (req, re
   });
 
   // POST /feiras — cria ou atualiza (se enviar id)
-  app.post('/leads', express.json({ limit: '50mb' }), requireAuth, async (req, res) => {
+  app.post('/feiras', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
     try {
-      const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
-      let leadFinal = { ...incoming };
-      const id = leadFinal.id || crypto.randomUUID();
-      const tenantId = req.user?.tenantId || 'default';
+      const body = req.body || {};
+      const all = loadJSON(FEIRAS_FILE, []);
+      const id = String(body.id || crypto.randomUUID());
+      const idx = all.findIndex(f => String(f.id) === id);
+      const now = new Date().toISOString();
+      const feira = { ...(body || {}), id, criadoEm: body.criadoEm || now };
+      if (idx >= 0) {
+        all[idx] = { ...all[idx], ...feira };
+      } else {
+        all.push(feira);
+      }
+      saveJSON(FEIRAS_FILE, all);
+      return res.status(idx >= 0 ? 200 : 201).json({ ok: true, data: feira });
+    } catch (e) {
+      console.error('[POST /feiras] erro:', e);
+      return res.status(500).json({ ok: false, error: 'Erro ao salvar feira' });
+    }
+  });
 
-      const payloadToSave = JSON.stringify({
-        ...leadFinal,
-        id,
-        tenantId
-      });
-
-      db.prepare(`
-        INSERT INTO leads (id, tenantId, payload, createdAt, updatedAt)
-        VALUES (?, ?, ?, datetime('now'), datetime('now'))
-        ON CONFLICT(id) DO UPDATE SET
-          payload = excluded.payload,
-          updatedAt = datetime('now')
-      `).run(
-        id,
-        tenantId,
-        payloadToSave
-      );
-
-      console.log('[LEADS] SALVO:', { id, tenantId });
-
-      res.json({
-        ok: true,
-        id
-      });
+  // PUT /feiras/:id — atualiza feira
+  app.put('/feiras/:id', express.json({ limit: '50mb' }), requireAuth, (req, res) => {
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ ok: false, error: 'id obrigatório' });
+      const body = req.body || {};
+      const all = loadJSON(FEIRAS_FILE, []);
+      const idx = all.findIndex(f => String(f.id) === id);
+      if (idx === -1) return res.status(404).json({ ok: false, error: 'Feira não encontrada' });
+      all[idx] = { ...all[idx], ...body };
       saveJSON(FEIRAS_FILE, all);
       return res.json({ ok: true, data: all[idx] });
     } catch (e) {
@@ -2631,66 +2150,32 @@ app.post('/webhooks/assinaturas', rawJson, (req, res) => {
 
 // ========================= M6 – Funil de Leads: API básica =========================
 
-// GET /leads -> lista JSON COMPLETO
+// GET /leads → lista leads do funil (usado no sync inicial)
 app.get('/leads', requireAuth, (req, res) => {
   try {
     const tenantId = String(req.user?.tenantId || 'default');
 
-    ensureLeadsTable();
+    const all = loadJSON(LEADS_FILE, []);
+    let leads = Array.isArray(all)
+      ? all.filter(l => String(l.tenantId || 'default') === tenantId)
+      : [];
 
-    try {
-      const rows = db.prepare(`SELECT *, data_json, payload FROM leads WHERE tenantId = ? ORDER BY updatedAt DESC LIMIT 300`).all(tenantId);
-      const items = Array.isArray(rows) ? rows.map(r => {
-        try {
-          const payload = r.payload ? (typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload) : {};
-          const merged = { ...payload, ...r };
-          delete merged.payload;
-          delete merged.data_json;
-          return merged;
-        } catch (e) { return null; }
-      }).filter(Boolean) : [];
-      return res.json({ ok: true, data: items });
-    } catch (e) {
-      console.warn('[LEADS] GET list sqlite failed:', e && e.message);
+    // Filtro opcional: ?ids=1,2,3
+    const idsStr = String(req.query.ids || '').trim();
+    if (idsStr) {
+      const idSet = new Set(
+        idsStr.split(',').map(s => s.trim()).filter(Boolean)
+      );
+      leads = leads.filter(ld => idSet.has(String(ld.id)));
     }
 
-    // fallback to file-based list
-    const all = loadJSON(LEADS_FILE, []);
-    const items = Array.isArray(all) ? all.filter(l => String(l.tenantId || 'default') === tenantId) : [];
-    return res.json({ ok: true, data: items });
+    // pode devolver array direto (getLeadsAll aceita isso)
+    return res.json(leads);
   } catch (e) {
     console.error('[GET /leads] erro:', e);
-    return res.status(500).json({ ok: false, error: 'Erro ao listar leads' });
+    return res.status(500).json({ error: 'Erro ao listar leads' });
   }
 });
-
-  // ===================== LEADS: GET /leads/:id =====================
-
-  app.get('/leads/:id', requireAuth, async (req, res) => {
-    const { id } = req.params;
-
-    const row = db
-      .prepare(`SELECT payload FROM leads WHERE id = ?`)
-      .get(id);
-
-    if (!row) {
-      console.warn('[LEADS] GET 404 id:', id);
-      return res.status(404).json({ ok: false, error: 'Lead not found' });
-    }
-
-    let payload;
-    try {
-      payload = JSON.parse(row.payload);
-    } catch (e) {
-      console.error('[LEADS] ERRO parse payload:', e);
-      return res.status(500).json({ ok: false });
-    }
-
-    res.json({
-      ok: true,
-      data: payload
-    });
-  });
 
 // PUT /leads/:id → chamado quando você arrasta o card de coluna
 app.put('/leads/:id', requireAuth, (req, res) => {
@@ -7210,107 +6695,34 @@ app.post('/api/integracoes/payments/cobranca', async (req, res) => {
 // GET /usuarios -> lista todos (sem campo senha)
 app.get('/usuarios', (req, res) => {
   try {
-    console.log('[KGB] GET /usuarios auth=', req.headers && req.headers.authorization);
-    // Verify token and RBAC: only admins can list users
-    try {
-      const authH = String(req.headers.authorization || '');
-      const m = authH.match(/^Bearer\s+(.+)$/i);
-      if (!m) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      const payload = verifyToken(m[1]);
-      if (!payload) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-      // load full user to check perfis/permissoes
-      const caller = fetchUserForApi(payload.id);
-      console.log('[KGB] GET /usuarios caller=', caller && { id: caller.id, perfil: caller.perfil });
-      const isAdmin = (String(caller?.perfil || '').toLowerCase() === 'administrador') || (Array.isArray(caller?.perfis) && caller.perfis.map(p => String(p).toLowerCase()).includes('administrador')) || (Array.isArray(caller?.permissoes) && caller.permissoes.includes('*'));
-      if (!isAdmin) return res.status(403).json({ ok: false, error: 'Forbidden' });
-    } catch (e) {
-      console.warn('[KGB] GET /usuarios auth check failed', e && (e.stack || e));
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-    // Discover columns present in the usuarios table
-    const cols = db.prepare("PRAGMA table_info('usuarios')").all() || [];
-    const names = new Set((cols || []).map(c => String(c.name).toLowerCase()));
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        whatsapp,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at_iso
+      FROM usuarios
+      ORDER BY COALESCE(id,rowid) ASC
+    `).all();
 
-    // Build SELECT dynamically with safe aliases and COALESCE fallbacks
-    const select = [];
-
-    // id (prefer id, fallback to rowid)
-    select.push("COALESCE(id, rowid) AS id");
-
-    // Basic text fields
-    select.push(names.has('email') ? 'email' : "'' AS email");
-    select.push(names.has('nome') ? 'nome' : "'' AS nome");
-    select.push(names.has('whatsapp') ? 'whatsapp' : "'' AS whatsapp");
-
-    // perfis (json/text) and perfil (legacy string)
-    if (names.has('perfis')) {
-      select.push('perfis');
-    } else {
-      select.push("NULL AS perfis");
-    }
-    if (names.has('perfil')) {
-      select.push('perfil');
-    } else {
-      select.push("NULL AS perfil");
-    }
-
-    // created_at_iso fallback to created_at or null
-    if (names.has('created_at_iso')) {
-      select.push('created_at_iso');
-    } else if (names.has('created_at')) {
-      select.push('created_at AS created_at_iso');
-    } else {
-      select.push('NULL AS created_at_iso');
-    }
-
-    const sql = `SELECT ${select.join(',\n  ')} FROM usuarios ORDER BY COALESCE(id,rowid) ASC`;
-    const rows = db.prepare(sql).all();
-
-    const users = (rows || []).map(r => {
-      // Normalize perfis
-      let perfis = [];
-      try {
-        if (r.perfis) {
-          if (Array.isArray(r.perfis)) {
-            perfis = r.perfis;
-          } else if (typeof r.perfis === 'string') {
-            try {
-              const parsed = JSON.parse(r.perfis);
-              if (Array.isArray(parsed)) perfis = parsed;
-            } catch (e) {
-              // not JSON — try comma separated
-              perfis = r.perfis.split(',').map(s => s.trim()).filter(Boolean);
-            }
-          }
-        }
-      } catch (e) {
-        perfis = [];
-      }
-
-      // If no perfis parsed, try legacy perfil string
-      if (!perfis.length && r.perfil) {
-        perfis = [String(r.perfil)];
-      }
-
-      // Final safe fallback: empty array
-      if (!perfis.length) perfis = [];
-
+    const users = rows.map(u => {
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
       return {
-        id: r.id,
-        nome: r.nome || '',
-        email: r.email || '',
-        whatsapp: r.whatsapp || '',
-        perfis: perfis,
-        created_at_iso: (r.created_at_iso && String(r.created_at_iso).trim()) ? r.created_at_iso : null
+        id: u.id,
+        nome: u.nome || '',
+        email: u.email || '',
+        whatsapp: u.whatsapp || '',
+        perfis: perfisArr,
+        created_at_iso: u.created_at_iso || null
       };
     });
 
     return res.json({ ok: true, users });
   } catch (err) {
-    console.error('[GET /usuarios] SQL error:', err && (err.stack || err));
-    if (process.env.AUTH_DEBUG === '1') {
-      return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.', detail: err && err.message });
-    }
+    console.error('[usuarios] GET /usuarios erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
   }
 });
@@ -7331,295 +6743,154 @@ app.get('/perfis', (req, res) => {
   }
 });
 
-// GET /permissoesUi -> retorna permissões por perfil (admin)
-app.get('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
-  try {
-    const rows = db.prepare(`SELECT perfil, permissoes_json FROM permissoes_ui ORDER BY perfil`).all() || [];
-
-    const items = rows.map(r => {
-      let permissoes = [];
-      try { permissoes = JSON.parse(r.permissoes_json || '[]'); } catch (e) { permissoes = []; }
-      if (!Array.isArray(permissoes)) permissoes = [];
-      // normalize any '*' presence
-      if (permissoes.includes('*')) permissoes = ['*'];
-      return { perfil: r.perfil, permissoes };
-    });
-
-    // Garantir que o perfil Administrador sempre existe com ['*']
-    const hasAdmin = items.some(i => String(i.perfil).toLowerCase() === 'administrador' || String(i.perfil).toLowerCase() === 'admin');
-    if (!hasAdmin) {
-      items.unshift({ perfil: 'Administrador', permissoes: ['*'] });
-    }
-
-    // Ordena por perfil para estabilidade (alfabética)
-    items.sort((a,b) => String(a.perfil || '').localeCompare(String(b.perfil || '')));
-
-    return res.json({ ok: true, items });
-  } catch (e) {
-    console.error('[permissoesUi] GET erro:', e && (e.stack || e));
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
-});
-
-// PUT /permissoesUi -> salva permissões por perfil (admin)
-app.put('/permissoesUi', requireAuth, requireAdmin, (req, res) => {
-  try {
-    const body = req.body;
-    const items = Array.isArray(body) ? body : (Array.isArray(body?.items) ? body.items : null);
-
-    if (!Array.isArray(items)) {
-      return res.status(400).json({ ok: false, error: 'Payload inválido: esperado array de {perfil, permissoes} ou { items: [...] }' });
-    }
-
-    if (items.length === 0) {
-      return res.status(400).json({ ok: false, error: 'Payload inválido: array vazio não permitido' });
-    }
-
-    // Validação e normalização
-    const normalized = [];
-    for (const it of items) {
-      const perfil = (it?.perfil || '').toString().trim();
-      if (!perfil) continue;
-
-      let permissoes = it?.permissoes;
-      if (permissoes === '*' || (typeof permissoes === 'string' && permissoes.trim() === '*')) {
-        permissoes = ['*'];
-      } else if (!Array.isArray(permissoes)) {
-        // tentar desserializar se for string JSON
-        if (typeof permissoes === 'string' && (permissoes.trim().startsWith('[') || permissoes.trim().startsWith('{'))) {
-          try { permissoes = JSON.parse(permissoes); } catch { permissoes = []; }
-        } else {
-          permissoes = Array.isArray(permissoes) ? permissoes : [];
-        }
-      }
-
-      permissoes = permissoes.map(p => (p || '').toString().trim()).filter(Boolean);
-      if (permissoes.includes('*')) permissoes = ['*'];
-
-      // Força Administrador sempre ['*']
-      if (perfil.toLowerCase() === 'administrador' || perfil.toLowerCase() === 'admin') {
-        permissoes = ['*'];
-      }
-
-      normalized.push({ perfil, permissoes });
-    }
-
-    if (normalized.length === 0) return res.status(400).json({ ok: false, error: 'Nenhum perfil válido no payload' });
-
-    const upsert = db.prepare(`
-      INSERT INTO permissoes_ui (perfil, permissoes_json, updated_at)
-      VALUES (@perfil, @permissoes_json, @updated_at)
-      ON CONFLICT(perfil) DO UPDATE SET permissoes_json = excluded.permissoes_json, updated_at = excluded.updated_at
-    `);
-
-    const tx = db.transaction((rows) => {
-      for (const it of rows) {
-        upsert.run({ perfil: it.perfil, permissoes_json: JSON.stringify(it.permissoes), updated_at: new Date().toISOString() });
-      }
-    });
-
-    tx(normalized);
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[permissoesUi] PUT erro:', e && e.stack ? e.stack : e);
-    return res.status(500).json({ ok: false, error: 'Erro interno' });
-  }
-});
-
 // POST /usuarios -> cria novo usuário
-app.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
+app.post('/usuarios', (req, res) => {
+  const { nome, email, whatsapp, perfis, password } = req.body || {};
+  const emailNorm = String(email || '').toLowerCase().trim();
+
+  // validar campos obrigatórios: nome, email, perfis (array) e password
+  const perfisArr = Array.isArray(perfis) ? perfis : [];
+  const pass = (typeof password === 'string' && password.trim()) ? password : null;
+
+  if (!nome || !emailNorm || !perfisArr.length || !pass) {
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
+  }
+
   try {
-    console.log('[KGB] POST /usuarios auth=', req.headers && req.headers.authorization);
-    try { console.log('[KGB] POST /usuarios bodyKeys=', Object.keys(req.body || {}).filter(k => k !== 'password' && k !== 'senha')); } catch(e){}
+    const exists = db
+      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
+      .get(emailNorm);
 
-    // Normalização de payload (tolerante a variações do frontend)
-    const b = req.body || {};
-    const nome = (b.nome ?? b.name ?? b.Nome ?? '').toString().trim();
-    const emailRaw = (b.email ?? b.Email ?? '').toString().trim();
-    const emailNorm = String(emailRaw || '').toLowerCase();
-    const whatsapp = (b.whatsapp ?? b.telefone ?? b.phone ?? '').toString().trim();
-
-    // perfis: aceitar perfis[] (array), perfil (string), perfis como JSON string, ou CSV
-    let perfisRaw = b.perfis ?? b.perfil ?? b.roles ?? [];
-    let perfis = [];
-    if (Array.isArray(perfisRaw)) {
-      perfis = perfisRaw;
-    } else if (typeof perfisRaw === 'string') {
-      const s = perfisRaw.trim();
-      if (!s) perfis = [];
-      else {
-        try { const parsed = JSON.parse(s); perfis = Array.isArray(parsed) ? parsed : [String(parsed)]; } catch { perfis = s.split(',').map(x => x.trim()).filter(Boolean); }
-      }
-    } else if (perfisRaw != null) {
-      perfis = [String(perfisRaw)];
-    }
-    perfis = perfis.map(p => String(p).trim()).filter(Boolean);
-
-    // password: aceitar password, senha, novaSenha
-    const pass = (b.password ?? b.senha ?? b.novaSenha ?? '').toString();
-
-    // validação: 400 para entradas inválidas
-    if (!nome || !emailNorm || !perfis.length || !pass) {
-      return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
+    if (exists) {
+      return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
     }
 
-    try {
-      // Log real schema before attempting INSERT to help debug Render sqlite differences
-      try {
-        const cols = db.prepare("PRAGMA table_info(usuarios)").all();
-        console.log('[KGB][DB] usuarios schema:', cols);
-      } catch (e) { console.error('[KGB][DB] pragma error', e && (e.stack || e)); }
+    const id = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+    const senhaHash = bcrypt.hashSync(String(pass), 10);
+    const perfilSalvar = String(perfisArr[0] || '').trim();
 
-      const exists = db.prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?').get(emailNorm);
-      if (exists) return res.status(409).json({ status: 409, error: 'Já existe um usuário com esse e-mail.' });
+    db.prepare(`
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      String(nome || '').trim(),
+      emailNorm,
+      String(whatsapp || ''),
+      perfilSalvar,
+      senhaHash,
+      null,
+      nowIso,
+      0
+    );
 
-      const id = crypto.randomUUID();
-      const nowIso = new Date().toISOString();
-      const senhaHash = bcrypt.hashSync(String(pass), 10);
-      const perfilSalvar = String(perfis[0] || '').trim() || null;
-
-      // Use a blind, safe INSERT that only references columns we ensure exist in migrations
-      const stmt = db.prepare(`
-        INSERT INTO usuarios (
-          id,
-          nome,
-          email,
-          senha_hash,
-          perfil,
-          perfis,
-          created_at
-        ) VALUES (
-          @id,
-          @nome,
-          @email,
-          @senha_hash,
-          @perfil,
-          @perfis,
-          @created_at
-        )
-      `);
-
-      try {
-        const info = stmt.run({
-          id,
-          nome: String(nome || '').trim(),
-          email: emailNorm,
-          senha_hash: senhaHash,
-          perfil: perfilSalvar,
-          perfis: JSON.stringify(perfis),
-          created_at: nowIso
-        });
-        console.log('[usuarios] INSERT OK', { id, changes: info.changes, lastInsertRowid: info.lastInsertRowid });
-      } catch (runErr) {
-        console.error('[usuarios] INSERT ERROR', runErr && (runErr.stack || runErr));
-        throw runErr;
-      }
-
-      const user = { id, nome: String(nome || '').trim(), email: emailNorm, perfis: perfis, perfil: perfilSalvar, created_at_iso: nowIso };
-      return res.status(201).json({ ok: true, user });
-    } catch (err) {
-      const debug = process.env.AUTH_DEBUG === '1';
-      console.error('[usuarios] POST /usuarios erro:', err && (err.stack || err));
-      return res.status(500).json({
-        ok: false,
-        error: 'Erro interno ao criar usuário',
-        ...(debug ? { detail: String(err && (err.stack || err)) } : {})
-      });
-    }
-  } catch (outerErr) {
-    console.error('[usuarios] POST outer error:', outerErr && (outerErr.stack || outerErr));
+    const user = {
+      id,
+      nome: String(nome || '').trim(),
+      email: emailNorm,
+      whatsapp: String(whatsapp || ''),
+      perfis: perfisArr,
+      perfil: perfilSalvar,
+      created_at_iso: nowIso
+    };
+    return res.status(201).json({ ok: true, user });
+  } catch (err) {
+    console.error('[usuarios] POST /usuarios erro:', err);
     return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
   }
 });
 
-// GET /usuarios/:id (admin)
-app.get('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
+// GET /usuarios/:id -> retorna usuário por id
+app.get('/usuarios/:id', (req, res) => {
+  const id = req.params?.id;
+  if (!id) return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
   try {
-    const id = String(req.params.id || '').trim();
-    if (!id) return res.status(400).json({ ok:false, error:'ID inválido' });
+    const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
 
-    const u = db.prepare(`
-      SELECT id, nome, email, whatsapp, perfil, perfis, created_at
-      FROM usuarios
-      WHERE id = ?
-    `).get(id);
+    const perfisArr = row && row.perfil ? [String(row.perfil)] : [];
+    const perfilFinal = row.perfil || (perfisArr[0] || '');
 
-    if (!u) return res.status(404).json({ ok:false, error:'Usuário não encontrado' });
+    const user = {
+      id: row.id,
+      email: row.email || '',
+      nome: row.nome || '',
+      whatsapp: row.whatsapp || '',
+      perfil: perfilFinal,
+      perfis: perfisArr,
+      must_change_password: row.must_change_password ? 1 : 0,
+      foto: row.foto || null,
+      created_at: row.created_at || row.created_at_iso || null
+    };
 
-    // normaliza perfis
-    let perfisArr = [];
-    if (u.perfis) {
-      try { perfisArr = Array.isArray(u.perfis) ? u.perfis : JSON.parse(u.perfis); } catch { perfisArr = []; }
-    } else if (u.perfil) {
-      perfisArr = [u.perfil];
-    }
-
-    return res.json({ ok:true, user: { ...u, perfis: perfisArr } });
-  } catch (e) {
-    console.error('[usuarios/:id] error', e);
-    return res.status(500).json({ ok:false, error:'Erro interno', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
+    return res.json({ ok: true, user });
+  } catch (err) {
+    console.error('[usuarios] GET /usuarios/:id erro:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao buscar usuário.' });
   }
 });
 
-// PUT /usuarios/:id (admin)
-app.put('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
+// PUT /usuarios/:id -> atualiza usuário (por id)
+app.put('/usuarios/:id', (req, res) => {
+  const id = req.params?.id;
+  const { nome, email, whatsapp, perfis, password, foto } = req.body || {};
+
+  if (!id) {
+    return res.status(400).json({ ok: false, error: 'ID obrigatório.' });
+  }
+
   try {
-    const id = String(req.params.id || '').trim();
-    if (!id) return res.status(400).json({ ok:false, error:'ID inválido' });
+    const atual = db
+      .prepare('SELECT * FROM usuarios WHERE id = ?')
+      .get(id);
 
-    // body
-    const nome = (req.body?.nome ?? '').toString().trim();
-    const email = (req.body?.email ?? '').toString().trim().toLowerCase();
-    const whatsapp = (req.body?.whatsapp ?? req.body?.telefone ?? '').toString().trim();
-
-    // perfis pode vir como perfis[] ou perfil string
-    let perfis = req.body?.perfis ?? req.body?.perfil ?? req.body?.roles ?? [];
-    if (typeof perfis === 'string') {
-      try { perfis = JSON.parse(perfis); } catch { perfis = [perfis]; }
-    }
-    if (!Array.isArray(perfis)) perfis = [String(perfis)];
-    perfis = perfis.map(s => String(s).trim()).filter(Boolean);
-
-    const perfilPrincipal = perfis[0] || 'Vendedor';
-
-    // senha opcional
-    const senha = (req.body?.senha ?? req.body?.password ?? '').toString();
-    let senha_hash = null;
-    if (senha) {
-      const bcrypt = require('bcryptjs');
-      senha_hash = bcrypt.hashSync(senha, 10);
+    if (!atual) {
+      return res.status(404).json({ ok: false, error: 'Usuário não encontrado.' });
     }
 
-    // bloquear editar admin email (opcional mas recomendado)
-    const current = db.prepare(`SELECT id,email FROM usuarios WHERE id=?`).get(id);
-    if (!current) return res.status(404).json({ ok:false, error:'Usuário não encontrado' });
-    if (current.email === 'admin@kgb.com' && email && email !== current.email) {
-      return res.status(403).json({ ok:false, error:'Não é permitido alterar o e-mail do admin.' });
+    const emailNorm = email
+      ? String(email).toLowerCase().trim()
+      : atual.email;
+
+    // Se trocou e-mail, verifica se já existe outro com esse e-mail
+    if (emailNorm !== atual.email) {
+      const outro = db
+        .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?')
+        .get(emailNorm, id);
+
+      if (outro) {
+        return res.status(409).json({ status: 409, error: 'Já existe usuário com esse e-mail.' });
+      }
     }
 
-    // montar update dinâmico
-    const sets = [];
-    const params = {};
 
-    if (nome) { sets.push('nome=@nome'); params.nome = nome; }
-    if (email) { sets.push('email=@email'); params.email = email; }
-    sets.push('whatsapp=@whatsapp'); params.whatsapp = whatsapp;
-    sets.push('perfil=@perfil'); params.perfil = perfilPrincipal;
-    sets.push('perfis=@perfis'); params.perfis = JSON.stringify(perfis);
-    if (senha_hash) { sets.push('senha_hash=@senha_hash'); params.senha_hash = senha_hash; }
+    const rawPass = (typeof password === 'string' && password.trim()) ? password : null;
 
-    if (sets.length === 0) return res.status(400).json({ ok:false, error:'Nada para atualizar' });
+    const perfilSalvar = Array.isArray(perfis) && perfis.length ? String(perfis[0]) : atual.perfil;
 
-    params.id = id;
+    const updates = [ 'nome = ?', 'email = ?', 'whatsapp = ?', 'perfil = ?' ];
+    const params = [ nome ?? atual.nome, emailNorm, whatsapp ?? atual.whatsapp, perfilSalvar ];
 
-    const sql = `UPDATE usuarios SET ${sets.join(', ')} WHERE id=@id`;
-    const info = db.prepare(sql).run(params);
+    if (rawPass) {
+      const hashed = bcrypt.hashSync(String(rawPass), 10);
+      updates.push('senha_hash = ?', 'senha = ?');
+      params.push(hashed, null);
+    }
 
-    return res.json({ ok:true, updated: info.changes > 0 });
-  } catch (e) {
-    console.error('[usuarios PUT] error', e);
-    return res.status(500).json({ ok:false, error:'Erro interno', detail: process.env.AUTH_DEBUG==='1' ? String(e?.stack||e) : undefined });
+    updates.push('foto = ?');
+    params.push(typeof foto === 'string' ? foto : atual.foto);
+
+    const sql = `UPDATE usuarios SET ${updates.join(',\n')} WHERE id = ?`;
+    params.push(id);
+
+    db.prepare(sql).run(...params);
+
+    const atualizado = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id);
+    return res.json({ ok: true, user: atualizado });
+  } catch (err) {
+    console.error('[usuarios] PUT /usuarios erro:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao atualizar usuário.' });
   }
 });
 
@@ -7657,9 +6928,103 @@ app.delete('/usuarios', (req, res) => {
 });
 // ===== Usuários (CRUD básico para o sistema) =====
 
-// Duplicate GET /usuarios removed — consolidated into a single schema-agnostic handler above.
+// GET /usuarios -> lista todos (sem campo senha)
+app.get('/usuarios', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(id, rowid) AS id,
+        email,
+        nome,
+        perfil,
+        whatsapp,
+        must_change_password,
+        COALESCE(created_at, created_at_iso) AS created_at
+      FROM usuarios
+      ORDER BY COALESCE(id,rowid) ASC
+    `).all();
 
-// Duplicate POST /usuarios removed — consolidated handler is defined earlier in this file.
+    const users = rows.map(u => {
+      const perfisArr = u && u.perfil ? [String(u.perfil)] : [];
+      const perfilFinal = u.perfil || (perfisArr[0] || '');
+
+      return {
+        id: u.id,
+        email: u.email || '',
+        nome: u.nome || '',
+        whatsapp: u.whatsapp || '',
+        perfil: perfilFinal,
+        perfis: perfisArr,
+        must_change_password: u.must_change_password ? 1 : 0,
+        created_at: u.created_at || null
+      };
+    });
+
+    return res.json({ ok: true, users });
+  } catch (err) {
+    console.error('[usuarios] GET /usuarios erro:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao listar usuários.' });
+  }
+});
+
+// POST /usuarios -> cria novo usuário
+app.post('/usuarios', (req, res) => {
+  const { nome, email, whatsapp, perfis, password } = req.body || {};
+  const emailNorm = String(email || '').toLowerCase().trim();
+
+  // validar campos obrigatórios: nome, email, perfis (array) e password
+  const perfisArr = Array.isArray(perfis) ? perfis : [];
+  const pass = (typeof password === 'string' && password.trim()) ? password : null;
+
+  if (!nome || !emailNorm || !perfisArr.length || !pass) {
+    return res.status(400).json({ ok: false, error: 'Campos obrigatórios: nome, email, perfis (array) e password' });
+  }
+
+  try {
+    const exists = db
+      .prepare('SELECT 1 FROM usuarios WHERE lower(email) = ?')
+      .get(emailNorm);
+
+    if (exists) {
+      return res.status(409).json({ ok: false, error: 'Já existe um usuário com esse e-mail.' });
+    }
+
+    const id = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+    const senhaHash = bcrypt.hashSync(String(pass), 10);
+    const perfilSalvar = String(perfisArr[0] || '').trim();
+
+    db.prepare(`
+      INSERT INTO usuarios (id, nome, email, whatsapp, perfil, senha_hash, senha, created_at_iso, must_change_password)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      String(nome || '').trim(),
+      emailNorm,
+      String(whatsapp || ''),
+      perfilSalvar,
+      senhaHash,
+      null,
+      nowIso,
+      0
+    );
+
+    const user = {
+      id,
+      nome: String(nome || '').trim(),
+      email: emailNorm,
+      whatsapp: String(whatsapp || ''),
+      perfis: perfisArr,
+      perfil: perfilSalvar,
+      created_at: nowIso
+    };
+
+    return res.status(201).json({ ok: true, user });
+  } catch (err) {
+    console.error('[usuarios] POST /usuarios erro:', err);
+    return res.status(500).json({ ok: false, error: 'Erro ao criar usuário.' });
+  }
+});
 
 // ADMIN: reset password for a user and force must_change_password=1
 // Deprecated admin reset-password endpoint — respond 404
@@ -8157,49 +7522,12 @@ try { cleanupOldBackups(); } catch(e){}
 setInterval(() => { try{ cleanupOldBackups(); } catch(e){} }, 24 * 60 * 60 * 1000);
 
 // ========================= Inicialização =========================
-// Ensure we only log when listen succeeds and capture listen errors
-const LISTEN_PORT = Number(process.env.PORT || PORT);
-
-// In production (Render) bind to 0.0.0.0, in local dev prefer 127.0.0.1
-const HOST =
-  process.env.RENDER ? '0.0.0.0' :
-  (process.env.HOST || '127.0.0.1');
-
-const server = app.listen(LISTEN_PORT, HOST, () => {
-  console.log(`[KGB] LISTEN OK http://${HOST}:${LISTEN_PORT}`);
+app.listen(PORT, () => {
+  console.log(`KGB API rodando em http://localhost:${PORT}`);
   console.log(`DB em: ${DB_PATH}`);
   if (ALLOWLIST.length) {
     console.log('CORS allowlist:', ALLOWLIST.join(', '));
   } else {
     console.log('CORS allowlist vazia (aceita qualquer origem sem Origin em ambiente local).');
   }
-});
-
-server.on('error', (err) => {
-  console.error('[KGB] LISTEN ERROR:', err);
-  process.exit(1);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('[KGB] uncaughtException:', err);
-});
-
-process.on('unhandledRejection', (err) => {
-  console.error('[KGB] unhandledRejection:', err);
-});
-
-// Global error handler to ensure stacks are logged in Render
-app.use((err, req, res, next) => {
-  const debug = process.env.AUTH_DEBUG === '1';
-  try {
-    console.error('[KGB] Unhandled error:', err && (err.stack || err));
-  } catch (e) { console.error('[KGB] Unhandled error (logging failed)', e); }
-  try {
-    return res.status(500).json({
-      ok: false,
-      error: 'Erro interno',
-      ...(debug ? { detail: String(err && (err.stack || err)) } : {}),
-      buildId: BUILD_ID
-    });
-  } catch (e) { /* nothing */ }
 });
